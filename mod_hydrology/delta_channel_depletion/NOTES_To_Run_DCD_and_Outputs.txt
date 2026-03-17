@@ -1,0 +1,45 @@
+Created by: Mehrdad Bastani - September 2025
+===============================================
+1- Follow the instruction in this link to create new python environment and then install the libraries requied in DETAW.py
+
+https://github.com/CADWRDeltaModeling/pyhecdss/tree/master
+
+So, do these two lines in anaconda prompt:
+
+Line 1:
+conda create -c conda-forge -c cadwr-dms -n CalsimDETAW python=3.12 pyhecdss
+
+Line 2:
+conda install xarray numba netcdf4 h5netcdf scipy
+
+###########################################################################################################################################
+
+2- I needed to change line 48 of the DCD.py script to update the folder name to "CALSIM3".
+Otherwise, the model does not generate output folder.
+
+##########################################################################################################################################
+
+3- In order to change the end year, the input files must be changed to show last data for that end year.
+These input files are: 
+	- "Landuse" in DETAW
+	- "calendar" in DETAW
+	- "LODI_PT" in DETAW
+	- "mm_pcp" in DETAW
+	- "GW_RATES" in DCD
+	- "GW_RATES_CALSIM3" in DCD
+	- "WYTYPES" in DCD
+	- "WYTYPES" in DCD_Cal
+
+###########################################################################################################################################
+
+4- Make sure that the two "WYTYPES" and the 168 "Landuse" files have been updated considering the new Water Year Types (Product A, B). 
+
+###########################################################################################################################################
+
+5- Do not delete "DCD_Cal" folder. You can delete "DCD_outputs" folder in "DCD_Cal" for a new run. 
+
+###########################################################################################################################################
+
+6- After running DCD and getting the outputs, I created two scripts located in the "post-process" folder inside DCD\Output\CALSIM3.
+Run them in order. The first one aggregates DP-FLOW and GW-FLOW for Delta and WBA50 based on the weighted ratios in the csv file located 
+in the same folder. The second one merges the 28 records of timeseries required for Calsim3 in one DSS file called "CS3sv_DCD_PRISM_Dtrnd".
