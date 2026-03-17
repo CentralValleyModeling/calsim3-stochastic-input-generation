@@ -1,0 +1,23 @@
+name: csstochastic
+channels:
+  - conda-forge
+  - cadwr-dms
+  - defaults
+dependencies:
+  - python=3.11
+  - numpy
+  - pandas
+  - scipy
+  - matplotlib
+  - seaborn
+  - openpyxl
+  - xlrd
+  - netcdf4
+  - python-dotenv
+  - pyhecdss
+  - pip
+  - pip:
+    - pydsstools   # requires VS Build Tools with C++ workload on Windows
+# pandss must be installed separately after env creation (needs pydsstools already present):
+#   conda activate csstochastic
+#   conda install pandss -c dwr-cvm
