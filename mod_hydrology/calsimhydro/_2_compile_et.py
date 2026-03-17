@@ -4,10 +4,10 @@ Compile area-weighted VIC ET per WBA and quantile-map to CS3 monthly ET.
 Usage
 -----
 Product A — single type:
-    python _2_compile_et.py --et_type RefET --vic_col_index 7 --write_dss
+    python _2_compile_et.py --et_type RefET --vic_col_index 7 --write_dss --n_workers 8
 
 Product A — all types at once:
-    python _2_compile_et.py --et_type all --vic_col_index 7 --write_dss
+    python _2_compile_et.py --et_type all --vic_col_index 7 --write_dss --n_workers 8
 
 Product B — all types at once:
     python _2_compile_et.py --et_type all --vic_col_index 7 --write_dss --Product_B --n_workers 16
@@ -635,7 +635,7 @@ def main():
 		"--n_workers",
 		type=int,
 		default=1,
-		help="Number of parallel threads for WBA processing (default: 1). Set to e.g. 4–8 to speed up CropET.",
+		help="Number of parallel workers for WBA processing (default: 1). Works with both Product A and B. Set to e.g. 8–16 to speed up CropET.",
 	)
 	args = parser.parse_args()
 
@@ -705,10 +705,10 @@ def main():
 
 if __name__ == "__main__":
 	# Product A — single type:
-	# python _2_compile_et.py --et_type RefET --grid_info_file ./reference/WBA_Grid_Info.txt --cshydro_dss ./reference/Historical/CS3_RefETo.dss --vic_col_index 7 --write_dss
+	# python _2_compile_et.py --et_type RefET --vic_col_index 7 --write_dss --n_workers 8
 	# Product A — all types at once:
-		# python _2_compile_et.py --et_type all --grid_info_file ./reference/WBA_Grid_Info.txt --vic_col_index 7 --write_dss
+	# python _2_compile_et.py --et_type all --vic_col_index 7 --write_dss --n_workers 8
 	# Product B — all types at once:
-		# python _2_compile_et.py --et_type all --grid_info_file ./reference/WBA_Grid_Info.txt --vic_col_index 7 --write_dss --Product_B --n_workers 16
+	# python _2_compile_et.py --et_type all --vic_col_index 7 --write_dss --Product_B --n_workers 16
 	main()
 
