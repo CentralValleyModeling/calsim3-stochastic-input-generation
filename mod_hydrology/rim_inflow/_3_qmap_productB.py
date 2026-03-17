@@ -16,7 +16,6 @@ import numpy as np
 import pandas as pd
 from pathlib import Path
 from pydsstools.heclib.dss import HecDss
-from pandas.tseries.offsets import MonthEnd
 
 # Add repo root to path for utils imports
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
@@ -40,6 +39,13 @@ vic_sim_dir   = str(_vic_gen / "output" / "routed" / "Product_B" / "1")
 BASE_OUT_DIR  = str(_gen / "_3_qmap_product_b")
 OUT_TS_DIR    = BASE_OUT_DIR
 os.makedirs(OUT_TS_DIR, exist_ok=True)
+
+# All Product B chunks span exactly 100 water years (Oct 1921 – Sep 2021,
+# i.e. WY 1922-2021).  We enforce this canonical date range regardless of
+# whatever year labels the VIC source files happen to carry, so mismatched
+# file timestamps can never corrupt the output Year/Month columns.
+PRODUCT_B_MONTHS    = 1200                   # 100 WY × 12 months
+PRODUCT_B_START     = pd.Timestamp("1921-10-31")   # first month-end date
 
 ANCHOR_XLSX  = str(_SCRIPT_DIR / "reference" / "RimInflowAnchor.xlsx")
 
@@ -81,7 +87,7 @@ def excel_to_partB(name: str) -> str:
 
 def read_calsim_monthly_multi(dssfile, strList):
     """Read CalSim monthly inflows from DSS into wide DataFrame."""
-    full_idx = pd.date_range("1915-01-31", f"{vic_end_year}-12-31", freq="M")
+    full_idx = pd.date_range("1915-01-31", f"{vic_end_year}-12-31", freq="ME")
     with HecDss.Open(dssfile, version=6, catalog_flag=True) as dss:
         paths   = dss.getPathnameList("/*/*/*/*/1MON/*")
         bucket  = {}
@@ -119,13 +125,10 @@ def load_vic_hist_dir(vic_path: str) -> pd.DataFrame:
         name  = file[len("CS3_"):-len("_qmo.csv")]
         fpath = os.path.join(vic_path, file)
         df    = pd.read_csv(fpath, header=None)
-        df.iloc[:, 0] = pd.to_datetime(df.iloc[:, 0], errors="coerce")
-        ser = pd.Series(df.iloc[:, 1].values, index=df.iloc[:, 0].values, name=name)
-
+        dates = pd.to_datetime(df.iloc[:, 0], errors="coerce")
         # normalize to month-end
-        ser.index = pd.to_datetime(
-            pd.to_datetime(ser.index).to_period("M").to_timestamp("M")
-        )
+        idx   = dates.dt.to_period("M").dt.to_timestamp("M")
+        ser   = pd.Series(df.iloc[:, 1].values, index=idx, name=name)
         data[name] = ser
 
     out = pd.DataFrame(data)
@@ -178,15 +181,20 @@ def load_vic_sim_series(vic_name: str, sim_dir: str, ts: str):
 
     df = pd.read_csv(fpath, header=None)
 
-    years  = df.iloc[:, 0].astype(int)
-    months = df.iloc[:, 1].astype(int)
-    vals   = df.iloc[:, 2].astype(float).values
+    vals = df.iloc[:, 2].astype(float).values
 
-    # First day of month, then shift to month-end
-    dt  = pd.to_datetime(years.astype(str) + "-" + months.astype(str) + "-01", errors="coerce")
-    idx = dt + MonthEnd(0)
+    if len(vals) != PRODUCT_B_MONTHS:
+        raise ValueError(
+            f"{fname}: expected {PRODUCT_B_MONTHS} rows (Oct 1921 – Sep 2021) "
+            f"but got {len(vals)}."
+        )
 
-    ser = pd.Series(vals, index=idx, name=vic_name)
+    # Enforce the canonical Product B date range (Oct 1921 – Sep 2021), ignoring
+    # whatever year/month labels the VIC file contains.  All Product B chunks must
+    # span exactly 100 water years using this convention.
+    canonical_idx = pd.date_range(PRODUCT_B_START, periods=PRODUCT_B_MONTHS, freq="ME")
+
+    ser = pd.Series(vals, index=canonical_idx, name=vic_name)
     return ser, fname
 
 
