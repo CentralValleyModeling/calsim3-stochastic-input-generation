@@ -1,0 +1,62 @@
+# =============================================================================
+# CalSim Synthetic Hydroclimate — .gitignore
+# Large data lives in data/ (gitignored). Download from Box
+# =============================================================================
+
+# ── Data root  ────────────────────────────────────────────────────────────────
+data/
+!data/.gitkeep
+
+# ── Module input/output directories ───────────────────────────────────────────
+**/output/
+**/input/
+!**/output/.gitkeep
+!**/input/.gitkeep
+
+# ── Third-party model support tools (VIC 4.2 standalone) ──────────────────────
+mod_forcing/vic/VIC_Support_4.2.d/
+
+# ── Large binary and data file types ──────────────────────────────────────────
+*.dss
+*.nc
+*.pkl
+*.exe
+*.dll
+*.bin
+*.class
+*.jar
+*.xlsb
+
+# ── PowerBI workbooks ─────────────────────────────────────────────────────────
+**/PowerBI/
+
+# ── Python artifacts ──────────────────────────────────────────────────────────
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.pytest_cache/
+*.egg-info/
+dist/
+build/
+
+# ── Environment & secrets ─────────────────────────────────────────────────────
+.env
+.venv/
+venv/
+env/
+
+# ── Jupyter ───────────────────────────────────────────────────────────────────
+.ipynb_checkpoints/
+
+# ── Sphinx build output ───────────────────────────────────────────────────────
+docs/_build/
+docs/.doctrees/
+
+# ── VS Code ───────────────────────────────────────────────────────────────────
+.vscode/
+
+# ── OS ────────────────────────────────────────────────────────────────────────
+.DS_Store
+Thumbs.db
+desktop.ini
