@@ -1,0 +1,4 @@
+{
+    "_comment": "Default configuration for CalSim Synthetic Hydroclimate. Copy this file to 'config.json' and edit the data_dir to point to your local data directory.",
+    "data_dir": "./data"
+}

@@ -5,27 +5,6 @@
 
 # ── Data root  ────────────────────────────────────────────────────────────────
 data/
-!data/.gitkeep
-
-# ── Module input/output directories ───────────────────────────────────────────
-**/output/
-**/input/
-!**/output/.gitkeep
-!**/input/.gitkeep
-
-# ── Third-party model support tools (VIC 4.2 standalone) ──────────────────────
-mod_forcing/vic/VIC_Support_4.2.d/
-
-# ── Large binary and data file types ──────────────────────────────────────────
-*.dss
-*.nc
-*.pkl
-*.exe
-*.dll
-*.bin
-*.class
-*.jar
-*.xlsb
 
 # ── PowerBI workbooks ─────────────────────────────────────────────────────────
 **/PowerBI/
@@ -45,6 +24,7 @@ build/
 .venv/
 venv/
 env/
+config.json
 
 # ── Jupyter ───────────────────────────────────────────────────────────────────
 .ipynb_checkpoints/
