@@ -1,4 +1,6 @@
 """
+HELLO
+
 Quantile-Map Product B Rim Inflows
 ==================================
 Train on the full Product A overlap (Oct 1921 – Dec 2018) and apply to
@@ -26,7 +28,7 @@ Inputs
 Outputs
 -------
 - data/GENERATED/mod_hydrology/rim_inflow/_3_qmap_product_b/
-  One CSV per CalSim inflow per chunk with columns:
+  two CSV per CalSim inflow per chunk with columns:
   CalSim, Matched_inflow, Year, Month, vic_val, qmap_preAdj, qmap_postAdj
 
 Usage
