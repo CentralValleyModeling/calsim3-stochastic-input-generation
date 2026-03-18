@@ -12,7 +12,7 @@ For each CalSim/VIC pair from CalSim3_VIC_name_mapping.csv:
 Inputs
 ------
 - CalSim baseline DSS:    CalSim3/__calsim_sv_default__.dss
-- Product A VIC routed:   mod_hydrology/vic/output/routed/Product_A/1/
+- Product A VIC routed:   mod_forcing/vic/output/routed/Product_A/1/
 - Name mapping:           reference/CalSim3_VIC_name_mapping.csv
 - Anchor map:             reference/RimInflowAnchor.xlsx
 
@@ -41,7 +41,7 @@ from utils.quantile_mapping import qmap_single
 
 _SCRIPT_DIR = Path(__file__).resolve().parent
 _gen = get_module_generated_dir("mod_hydrology/rim_inflow")
-_vic_gen = get_module_generated_dir("mod_hydrology/vic")
+_vic_gen = get_module_generated_dir("mod_forcing/vic")
 
 # %% ── RESULTS ROOT ─────────────────────────────────────────────────────
 BASE_RESULTS_DIR = str(_gen / "_2_qmap_historical_validation" / "Product_A")

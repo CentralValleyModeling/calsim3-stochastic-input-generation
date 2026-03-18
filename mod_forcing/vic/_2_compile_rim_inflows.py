@@ -178,7 +178,7 @@ class compile_rim_inflows:
 
 def main():
     # Parse command-line arguments and run the compilation
-    _vic_gen = get_module_generated_dir("mod_hydrology/vic")
+    _vic_gen = get_module_generated_dir("mod_forcing/vic")
     _script_dir = Path(__file__).resolve().parent
 
     parser = argparse.ArgumentParser(description="Compile rim inflows from VIC fluxes.")

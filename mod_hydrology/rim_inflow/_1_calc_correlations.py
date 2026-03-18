@@ -11,7 +11,7 @@ Inputs
 ------
 - CalSim baseline DSS:  CalSim3/__calsim_sv_default__.dss
 - Master inventory:     _MASTER_INVENTORY_FOR_STOCHASTIC_INPUT_GENERATION_.xlsx
-- VIC historical routed: mod_hydrology/vic/output/routed/Historical/
+- VIC historical routed: mod_forcing/vic/output/routed/Historical/
 
 Outputs
 -------
@@ -39,7 +39,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 from utils.paths import get_base_dir, get_inventory_dir, get_module_generated_dir
 
 _gen = get_module_generated_dir("mod_hydrology/rim_inflow")
-_vic_gen = get_module_generated_dir("mod_hydrology/vic")
+_vic_gen = get_module_generated_dir("mod_forcing/vic")
 
 # %% ---  Extract inflow names from Excel MASTER file ---
 excel_path = str(get_inventory_dir() / "_MASTER_INVENTORY_FOR_STOCHASTIC_INPUT_GENERATION_.xlsx")

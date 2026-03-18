@@ -17,8 +17,8 @@ Uses multiprocessing (ProcessPoolExecutor) for step 3.
 
 Inputs
 ------
-- Product A VIC routed:  data/GENERATED/mod_hydrology/vic/output/routed/Product_A/1/
-- Product B VIC routed:  data/GENERATED/mod_hydrology/vic/output/routed/Product_B/1/
+- Product A VIC routed:  data/GENERATED/mod_forcing/vic/output/routed/Product_A/1/
+- Product B VIC routed:  data/GENERATED/mod_forcing/vic/output/routed/Product_B/1/
 - CalSim baseline DSS:   CalSim3/__calsim_sv_default__.dss
 - Name mapping:          reference/CalSim3_VIC_name_mapping.csv
 - Anchor map:            reference/RimInflowAnchor.xlsx
@@ -51,7 +51,7 @@ from utils.quantile_mapping import qmap_single
 
 _SCRIPT_DIR = Path(__file__).resolve().parent
 _gen = get_module_generated_dir("mod_hydrology/rim_inflow")
-_vic_gen = get_module_generated_dir("mod_hydrology/vic")
+_vic_gen = get_module_generated_dir("mod_forcing/vic")
 
 # ==== CONFIG =================================================================
 # Historical training data (Product A)

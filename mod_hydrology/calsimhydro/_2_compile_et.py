@@ -641,7 +641,7 @@ def main():
 
 	# Resolve Product-dependent defaults
 	_script_dir = Path(__file__).resolve().parent
-	_vic_gen = get_module_generated_dir("mod_hydrology/vic")
+	_vic_gen = get_module_generated_dir("mod_forcing/vic")
 	_cshydro_gen = get_module_generated_dir("mod_hydrology/calsimhydro")
 
 	# Resolve grid_info_file and DSS defaults from reference/ folder

@@ -12,7 +12,7 @@ from utils.paths import get_base_dir, get_module_generated_dir
 
 #%% #---Set Directories---
 _base = get_base_dir()
-_gen = get_module_generated_dir("mod_hydrology/vic")
+_gen = get_module_generated_dir("mod_forcing/vic")
 #-Scenario-
 wgen_dir = str(_base / 'WGEN' / 'Product_B' / '1')
 #-Wind Location-
