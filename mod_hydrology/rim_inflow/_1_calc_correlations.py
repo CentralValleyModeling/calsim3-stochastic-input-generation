@@ -1,3 +1,28 @@
+"""
+CalSim vs VIC Inflow Correlations
+=================================
+Calculate R-squared between each CalSim DSS inflow (1920-2021) and all
+VIC SAC-SMA routed inflows (1915-2018) over their overlapping period.
+
+For CalSim inflows with an exact VIC name match, the direct correlation
+is used. For unmatched names, the best-correlated VIC inflow is selected.
+
+Inputs
+------
+- CalSim baseline DSS:  CalSim3/__calsim_sv_default__.dss
+- Master inventory:     _MASTER_INVENTORY_FOR_STOCHASTIC_INPUT_GENERATION_.xlsx
+- VIC historical routed: mod_hydrology/vic/output/routed/Historical/
+
+Outputs
+-------
+- _1_calc_correlations/r2_calsim_vs_vic.csv
+  Columns: DSS Inflow, VIC Inflow (matched or best), R-squared
+
+Usage
+-----
+    cd mod_hydrology/rim_inflow && python _1_calc_correlations.py
+"""
+
 # %% This script calculates the Correlation (R^2) between
 # CALSIM inflows (1920-2021) and SAC-SMA inflows (1915-2018) over their
 # overlapping period (1920-2018).

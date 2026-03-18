@@ -1,3 +1,35 @@
+"""
+Stochastic Inflow Exploration Plots
+====================================
+Interactive exploration of a single rim inflow location across CS3 baseline,
+Product A (historical qmap), and Product B (stochastic qmap) outputs.
+
+Plots
+-----
+1. 30-year rolling mean flow comparison
+2. Multi-window rolling means (2, 5, 20 yr)
+3. Mean-annual flow bar chart with Product B range
+4. Drought severity scatter (duration vs % of average)
+
+Configuration
+-------------
+Set LOCATION and CS3_PATH at the top to switch inflow locations.
+
+Inputs
+------
+- CalSim baseline DSS:  CalSim3/__calsim_sv_default__.dss
+- Product A qmap CSV:   _2_qmap_historical_validation/Product_A/calsim_qmap_validation_TS.csv
+- Product B qmap CSVs:  _3_qmap_product_b/<CalSim>_<VIC>_qmo_n*.csv
+
+Outputs
+-------
+- SVG figures in _0_stochastic_inflow_explore/
+
+Usage
+-----
+    cd mod_hydrology/rim_inflow && python _0_stochastic_inflow_explore.py
+"""
+
 # %% imports
 import os
 import sys

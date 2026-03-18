@@ -1,20 +1,47 @@
-# %% Quantile-mapping: train on Product A (1921-10–2018-12) and
-# %% apply to Product B VIC routed flows
-#
-# 
-#   1) Read all Product-B time series (01..10 / n01..n10)
-#   2) Concatenate them in numeric order into one long simulation time series
-#   3) Run qmap_single() ONCE on that combined simulation timeseries
-#   4) Split mapped values back to each time series
-#   5) Write one output per time series, keeping the original suffix
-#      e.g. *_qmo_n01.csv -> <CalSim>_*_qmo_n01.csv
+"""
+Quantile-Map Product B Rim Inflows
+==================================
+Train on the full Product A overlap (Oct 1921 – Dec 2018) and apply to
+Product B stochastic VIC routed flows (10 chunks × 100 water years).
+
+Workflow
+--------
+1. Load CalSim ↔ VIC pairings from CalSim3_VIC_name_mapping.csv.
+2. Build training distributions from Product A VIC and CalSim DSS data.
+3. For each pair, concatenate all 10 Product B chunks into one series,
+   run qmap_single() once, then split mapped values back per chunk.
+4. Enforce anchor/tributary mass balance (RimInflowAnchor.xlsx).
+5. Write per-inflow CSVs: <CalSim>_<VIC>_qmo_n01.csv … n10.csv
+
+Uses multiprocessing (ProcessPoolExecutor) for step 3.
+
+Inputs
+------
+- Product A VIC routed:  data/GENERATED/mod_hydrology/vic/output/routed/Product_A/1/
+- Product B VIC routed:  data/GENERATED/mod_hydrology/vic/output/routed/Product_B/1/
+- CalSim baseline DSS:   CalSim3/__calsim_sv_default__.dss
+- Name mapping:          reference/CalSim3_VIC_name_mapping.csv
+- Anchor map:            reference/RimInflowAnchor.xlsx
+
+Outputs
+-------
+- data/GENERATED/mod_hydrology/rim_inflow/_3_qmap_product_b/
+  One CSV per CalSim inflow per chunk with columns:
+  CalSim, Matched_inflow, Year, Month, vic_val, qmap_preAdj, qmap_postAdj
+
+Usage
+-----
+    cd mod_hydrology/rim_inflow && python _3_qmap_productB.py
+"""
 
 import os
 import re
 import sys
+import time
 import numpy as np
 import pandas as pd
 from pathlib import Path
+from concurrent.futures import ProcessPoolExecutor, as_completed
 from pydsstools.heclib.dss import HecDss
 
 # Add repo root to path for utils imports
@@ -48,6 +75,7 @@ PRODUCT_B_MONTHS    = 1200                   # 100 WY × 12 months
 PRODUCT_B_START     = pd.Timestamp("1921-10-31")   # first month-end date
 
 ANCHOR_XLSX  = str(_SCRIPT_DIR / "reference" / "RimInflowAnchor.xlsx")
+MAX_WORKERS  = max(1, (os.cpu_count() or 4) - 1)
 
 # ==== BASIC HELPERS ==========================================================
 def ser_to_df(s: pd.Series) -> pd.DataFrame:
@@ -69,12 +97,11 @@ def read_master_pairs():
     df_inflow    = df_master[df_master[col_I].astype(str).str.strip().str.lower() == "rim inflow"]
     calsim_inflows = df_inflow[col_C].dropna().unique().tolist()
 
-    # CalSim ↔ VIC matched pairs (from correlation CSV)
-    r2_csv_path = str(_gen / "_1_calc_correlations" / "r2_calsim_vs_vic.csv")
-    df_r2 = pd.read_csv(r2_csv_path)
-    df_pairs = df_r2[["DSS Inflow", "VIC Inflow"]].copy()
-    df_pairs = df_pairs.rename(columns={"DSS Inflow": "CalSim_Inflow", "VIC Inflow": "VIC_Inflow"})
-    df_pairs = df_pairs.dropna()
+    # CalSim ↔ VIC matched pairs (from name mapping CSV)
+    name_map_csv = str(_SCRIPT_DIR / "reference" / "CalSim3_VIC_name_mapping.csv")
+    df_pairs = pd.read_csv(name_map_csv).rename(columns={"CS3_Inflow": "CalSim_Inflow"})
+    df_pairs = df_pairs.dropna(subset=["CalSim_Inflow", "VIC_Inflow"])
+    df_pairs = df_pairs[df_pairs["VIC_Inflow"].str.strip() != ""]
 
     # Preserve CSV order of CalSim inflows for outputs
     master_order = df_pairs["CalSim_Inflow"].tolist()
@@ -228,15 +255,16 @@ def load_vic_sim_all_timeseries(vic_name: str, sim_dir: str, timeseries_list: li
 
 def build_output_filename(calsim_name: str, input_filename: str) -> str:
     """
-    Replace the leading 'CS3' in the Product B filename with the CalSim inflow name.
-    CS3_8RI_DPR_I_qmo_n01.csv -> <CalSim>_8RI_DPR_I_qmo_n01.csv
+    Build output filename using only the CalSim inflow name + chunk suffix.
+    CS3_8RI_DPR_I_qmo_n01.csv -> <CalSim>_qmo_n01.csv
     """
     if not input_filename:
         return f"{calsim_name}.csv"
-    if "_" in input_filename:
-        _, rest = input_filename.split("_", 1)
-        return f"{calsim_name}_{rest}"
-    return f"{calsim_name}_{input_filename}"
+    # Extract the _qmo_<ts>.csv suffix
+    if "_qmo_" in input_filename:
+        suffix = input_filename[input_filename.index("_qmo_"):]
+        return f"{calsim_name}{suffix}"
+    return f"{calsim_name}.csv"
 
 
 # ==== ANCHOR / MASS BALANCE HELPERS ==========================================
@@ -315,13 +343,44 @@ def enforce_anchor_mass_balance(qdf: pd.DataFrame, mapping_cal: pd.DataFrame):
     return out
 
 
+# ==== PARALLEL WORKER ========================================================
+def _qmap_worker(cal, vic, b_train_df, t_train_df, sim_dir, ts_list):
+    """Process one (CalSim, VIC) pair: load all Product B chunks and run qmap."""
+    sim_all = load_vic_sim_all_timeseries(vic, sim_dir, ts_list)
+    if sim_all.empty:
+        return cal, vic, None
+
+    simulation_df = sim_all[["year", "month", "vic_val"]].rename(columns={"vic_val": "value"})
+    qmap = qmap_single(simulation_df, b_train_df, t_train_df).copy()
+
+    if "quantile_mapped_value" not in qmap.columns:
+        raise KeyError(
+            f"qmap_single output missing 'quantile_mapped_value' for ({cal}, {vic}). "
+            f"Columns: {list(qmap.columns)}"
+        )
+    if len(qmap) != len(sim_all):
+        raise ValueError(
+            f"qmap_single returned {len(qmap)} rows but expected {len(sim_all)} "
+            f"for ({cal}, {vic})."
+        )
+
+    sim_all = sim_all.copy()
+    sim_all["qmap_preAdj"] = qmap["quantile_mapped_value"].to_numpy(float)
+    return cal, vic, sim_all
+
+
 # ==== MAIN WORKFLOW ==========================================================
 def main():
+    t_start = time.perf_counter()
+
     # --- 1. Static data (done once) -----------------------------------------
+    print("Loading master pairs and training data ...")
     df_pairs, calsim_inflows, master_order = read_master_pairs()
+    print(f"  {len(df_pairs)} CalSim/VIC pairs from name mapping")
 
     df_vic_hist   = load_vic_hist_dir(vic_hist_dir)
     df_calsim_all = read_calsim_monthly_multi(dss_file, calsim_inflows)
+    print(f"  {len(df_vic_hist.columns)} VIC inflows, {len(df_calsim_all.columns)} CalSim inflows loaded")
 
     # Optional: Save df_calsim_all for inspection
     df_calsim_all.to_csv(os.path.join(BASE_OUT_DIR, "df_calsim_all.csv"))
@@ -355,7 +414,7 @@ def main():
         training[(cal, vic)] = (ser_to_df(b_train), ser_to_df(t_train))
 
     if not training:
-        print("No CalSim/VIC training pairs available.")
+        print("  ERROR: No CalSim/VIC training pairs available.")
         return
 
     # Build full anchor map once
@@ -364,54 +423,47 @@ def main():
     # Detect Product B time series files (e.g. 01..10 or n01..n10)
     timeseries_list = find_timeseries_in_dir(vic_sim_dir)
     if not timeseries_list:
-        print("No Product B time series files found – check vic_sim_dir.")
+        print("  ERROR: No Product B time series files found.")
         return
 
-    print("Found Product B time series:", ", ".join(timeseries_list))
+    print(f"  {len(training)} valid training pairs, {len(timeseries_list)} chunks ({', '.join(timeseries_list)})")
+    print(f"  Setup complete ({time.perf_counter() - t_start:.1f}s)")
 
-    # --- 2. Precompute qmap on COMBINED time series -----------------------------
-    # For each (CalSim, VIC) pair:
-    #   - read all Product-B time series in order
-    #   - concatenate into one long simulation serie
-    #   - run qmap_single ONCE
-    #   - store mapped values with time series labels so we can split later
+    # --- 2. Parallel qmap on combined time series ----------------------------
+    n_pairs = len(training)
+    n_workers = min(MAX_WORKERS, n_pairs)
+    print(f"\nQuantile-mapping {n_pairs} pairs  ({n_workers} workers) ...")
+
     qmap_cache = {}  # key: (cal, vic) -> combined mapped DataFrame
+    t_qmap = time.perf_counter()
+    width = len(str(n_pairs))
 
-    for (cal, vic), (b_train_df, t_train_df) in training.items():
-        sim_all = load_vic_sim_all_timeseries(vic, vic_sim_dir, timeseries_list)
-        if sim_all.empty:
-            continue
+    with ProcessPoolExecutor(max_workers=n_workers) as pool:
+        futures = {
+            pool.submit(_qmap_worker, cal, vic, b_train, t_train,
+                        vic_sim_dir, timeseries_list): (cal, vic)
+            for (cal, vic), (b_train, t_train) in training.items()
+        }
+        for i, future in enumerate(as_completed(futures), 1):
+            cal, vic, sim_all = future.result()
+            if sim_all is not None:
+                qmap_cache[(cal, vic)] = sim_all
+                tag = "ok"
+            else:
+                tag = "skip"
+            elapsed = time.perf_counter() - t_qmap
+            print(f"  [{i:>{width}}/{n_pairs}] {cal:<30s} <- {vic:<20s}  {tag}  ({elapsed:.1f}s)")
 
-        simulation_df = sim_all[["year", "month", "vic_val"]].rename(columns={"vic_val": "value"})
-
-        qmap = qmap_single(
-            simulation_df,      # combined Product B VIC series (all time series stacked)
-            b_train_df,   # train basis: Product A VIC
-            t_train_df,   # train target: CalSim
-        ).copy()
-
-        if "quantile_mapped_value" not in qmap.columns:
-            raise KeyError(
-                "qmap_single output is missing 'quantile_mapped_value'. "
-                f"Available columns: {list(qmap.columns)}"
-            )
-        if len(qmap) != len(sim_all):
-            raise ValueError(
-                f"qmap_single returned {len(qmap)} rows, but combined simulation series has {len(sim_all)} rows "
-                f"for pair (CalSim={cal}, VIC={vic})."
-            )
-
-        sim_all = sim_all.copy()
-        sim_all["qmap_preAdj"] = qmap["quantile_mapped_value"].to_numpy(float)
-        qmap_cache[(cal, vic)] = sim_all
+    print(f"  Mapped {len(qmap_cache)}/{n_pairs} pairs ({time.perf_counter() - t_qmap:.1f}s)")
 
     if not qmap_cache:
-        print("No Product B time series were available for quantile mapping.")
+        print("  ERROR: No Product B time series available for quantile mapping.")
         return
 
     # --- 3. Split mapped results back to each time series and write outputs ------
+    print(f"\nWriting output CSVs ...")
+    total_files = 0
     for ts in timeseries_list:
-        print(f"\n=== Processing time series {ts} ===")
 
         per_pair_dfs = []
         input_fname_by_cal = {}
@@ -436,7 +488,7 @@ def main():
             per_pair_dfs.append(pair_df)
 
         if not per_pair_dfs:
-            print(f"No CalSim/VIC pairs processed for time series {ts}.")
+            print(f"  {ts}: no pairs")
             continue
 
         detail_df = pd.concat(per_pair_dfs, ignore_index=True)
@@ -491,13 +543,19 @@ def main():
             "qmap_postAdj",
         ]
 
+        chunk_files = 0
         for cal_name, grp in detail_df.groupby("CalSim", observed=True):
             cal_name = str(cal_name)
             in_fname = input_fname_by_cal.get(cal_name, f"{cal_name}_{ts}.csv")
             out_fname = build_output_filename(cal_name, in_fname)
             out_path = os.path.join(OUT_TS_DIR, out_fname)
             grp[base_cols].to_csv(out_path, index=False)
-            print(f"Wrote {out_path}")
+            chunk_files += 1
+        total_files += chunk_files
+        print(f"  {ts}: {chunk_files} files")
+
+    t_total = time.perf_counter() - t_start
+    print(f"\nComplete: {total_files} files written in {t_total:.1f}s")
 
 
 if __name__ == "__main__":

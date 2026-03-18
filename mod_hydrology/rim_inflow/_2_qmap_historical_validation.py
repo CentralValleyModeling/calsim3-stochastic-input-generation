@@ -1,6 +1,34 @@
-# %% ──────────────────────────────────────────────────────────────────────
-# %%  Quantile-mapping validation: CalSim inflows vs VIC
-# %% ──────────────────────────────────────────────────────────────────────
+"""
+Quantile-Mapping Historical Validation (Product A)
+===================================================
+Train quantile mapping on the first half of the overlap period
+(Oct 1921 - Sep 1971) and validate on the second half (Oct 1971 - Dec 2018).
+
+For each CalSim/VIC pair from CalSim3_VIC_name_mapping.csv:
+- Compute pre-adjustment QMAP and skill metrics (R-squared, NSE)
+- Enforce anchor/tributary mass balance (post-adjustment)
+- Compare VIC baseline, QMAP pre-adj, and QMAP post-adj
+
+Inputs
+------
+- CalSim baseline DSS:    CalSim3/__calsim_sv_default__.dss
+- Product A VIC routed:   mod_hydrology/vic/output/routed/Product_A/1/
+- Name mapping:           reference/CalSim3_VIC_name_mapping.csv
+- Anchor map:             reference/RimInflowAnchor.xlsx
+
+Outputs
+-------
+- _2_qmap_historical_validation/Product_A/
+  - calsim_qmap_validation_TS.csv   (row-level qmap results)
+  - quantile_mapping_validation_summary.csv
+  - vic_all_rivers.csv, calsim_all_inflows.csv
+  - annual_sum_comparisons_*.csv
+  - _figures/  (monthly box plots, annual summaries)
+
+Usage
+-----
+    cd mod_hydrology/rim_inflow && python _2_qmap_historical_validation.py
+"""
 
 import os, sys, numpy as np, pandas as pd, seaborn as sns, matplotlib.pyplot as plt
 from pathlib import Path
@@ -26,8 +54,8 @@ os.makedirs(PLOTS_DIR,  exist_ok=True)
 master_xlsx  = str(get_inventory_dir() / "_MASTER_INVENTORY_FOR_STOCHASTIC_INPUT_GENERATION_.xlsx")
 dss_file     = str(get_base_dir() / "CalSim3" / "__calsim_sv_default__.dss")
 vic_dir      = str(_vic_gen / "output" / "routed" / "Product_A" / "1")
-ANCHOR_XLSX  = str(_SCRIPT_DIR / "reference" / "RimInflowAnchor.xlsx")
-r2_csv_path  = str(_gen / "_1_calc_correlations" / "r2_calsim_vs_vic.csv")
+ANCHOR_XLSX     = str(_SCRIPT_DIR / "reference" / "RimInflowAnchor.xlsx")
+NAME_MAP_CSV    = str(_SCRIPT_DIR / "reference" / "CalSim3_VIC_name_mapping.csv")
 
 vic_end_year = 2018
 
@@ -39,17 +67,10 @@ col_O, col_P = df_master.columns[15], df_master.columns[16]
 df_inflow    = df_master[df_master[col_I].astype(str).str.strip().str.lower() == 'rim inflow']
 calsim_names = df_inflow[col_C].dropna().unique().tolist()
 
-# df_pairs = (df_inflow[[col_C, col_O]]
-#             .dropna(subset=[col_C, col_O])
-#             .rename(columns={col_C:'CalSim_Inflow', col_O:'VIC_Inflow'}))
-
-
-
-# CalSim ↔ VIC matched pairs (from correlation CSV)
-df_r2 = pd.read_csv(r2_csv_path)
-df_pairs = df_r2[['DSS Inflow', 'VIC Inflow']].copy()
-df_pairs = df_pairs.rename(columns={'DSS Inflow': 'CalSim_Inflow', 'VIC Inflow': 'VIC_Inflow'})
-df_pairs = df_pairs.dropna()
+# CalSim ↔ VIC matched pairs (from name mapping CSV)
+df_pairs = pd.read_csv(NAME_MAP_CSV).rename(columns={'CS3_Inflow': 'CalSim_Inflow'})
+df_pairs = df_pairs.dropna(subset=['CalSim_Inflow', 'VIC_Inflow'])
+df_pairs = df_pairs[df_pairs['VIC_Inflow'].str.strip() != '']
 
 # Preserve CSV order of CalSim inflows for all outputs
 master_order = df_pairs['CalSim_Inflow'].tolist()

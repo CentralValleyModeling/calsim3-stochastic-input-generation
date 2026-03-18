@@ -1,3 +1,35 @@
+"""
+Stochastic Precipitation Exploration Plots
+==========================================
+Interactive exploration of area-weighted precipitation for a single VIC basin
+across Product A (historical WGEN) and Product B (stochastic WGEN).
+
+Plots
+-----
+1. Multi-window rolling mean precipitation (2, 5, 20 yr)
+2. Rolling precipitation KDEs (1, 2, 5, 10 yr)
+3. January daily precipitation ECDF
+
+Configuration
+-------------
+Set LOCATION at the top to switch basins (e.g. CS3_8RI_OROVI, CS3_I_SHSTA).
+Grid info is read from mod_forcing/vic/reference/GridInfo/.
+
+Inputs
+------
+- Product A WGEN meteo:  WGEN/Product_A/1/
+- Product B WGEN meteo:  WGEN/Product_B/1/
+- VIC grid info:         mod_forcing/vic/reference/GridInfo/<LOCATION>_GridInfo.txt
+
+Outputs
+-------
+- SVG figures and precipitation CSVs in _0_stochastic_precipitation/
+
+Usage
+-----
+    cd mod_hydrology/rim_inflow && python _0_stochastic_precipitation.py
+"""
+
 # %% imports
 import os, sys
 from pathlib import Path
