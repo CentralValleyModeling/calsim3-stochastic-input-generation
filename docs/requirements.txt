@@ -1,0 +1,6 @@
+# Sphinx documentation dependencies
+sphinx>=7.0
+myst-parser>=3.0
+sphinx-book-theme
+sphinx-copybutton
+sphinx-autobuild

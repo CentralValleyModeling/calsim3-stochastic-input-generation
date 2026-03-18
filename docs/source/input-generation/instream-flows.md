@@ -1,0 +1,60 @@
+
+# Instream Flows (6 Variables)
+
+```{admonition} Repository Module
+:class: tip
+
+**Module:** `mod_other/instream_flows/`  
+Minimum instream flow requirements
+```
+
+
+Minimum instream flow requirements for regulated rivers based on biological opinions, settlement agreements, and operational constraints. The two primary reconstructions cover San Joaquin River Restoration flows below Friant Dam and Feather River minimum flows below Oroville. Both implementations translate original agreement methodologies into algorithms applicable to synthetic unimpaired flow sequences.
+
+## Methodology
+
+### San Joaquin Restoration Flows
+
+The San Joaquin River Restoration minimum instream flows follow the 2009 restoration settlement agreement, with implementation based on the original Excel workbook calculation methodology. The restoration releases divide into two components: non-pulse base flows providing year-round minimum requirements, and pulse flows adding elevated requirements during specific April periods. Monthly timestep calculations use weighted averages of both components.
+
+Reverse-engineering the original Excel workbook proved essential for understanding the conditional logic governing release schedules. The workbook embeds extensive nested IF statements with threshold-dependent lookup tables that differ between normal and restoration year types. Converting this logic to algorithmic form required carefully tracing cell references through multiple worksheets, with particular attention to edge cases near threshold boundaries where small differences in annual runoff can trigger substantially different release schedules.
+
+Unimpaired runoff into Lake Millerton serves as the sole input variable, with threshold logic determining release requirements. Below 400 TAF annual runoff, minimum base flow requirements apply. Above 2.5 MAF annual runoff, the restoration schedule reaches maximum flow levels. Between these thresholds, linear interpolation provides intermediate flow requirements. The non-pulse component covers the first 14–15 days of April, while pulse flows apply to remaining days, with monthly values computed as day-weighted averages.
+
+### Feather River Minimum Flows
+
+Feather River minimum instream flows implement the 1983 agreement between DWR and the Department of Fish and Game. The agreement specifies four conditions with criteria determining minimum required flows ranging from 750 to 2,500 CFS depending on water availability indicators. The reconstruction translates this reference table structure into algorithmic threshold logic using Oroville unimpaired runoff as the primary predictor.
+
+#### Threshold Logic
+
+The flowchart logic begins with Condition 3, calculating average annual Oroville unimpaired runoff for the previous water year. If runoff falls below 28% of 4.4 MAF (approximately 1.23 MAF), Condition 3 applies with 900 CFS October through February and 700 CFS March through September. If above this threshold, the algorithm calculates a two-year rolling average. Two-year average runoff below 73% of 4.4 MAF (approximately 3.21 MAF) maintains Condition 3. Above this threshold, the logic transitions to Conditions 1 and 2, distinguished by an April-July cumulative runoff threshold at 55% of 1.9 MAF (approximately 1.05 MAF). This creates a hierarchical decision structure with increasingly restrictive conditions as water availability declines.
+Developing this flowchart required careful interpretation of the 1983 agreement language, which describes conditions in legal prose rather than algorithmic notation. The translation from agreement text to threshold logic was discussed extensively during the November and December progress meetings, with particular attention to whether the rolling average should be computed on a water year or calendar year basis (water year was selected as more hydrologically meaningful) and how to handle the first year of simulation where no prior-year data exists.
+:::note Suggested Plot
+Flowchart diagram visualizing the Condition 3 → Condition 1/2 decision logic with threshold values annotated. Include example water years showing how annual runoff and rolling averages trigger different conditions. Optionally overlay historical frequency of each condition occurring.
+:::
+
+#### Threshold Optimization
+
+Original agreement language referenced Oroville storage (preprocessed), but the reconstruction uses Oroville unimpaired runoff as a more direct hydrologic indicator applicable to synthetic sequences. The three key thresholds (28% of 4.4 MAF annual, 73% of 4.4 MAF two-year rolling, 55% of 1.9 MAF April-July cumulative) were optimized to maximize correspondence with actual CalSim inputs. Condition 4, representing an upper cap never exceeded in historical MIF values (which never exceeded 1,700 CFS), was excluded from the reconstruction logic.
+
+#### Condition 4 Decision
+
+Condition 4 from the original 1983 agreement was deliberately excluded from the reconstruction. Historical analysis showed that actual minimum instream flow values never exceeded 1,700 CFS, well below Condition 4 thresholds that would require 2,500 CFS. Including rarely or never-triggered conditions in the logic introduces unnecessary complexity and potential for spurious activations in synthetic sequences. The three-condition framework (Conditions 1, 2, 3) captures the full range of historical behavior while maintaining defensible thresholds grounded in observed operations.
+
+## Results
+
+### San Joaquin Restoration Flows
+
+Validation over WY 1972-2018 achieves R² values between 0.85 and 0.90, demonstrating strong performance. Observed differences stem from differences in unimpaired inflow projections between CalSim baseline inputs and reconstructed VIC-based values. Years showing spikes in residuals correspond to cases where CalSim input annual runoff exceeded the 2.5 MAF threshold while reconstructed values remained below, or vice versa for low flow conditions. These threshold crossings create discrete step changes that explain apparent discrepancies while validating correct algorithm implementation.
+
+:::note Suggested Plot
+Dual panels showing: (1) Time series of San Joaquin Restoration flows WY 1972-2018 with actual (gray) and reconstructed (blue) values, highlighting years where threshold crossings explain differences. (2) Scatter plot of actual vs reconstructed colored by WYT, with 1:1 line and 2.5 MAF / 0.4 MAF threshold regions annotated.
+:::
+
+### Feather River Minimum Flows
+
+The reconstructed Feather River minimum flows achieve R² = 0.89 over the validation period, indicating strong replication of historical patterns. The threshold-based approach successfully captures the discrete operational rules while remaining applicable to novel hydrologic sequences not present in the training data.
+
+![Feather MIF Validation](../figures/s3-inputs_feather-mif-validation.png)
+*Feather River Minimum Instream Flow validation from Progress Meeting 3 (R² = 0.89). The reconstructed time series captures the three-condition threshold structure with strong agreement across water year types.*
+
