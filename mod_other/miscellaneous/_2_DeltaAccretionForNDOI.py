@@ -12,7 +12,7 @@ CalSim 3.0 using WGEN precipitation for the grid cell nearest to:
     Latitude: 38.00°N, Longitude: 121.32°W
 
 Formula (replicates "Direct Calculation" tab of
-    _TermDevelopment/DELTAACCRETIONFORNDOI/
+    ./data/GENERATED/mod_other/miscellaneous/term_development/DELTAACCRETIONFORNDOI/
     Reconstructed_DeltaAccretionForNDOI_Directly.xlsx, column J):
 
     TAF = (precip_in / 12) * DELTA_AREA * (DELTA_AREA / watershed_area) / 1000
