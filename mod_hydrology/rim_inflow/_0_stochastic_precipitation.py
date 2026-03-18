@@ -101,7 +101,7 @@ def gather_precip(meteo_dir, grid_info, start_date):
         area_sum += row['f2'] / row['f1']
     precip = (precip / area_sum) * 0.0393701  # mm → in
     precip.index = pd.date_range(start=start_date, periods=len(precip), freq='D')
-    return precip, precip.resample('M').sum(), precip.resample('A').sum()
+    return precip, precip.resample('ME').sum(), precip.resample('YE').sum()
 
 
 def _grid(ax, axis='both'):

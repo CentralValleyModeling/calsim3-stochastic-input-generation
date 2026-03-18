@@ -111,7 +111,7 @@ def gather_precip(meteo_dir, grid_info, start_date):
         area_sum += row['f2'] / row['f1']
     precip = (precip / area_sum) * 0.0393701  # mm → in
     precip.index = pd.date_range(start=start_date, periods=len(precip), freq='D')
-    return precip, precip.resample('M').sum(), precip.resample('A').sum()
+    return precip, precip.resample('ME').sum(), precip.resample('YE').sum()
 
 
 def _grid(ax, axis='both'):
@@ -130,14 +130,14 @@ def _ecdf(series):
 # ============================================================
 
 # CS3 baseline (L2020A)
-fid = HecDss.Open(CS3_DSS)
-_ts = fid.read_ts(f"/CALSIM/{CS3_PATH}//1MON/L2020A/")
+with HecDss.Open(CS3_DSS) as fid:
+    _ts = fid.read_ts(f"/CALSIM/{CS3_PATH}//1MON/L2020A/")
 cs3 = pd.DataFrame(
     {LOCATION: _ts.values},
-    index=pd.date_range(start='1920-10-31', periods=len(_ts.values), freq='M')
+    index=pd.date_range(start='1920-10-31', periods=len(_ts.values), freq='ME')
 )
 cs3 = cs3.loc[cs3.index <= '2021-09-30']
-cs3_annual = cs3.resample('AS-OCT').sum()
+cs3_annual = cs3.resample('YS-OCT').sum()
 
 # WGEN historical (qmap-adjusted)
 _hist_all = pd.read_csv(HIST_CSV)
@@ -147,11 +147,12 @@ _hist = _hist_all.loc[
 ].copy()
 _hist.index = pd.to_datetime(_hist['Year'].astype(str) + '-' + _hist['Month'].astype(str) + '-01')
 wgen_hist = _hist[['qmap_postAdj']].rename(columns={'qmap_postAdj': LOCATION})
-wgen_hist_annual = wgen_hist.resample('AS-OCT').sum()
+wgen_hist_annual = wgen_hist.resample('YS-OCT').sum()
 wgen_hist_annual = wgen_hist_annual.loc[(wgen_hist_annual.index.year >= 1915) & (wgen_hist_annual.index.year <= 2017)]
 
 # WGEN stochastic (qmap-adjusted)
-_files = sorted(glob.glob(os.path.join(STOCH_DIR, f'{CALSIM_KEY}_{MATCHED_KEY}_qmo_n*.csv')))
+# Product B files are named <CALSIM_KEY>_qmo_n*.csv (no VIC name appended)
+_files = sorted(glob.glob(os.path.join(STOCH_DIR, f'{CALSIM_KEY}_qmo_n*.csv')))
 _chunks = []
 for i, f in enumerate(_files):
     df = pd.read_csv(f)[['Year', 'Month', 'qmap_postAdj']].copy()
@@ -172,7 +173,7 @@ ax.plot(_rolling(cs3_annual[LOCATION], 30),
 ax.plot(_rolling(wgen_hist_annual[LOCATION], 30),
         color=COLORS['hist'], linewidth=2, linestyle='-', label='Product A (Historical)')
 for col in syn_cols:
-    ax.plot(pd.date_range('1916-10-01', periods=len(wgen_annual), freq='A'),
+    ax.plot(pd.date_range('1916-10-01', periods=len(wgen_annual), freq='YS-OCT'),
             _rolling(wgen_annual[col], 30),
             color=COLORS['synth'], alpha=0.6, linewidth=1, zorder=0)
 ax.set(xlabel='Year', ylabel='30-Year Rolling Mean Flow',
@@ -187,8 +188,8 @@ plt.show()
 # %% plot 2 — 4-row rolling means (flows, shared x-axis)
 # ============================================================
 
-cs3_dates = pd.date_range('1920-10-01', periods=len(cs3_annual), freq='A')
-syn_dates = pd.date_range('1916-10-01', periods=len(wgen_annual), freq='A')
+cs3_dates = pd.date_range('1920-10-01', periods=len(cs3_annual), freq='YS-OCT')
+syn_dates = pd.date_range('1916-10-01', periods=len(wgen_annual), freq='YS-OCT')
 
 import matplotlib.dates as mdates
 
