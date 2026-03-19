@@ -43,3 +43,7 @@ docs/.doctrees/
 .DS_Store
 Thumbs.db
 desktop.ini
+
+# ── GitHub special ────────────────────────────────────────────────────────────
+.github/*instructions*
+.github/scripts/
