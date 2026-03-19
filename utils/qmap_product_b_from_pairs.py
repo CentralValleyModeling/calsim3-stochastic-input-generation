@@ -18,7 +18,6 @@ Core assumptions
 """
 
 import re
-import sys
 import time
 from pathlib import Path
 
@@ -31,13 +30,13 @@ from utils.quantile_mapping import qmap_single
 # -----------------------------------------------------------------------------
 # Defaults
 # -----------------------------------------------------------------------------
-DEFAULT_PRODUCT_B_START = pd.Timestamp("1921-10-31")
-DEFAULT_PRODUCT_B_END = pd.Timestamp("2021-09-30")
-DEFAULT_DSS_READ_START = "1915-01-31"
-DEFAULT_DSS_READ_END = "2021-12-31"
-DEFAULT_TRAIN_START = "1921-10-01"
-DEFAULT_TRAIN_END = "2021-09-30"
-DEFAULT_OUTPUT_TAG = "qmap"
+PRODUCT_B_START = pd.Timestamp("1921-10-31")
+PRODUCT_B_END = pd.Timestamp("2021-09-30")
+DSS_READ_START = "1915-01-31"
+DSS_READ_END = "2021-12-31"
+TRAIN_START = "1921-10-01"
+TRAIN_END = "2021-09-30"
+OUTPUT_TAG = "qmap"
 SIM_VALUE_COLUMN = "qmap_postAdj"
 
 # -----------------------------------------------------------------------------
@@ -95,7 +94,7 @@ def find_timeseries_in_dir(sim_dir: str | Path) -> list[str]:
     return sorted(timeseries_list, key=timeseries_sort_key)
 
 
-def build_output_filename(target_partb: str, timeseries: str, output_tag: str = DEFAULT_OUTPUT_TAG) -> str:
+def build_output_filename(target_partb: str, timeseries: str, output_tag: str = OUTPUT_TAG) -> str:
     return f"{target_partb}_{output_tag}_{timeseries}.csv"
 
 
@@ -176,8 +175,8 @@ def read_qmap_pairs(pair_csv: str | Path) -> pd.DataFrame:
 def read_calsim_monthly_pairs(
     dssfile: str | Path,
     specs: list[tuple[str, str]],
-    dss_read_start: str = DEFAULT_DSS_READ_START,
-    dss_read_end: str = DEFAULT_DSS_READ_END,
+    dss_read_start: str = DSS_READ_START,
+    dss_read_end: str = DSS_READ_END,
 ) -> dict[tuple[str, str], pd.Series]:
     """
     Read multiple CalSim monthly DSS series keyed by (B-part, C-part).
@@ -254,8 +253,8 @@ def load_product_b_basis_series(
     basis_partb: str,
     sim_dir: str | Path,
     timeseries: str,
-    product_b_start: str | pd.Timestamp = DEFAULT_PRODUCT_B_START,
-    product_b_end: str | pd.Timestamp = DEFAULT_PRODUCT_B_END,
+    product_b_start: str | pd.Timestamp = PRODUCT_B_START,
+    product_b_end: str | pd.Timestamp = PRODUCT_B_END,
 ) -> pd.Series | None:
     """
     Load one Product-B realization for a matched basis term.
@@ -288,8 +287,8 @@ def load_product_b_all_timeseries(
     basis_partb: str,
     sim_dir: str | Path,
     timeseries_list: list[str],
-    product_b_start: str | pd.Timestamp = DEFAULT_PRODUCT_B_START,
-    product_b_end: str | pd.Timestamp = DEFAULT_PRODUCT_B_END,
+    product_b_start: str | pd.Timestamp = PRODUCT_B_START,
+    product_b_end: str | pd.Timestamp = PRODUCT_B_END,
 ) -> pd.DataFrame:
     """
     Load and concatenate all Product-B realizations for one basis term.
@@ -329,8 +328,8 @@ def load_product_b_all_timeseries(
 def build_training_pairs(
     df_pairs: pd.DataFrame,
     dss_data: dict[tuple[str, str], pd.Series],
-    train_start: str = DEFAULT_TRAIN_START,
-    train_end: str = DEFAULT_TRAIN_END,
+    train_start: str = TRAIN_START,
+    train_end: str = TRAIN_END,
 ) -> tuple[dict[tuple[str, str], dict[str, object]], list[tuple[str, str, str]]]:
     """
     Build training vectors for each target/predictor pair in qmap_pairs.csv.
@@ -403,13 +402,13 @@ def run_product_b_qmap_from_pairs(
     dss_file: str | Path,
     sim_in_dir: str | Path,
     out_dir: str | Path,
-    train_start: str = DEFAULT_TRAIN_START,
-    train_end: str = DEFAULT_TRAIN_END,
-    product_b_start: str | pd.Timestamp = DEFAULT_PRODUCT_B_START,
-    product_b_end: str | pd.Timestamp = DEFAULT_PRODUCT_B_END,
-    output_tag: str = DEFAULT_OUTPUT_TAG,
-    dss_read_start: str = DEFAULT_DSS_READ_START,
-    dss_read_end: str = DEFAULT_DSS_READ_END,
+    train_start: str = TRAIN_START,
+    train_end: str = TRAIN_END,
+    product_b_start: str | pd.Timestamp = PRODUCT_B_START,
+    product_b_end: str | pd.Timestamp = PRODUCT_B_END,
+    output_tag: str = OUTPUT_TAG,
+    dss_read_start: str = DSS_READ_START,
+    dss_read_end: str = DSS_READ_END,
 ) -> dict[str, int]:
     """
     Run Product-B quantile mapping for all rows in a qmap_pairs.csv file.
@@ -533,7 +532,7 @@ def run_product_b_qmap_from_pairs(
                 )
 
             mapped = sim_all.copy()
-            mapped["qmap_final"] = pd.to_numeric(
+            mapped["qmap_target"] = pd.to_numeric(
                 qmap["quantile_mapped_value"],
                 errors="coerce",
             ).to_numpy(float)
@@ -541,9 +540,9 @@ def run_product_b_qmap_from_pairs(
             lower_bound = info["lower_bound"]
             upper_bound = info["upper_bound"]
             if pd.notna(lower_bound):
-                mapped["qmap_final"] = mapped["qmap_final"].clip(lower=float(lower_bound))
+                mapped["qmap_target"] = mapped["qmap_target"].clip(lower=float(lower_bound))
             if pd.notna(upper_bound):
-                mapped["qmap_final"] = mapped["qmap_final"].clip(upper=float(upper_bound))
+                mapped["qmap_target"] = mapped["qmap_target"].clip(upper=float(upper_bound))
 
             qmap_cache[(target_b, basis_b, str(info["target_c"]))] = mapped
             tag = "ok"
@@ -583,15 +582,13 @@ def run_product_b_qmap_from_pairs(
                     "Year": block["year"].astype(int).to_numpy(),
                     "Month": block["month"].astype(int).to_numpy(),
                     "basis_sim": block["basis_sim"].astype(float).to_numpy(),
-                    "qmap_final": block["qmap_final"].astype(float).to_numpy(),
+                    "qmap_target": block["qmap_target"].astype(float).to_numpy(),
                 }
             )
 
             out_fname = build_output_filename(target_b, ts, output_tag=output_tag)
             out_path = out_dir / out_fname
-            # Use Windows extended-length path prefix to avoid MAX_PATH limit.
-            csv_path = f"\\\\?\\{out_path}" if sys.platform == "win32" else str(out_path)
-            out_df.to_csv(csv_path, index=False)
+            out_df.to_csv(out_path, index=False)
             chunk_files += 1
 
         total_files += chunk_files
