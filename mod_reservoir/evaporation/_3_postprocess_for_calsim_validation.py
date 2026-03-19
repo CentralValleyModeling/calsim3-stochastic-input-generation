@@ -5,7 +5,7 @@ Creates a combined long-format validation CSV from individual reservoir
 evaporation files produced by _2_run_product_a.py.
 
 Output format: Part B, Part C, Year, Month, Value
-Output file:   output/_calsim_historical_validation/_reservoir_evaporation_productA_{start_wy}_{end_wy}.csv
+Output file:   output/product_a_historical_validation/_reservoir_evaporation_productA_{start_wy}_{end_wy}.csv
 
 Usage:
     python _2_postprocess_for_calsim_validation.py                  # Default WY 1972-2018
@@ -48,7 +48,7 @@ def create_validation_csv(
     if output_dir is None:
         output_dir = _gen / 'output' / '_2_run_reservoir_evap' / 'Product_A'
     if validation_dir is None:
-        validation_dir = _gen / 'output' / '_calsim_historical_validation'
+        validation_dir = _gen / 'output' / 'product_a_historical_validation'
     individual_dir = Path(output_dir) / 'individual_reservoirs'
     if not individual_dir.exists():
         print(f"Error: {individual_dir} not found. Run _2_run_product_a.py first.")

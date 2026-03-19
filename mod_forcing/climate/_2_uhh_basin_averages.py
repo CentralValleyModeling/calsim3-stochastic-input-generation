@@ -551,7 +551,7 @@ def process_location(shorthand, grid_info_file, grid_info_folder, data_folder, o
 
 def create_validation_csv(
     source_dir: str = 'output/_2_uhh_basin_averages/product_a/1',
-    validation_dir: str = 'output/_calsim_historical_validation',
+    validation_dir: str = 'output/product_a_historical_validation',
     start_wy: int = 1971,
     end_wy: int = 2018
 ):

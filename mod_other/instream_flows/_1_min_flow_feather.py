@@ -128,7 +128,7 @@ PATH_UNIMP_OROV_PA = _rim_gen / "_2_qmap_historical_validation" / "Product_A" / 
 PATH_UNIMP_OROV_PB_DIR = _rim_gen / "_3_qmap_product_b"
 
 # Reference for validation comparison (CalSim3 historical MINFLOWFEATHER)
-PATH_VALIDATION_REF = _gen / "output" / "_calsim_historical_validation" / "_InstreamFlows_terms_MINFLOWFEATHER_1971_2018.csv"
+PATH_VALIDATION_REF = _gen / "output" / "product_a_historical_validation" / "_InstreamFlows_terms_MINFLOWFEATHER_1971_2018.csv"
 
 # Spreadsheet with original computed schedule (for 3-way validation comparison)
 PATH_XLSX = _gen / "term_development" / "MINFLOWFEATHER" / "MIF_FEATHER_Logic_Reconstruction.xlsx"

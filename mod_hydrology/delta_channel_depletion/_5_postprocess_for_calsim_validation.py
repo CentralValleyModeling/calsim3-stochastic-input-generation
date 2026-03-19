@@ -22,7 +22,7 @@ from utils.paths import get_module_generated_dir, get_inventory_dir
 
 # %% ── CONSTANTS ────────────────────────────────────────────────────────
 _GEN_DIR = get_module_generated_dir("mod_hydrology/delta_channel_depletion")
-OUTPUT_DIR = str(_GEN_DIR / "output" / "_calsim_historical_validation")
+OUTPUT_DIR = str(_GEN_DIR / "output" / "product_a_historical_validation")
 
 EXCEL_PATH = str(get_inventory_dir() / "_MASTER_INVENTORY_FOR_STOCHASTIC_INPUT_GENERATION_.xlsx")
 SHEET_NAME = "MASTER"

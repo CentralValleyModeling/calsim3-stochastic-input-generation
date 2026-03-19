@@ -17,6 +17,7 @@ Quick start
 """
 
 import json
+import sys
 from pathlib import Path
 
 # ---------------------------------------------------------------------------
@@ -24,6 +25,14 @@ from pathlib import Path
 # ---------------------------------------------------------------------------
 _UTILS_DIR = Path(__file__).resolve().parent
 REPO_ROOT = _UTILS_DIR.parent
+
+
+def _long_path(p: Path) -> Path:
+    """On Windows, prepend ``\\\\?\\`` to bypass the 260-char MAX_PATH limit."""
+    s = str(p)
+    if sys.platform == "win32" and not s.startswith("\\\\?\\"):
+        return Path("\\\\?\\" + s)
+    return p
 
 # ---------------------------------------------------------------------------
 # Load user config → fall back to default
@@ -42,7 +51,7 @@ _CFG = _load_config()
 
 # Resolve data_dir relative to the repo root (or use absolute if given)
 _raw = Path(_CFG["data_dir"])
-DATA_DIR: Path = _raw if _raw.is_absolute() else (REPO_ROOT / _raw).resolve()
+DATA_DIR: Path = _long_path(_raw if _raw.is_absolute() else (REPO_ROOT / _raw).resolve())
 
 
 # ---------------------------------------------------------------------------
