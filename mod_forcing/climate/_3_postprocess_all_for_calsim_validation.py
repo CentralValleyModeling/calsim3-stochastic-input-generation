@@ -11,10 +11,10 @@ Inputs
 
 Outputs
 -------
-- output/_calsim_historical_validation/_pp_precip_productA_{start_wy}_{end_wy}.csv
-- output/_calsim_historical_validation/_uhh_precip_productA_{start_wy}_{end_wy}.csv
-- output/_calsim_historical_validation/_uhh_temperature_productA_{start_wy}_{end_wy}.csv
-- output/_calsim_historical_validation/_uhh_vpd_productA_{start_wy}_{end_wy}.csv
+- output/product_a_historical_validation/_pp_precip_productA_{start_wy}_{end_wy}.csv
+- output/product_a_historical_validation/_uhh_precip_productA_{start_wy}_{end_wy}.csv
+- output/product_a_historical_validation/_uhh_temperature_productA_{start_wy}_{end_wy}.csv
+- output/product_a_historical_validation/_uhh_vpd_productA_{start_wy}_{end_wy}.csv
 
 Usage
 -----
@@ -32,7 +32,7 @@ from utils.paths import get_module_generated_dir
 
 # ── CONSTANTS ───────────────────────────────────────────────────────────
 _GEN_DIR = get_module_generated_dir("mod_climate")
-VALIDATION_DIR = _GEN_DIR / 'output' / '_calsim_historical_validation'
+VALIDATION_DIR = _GEN_DIR / 'output' / 'product_a_historical_validation'
 PP_SOURCE_DIR = _GEN_DIR / 'output' / '_1_pp_point_locations' / 'product_a' / '1'
 UHH_SOURCE_DIR = _GEN_DIR / 'output' / '_2_uhh_basin_averages' / 'product_a' / '1'
 

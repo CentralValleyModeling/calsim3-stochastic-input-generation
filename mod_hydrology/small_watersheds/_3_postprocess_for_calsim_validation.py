@@ -6,7 +6,7 @@ output (SmallWatersheds_2DSS.csv) using the VIC_Precip (Product A) scenario.
 Converts AF to TAF and filters to the specified water-year window.
 
 Output format: Part B, Part C, Year, Month, Value
-Output file:   <GENERATED>/mod_hydrology/small_watersheds/output/_calsim_historical_validation/
+Output file:   <GENERATED>/mod_hydrology/small_watersheds/output/product_a_historical_validation/
                _smallwatersheds_productA_{start_wy}_{end_wy}.csv
 
 Usage
@@ -32,7 +32,7 @@ _GEN_DIR = get_module_generated_dir("mod_hydrology/small_watersheds")
 
 # ── CONSTANTS ───────────────────────────────────────────────────────────
 SOURCE_CSV = str(_GEN_DIR / "output" / "_2_postprocess_run" / "SmallWatersheds_2DSS.csv")
-VALIDATION_DIR = str(_GEN_DIR / "output" / "_calsim_historical_validation")
+VALIDATION_DIR = str(_GEN_DIR / "output" / "product_a_historical_validation")
 
 
 def create_validation_csv(
@@ -55,7 +55,7 @@ def create_validation_csv(
         Defaults to output/_2_postprocess_run/SmallWatersheds_2DSS.csv
     output_dir : str, optional
         Output directory for validation CSV.
-        Defaults to output/_calsim_historical_validation
+        Defaults to output/product_a_historical_validation
     start_wy : int
         Start water year (default: 1972)
     end_wy : int
