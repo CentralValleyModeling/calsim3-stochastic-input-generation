@@ -31,21 +31,23 @@ External inputs
     _2_run_reservoir_evap/Product_{A|B}/individual_reservoirs/
       San_Joaquin_Valley/PEDRO.csv
 
-Outputs  (data/GENERATED/mod_other/upper_watershed/output/_5_dnp_evaporation/)
+Outputs  (data/GENERATED/mod_other/upper_watershed/output/)
 -------------------------------------------------------------------------------
-  calibrate/
+  _5_dnp_evaporation/calibrate/
     hypsographic_polynomial_coeffs.csv
     surface_area_historical.csv
     hypsographic_curve.csv
     hypsographic_curve.png
     time_series_storage_area.png
-  Product_A/
-    _e_pedro_sv_evaporation_productA_<start>_<end>.csv
+  _5_dnp_evaporation/Product_A/
     product_a_evaporation_timeseries.png
     product_a_monthly_pattern.png
-  Product_B/
-    _e_pedro_sv_evaporation_productB_<start>_<end>.csv
+  _5_dnp_evaporation/Product_B/
     ...
+  _product_a_validation/
+    _e_pedro_sv_evaporation_productA_<start>_<end>.csv
+  _product_b_final/
+    _e_pedro_sv_evaporation_productB_<start>_<end>.csv
 
 Usage
 -----
@@ -82,6 +84,8 @@ OUTPUT_ROOT   = _GEN_DIR / "output" / "_5_dnp_evaporation"
 CALIBRATE_DIR = OUTPUT_ROOT / "calibrate"
 OUTPUT_A_DIR  = OUTPUT_ROOT / "Product_A"
 OUTPUT_B_DIR  = OUTPUT_ROOT / "Product_B"
+CSV_A_DIR     = _GEN_DIR / "output" / "_product_a_validation"
+CSV_B_DIR     = _GEN_DIR / "output" / "_product_b_final"
 
 # ── External input: reservoir evaporation rates ───────────────────────────────
 _EVAP_OUTROOT = _EVAP_GEN / "output" / "_2_run_reservoir_evap"
@@ -275,7 +279,9 @@ def run_generate(product: str) -> None:
     print("=" * 72)
 
     out_dir = OUTPUT_A_DIR if product == "A" else OUTPUT_B_DIR
+    csv_dir = CSV_A_DIR if product == "A" else CSV_B_DIR
     out_dir.mkdir(parents=True, exist_ok=True)
+    csv_dir.mkdir(parents=True, exist_ok=True)
 
     # ── Load polynomial from calibrate output ────────────────────────────────
     coeffs_path = CALIBRATE_DIR / "hypsographic_polynomial_coeffs.csv"
@@ -318,7 +324,7 @@ def run_generate(product: str) -> None:
     valid_rows  = storage[storage["e_cfs"].notna()]
     start_wy    = _wy(valid_rows["date"].min())
     end_wy      = _wy(valid_rows["date"].max())
-    out_csv     = out_dir / f"_e_pedro_sv_evaporation_product{product}_{start_wy}_{end_wy}.csv"
+    out_csv     = csv_dir / f"_e_pedro_sv_evaporation_product{product}_{start_wy}_{end_wy}.csv"
     pd.DataFrame({
         "Part B":  "E_PEDRO_SV",
         "Part C":  "EVAPORATION",

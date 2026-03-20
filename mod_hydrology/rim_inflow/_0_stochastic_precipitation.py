@@ -66,7 +66,7 @@ _VIC_GRID_DIR = REPO_ROOT / "mod_forcing" / "vic" / "reference" / "GridInfo"
 LOCATION   = 'CS3_8RI_OROVI'   # CS3_8RI_OROVI | CS3_I_SHSTA
 GRID_INFO  = str(_VIC_GRID_DIR / f'{LOCATION}_GridInfo.txt')
 METEO_COLS = ['Year', 'Month', 'Day', 'PRECIP', 'TMAX', 'TMIN']
-_FIG_DIR = str(_gen / "_0_stochastic_precipitation")
+_FIG_DIR = str(_gen / "output" / "_0_stochastic_precipitation")
 os.makedirs(_FIG_DIR, exist_ok=True)
 
 # ============================================================

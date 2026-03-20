@@ -29,10 +29,10 @@ Product B – fixed area ratio (final period):
 
 Outputs
 -------
-    output/_2_DeltaAccretionForNDOI/Product_A/
+    output/_product_a_validation/
         _deltaaccretionforndoi_productA_1922_2018.csv
 
-    output/_2_DeltaAccretionForNDOI/Product_B/
+    output/_product_b_final/
         _deltaaccretionforndoi_productB_1922_2021_qmo_n01.csv
         ...
         _deltaaccretionforndoi_productB_1922_2021_qmo_n10.csv
@@ -78,8 +78,8 @@ AREA_PRODUCT_B = 682_230
 _GEN_DIR     = get_module_generated_dir("mod_other/miscellaneous")
 WGEN_A_DIR   = get_base_dir() / "WGEN" / "Product_A" / "1"
 WGEN_B_DIR   = get_base_dir() / "WGEN" / "Product_B" / "1"
-OUTPUT_A_DIR = _GEN_DIR / "output" / "_2_DeltaAccretionForNDOI" / "Product_A"
-OUTPUT_B_DIR = _GEN_DIR / "output" / "_2_DeltaAccretionForNDOI" / "Product_B"
+OUTPUT_A_DIR = _GEN_DIR / "output" / "_product_a_validation"
+OUTPUT_B_DIR = _GEN_DIR / "output" / "_product_b_final"
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
 

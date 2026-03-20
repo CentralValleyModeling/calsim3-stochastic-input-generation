@@ -33,7 +33,7 @@ from utils.paths import get_module_generated_dir, get_inventory_dir
 # -- CONSTANTS -----------------------------------------------------------------
 _GEN_DIR = get_module_generated_dir("mod_hydrology/calsimhydro")
 COMPARE_DIR = str(_GEN_DIR / "output" / "_3_postprocess_product_a")
-VALIDATE_DIR = str(_GEN_DIR / "output" / "product_a_historical_validation")
+VALIDATE_DIR = str(_GEN_DIR / "output" / "_3_postprocess_product_a" / "_product_a_validation")
 
 EXCEL_PATH = str(get_inventory_dir() / "_MASTER_INVENTORY_FOR_STOCHASTIC_INPUT_GENERATION_.xlsx")
 SHEET_NAME = "MASTER"

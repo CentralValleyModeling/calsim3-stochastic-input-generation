@@ -145,7 +145,7 @@ for dss in dss_names_ordered:
 # 4) Build final output: keep EXACT Excel order; one VIC name + one R² per DSS inflow
 final_df = pd.DataFrame(results_rows, columns=["DSS Inflow", "VIC Inflow (matched or best)", "R²"]).set_index("DSS Inflow")
 final_df = final_df.reindex(dss_names_ordered).reset_index()
-_out_dir = _gen / "_1_calc_correlations"
+_out_dir = _gen / "output" / "_1_calc_correlations"
 _out_dir.mkdir(parents=True, exist_ok=True)
 final_df.to_csv(str(_out_dir / "r2_calsim_vs_vic.csv"), index=False)
 

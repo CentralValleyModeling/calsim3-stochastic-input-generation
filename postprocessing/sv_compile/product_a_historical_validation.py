@@ -4,7 +4,7 @@ Consolidated Product A historical-validation compiler.
 
 Workflow
 --------
-1. Scan each module's ``output/product_a_historical_validation/`` for data CSVs
+1. Scan each module's ``output/_product_a_validation/`` for data CSVs
 2. Copy those CSVs into ``compiled_input_files/<module>/``
 3. For each module, build an intermediate DSS by overriding the baseline
    ``__calsim_sv_default__.dss`` with the CSV values
@@ -21,7 +21,7 @@ Inventory flags
 - **Constant/Rept = T** → repeat the last 12 WY months of the baseline across
   the full overwrite window (auto-generated, no CSV needed)
 
-Diagnostic outputs  (all written to ``product_a_historical_validation/``)
+Diagnostic outputs  (all written to ``_product_a_validation/``)
 ------------------------------------------------------------------------
 - ``compiled_input_files/<module>/*.csv``  — local copies of source CSVs
 - ``<module>__productA.dss``               — per-module intermediate DSS
@@ -89,7 +89,7 @@ _base = get_base_dir()
 _gen  = get_module_generated_dir("postprocessing/sv_compile")
 
 BASELINE_DSS = _base / "CalSim3" / "__calsim_sv_default__.dss"
-OUTPUT_DIR   = _gen / "product_a_historical_validation"
+OUTPUT_DIR   = _gen / "product_a_validation"
 OUTPUT_DSS   = OUTPUT_DIR / "ProductA_Historical_Validation_SV.dss"
 COMPILED_CSV = OUTPUT_DIR / "compiled_input_files"
 
@@ -126,18 +126,30 @@ CLI_ARGS = _parser.parse_args()
 # label → (absolute path to validation dir, inventory Input_Category name)
 _gen_dir = get_generated_dir()
 MODULE_CONFIG = OrderedDict([
-    ("calsimhydro",              (_gen_dir / "mod_hydrology/calsimhydro/output/product_a_historical_validation",              "CalSimHydro")),
-    ("calsimhydro_ee",           (_gen_dir / "mod_hydrology/calsimhydro_ee/output/product_a_historical_validation",          "CalSimHydroEE")),
-    ("evaporation",              (_gen_dir / "mod_reservoir/evaporation/output/product_a_historical_validation",             "Reservoir Evaporation")),
-    ("rim_inflow",               (_gen_dir / "mod_hydrology/rim_inflow/product_a_historical_validation",                    "Rim Inflow")),
-    ("delta_channel_depletion",  (_gen_dir / "mod_hydrology/delta_channel_depletion/output/product_a_historical_validation", "Delta Channel Depletion")),
-    ("small_watersheds",         (_gen_dir / "mod_hydrology/small_watersheds/output/product_a_historical_validation",       "Small Watersheds")),
-    ("storage_curves",           (_gen_dir / "mod_reservoir/storage_curves/output/product_a_historical_validation",          "Reservoir Storage Curves")),
-    ("instream_flows",           (_gen_dir / "mod_other/instream_flows/output/product_a_historical_validation",             "Instream Flows")),
-    ("tulare_gw_terms",          (_gen_dir / "mod_hydrology/tulare_gw_terms/output/product_a_historical_validation",        "Tulare Groundwater Terms")),
-    ("climate",                  (_gen_dir / "mod_forcing/climate/output/product_a_historical_validation",                  "Climate")),
-    ("miscellaneous",            (_gen_dir / "mod_other/miscellaneous/output/product_a_historical_validation",              "Other")),
-    ("upper_watershed",          (_gen_dir / "mod_other/upper_watershed/output/product_a_historical_validation",            "Upper Watershed Modules")),
+    ("calsimhydro",              (_gen_dir / "mod_hydrology/calsimhydro/output/_3_postprocess_product_a/_product_a_validation", 
+        "CalSimHydro")),
+    ("calsimhydro_ee",           (_gen_dir / "mod_hydrology/calsimhydro_ee/output/_2_postprocess_product_a/_product_a_validation",  
+        "CalSimHydroEE")),
+    ("evaporation",              (_gen_dir / "mod_reservoir/evaporation/output/_2_run_reservoir_evap/_product_a_validation",   
+        "Reservoir Evaporation")),
+    ("rim_inflow",               (_gen_dir / "mod_hydrology/rim_inflow/output/_2_qmap_historical_validation/_product_a_validation", 
+        "Rim Inflow")),
+    ("delta_channel_depletion",  (_gen_dir / "mod_hydrology/delta_channel_depletion/output/_4_postprocess_product_a/_product_a_validation", 
+        "Delta Channel Depletion")),
+    ("small_watersheds",         (_gen_dir / "mod_hydrology/small_watersheds/output/_2_postprocess_product_a/_product_a_validation", 
+        "Small Watersheds")),
+    ("storage_curves",           (_gen_dir / "mod_reservoir/storage_curves/output/_product_a_validation",  
+        "Reservoir Storage Curves")),
+    ("instream_flows",           (_gen_dir / "mod_other/instream_flows/output/_product_a_validation", 
+        "Instream Flows")),
+    ("tulare_gw_terms",          (_gen_dir / "mod_hydrology/tulare_gw_terms/output/_1_wyt_monthly_avg_product_a/_product_a_validation", 
+        "Tulare Groundwater Terms")),
+    ("climate",                  (_gen_dir / "mod_forcing/climate/output/_product_a_validation",
+        "Climate")),
+    ("miscellaneous",            (_gen_dir / "mod_other/miscellaneous/output/_product_a_validation", 
+            "Other")),
+    ("upper_watershed",          (_gen_dir / "mod_other/upper_watershed/output/_product_a_validation",
+        "Upper Watershed Modules")),
 ])
 
 # Inventory categories that are NOT expected to have validation modules

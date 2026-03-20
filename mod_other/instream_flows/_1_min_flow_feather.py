@@ -77,14 +77,14 @@ INPUTS / OUTPUTS
   Output 2 – Product A (WY 1922–2018)
     Classifies with Product A data; dates from Oct 1921 – Sep 2018.
     Written to:
-      output/_1_min_flow_feather/_minflowfeather_productA_1922_2018.csv
+      output/_product_a_validation/_minflowfeather_productA_1922_2018.csv
 
   Output 3 – Product B (10 chunks, WY 1922–2021 each)
     Classifies with each chunk's own qmap_postAdj data plus CS3 WY 1921 seed
     for 2-year rolling average priming.
     Written to:
-      output/_1_min_flow_feather/_minflowfeather_productB_qmo_n01.csv
-      output/_1_min_flow_feather/_minflowfeather_productB_qmo_n02.csv
+      output/_product_b_final/_minflowfeather_productB_qmo_n01.csv
+      output/_product_b_final/_minflowfeather_productB_qmo_n02.csv
       ... through n10.csv
 
 Reference:
@@ -119,16 +119,16 @@ _gen        = get_module_generated_dir("mod_other/instream_flows")
 
 # Input 1: Historical CS3 unimpaired Oroville inflow — used for validation
 #          (matches Main column B in the spreadsheet)
-PATH_UNIMP_OROV_HIST = _rim_gen / "_2_qmap_historical_validation" / "Historical" / "calsim_all_inflows.csv"
+PATH_UNIMP_OROV_HIST = _rim_gen / "output" / "_2_qmap_historical_validation" / "calsim_all_inflows.csv"
 
 # Input 2: Product A synthetic unimpaired Oroville inflow — used for Product A
-PATH_UNIMP_OROV_PA = _rim_gen / "_2_qmap_historical_validation" / "Product_A" / "calsim_all_inflows.csv"
+PATH_UNIMP_OROV_PA = _rim_gen / "output" / "_2_qmap_historical_validation" / "calsim_all_inflows.csv"
 
 # Input 3: Product B directory (10 chunk CSVs)
-PATH_UNIMP_OROV_PB_DIR = _rim_gen / "_3_qmap_product_b"
+PATH_UNIMP_OROV_PB_DIR = _rim_gen / "output" / "_3_qmap_product_b"
 
 # Reference for validation comparison (CalSim3 historical MINFLOWFEATHER)
-PATH_VALIDATION_REF = _gen / "output" / "product_a_historical_validation" / "_InstreamFlows_terms_MINFLOWFEATHER_1971_2018.csv"
+PATH_VALIDATION_REF = _gen / "output" / "_product_a_validation" / "_InstreamFlows_terms_MINFLOWFEATHER_1971_2018.csv"
 
 # Spreadsheet with original computed schedule (for 3-way validation comparison)
 PATH_XLSX = _gen / "term_development" / "MINFLOWFEATHER" / "MIF_FEATHER_Logic_Reconstruction.xlsx"
@@ -140,10 +140,12 @@ OUT_DIR = _gen / "output" / "_1_min_flow_feather"
 OUT_VALIDATION = OUT_DIR / "_minflowfeather_validation_1922_2021.csv"
 
 # Output 2: Product A full period (WY 1922–2018)
-OUT_PRODUCT_A = OUT_DIR / "_minflowfeather_productA_1922_2018.csv"
+OUT_PRODUCT_A_DIR = _gen / "output" / "_product_a_validation"
+OUT_PRODUCT_A = OUT_PRODUCT_A_DIR / "_minflowfeather_productA_1922_2018.csv"
 
 # Output 3: Product B — one file per chunk (n01 … n10)
-OUT_PRODUCT_B_PATTERN = str(OUT_DIR / "_minflowfeather_productB_qmo_n{:02d}.csv")
+OUT_PRODUCT_B_DIR = _gen / "output" / "_product_b_final"
+OUT_PRODUCT_B_PATTERN = str(OUT_PRODUCT_B_DIR / "_minflowfeather_productB_qmo_n{:02d}.csv")
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Thresholds  (fixed calibrated constants from spreadsheet)
@@ -518,7 +520,7 @@ def run_validation():
 
 def run_product_a():
     """Output 2: Product A (WY 1922-2018, synthetic UNIMP_OROV classification)."""
-    os.makedirs(OUT_DIR, exist_ok=True)
+    os.makedirs(OUT_PRODUCT_A_DIR, exist_ok=True)
     print("\n" + "─" * 65)
     print("OUTPUT 2 — Product A  (WY 1922-2018, Product A input)")
     print("─" * 65)
@@ -538,7 +540,7 @@ def run_product_a():
 
 def run_product_b():
     """Output 3: Product B — 10 chunks, WY 1922-2021 each."""
-    os.makedirs(OUT_DIR, exist_ok=True)
+    os.makedirs(OUT_PRODUCT_B_DIR, exist_ok=True)
     print("\n" + "─" * 65)
     print("OUTPUT 3 — Product B  (10 chunks, WY 1922-2021)")
     print("─" * 65)

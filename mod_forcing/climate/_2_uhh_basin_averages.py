@@ -18,10 +18,11 @@ Inputs
 
 Outputs
 -------
-- output/_2_uhh_basin_averages/product_a/1/PPT_<name>_UHH.csv
-- output/_2_uhh_basin_averages/product_a/1/T<name>_UHH.csv
-- output/_2_uhh_basin_averages/product_a/1/VPD<name>_UHH.csv
-- output/_2_uhh_basin_averages/product_b/1/_uhh_precip_productB_n01.csv … n10.csv  (same pattern for temp/vpd)
+- output/_2_uhh_basin_averages/product_a/PPT_<name>_UHH.csv
+- output/_2_uhh_basin_averages/product_a/T<name>_UHH.csv
+- output/_2_uhh_basin_averages/product_a/VPD<name>_UHH.csv
+- output/_product_a_validation/_uhh_{precip,temperature,vpd}_productA_{start_wy}_{end_wy}.csv
+- output/_product_b_final/_uhh_precip_productB_n01.csv ... n10.csv  (same pattern for temp/vpd)
 
 Usage
 -----
@@ -550,8 +551,8 @@ def process_location(shorthand, grid_info_file, grid_info_folder, data_folder, o
 
 
 def create_validation_csv(
-    source_dir: str = 'output/_2_uhh_basin_averages/product_a/1',
-    validation_dir: str = 'output/product_a_historical_validation',
+    source_dir: str = 'output/_2_uhh_basin_averages/product_a',
+    validation_dir: str = 'output/_product_a_validation',
     start_wy: int = 1971,
     end_wy: int = 2018
 ):
@@ -1076,7 +1077,7 @@ def run_validate_outputs(scenario):
     excel_file = script_dir / "reference" / "calsim_climate_sv.xlsx"
     if not excel_file.exists():
         excel_file = script_dir / "input" / "calsim_climate_sv.xlsx"
-    data_folder = gen_dir / "output" / "_2_uhh_basin_averages" / "product_a" / scenario
+    data_folder = gen_dir / "output" / "_2_uhh_basin_averages" / "product_a"
     validation_folder = gen_dir / "output" / "_3_validation"
     validation_folder.mkdir(parents=True, exist_ok=True)
     
@@ -1166,6 +1167,57 @@ def run_validate_outputs(scenario):
     print(f"\nGenerating annual comparison plots...")
     create_annual_comparison_plots(all_results, validation_folder, locations, scenario)
     print(f"Annual comparison plots saved to: {validation_folder}")
+
+
+def write_product_a_validation(summaries, output_folder, start_wy=1922, end_wy=2018):
+    """
+    Create combined long-format validation CSVs from processed Product A summaries.
+    Output: _uhh_precip_productA_{start_wy}_{end_wy}.csv,
+            _uhh_temperature_productA_{start_wy}_{end_wy}.csv,
+            _uhh_vpd_productA_{start_wy}_{end_wy}.csv
+    Format: Part B, Part C, Year, Month, Value
+    """
+    start_date = pd.Timestamp(start_wy - 1, 10, 1)
+    end_date = pd.Timestamp(end_wy, 9, 30)
+    output_path = Path(output_folder)
+
+    var_configs = [
+        {'col': 'precip_inches', 'part_c': 'PRECIP',      'name_key': 'ppt_location_name',  'file_stem': f'_uhh_precip_productA_{start_wy}_{end_wy}'},
+        {'col': 'tavg_f',        'part_c': 'Temperature',  'name_key': 'temp_location_name', 'file_stem': f'_uhh_temperature_productA_{start_wy}_{end_wy}'},
+        {'col': 'vpd_kpa',       'part_c': 'VPD',          'name_key': 'vpd_location_name',  'file_stem': f'_uhh_vpd_productA_{start_wy}_{end_wy}'},
+    ]
+
+    print(f"\nCreating Product A validation CSVs (WY {start_wy}-{end_wy})...")
+    for vc in var_configs:
+        col = vc['col']
+        all_rows = []
+        for s in summaries:
+            md = s.get('_monthly_data')
+            if md is None or col not in md.columns or 'date' not in md.columns:
+                continue
+            loc_name = s[vc['name_key']]
+            if loc_name == 'N/A':
+                continue
+            mask = (md['date'] >= start_date) & (md['date'] <= end_date)
+            df_f = md.loc[mask]
+            for _, row in df_f.iterrows():
+                all_rows.append({
+                    'Part B': loc_name,
+                    'Part C': vc['part_c'],
+                    'Year': int(row['year']),
+                    'Month': int(row['month']),
+                    'Value': round(row[col], 6),
+                })
+
+        if not all_rows:
+            print(f"  No data for {vc['part_c']} validation CSV.")
+            continue
+
+        output_df = pd.DataFrame(all_rows)
+        output_file = output_path / f"{vc['file_stem']}.csv"
+        output_df.to_csv(output_file, index=False)
+        n_locations = output_df['Part B'].nunique()
+        print(f"  {output_file.name} ({n_locations} locations, {len(output_df)} rows)")
 
 
 def write_product_b_chunks(summaries: list, output_folder):
@@ -1335,7 +1387,10 @@ def main():
     else:
         # Product_A or Product_B with scenario
         data_folder = base_dir / "WGEN" / args.source / args.scenario
-        output_folder = gen_dir / "output" / "_2_uhh_basin_averages" / args.source.lower() / args.scenario
+        if args.source == 'Product_A':
+            output_folder = gen_dir / "output" / "_2_uhh_basin_averages" / "product_a"
+        else:
+            output_folder = gen_dir / "output" / "_product_b_final"
     
     output_folder.mkdir(parents=True, exist_ok=True)
     
@@ -1393,6 +1448,10 @@ def main():
         # Compile Product B chunks across all locations before writing summary
         if args.source == 'Product_B':
             write_product_b_chunks(summaries, output_folder)
+        elif args.source == 'Product_A':
+            validation_dir = gen_dir / "output" / "_product_a_validation"
+            validation_dir.mkdir(parents=True, exist_ok=True)
+            write_product_a_validation(summaries, validation_dir)
 
         # Strip internal keys (prefixed _) before writing CSV
         summary_rows = [{k: v for k, v in s.items() if not k.startswith('_')} for s in summaries]

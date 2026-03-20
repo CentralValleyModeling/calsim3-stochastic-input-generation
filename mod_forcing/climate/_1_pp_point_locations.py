@@ -15,8 +15,9 @@ Inputs
 
 Outputs
 -------
-- output/_1_pp_point_locations/product_a/1/<location>_monthly_precip.csv
-- output/_1_pp_point_locations/product_b/1/_pp_precip_productB_n01.csv … n10.csv
+- output/_1_pp_point_locations/product_a/<location>_monthly_precip.csv
+- output/_product_a_validation/_pp_precip_productA_{start_wy}_{end_wy}.csv
+- output/_product_b_final/_pp_precip_productB_n01.csv ... n10.csv
 - output/_1_pp_point_locations/{source}/_summary.csv
 
 Usage
@@ -249,6 +250,42 @@ def process_location(location_name, target_lat, target_lon, data_folder, output_
     }
 
 
+def write_product_a_validation(summaries, output_folder, start_wy=1922, end_wy=2018):
+    """
+    Create combined long-format validation CSV from processed Product A summaries.
+    Output: _pp_precip_productA_{start_wy}_{end_wy}.csv
+    Format: Part B, Part C, Year, Month, Value
+    """
+    start_date = pd.Timestamp(start_wy - 1, 10, 1)
+    end_date = pd.Timestamp(end_wy, 9, 30)
+
+    all_rows = []
+    for s in summaries:
+        md = s.get('_monthly_data')
+        if md is None or 'date' not in md.columns:
+            continue
+        mask = (md['date'] >= start_date) & (md['date'] <= end_date)
+        df_filtered = md.loc[mask]
+        for _, row in df_filtered.iterrows():
+            all_rows.append({
+                'Part B': s['location_name'],
+                'Part C': 'PRECIP',
+                'Year': int(row['year']),
+                'Month': int(row['month']),
+                'Value': round(row['precip_inches'], 6),
+            })
+
+    if not all_rows:
+        print("  No data found for Product A validation period.")
+        return
+
+    output_df = pd.DataFrame(all_rows)
+    output_file = Path(output_folder) / f"_pp_precip_productA_{start_wy}_{end_wy}.csv"
+    output_df.to_csv(output_file, index=False)
+    n_locations = output_df['Part B'].nunique()
+    print(f"\n  Validation CSV: {output_file.name} ({n_locations} locations, {len(output_df)} rows)")
+
+
 def write_product_b_chunks(summaries: list, output_folder):
     """
     Compile all locations into 10 long-format chunk CSVs (100 WYs each).
@@ -372,7 +409,10 @@ def main():
     else:
         # Product_A or Product_B with scenario
         data_folder = base_dir / "WGEN" / args.source / args.scenario
-        output_folder = gen_dir / "output" / "_1_pp_point_locations" / args.source.lower() / args.scenario
+        if args.source == 'Product_A':
+            output_folder = gen_dir / "output" / "_1_pp_point_locations" / "product_a"
+        else:
+            output_folder = gen_dir / "output" / "_product_b_final"
     
     output_folder.mkdir(parents=True, exist_ok=True)
     
@@ -419,6 +459,10 @@ def main():
     if summaries:
         if product_b:
             write_product_b_chunks(summaries, output_folder)
+        else:
+            validation_dir = gen_dir / "output" / "_product_a_validation"
+            validation_dir.mkdir(parents=True, exist_ok=True)
+            write_product_a_validation(summaries, validation_dir)
 
         # Strip internal keys before writing summary CSV
         summary_rows = [{k: v for k, v in s.items() if not k.startswith('_')} for s in summaries]
