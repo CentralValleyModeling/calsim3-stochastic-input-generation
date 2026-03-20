@@ -3,34 +3,58 @@
 Created on 10/2/2025
 @author: mbastani
 
-This script merges two DSS files called "DCD_island_month_C3" and "DCD_Sep2018_Lch5_mon_C3" into a 
-single DSS v6 file called "CS3sv_DCD_PRISM_Dtrnd.dss". It copies all time-series 
-records (preserving units/type and A–F parts), preferring records from the 2nd file on conflicts.
+This script merges two DSS files called "DCD_island_month_C3" and "DCD_Sep2018_Lch5_mon_C3" into a
+single DSS v6 file called "CS3sv_DCD_PRISM_Dtrnd.dss". It copies all time-series
+records (preserving units/type and A-F parts), preferring records from the 2nd file on conflicts.
 
+Usage
+-----
+    python _3_merge_DCD_outputs_for_CS3.py <run_dir>
 
+Example
+-------
+    python _3_merge_DCD_outputs_for_CS3.py "C:\path\to\data\GENERATED\mod_hydrology\delta_channel_depletion\DeltaChannelDepletion_Runs\DCD_Calsim3_PlanningStudy_1921-2018"
+
+Arguments
+---------
+run_dir : Path
+    Path to the DCD model run directory containing the source DSS files.
+
+Inputs
+------
+- <run_dir>/DCD_island_month_C3.dss
+- <run_dir>/DCD_Sep2018_Lch5_mon_C3.dss
+
+Outputs
+-------
+- <run_dir>/CS3sv_DCD_PRISM_Dtrnd.dss
 """
 
 
 #%%# ====================== 1) Imports & Config ======================
 import os
-import sys
+import argparse
 import numpy as np
 from pathlib import Path
 from pydsstools.heclib.dss import HecDss
 from pydsstools.core import TimeSeriesContainer as TSC
 
-# Add repo root to path for utils imports
-sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
-from utils.paths import get_base_dir, get_module_generated_dir
+parser = argparse.ArgumentParser(
+    description="Merge DCD_island_month_C3 and DCD_Sep2018_Lch5_mon_C3 into CS3sv_DCD_PRISM_Dtrnd.dss."
+)
+parser.add_argument(
+    "run_dir",
+    type=Path,
+    help="Path to the DCD model run directory containing the source DSS files",
+)
+args = parser.parse_args()
 
-_GEN_DIR = get_module_generated_dir("mod_hydrology/delta_channel_depletion")
-_DCD_RUNS = _GEN_DIR / "DeltaChannelDepletion_Runs"
-
+RUN_DIR = args.run_dir.resolve()
 SRC = [
-    str(_DCD_RUNS / "DCD_island_month_C3.dss"),
-    str(_GEN_DIR / "DCD_Sep2018_Lch5_mon_C3.dss"),
+    str(RUN_DIR / "DCD_island_month_C3.dss"),
+    str(RUN_DIR / "DCD_Sep2018_Lch5_mon_C3.dss"),
 ]  # second wins
-DST = str(_DCD_RUNS / "CS3sv_DCD_PRISM_Dtrnd.dss")
+DST = str(RUN_DIR / "CS3sv_DCD_PRISM_Dtrnd.dss")
 
 #%%# ========================= 2) Small Helpers =========================
 def all_paths(fid): 
@@ -86,7 +110,7 @@ for p, idx in chosen.items():
             failed_paths.append(p)
 
 f0.close(); f1.close(); fout.close()
-print("✅ Merged into", DST)
+print("Merged into", DST)
 if failed_paths:
-    print(f"⚠️ Skipped {len(failed_paths)} path(s) due to read/write errors")
+    print(f"Skipped {len(failed_paths)} path(s) due to read/write errors")
 
