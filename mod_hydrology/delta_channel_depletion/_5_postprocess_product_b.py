@@ -74,6 +74,7 @@ DSS_TEMPLATE = "CS3sv_DCD_PRISM_Dtrnd_n{chunk:02d}.DSS"
 CSV_TEMPLATE = "_dcd_productB_n{chunk:02d}.csv"
 SUMMARY_TEMPLATE = "_dcd_productB_n{chunk:02d}_summary.csv"
 COMPARE_A_CSV = "_dcd_productB_vs_productA.csv"
+COMPARE_A_PARTC_AGG_CSV = "_dcd_productB_vs_productA_partC_agg.csv"
 
 
 # -- INVENTORY -----------------------------------------------------------------
@@ -339,6 +340,19 @@ def _monthly_stats(df, value_col, tag):
     return pd.concat(frames, ignore_index=True)
 
 
+def _partc_agg_monthly_stats(df, value_col, tag):
+    """Sum across Part B per (Part C, row), then compute monthly stats at Part C level."""
+    # Sum value across Part B for each (Part C, Year, Month)
+    agg = df.groupby(['Part C', 'Year', 'Month'])[value_col].sum().reset_index()
+    frames = []
+    for name, func in zip(STAT_NAMES, STAT_FUNCS):
+        g = agg.groupby(['Part C', 'Month'])[value_col].agg(func).reset_index()
+        g = g.rename(columns={value_col: tag})
+        g['stat'] = name
+        frames.append(g)
+    return pd.concat(frames, ignore_index=True)
+
+
 def run_compare_a():
     """Compare Product B chunk monthly statistics against Product A.
 
@@ -422,6 +436,69 @@ def run_compare_a():
     print(f"  Part B/C groups: {n_svs}  |  Rows: {len(result):,}")
 
 
+def run_compare_a_partc_agg():
+    """Part C aggregation: sum across Part B, then compare B vs A monthly stats.
+
+    Produces a CSV with columns: Part C, stat, Month, Product_A, n01..n10.
+    """
+    print(f"\n{'=' * 60}")
+    print("  Compare B vs A (Part C agg): DeltaChannelDepletion")
+    print(f"{'=' * 60}")
+
+    out_dir = OUTPUT_DIR / "_product_b_final"
+    missing = []
+    for i in range(1, N_CHUNKS + 1):
+        csv_path = out_dir / CSV_TEMPLATE.format(chunk=i)
+        if not csv_path.exists():
+            missing.append(f"n{i:02d}")
+    if missing:
+        print(f"\nERROR: Product B chunk CSVs not found: {', '.join(missing)}")
+        sys.exit(1)
+
+    if not _PRODUCT_A_MERGED.exists():
+        print(f"\nERROR: Product A merged CSV not found: {_PRODUCT_A_MERGED}")
+        sys.exit(1)
+
+    # Product A
+    prodA_df = pd.read_csv(_PRODUCT_A_MERGED)
+    prodA_df['Date'] = pd.to_datetime(prodA_df['Date'])
+    prodA_df['Month'] = prodA_df['Date'].dt.month
+    prodA_df['Year'] = prodA_df['Date'].dt.year
+    if 'PartB' in prodA_df.columns:
+        prodA_df = prodA_df.rename(columns={'PartB': 'Part B'})
+    if 'PartC' in prodA_df.columns:
+        prodA_df = prodA_df.rename(columns={'PartC': 'Part C'})
+    days = prodA_df.apply(
+        lambda r: calendar.monthrange(int(r['Year']), int(r['Month']))[1], axis=1
+    )
+    prodA_df['ProductA'] = prodA_df['ProductA'] * days * CFS_TAF_PER_DAY
+
+    result = _partc_agg_monthly_stats(prodA_df, 'ProductA', 'Product_A')
+    print(f"  Product A: {result['Part C'].nunique()} Part C groups")
+
+    # Product B chunks
+    for i in range(1, N_CHUNKS + 1):
+        chunk_tag = f"n{i:02d}"
+        csv_path = out_dir / CSV_TEMPLATE.format(chunk=i)
+        chunk_df = pd.read_csv(csv_path)
+        print(f"  Reading chunk {chunk_tag}: {len(chunk_df):,} rows")
+        chunk_stats = _partc_agg_monthly_stats(chunk_df, 'Value', chunk_tag)
+        result = result.merge(
+            chunk_stats, on=['Part C', 'stat', 'Month'], how='outer',
+        )
+
+    chunk_cols = [f"n{i:02d}" for i in range(1, N_CHUNKS + 1)]
+    col_order = ['Part C', 'stat', 'Month', 'Product_A'] + chunk_cols
+    result = result[[c for c in col_order if c in result.columns]]
+    result = result.sort_values(['Part C', 'stat', 'Month']).reset_index(drop=True)
+
+    OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
+    compare_path = OUTPUT_DIR / COMPARE_A_PARTC_AGG_CSV
+    result.to_csv(compare_path, index=False)
+    print(f"  Written: {compare_path.name}")
+    print(f"  Part C groups: {result['Part C'].nunique()}  |  Rows: {len(result):,}")
+
+
 # -- PLOT PRODUCT B vs PRODUCT A -----------------------------------------------
 
 CHUNK_COLS = [f"n{i:02d}" for i in range(1, N_CHUNKS + 1)]
@@ -479,6 +556,56 @@ def run_plot():
         stat_dir = plot_dir / stat
         stat_dir.mkdir(parents=True, exist_ok=True)
         fname = f"{partb}_{partc}.png".replace("/", "_")
+        fig.savefig(stat_dir / fname, dpi=300)
+        plt.close(fig)
+
+    print(f"  Saved {len(groups)} plots to {plot_dir}")
+
+
+def run_plot_partc_agg():
+    """Plot Part C aggregation comparison (sum across Part B).
+
+    Reads the Part C agg CSV and generates per-(Part C, stat) line plots.
+    """
+    compare_csv = OUTPUT_DIR / COMPARE_A_PARTC_AGG_CSV
+    if not compare_csv.exists():
+        print(f"\nERROR: Part C agg CSV not found: {compare_csv}")
+        print("Run --compare-a first.")
+        sys.exit(1)
+
+    matplotlib.rcParams.update({'font.size': 8})
+
+    df = pd.read_csv(compare_csv)
+    plot_dir = OUTPUT_DIR / "_plots_product_b_vs_a_partC_agg"
+    plot_dir.mkdir(parents=True, exist_ok=True)
+
+    groups = df.groupby(['Part C', 'stat'])
+    print(f"  Generating {len(groups)} Part C agg plots")
+
+    for (partc, stat), gdf in groups:
+        gdf = gdf.sort_values('Month')
+        months = gdf['Month'].values
+
+        fig, ax = plt.subplots(figsize=(6.5, 3))
+        for i, col in enumerate(CHUNK_COLS):
+            if col in gdf.columns:
+                ax.plot(months, gdf[col].values, color='tab:orange', alpha=0.35,
+                        linewidth=0.8, label='Product B' if i == 0 else None)
+        if 'Product_A' in gdf.columns:
+            ax.plot(months, gdf['Product_A'].values, color='tab:blue',
+                    linewidth=1.2, label='Product A')
+
+        ax.set_xticks(range(1, 13))
+        ax.set_xticklabels(MONTH_LABELS)
+        ax.set_xlabel('Month')
+        ax.set_ylabel(stat.capitalize())
+        ax.set_title(f"{partc} (sum across Part B) - {stat}")
+        ax.legend(loc='best', framealpha=0.8)
+        fig.tight_layout()
+
+        stat_dir = plot_dir / stat
+        stat_dir.mkdir(parents=True, exist_ok=True)
+        fname = f"{partc}.png"
         fig.savefig(stat_dir / fname, dpi=300)
         plt.close(fig)
 
@@ -546,9 +673,11 @@ def main():
 
     if args.compare_a:
         run_compare_a()
+        run_compare_a_partc_agg()
 
     if args.plot:
         run_plot()
+        run_plot_partc_agg()
 
     print(f"\n{'=' * 80}")
     print("DeltaChannelDepletion Product B postprocessing complete.")
