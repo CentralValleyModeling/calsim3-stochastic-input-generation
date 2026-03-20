@@ -3,25 +3,38 @@
 Created on 10/02/2025
 @author: mbastani
 
-This script uses Sum-Product calculation to aggregates 168 island monthly flow time series (in cfs) 
-into Delta & WBA50 weighted totals for DP-FLOW and GW-FLOW, and write four 
+This script uses Sum-Product calculation to aggregate 168 island monthly flow time series (in cfs)
+into Delta & WBA50 weighted totals for DP-FLOW and GW-FLOW, and write four
 new records into "DCD_island_month_C3.dss".
 
-Note: If you want the weighted average instead of sum, just divide 
+Note: If you want the weighted average instead of sum, just divide
 each result by w["Delta"].sum() or w["WBA50"].sum() before writing.
 
 Python configurations:
-It works with both "read_ts" or "get_ts", parses island IDs from Part B, and 
+It works with both "read_ts" or "get_ts", parses island IDs from Part B, and
 writes via "TimeSeriesContainer" (most compatible). Handles "pytimes" vs "times".
+
+Usage
+-----
+    python _2_aggregate_dpflow_gwflow_for_DCD.py <run_dir>
+
+Example
+-------
+    python _2_aggregate_dpflow_gwflow_for_DCD.py "C:\path\to\data\GENERATED\mod_hydrology\delta_channel_depletion\DeltaChannelDepletion_Runs\DCD_Calsim3_PlanningStudy_1921-2018"
+
+Arguments
+---------
+run_dir : Path
+    Path to the DCD model run directory containing DCD_island_month.dss.
 
 Inputs
 ------
-- DCD_island_month.dss
-- WeightedRatiosForDCD.csv  (columns: Island, Delta, WBA50; tab or comma separated)
+- <run_dir>/DCD_island_month.dss
+- reference/WeightedRatiosForDCD.csv  (columns: Island, Delta, WBA50; tab or comma separated)
 
 Outputs
 -------
-- DCD_island_month_C3.dss with:
+- <run_dir>/DCD_island_month_C3.dss with:
   /<A>/DP_DELTA_DCD/DP-FLOW/<D>/<E>/<F>/
   /<A>/DP_WBA50_DCD/DP-FLOW/<D>/<E>/<F>/
   /<A>/GW_DELTA_DCD/GW-FLOW/<D>/<E>/<F>/
@@ -29,23 +42,28 @@ Outputs
 """
 
 #%%# ========================= 1) Imports & File Paths =========================
-import os
-import sys
 import re
+import argparse
 import pandas as pd
 from pathlib import Path
 from pydsstools.heclib.dss import HecDss
 from pydsstools.core import TimeSeriesContainer as TSC
 
-# Add repo root to path for utils imports
-sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
-from utils.paths import get_module_generated_dir
-
-_GEN_DIR = get_module_generated_dir("mod_hydrology/delta_channel_depletion")
 _SCRIPT_DIR = Path(__file__).resolve().parent
 
-DSS_IN  = str(_GEN_DIR / "DeltaChannelDepletion_Runs" / "DCD_island_month.dss")
-DSS_OUT = str(_GEN_DIR / "DeltaChannelDepletion_Runs" / "DCD_island_month_C3.dss")
+parser = argparse.ArgumentParser(
+    description="Aggregate 168 island monthly flows into Delta & WBA50 weighted totals."
+)
+parser.add_argument(
+    "run_dir",
+    type=Path,
+    help="Path to the DCD model run directory containing DCD_island_month.dss",
+)
+args = parser.parse_args()
+
+RUN_DIR = args.run_dir.resolve()
+DSS_IN  = str(RUN_DIR / "DCD_island_month.dss")
+DSS_OUT = str(RUN_DIR / "DCD_island_month_C3.dss")
 CSV     = str(_SCRIPT_DIR / "reference" / "WeightedRatiosForDCD.csv")  # columns: Island, Delta, WBA50
 
 # Override A- and F-parts for outputs:
