@@ -19,9 +19,9 @@ Inputs
 
 Outputs
 -------
-- output/_2_postprocess_run/calsimHydroEE_1972-2018_DSS.csv
-- output/_2_postprocess_run/calsimHydroEE_summary_statistics_by_PartC.csv
-- output/_2_postprocess_run/Boxplot_<PartC>_with_mean.png
+- output/_2_postprocess_product_a/calsimHydroEE_1972-2018_DSS.csv
+- output/_2_postprocess_product_a/calsimHydroEE_summary_statistics_by_PartC.csv
+- output/_2_postprocess_product_a/Boxplot_<PartC>_with_mean.png
 - output/_2_postprocess_product_a/_product_a_validation/_cshydroEE_productA_1972_2018.csv
 
 Usage
@@ -31,6 +31,7 @@ Usage
 
 import os
 import sys
+import subprocess
 from pathlib import Path
 import numpy as np
 import pandas as pd
@@ -47,7 +48,7 @@ from utils.paths import get_module_generated_dir, get_inventory_dir
 
 # %% ── RESULTS ROOT ─────────────────────────────────────────────────────
 _GEN_DIR = get_module_generated_dir("mod_hydrology/calsimhydro_ee")
-OUTPUT_DIR = str(_GEN_DIR / "output" / "_2_postprocess_run")
+OUTPUT_DIR = str(_GEN_DIR / "output" / "_2_postprocess_product_a")
 os.makedirs(OUTPUT_DIR, exist_ok=True)
 
 VALIDATION_DIR = str(_GEN_DIR / "output" / "_2_postprocess_product_a" / "_product_a_validation")
@@ -73,6 +74,31 @@ excel_partcs = {excel_to_part_BC(n): n for n in CalSimHydroEE_SVnames}
 # Get desired sort order based on master file (column 7)
 desired_order = [excel_to_part_BC(name) for name in CalSimHydroEE_rows.iloc[:, 7].tolist()]
 
+# %% ── Junction helper for long DSS paths ────────────────────────────────
+# The Fortran HEC-DSS library inside pydsstools limits path names to 256 chars.
+_REPO_ROOT = Path(__file__).resolve().parents[2]
+_DSS_LINK = _REPO_ROOT / "_dss_link"
+_PATH_LIMIT = 200
+
+
+def _needs_junction(dss_path):
+    return len(str(dss_path)) > _PATH_LIMIT
+
+
+def _create_junction(target_dir):
+    if _DSS_LINK.exists():
+        subprocess.run(["cmd", "/c", "rmdir", str(_DSS_LINK)], capture_output=True)
+    subprocess.run(
+        ["cmd", "/c", "mklink", "/J", str(_DSS_LINK), str(target_dir)],
+        check=True, capture_output=True,
+    )
+
+
+def _remove_junction():
+    if _DSS_LINK.exists():
+        subprocess.run(["cmd", "/c", "rmdir", str(_DSS_LINK)], capture_output=True)
+
+
 # %% ── DSS File Paths ───────────────────────────────────────────────────
 _ee_runs = _GEN_DIR / "CalSimHydroEE_Runs"
 dss_paths = [
@@ -84,6 +110,21 @@ dss_paths = [
 
 # %% ── Function to Extract DSS Time Series ──────────────────────────────
 def extract_dss_data(dss_path):
+    dss_path = Path(dss_path).resolve()
+    use_junction = _needs_junction(dss_path)
+    if use_junction:
+        _create_junction(dss_path.parent)
+        work_path = str(_DSS_LINK / dss_path.name)
+    else:
+        work_path = str(dss_path)
+    try:
+        return _extract_dss_data_inner(work_path)
+    finally:
+        if use_junction:
+            _remove_junction()
+
+
+def _extract_dss_data_inner(dss_path):
     data_dict = {}
     with HecDss.Open(str(dss_path), version=6, catalog_flag=True) as dss:
         all_paths = dss.getPathnameList("/*/*/*/*/1MON/*")
@@ -176,7 +217,7 @@ merged_df = merged_df.drop(columns=['PartBC', 'SortOrder'])
 # %% ── Save Final Merged Time Series ─────────────────────────────────────
 merged_csv_path = os.path.join(OUTPUT_DIR, "calsimHydroEE_1972-2018_DSS.csv")
 merged_df.to_csv(merged_csv_path, index=False)
-print(f"✅ Final CSV saved to: {merged_csv_path}")
+print(f"Final CSV saved to: {merged_csv_path}")
 
 # %% ── Summary Statistics by PartC ───────────────────────────────────────
 
@@ -216,7 +257,7 @@ summary_df = pd.concat([
 # Save summary statistics to CSV
 summary_output_path = os.path.join(OUTPUT_DIR, "calsimHydroEE_summary_statistics_by_PartC.csv")
 summary_df.to_csv(summary_output_path, index=False)
-print(f"📊 Summary statistics saved to: {summary_output_path}")
+print(f"Summary statistics saved to: {summary_output_path}")
 
 
 #%% BOX PLOT
