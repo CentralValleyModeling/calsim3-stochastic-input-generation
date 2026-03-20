@@ -1,9 +1,24 @@
-#%% This script extracts, processes, and visualizes time series data from CalSimHydro output DSS files.
-# It generates merged CSVs, summary statistics, and boxplots comparing different scenario outputs.
+"""
+Postprocess DCD (Delta Channel Depletion) DSS Outputs
+
+Extracts time series from DCD DSS output files (PlanningStudy and Product A),
+merges into comparison CSVs, computes summary statistics, generates boxplots,
+and creates the Product A validation CSV for CalSim compilation.
+
+Usage:
+    python _4_postprocess_run_DCD.py
+
+Output:
+    - output/_4_postprocess_run_DCD/DeltaChannelDepletion_DSS.csv
+    - output/_4_postprocess_run_DCD/DeltaChannelDepletion_summary_statistics_by_PartC.csv
+    - output/_4_postprocess_run_DCD/Boxplot_{PartC}_with_mean.png
+    - output/_4_postprocess_run_DCD/_product_a_validation/_dcd_productA_1972_2018.csv
+"""
 #%%
 
 import os
 import sys
+import calendar
 from pathlib import Path
 import numpy as np
 import pandas as pd
@@ -17,10 +32,11 @@ import matplotlib.pyplot as plt
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 from utils.paths import get_module_generated_dir, get_inventory_dir
 
+_GEN_DIR = get_module_generated_dir("mod_hydrology/delta_channel_depletion")
+
 
 # %% ── RESULTS ROOT ─────────────────────────────────────────────────────
-_GEN_DIR = get_module_generated_dir("mod_hydrology/calsimhydro")
-OUTPUT_DIR = str(_GEN_DIR / "output" / "_3_postprocess_run_Rebalance")
+OUTPUT_DIR = str(_GEN_DIR / "output" / "_2_postprocess_run_DCD")
 os.makedirs(OUTPUT_DIR, exist_ok=True)
 
 # %% ── Load Excel Master File ───────────────────────────────────────────
@@ -28,30 +44,28 @@ excel_path = str(get_inventory_dir() / "_MASTER_INVENTORY_FOR_STOCHASTIC_INPUT_G
 sheet_name = "MASTER"
 df_master = pd.read_excel(excel_path, sheet_name=sheet_name)
 
-# Filter CalSimHydro rows
-CalSimHydro_rows = df_master[(df_master.iloc[:, 8] == 'CalSimHydro') & (df_master.iloc[:, 9] == 'RebalancedSJR_AW_TW_DP.dss')]
-CalSimHydro_SVnames = [str(name).strip().upper() for name in CalSimHydro_rows.iloc[:, 7].tolist()]
+# Filter SmallWatersheds rows
+SmallWatersheds_rows = df_master[(df_master.iloc[:, 8] == 'Delta Channel Depletion') & (df_master.iloc[:, 9] == 'DCD_island_month.dss')]
+SmallWatersheds_SVnames = [str(name).strip().upper() for name in SmallWatersheds_rows.iloc[:, 7].tolist()]
 
 # Create mapping: formatted PartB/PartC → original SV name
 excel_to_part_BC = lambda n: n.upper().replace(" ", "_")
-excel_partcs = {excel_to_part_BC(n): n for n in CalSimHydro_SVnames}
+excel_partcs = {excel_to_part_BC(n): n for n in SmallWatersheds_SVnames}
 
 # Get desired sort order based on master file (column 7)
-desired_order = [excel_to_part_BC(name) for name in CalSimHydro_rows.iloc[:, 7].tolist()]
+desired_order = [excel_to_part_BC(name) for name in SmallWatersheds_rows.iloc[:, 7].tolist()]
 
 # %% ── DSS File Paths ───────────────────────────────────────────────────
-_rebalance_runs = _GEN_DIR / "CalSimHydro_Rebalance_Runs"
+_dcd_runs = _GEN_DIR / "DeltaChannelDepletion_Runs"
 dss_paths = [
-    str(_rebalance_runs / "Rebalance_Historical_1972-2018" / "DSS" / "HydroRebalanceSJRdemands.dss"),
-    str(_rebalance_runs / "Rebalance_VICPrecip_1972-2018" / "DSS" / "HydroRebalanceSJRdemands.dss"),
-    str(_rebalance_runs / "Rebalance_QMET_1972-2018" / "DSS" / "HydroRebalanceSJRdemands.dss"),
-    str(_rebalance_runs / "Rebalance_Product_A" / "DSS" / "HydroRebalanceSJRdemands.dss"),
+    str(_dcd_runs / "DCD_Calsim3_PlanningStudy_1921-2018" / "DCD" / "Output" / "CALSIM3" / "CS3sv_DCD_PRISM_Dtrnd.dss"),      # Value 1
+    str(_dcd_runs / "DCD_Calsim3_PlanningStudy_ProductA_1921-2018" / "DCD" / "Output" / "CALSIM3" / "CS3sv_DCD_PRISM_Dtrnd.dss"),       # Value 2
 ]
 
 # %% ── Function to Extract DSS Time Series ──────────────────────────────
 def extract_dss_data(dss_path):
     data_dict = {}
-    with HecDss.Open(str(dss_path), version=6, catalog_flag=True) as dss:
+    with HecDss.Open(str(dss_path), version=7, catalog_flag=True) as dss:
         all_paths = dss.getPathnameList("/*/*/*/*/1MON/*")
         buckets = {}
         for p in all_paths:
@@ -83,7 +97,7 @@ dss_data_by_file = [extract_dss_data(path) for path in dss_paths]
 # %% ── Convert to Long Format ───────────────────────────────────────────
 
 # Define meaningful scenario names matching DSS file order
-scenario_labels = ['Historical', 'VIC_Precip', 'QM_ET', 'Product_A']
+scenario_labels = ['PlanningStudy', 'ProductA']
 
 long_dfs = []
 for df, label in zip(dss_data_by_file, scenario_labels):
@@ -109,9 +123,61 @@ merged_df = merged_df.sort_values(by=['SortOrder', 'Date'])
 merged_df = merged_df.drop(columns=['PartBC', 'SortOrder'])
 
 # %% ── Save Final Merged Time Series ─────────────────────────────────────
-merged_csv_path = os.path.join(OUTPUT_DIR, "HydroRebalanceSJRdemands_1972-2018_DSS.csv")
+merged_csv_path = os.path.join(OUTPUT_DIR, "DeltaChannelDepletion_DSS.csv")
 merged_df.to_csv(merged_csv_path, index=False)
-print(f"✅ Final CSV saved to: {merged_csv_path}")
+print(f"Final CSV saved to: {merged_csv_path}")
+
+# %% ── Product A Validation CSV ──────────────────────────────────────────
+
+def to_validation_csv(df, start_wy=1972, end_wy=2018):
+    """Convert wide DataFrame to validation format (Part B, Part C, Year, Month, Value).
+
+    Filters to the specified water year range and converts CFS to TAF.
+    """
+    start_date = pd.Timestamp(start_wy - 1, 10, 1)
+    end_date = pd.Timestamp(end_wy, 9, 30)
+
+    long = df.stack().reset_index()
+    long.columns = ['Date', 'PartBC', 'Value']
+    long['Date'] = pd.to_datetime(long['Date'])
+
+    mask = (long['Date'] >= start_date) & (long['Date'] <= end_date)
+    long = long.loc[mask].copy()
+
+    if long.empty:
+        return pd.DataFrame(columns=['Part B', 'Part C', 'Year', 'Month', 'Value'])
+
+    long[['Part B', 'Part C']] = long['PartBC'].str.split('/', expand=True)
+    long['Year'] = long['Date'].dt.year
+    long['Month'] = long['Date'].dt.month
+
+    long = long.dropna(subset=['Value'])
+    long = long[['Part B', 'Part C', 'Year', 'Month', 'Value']]
+    long = long.sort_values(['Part B', 'Part C', 'Year', 'Month']).reset_index(drop=True)
+
+    # DCD DSS outputs are in CFS (PER-AVER); CalSim baseline expects TAF
+    # TAF = CFS * days_in_month * 86400 / 43560 / 1000
+    CFS_TAF_PER_DAY = 86400.0 / 43560.0 / 1000.0
+    days = long.apply(
+        lambda r: calendar.monthrange(int(r['Year']), int(r['Month']))[1], axis=1
+    )
+    long['Value'] = long['Value'] * days * CFS_TAF_PER_DAY
+
+    return long
+
+
+VALIDATION_DIR = str(_GEN_DIR / "output" / "_4_postprocess_run_DCD" / "_product_a_validation")
+os.makedirs(VALIDATION_DIR, exist_ok=True)
+
+# Use the already-extracted ProductA data (second DSS file)
+val_df = to_validation_csv(dss_data_by_file[1])
+
+if not val_df.empty:
+    val_csv_path = os.path.join(VALIDATION_DIR, "_dcd_productA_1972_2018.csv")
+    val_df.to_csv(val_csv_path, index=False)
+    n_vars = val_df.groupby(['Part B', 'Part C']).ngroups
+    print(f"Validation CSV saved: {val_csv_path}")
+    print(f"  Variables: {n_vars}  |  Rows: {len(val_df):,}")
 
 # %% ── Summary Statistics by PartC ───────────────────────────────────────
 
@@ -123,7 +189,7 @@ merged_df['Year'] = merged_df['Date'].dt.year
 merged_df['Month'] = merged_df['Date'].dt.month
 merged_df['Quarter'] = merged_df['Date'].dt.to_period("Q")
 
-value_cols = ['Historical', 'VIC_Precip', 'QM_ET', 'Product_A']
+value_cols = ['PlanningStudy', 'ProductA']
 
 def compute_summary(df, time_unit, agg_func, label):
     grouped = df.groupby(['PartC', time_unit])[value_cols].agg(agg_func).reset_index()
@@ -149,18 +215,18 @@ summary_df = pd.concat([
 ], ignore_index=True)
 
 # Save summary statistics to CSV
-summary_output_path = os.path.join(OUTPUT_DIR, "HydroRebalanceSJRdemands_summary_statistics_by_PartC.csv")
+summary_output_path = os.path.join(OUTPUT_DIR, "DeltaChannelDepletion_summary_statistics_by_PartC.csv")
 summary_df.to_csv(summary_output_path, index=False)
-print(f"📊 Summary statistics saved to: {summary_output_path}")
+print(f"Summary statistics saved to: {summary_output_path}")
 
 
 #%% BOX PLOT
 
 
 # --- Prepare Data ---
-plot_df = merged_df[['PartC'] + value_cols].copy()
+plot_df = merged_df[['PartC', 'PlanningStudy', 'ProductA']].copy()
 plot_df_melted = plot_df.melt(id_vars='PartC',
-                              value_vars=value_cols,
+                              value_vars=['PlanningStudy', 'ProductA'],
                               var_name='Scenario', value_name='Value')
 plot_df_melted = plot_df_melted.dropna()
 
@@ -203,14 +269,15 @@ for partc in unique_partcs:
     
 
 
+
 ################################################################################################################
 ######################## The following lines show box plot with outlier data #######################
 
 # # --- Prepare Data ---
 # # Melt the data to long format
-# plot_df = merged_df[['PartC', 'Historical', 'VIC_Precip', 'QM_ET']].copy()
+# plot_df = merged_df[['PartC', 'Historical_1921', 'ProductA']].copy()
 # plot_df_melted = plot_df.melt(id_vars='PartC',
-#                               value_vars=['Historical', 'VIC_Precip', 'QM_ET'],
+#                               value_vars=['Historical_1921', 'ProductA'],
 #                               var_name='Scenario', value_name='Value')
 # # Drop NaNs
 # plot_df_melted = plot_df_melted.dropna()

@@ -72,11 +72,11 @@ CS3_PATH    = 'UNIMP_OROV/FLOW-UNIMPAIRED'
 CS3_DSS     = str(get_base_dir() / "CalSim3" / "__calsim_sv_default__.dss")
 MATCHED_KEY = LOCATION.replace('CS3_', '')          # e.g., '8RI_OROVI'
 CALSIM_KEY  = CS3_PATH.split('/')[0]                # e.g., 'UNIMP_OROV'
-HIST_CSV    = str(_gen / "_2_qmap_historical_validation" / "Product_A" / "calsim_qmap_validation_TS.csv")
-STOCH_DIR   = str(_gen / "_3_qmap_product_b")
+HIST_CSV    = str(_gen / "output" / "_2_qmap_historical_validation" / "calsim_qmap_validation_TS.csv")
+STOCH_DIR   = str(_gen / "output" / "_3_qmap_product_b")
 GRID_INFO   = str(_VIC_GRID_DIR / f'{LOCATION}_GridInfo.txt')
 METEO_COLS = ['Year', 'Month', 'Day', 'PRECIP', 'TMAX', 'TMIN']
-_FIG_DIR = str(_gen / "_0_stochastic_inflow_explore")
+_FIG_DIR = str(_gen / "output" / "_0_stochastic_inflow_explore")
 os.makedirs(_FIG_DIR, exist_ok=True)
 
 # ============================================================

@@ -9,7 +9,7 @@ from utils.paths import get_module_generated_dir
 _gen = get_module_generated_dir("mod_hydrology/rim_inflow")
 
 # Load the validation time series
-df = pd.read_csv(_gen / "_2_qmap_historical_validation" / "Product_A" / "calsim_qmap_validation_TS.csv")
+df = pd.read_csv(_gen / "output" / "_2_qmap_historical_validation" / "calsim_qmap_validation_TS.csv")
 
 # Get unique CalSim locations
 locations = df['CalSim'].unique()

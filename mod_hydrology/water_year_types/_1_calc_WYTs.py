@@ -411,13 +411,13 @@ def main():
     parser.add_argument('--product', choices=['A', 'B', 'both'], default='both',
                         help='Which product to process (default: both)')
     parser.add_argument('--product_a_input', 
-                        default=str(_rim_gen / '_2_qmap_historical_validation' / 'Product_A' / 'calsim_qmap_validation_TS.csv'),
+                        default=str(_rim_gen / 'output' / '_2_qmap_historical_validation' / 'calsim_qmap_validation_TS.csv'),
                         help='Path to Product A input CSV')
     parser.add_argument('--product_a_output',
                         default=str(_wyt_gen / 'output' / '_1_calc_WYTs' / 'Product_A'),
                         help='Directory for Product A output CSVs')
     parser.add_argument('--product_b_input',
-                        default=str(_rim_gen / '_3_qmap_product_b'),
+                        default=str(_rim_gen / 'output' / '_3_qmap_product_b'),
                         help='Directory containing Product B input CSVs')
     parser.add_argument('--product_b_output',
                         default=str(_wyt_gen / 'output' / '_1_calc_WYTs' / 'Product_B'),

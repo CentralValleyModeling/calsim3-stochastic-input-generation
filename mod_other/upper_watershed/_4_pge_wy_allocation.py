@@ -27,15 +27,15 @@ Input files (in ./input/):
   - PGE_WY_ALLOCATION_config.json            : Thresholds & configuration
 
 External dependencies:
-  - _10_RimInflow/output/_2_qmap_historical_validation/Product_A/
+  - rim_inflow/output/_2_qmap_historical_validation/
        calsim_qmap_validation_TS.csv  (Product A FOLSM_INFLOW)
-  - _10_RimInflow/output/_3_qmap_product_b/
+  - rim_inflow/output/_3_qmap_product_b/
        FOLSM_INFLOW_8RI_FOL_I_qmo_n01.csv ... n10.csv  (Product B inflows)
 
 Output:
-  - output/_2_pge_wy_allocation/Product_A/
+  - output/_product_a_validation/
        _pge_wy_allocation_productA_1972_2018.csv
-  - output/_2_pge_wy_allocation/Product_B/
+  - output/_product_b_final/
        _pge_wy_allocation_productB_n01.csv  ...  _pge_wy_allocation_productB_n10.csv
 """
 
@@ -75,15 +75,15 @@ CONFIG_JSON = INPUT_DIR / "PGE_WY_ALLOCATION_config.json"
 # RimInflow directories
 _rim_gen = get_module_generated_dir("mod_hydrology/rim_inflow")
 RIM_INFLOW_PRODUCT_A_CSV = (
-    _rim_gen / "_2_qmap_historical_validation" / "Product_A" / "calsim_qmap_validation_TS.csv"
+    _rim_gen / "output" / "_2_qmap_historical_validation" / "calsim_qmap_validation_TS.csv"
 )
-RIM_INFLOW_PRODUCT_B_DIR = _rim_gen / "_3_qmap_product_b"
+RIM_INFLOW_PRODUCT_B_DIR = _rim_gen / "output" / "_3_qmap_product_b"
 
 # Output directories
 _GEN_DIR = get_module_generated_dir("mod_other/upper_watershed")
 OUTPUT_ROOT = _GEN_DIR / "output" / "_4_pge_wy_allocation"
-OUTPUT_A_DIR = OUTPUT_ROOT / "Product_A"
-OUTPUT_B_DIR = OUTPUT_ROOT / "Product_B"
+OUTPUT_A_DIR = _GEN_DIR / "output" / "_product_a_validation"
+OUTPUT_B_DIR = _GEN_DIR / "output" / "_product_b_final"
 
 
 # ──────────────────────────────────────────────────────────────────────────────

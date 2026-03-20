@@ -18,12 +18,14 @@ Inputs
 
 Outputs
 -------
-- _2_qmap_historical_validation/Product_A/
+- _2_qmap_historical_validation/
   - calsim_qmap_validation_TS.csv   (row-level qmap results)
   - quantile_mapping_validation_summary.csv
   - vic_all_rivers.csv, calsim_all_inflows.csv
   - annual_sum_comparisons_*.csv
   - _figures/  (monthly box plots, annual summaries)
+- _2_qmap_historical_validation/_product_a_validation/
+  - _riminflow_productA_1972_2018.csv  (CalSim format for SV compiler)
 
 Usage
 -----
@@ -44,11 +46,13 @@ _gen = get_module_generated_dir("mod_hydrology/rim_inflow")
 _vic_gen = get_module_generated_dir("mod_forcing/vic")
 
 # %% ── RESULTS ROOT ─────────────────────────────────────────────────────
-BASE_RESULTS_DIR = str(_gen / "_2_qmap_historical_validation" / "Product_A")
+BASE_RESULTS_DIR = str(_gen / "output" / "_2_qmap_historical_validation")
 OUTPUT_DIR       = BASE_RESULTS_DIR
 PLOTS_DIR        = os.path.join(BASE_RESULTS_DIR, "_figures")
+VALIDATION_DIR   = str(_gen / "output" / "_2_qmap_historical_validation" / "_product_a_validation")
 os.makedirs(OUTPUT_DIR, exist_ok=True)
 os.makedirs(PLOTS_DIR,  exist_ok=True)
+os.makedirs(VALIDATION_DIR, exist_ok=True)
 
 # %% ── CONFIG ───────────────────────────────────────────────────────────
 master_xlsx  = str(get_inventory_dir() / "_MASTER_INVENTORY_FOR_STOCHASTIC_INPUT_GENERATION_.xlsx")
@@ -692,3 +696,35 @@ if RUN_PLOTS:
     for cal_name, grp in vic_detail_df.groupby('CalSim'):
         save_monthly_box_per_location_general(grp, cal_name, value_col='VIC_Error_pct')
         save_monthly_box_per_location_general(grp, cal_name, value_col='VIC_Error')
+
+# %% -- 8. PRODUCT A VALIDATION CSV (for SV compiler) --------------------
+# Write final CalSim-format CSV (Part B, Part C, Year, Month, Value) to
+# _product_a_validation/ for consumption by the SV compiler.
+
+# Build Part B -> Part C map from the inventory (col index 2 = Part B, 3 = Part C)
+col_partB = df_master.columns[2]
+col_partC = df_master.columns[3]
+_partc_map = {}
+for _, r in df_master[[col_partB, col_partC]].dropna().iterrows():
+    b = str(r[col_partB]).upper().replace(' ', '_')
+    c = str(r[col_partC]).upper().replace(' ', '_')
+    if b and c:
+        _partc_map[b] = c
+
+val_rows = []
+for _, r in detail_df.iterrows():
+    b = excel_to_partB(str(r['CalSim']))
+    c = _partc_map.get(b, 'FLOW-INFLOW')
+    val_rows.append({
+        'Part B': b,
+        'Part C': c,
+        'Year': int(r['Year']),
+        'Month': int(r['Month']),
+        'Value': r['qmap_postAdj'],
+    })
+
+df_val_csv = pd.DataFrame(val_rows).sort_values(['Part B', 'Year', 'Month']).reset_index(drop=True)
+val_csv_path = os.path.join(VALIDATION_DIR, "_riminflow_productA_1972_2018.csv")
+df_val_csv.to_csv(val_csv_path, index=False)
+print(f"\nProduct A validation CSV: {val_csv_path}")
+print(f"  {len(df_val_csv):,} rows, {df_val_csv['Part B'].nunique()} inflows")

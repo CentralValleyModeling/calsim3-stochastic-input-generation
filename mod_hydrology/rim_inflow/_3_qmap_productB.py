@@ -63,7 +63,7 @@ vic_end_year  = 2018
 # Simulated to be adjusted (Product B)
 vic_sim_dir   = str(_vic_gen / "output" / "routed" / "Product_B" / "1")
 
-BASE_OUT_DIR  = str(_gen / "_3_qmap_product_b")
+BASE_OUT_DIR  = str(_gen / "output" / "_3_qmap_product_b")
 OUT_TS_DIR    = BASE_OUT_DIR
 os.makedirs(OUT_TS_DIR, exist_ok=True)
 
