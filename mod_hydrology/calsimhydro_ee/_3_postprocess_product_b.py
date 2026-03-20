@@ -1,8 +1,8 @@
 """
-Postprocess CalSimHydro Product B (1000-year stochastic) DSS Outputs
-====================================================================
+Postprocess CalSimHydroEE Product B (1000-year stochastic) DSS Outputs
+======================================================================
 Extracts monthly time series from the 10 chunked Product B DSS files
-(CS3L2015V0Hydro_SV, RiceOutput, HydroRebalanceSJRdemands) and produces:
+(CalSimHydroEE_DP_EA) and produces:
   1. Per-chunk CSVs in Part B / Part C / Year / Month / Value format
   2. Per-chunk summary CSVs with descriptive statistics by SV
   3. (--compare-a) Comparison CSV: Product A vs Product B at the PartC level
@@ -12,27 +12,20 @@ Oct 1921 - Sep 2021 (WY 1922-2021).
 
 Inputs
 ------
-- CalSimHydro_Runs/CalSimHydro_Product_B/CS3L2015V0Hydro_SV_n{01..10}.DSS
-- CalSimHydro_Runs/CalSimHydro_Product_B/RiceOutput_n{01..10}.DSS
-- CalSimHydro_Rebalance_Runs/Rebalance_Product_B/HydroRebalanceSJRdemands_n{01..10}.DSS
+- CalSimHydroEE_Runs/CalSimHydroEE_Product_B/CalSimHydroEE_DP_EA_n{01..10}.DSS
 - _MASTER_INVENTORY_FOR_STOCHASTIC_INPUT_GENERATION_.xlsx
 
 Outputs
 -------
-- output/_4_postprocess_product_b/_product_b_final/_cshydro_sv_productB_n{01..10}.csv
-- output/_4_postprocess_product_b/_product_b_final/_cshydro_rice_productB_n{01..10}.csv
-- output/_4_postprocess_product_b/_product_b_final/_cshydro_rebalance_productB_n{01..10}.csv
-- output/_4_postprocess_product_b/_cshydro_sv_productB_n{01..10}_summary.csv
-- output/_4_postprocess_product_b/_cshydro_rice_productB_n{01..10}_summary.csv
-- output/_4_postprocess_product_b/_cshydro_rebalance_productB_n{01..10}_summary.csv
-- output/_4_postprocess_product_b/_cshydro_*_productB_vs_productA.csv  (--compare-a)
+- output/_3_postprocess_product_b/_product_b_final/_cshydroEE_productB_n{01..10}.csv
+- output/_3_postprocess_product_b/_cshydroEE_productB_n{01..10}_summary.csv
+- output/_3_postprocess_product_b/_cshydroEE_productB_vs_productA.csv  (--compare-a)
 
 Usage
 -----
-    python _4_postprocess_product_b.py                     # all sources, all chunks
-    python _4_postprocess_product_b.py --sources cshydro   # single source
-    python _4_postprocess_product_b.py --chunks 1 2 3      # specific chunks only
-    python _4_postprocess_product_b.py --compare-a         # compare B vs A only
+    python _3_postprocess_product_b.py                    # all chunks
+    python _3_postprocess_product_b.py --chunks 1 2 3     # specific chunks only
+    python _3_postprocess_product_b.py --compare-a        # compare B vs A only
 """
 
 import os
@@ -50,59 +43,34 @@ from utils.paths import get_module_generated_dir, get_inventory_dir
 
 
 # -- CONSTANTS -----------------------------------------------------------------
-_GEN_DIR = get_module_generated_dir("mod_hydrology/calsimhydro")
-OUTPUT_DIR = _GEN_DIR / "output" / "_4_postprocess_product_b"
+_GEN_DIR = get_module_generated_dir("mod_hydrology/calsimhydro_ee")
+OUTPUT_DIR = _GEN_DIR / "output" / "_3_postprocess_product_b"
 
 EXCEL_PATH = str(get_inventory_dir() / "_MASTER_INVENTORY_FOR_STOCHASTIC_INPUT_GENERATION_.xlsx")
 SHEET_NAME = "MASTER"
 
-N_CHUNKS = 10          # 10 chunks of 100 water years each
+N_CHUNKS = 10           # 10 chunks of 100 water years each
 MONTHS_PER_CHUNK = 1200  # 100 WY x 12 months
 START_WY = 1922
 END_WY = 2021
 
-# DSS source definitions
-_cshydro_runs = _GEN_DIR / "CalSimHydro_Runs"
-_rebalance_runs = _GEN_DIR / "CalSimHydro_Rebalance_Runs"
-_PRODUCT_A_DIR = _GEN_DIR / "output" / "_3_postprocess_product_a"
+# DSS source paths
+_EE_RUNS = _GEN_DIR / "CalSimHydroEE_Runs"
+_PRODUCT_B_DIR = _EE_RUNS / "CalSimHydroEE_Product_B"
+_PRODUCT_A_MERGED = (
+    _GEN_DIR / "output" / "_2_postprocess_product_a" / "calsimHydroEE_1972-2018_DSS.csv"
+)
 
-SOURCES = {
-    "cshydro": {
-        "label": "CS3L2015V0Hydro_SV",
-        "inv_filter": "CS3L2015V0Hydro_SV.dss",
-        "dss_dir": _cshydro_runs / "CalSimHydro_Product_B",
-        "dss_template": "CS3L2015V0Hydro_SV_n{chunk:02d}.DSS",
-        "csv_template": "_cshydro_sv_productB_n{chunk:02d}.csv",
-        "summary_template": "_cshydro_sv_productB_n{chunk:02d}_summary.csv",
-        "prodA_merged": _PRODUCT_A_DIR / "cshydro" / "calsimHydro_1972-2018_SV_DSS.csv",
-        "compare_a_csv": "_cshydro_sv_productB_vs_productA.csv",
-    },
-    "rebalance": {
-        "label": "HydroRebalanceSJRdemands",
-        "inv_filter": "RebalancedSJR_AW_TW_DP.dss",
-        "dss_dir": _rebalance_runs / "Rebalance_Product_B",
-        "dss_template": "HydroRebalanceSJRdemands_n{chunk:02d}.DSS",
-        "csv_template": "_cshydro_rebalance_productB_n{chunk:02d}.csv",
-        "summary_template": "_cshydro_rebalance_productB_n{chunk:02d}_summary.csv",
-        "prodA_merged": _PRODUCT_A_DIR / "rebalance" / "HydroRebalanceSJRdemands_1972-2018_DSS.csv",
-        "compare_a_csv": "_cshydro_rebalance_productB_vs_productA.csv",
-    },
-    "rice": {
-        "label": "RiceOutput",
-        "inv_filter": "RiceOutput.dss",
-        "dss_dir": _cshydro_runs / "CalSimHydro_Product_B",
-        "dss_template": "RiceOutput_n{chunk:02d}.DSS",
-        "csv_template": "_cshydro_rice_productB_n{chunk:02d}.csv",
-        "summary_template": "_cshydro_rice_productB_n{chunk:02d}_summary.csv",
-        "prodA_merged": _PRODUCT_A_DIR / "rice" / "RiceOutput_DSS.csv",
-        "compare_a_csv": "_cshydro_rice_productB_vs_productA.csv",
-    },
-}
+DSS_TEMPLATE = "CalSimHydroEE_DP_EA_n{chunk:02d}.DSS"
+CSV_TEMPLATE = "_cshydroEE_productB_n{chunk:02d}.csv"
+SUMMARY_TEMPLATE = "_cshydroEE_productB_n{chunk:02d}_summary.csv"
+COMPARE_A_CSV = "_cshydroEE_productB_vs_productA.csv"
 
 
-# -- HELPER FUNCTIONS ----------------------------------------------------------
+# -- INVENTORY -----------------------------------------------------------------
 
 _df_master_cache = None
+
 
 def _get_master():
     """Read and cache the master inventory DataFrame."""
@@ -112,15 +80,15 @@ def _get_master():
     return _df_master_cache
 
 
-def load_inventory(inv_filter):
-    """Load master inventory rows for a given DSS filename.
+def load_inventory():
+    """Load master inventory rows for CalSimHydroEE / IDCOutputEE.dss.
 
     Returns (excel_partcs dict, desired_order list).
     """
     df_master = _get_master()
     rows = df_master[
-        (df_master.iloc[:, 8] == 'CalSimHydro') &
-        (df_master.iloc[:, 9] == inv_filter)
+        (df_master.iloc[:, 8] == 'CalSimHydroEE') &
+        (df_master.iloc[:, 9] == 'IDCOutputEE.dss')
     ]
     sv_names = [str(n).strip().upper() for n in rows.iloc[:, 7].tolist()]
 
@@ -132,7 +100,7 @@ def load_inventory(inv_filter):
 
 # -- Junction helper for long DSS paths ---------------------------------------
 # The Fortran HEC-DSS library inside pydsstools limits path names to 256 chars.
-# The data directory lives on OneDrive with a very long path, so we create a
+# The data directory may live on OneDrive with a very long path, so we create a
 # temporary Windows directory junction under the repo root to shorten it.
 
 _REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -278,11 +246,11 @@ def compute_summary(df_long):
 
 # -- CHUNK PROCESSING ----------------------------------------------------------
 
-def process_chunk(source_key, src, chunk_num, excel_partcs):
+def process_chunk(chunk_num, excel_partcs):
     """Process a single Product B chunk: extract DSS, write CSV and summary."""
     chunk_tag = f"n{chunk_num:02d}"
-    dss_name = src["dss_template"].format(chunk=chunk_num)
-    dss_path = src["dss_dir"] / dss_name
+    dss_name = DSS_TEMPLATE.format(chunk=chunk_num)
+    dss_path = _PRODUCT_B_DIR / dss_name
 
     print(f"\n  Chunk {chunk_tag}: {dss_name}")
 
@@ -311,7 +279,7 @@ def process_chunk(source_key, src, chunk_num, excel_partcs):
     out_dir = OUTPUT_DIR / "_product_b_final"
     out_dir.mkdir(parents=True, exist_ok=True)
 
-    csv_name = src["csv_template"].format(chunk=chunk_num)
+    csv_name = CSV_TEMPLATE.format(chunk=chunk_num)
     csv_path = out_dir / csv_name
     df_long.to_csv(csv_path, index=False)
 
@@ -320,7 +288,7 @@ def process_chunk(source_key, src, chunk_num, excel_partcs):
 
     # Compute and write summary
     summary = compute_summary(df_long)
-    summary_name = src["summary_template"].format(chunk=chunk_num)
+    summary_name = SUMMARY_TEMPLATE.format(chunk=chunk_num)
     OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
     summary_path = OUTPUT_DIR / summary_name
     summary.to_csv(summary_path, index=False)
@@ -348,7 +316,7 @@ def _partc_monthly_stats(df, value_col, tag):
     return pd.concat(frames, ignore_index=True)
 
 
-def run_compare_a(source_key, src):
+def run_compare_a():
     """Compare Product B chunk monthly statistics against Product A at the PartC level.
 
     Produces a CSV with columns: Part C, stat, Month, Product_A, n01, ..., n10.
@@ -356,33 +324,31 @@ def run_compare_a(source_key, src):
     Product A merged CSV to compute matching stats from the Product_A column.
     """
     print(f"\n{'=' * 60}")
-    print(f"  Compare B vs A: {src['label']}")
+    print("  Compare B vs A: CalSimHydroEE")
     print(f"{'=' * 60}")
 
     # -- Check that all 10 Product B chunk CSVs exist --------------------------
     out_dir = OUTPUT_DIR / "_product_b_final"
     missing = []
     for i in range(1, N_CHUNKS + 1):
-        csv_path = out_dir / src["csv_template"].format(chunk=i)
+        csv_path = out_dir / CSV_TEMPLATE.format(chunk=i)
         if not csv_path.exists():
             missing.append(f"n{i:02d}")
     if missing:
-        print(f"\nERROR: Product B chunk CSVs not found for {src['label']}: "
-              f"{', '.join(missing)}")
+        print(f"\nERROR: Product B chunk CSVs not found: {', '.join(missing)}")
         print("Run Product B postprocessing first:")
-        print(f"  python _4_postprocess_product_b.py --sources {source_key}")
+        print("  python _3_postprocess_product_b.py")
         sys.exit(1)
 
     # -- Check that Product A merged CSV exists --------------------------------
-    prodA_path = src["prodA_merged"]
-    if not prodA_path.exists():
-        print(f"\nERROR: Product A merged CSV not found: {prodA_path}")
-        print("Run Product A comparison postprocessing first:")
-        print(f"  python _3_postprocess_product_a.py --sources {source_key}")
+    if not _PRODUCT_A_MERGED.exists():
+        print(f"\nERROR: Product A merged CSV not found: {_PRODUCT_A_MERGED}")
+        print("Run Product A postprocessing first:")
+        print("  python _2_postprocess_product_a.py")
         sys.exit(1)
 
     # -- Compute Product A stats from merged CSV -------------------------------
-    prodA_df = pd.read_csv(prodA_path)
+    prodA_df = pd.read_csv(_PRODUCT_A_MERGED)
     prodA_df['Date'] = pd.to_datetime(prodA_df['Date'])
     prodA_df['Month'] = prodA_df['Date'].dt.month
     # Rename PartC -> Part C for consistency with Product B CSVs
@@ -395,7 +361,7 @@ def run_compare_a(source_key, src):
     # -- Read each Product B chunk and compute PartC-level stats ---------------
     for i in range(1, N_CHUNKS + 1):
         chunk_tag = f"n{i:02d}"
-        csv_path = out_dir / src["csv_template"].format(chunk=i)
+        csv_path = out_dir / CSV_TEMPLATE.format(chunk=i)
         chunk_df = pd.read_csv(csv_path)
         print(f"  Reading chunk {chunk_tag}: {len(chunk_df):,} rows")
 
@@ -414,7 +380,7 @@ def run_compare_a(source_key, src):
     ).reset_index(drop=True)
 
     OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
-    compare_path = OUTPUT_DIR / src["compare_a_csv"]
+    compare_path = OUTPUT_DIR / COMPARE_A_CSV
     result.to_csv(compare_path, index=False)
 
     n_partc = result['Part C'].nunique()
@@ -422,40 +388,11 @@ def run_compare_a(source_key, src):
     print(f"  PartC groups: {n_partc}  |  Rows: {len(result):,}")
 
 
-# -- MAIN PROCESSING -----------------------------------------------------------
-
-def run_source(source_key, src, chunks):
-    """Process all requested chunks for a single DSS source."""
-    print(f"\n{'=' * 60}")
-    print(f"  Source: {src['label']}")
-    print(f"  DSS dir: {src['dss_dir']}")
-    print(f"  Chunks: {', '.join(f'n{c:02d}' for c in chunks)}")
-    print(f"{'=' * 60}")
-
-    if not src["dss_dir"].exists():
-        print(f"  WARNING: DSS directory not found: {src['dss_dir']}")
-        return
-
-    excel_partcs, _ = load_inventory(src["inv_filter"])
-    print(f"  Inventory: {len(excel_partcs)} SVs from master spreadsheet")
-
-    success_count = 0
-    for chunk_num in chunks:
-        ok = process_chunk(source_key, src, chunk_num, excel_partcs)
-        if ok:
-            success_count += 1
-
-    print(f"\n  Completed: {success_count}/{len(chunks)} chunks for {src['label']}")
-
+# -- MAIN ----------------------------------------------------------------------
 
 def parse_args():
     parser = argparse.ArgumentParser(
-        description="Postprocess CalSimHydro Product B (1000-year stochastic) DSS outputs.",
-    )
-    parser.add_argument(
-        "--sources", nargs="+",
-        choices=list(SOURCES.keys()), default=list(SOURCES.keys()),
-        help="DSS sources to process (default: all)",
+        description="Postprocess CalSimHydroEE Product B (1000-year stochastic) DSS outputs.",
     )
     parser.add_argument(
         "--chunks", nargs="+", type=int,
@@ -479,8 +416,7 @@ def main():
             sys.exit(1)
 
     print("=" * 80)
-    print("CalSimHydro -- Product B Postprocessing")
-    print(f"Sources: {', '.join(args.sources)}")
+    print("CalSimHydroEE -- Product B Postprocessing")
     if not args.compare_a:
         print(f"Chunks: {', '.join(f'n{c:02d}' for c in args.chunks)}")
         print(f"Canonical period: WY {START_WY}-{END_WY} (100 WY per chunk)")
@@ -489,15 +425,27 @@ def main():
     print(f"Output: {OUTPUT_DIR}")
     print("=" * 80)
 
-    for key in args.sources:
-        src = SOURCES[key]
-        if not args.compare_a:
-            run_source(key, src, args.chunks)
-        if args.compare_a:
-            run_compare_a(key, src)
+    if not args.compare_a:
+        if not _PRODUCT_B_DIR.exists():
+            print(f"  WARNING: DSS directory not found: {_PRODUCT_B_DIR}")
+            sys.exit(1)
+
+        excel_partcs, _ = load_inventory()
+        print(f"  Inventory: {len(excel_partcs)} SVs from master spreadsheet")
+
+        success_count = 0
+        for chunk_num in args.chunks:
+            ok = process_chunk(chunk_num, excel_partcs)
+            if ok:
+                success_count += 1
+
+        print(f"\n  Completed: {success_count}/{len(args.chunks)} chunks")
+
+    if args.compare_a:
+        run_compare_a()
 
     print(f"\n{'=' * 80}")
-    print("Product B postprocessing complete.")
+    print("CalSimHydroEE Product B postprocessing complete.")
     print(f"{'=' * 80}")
 
 

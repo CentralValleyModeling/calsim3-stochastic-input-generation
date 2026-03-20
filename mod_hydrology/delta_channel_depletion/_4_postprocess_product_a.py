@@ -6,13 +6,13 @@ merges into comparison CSVs, computes summary statistics, generates boxplots,
 and creates the Product A validation CSV for CalSim compilation.
 
 Usage:
-    python _4_postprocess_run_DCD.py
+    python _4_postprocess_product_a.py
 
 Output:
-    - output/_4_postprocess_run_DCD/DeltaChannelDepletion_DSS.csv
-    - output/_4_postprocess_run_DCD/DeltaChannelDepletion_summary_statistics_by_PartC.csv
-    - output/_4_postprocess_run_DCD/Boxplot_{PartC}_with_mean.png
-    - output/_4_postprocess_run_DCD/_product_a_validation/_dcd_productA_1972_2018.csv
+    - output/_4_postprocess_product_a/DeltaChannelDepletion_DSS.csv
+    - output/_4_postprocess_product_a/DeltaChannelDepletion_summary_statistics_by_PartC.csv
+    - output/_4_postprocess_product_a/Boxplot_{PartC}_with_mean.png
+    - output/_4_postprocess_product_a/_product_a_validation/_dcd_productA_1972_2018.csv
 """
 #%%
 
@@ -36,7 +36,7 @@ _GEN_DIR = get_module_generated_dir("mod_hydrology/delta_channel_depletion")
 
 
 # %% ── RESULTS ROOT ─────────────────────────────────────────────────────
-OUTPUT_DIR = str(_GEN_DIR / "output" / "_2_postprocess_run_DCD")
+OUTPUT_DIR = str(_GEN_DIR / "output" / "_4_postprocess_product_a")
 os.makedirs(OUTPUT_DIR, exist_ok=True)
 
 # %% ── Load Excel Master File ───────────────────────────────────────────
@@ -166,7 +166,7 @@ def to_validation_csv(df, start_wy=1972, end_wy=2018):
     return long
 
 
-VALIDATION_DIR = str(_GEN_DIR / "output" / "_4_postprocess_run_DCD" / "_product_a_validation")
+VALIDATION_DIR = str(_GEN_DIR / "output" / "_4_postprocess_product_a" / "_product_a_validation")
 os.makedirs(VALIDATION_DIR, exist_ok=True)
 
 # Use the already-extracted ProductA data (second DSS file)
