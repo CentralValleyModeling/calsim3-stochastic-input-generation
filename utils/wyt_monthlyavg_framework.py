@@ -3,7 +3,7 @@
 WYT × monthly-average reconstruction framework.
 
 Historical series are loaded via DSS + term spec mode:
-  - a CSV containing term_part_b / term_part_c pairs
+  - a CSV containing term_part_b / term_part_c / basin_wyt rows
   - a historical DSS file from which the monthly series are extracted
 
 Returned outputs (what the runner writes)
@@ -13,13 +13,14 @@ pattern_df  -> <prefix>_pattern_by_WYT_month.csv
     Month is a string abbreviation (Jan, Feb, Mar, ...).
 
 hist_cmp_df -> <prefix>_actual_vs_synthetic.csv
-    WIDE format: actual & synthetic values are side-by-side
-    Columns: year, month, WYT, <term>_actual, <term>_synthetic, ...
-   
+    WIDE format: actual & synthetic values are side-by-side.
+    If all terms use the same WYT basin, the historical WYT column is named
+    'WYT' for backward compatibility. If multiple basins are used, one WYT
+    column is included per basin (for example, SJ_WYT and Sac_WYT).
 
 targets dict -> each target output CSV (Product A or Product B)
     LONG format:
-        year, month, WYT, part_b, part_c, wyt_monthly_avg
+        year, month, basin_wyt, WYT, part_b, part_c, wyt_monthly_avg
 """
 
 from __future__ import annotations
@@ -58,6 +59,13 @@ def basin_tag(basin: str) -> str:
     if b.startswith("sac"):
         return "Sac"
     raise ValueError("basin must start with 'sj' or 'sac' (e.g. 'SJ' or 'Sac').")
+
+
+
+def canonical_basin_wyt(basin: str) -> str:
+    """Return a canonical lower-case basin token for CSV/output use."""
+    tag = basin_tag(basin)
+    return tag.lower()
 
 
 
@@ -102,11 +110,17 @@ def _make_monthly_index(wy_min: int, wy_max: int) -> pd.DataFrame:
     return out
 
 
-@dataclass(frozen=True) 
+@dataclass(frozen=True)
 class TermSpec:
     term_name: str
     b_part: str
     c_part: str
+    basin_wyt: str
+
+    @property
+    def wyt_tag(self) -> str:
+        return basin_tag(self.basin_wyt)
+
 
 
 
@@ -153,14 +167,15 @@ def read_wyt_fixed(path: Path) -> pd.DataFrame:
 
 
 def read_term_specs_csv(path: Path) -> List[TermSpec]:
-    """Read a DSS term spec CSV with B-part / C-part columns.
+    """Read a DSS term spec CSV with B-part / C-part / basin columns.
 
     Required columns:
       - term_part_b
       - term_part_c
+      - basin_wyt
 
-    The output term label defaults to the B-part when it is unique across rows,
-    otherwise to '<B>__<C>' so output column names stay unique.
+    If the B-part is unique across rows, it is used as the output term label.
+    Otherwise the label defaults to '<B>__<C>' so output column names stay unique.
     """
     df = pd.read_csv(path)
     col_lookup = {_norm_header(c): c for c in df.columns}
@@ -168,9 +183,10 @@ def read_term_specs_csv(path: Path) -> List[TermSpec]:
     try:
         b_col = col_lookup["TERM_PART_B"]
         c_col = col_lookup["TERM_PART_C"]
+        basin_col = col_lookup["BASIN_WYT"]
     except KeyError as exc:
         raise KeyError(
-            f"{path} must contain columns 'term_part_b' and 'term_part_c'. "
+            f"{path} must contain columns 'term_part_b', 'term_part_c', and 'basin_wyt'. "
             f"Found columns: {list(df.columns)}"
         ) from exc
 
@@ -178,16 +194,27 @@ def read_term_specs_csv(path: Path) -> List[TermSpec]:
     for _, row in df.iterrows():
         b_part = clean_text(row[b_col])
         c_part = clean_text(row[c_col])
-        if not b_part and not c_part:
+        basin = clean_text(row[basin_col])
+        if not b_part and not c_part and not basin:
             continue
-        if not b_part or not c_part:
+        if not b_part or not c_part or not basin:
             raise ValueError(
-                f"{path} contains a row with a missing B-part or C-part: {row.to_dict()}"
+                f"{path} contains a row with a missing B-part, C-part, or basin_wyt: {row.to_dict()}"
             )
-        raw_rows.append({"b_part": b_part, "c_part": c_part})
+
+        # Validate and canonicalize the basin token immediately.
+        basin = canonical_basin_wyt(basin)
+
+        raw_rows.append(
+            {
+                "b_part": b_part,
+                "c_part": c_part,
+                "basin_wyt": basin,
+            }
+        )
 
     if not raw_rows:
-        raise ValueError(f"No valid B-part / C-part rows found in {path}.")
+        raise ValueError(f"No valid B-part / C-part / basin_wyt rows found in {path}.")
 
     b_counts = Counter(norm_token(r["b_part"]) for r in raw_rows)
     out: list[TermSpec] = []
@@ -202,10 +229,18 @@ def read_term_specs_csv(path: Path) -> List[TermSpec]:
         term_key = norm_token(term_name)
         if term_key in seen_names:
             raise ValueError(
-                f"Duplicate output term name '{term_name}' generated from {path}."
+                f"Duplicate output term name '{term_name}' generated from {path}. "
+                "Ensure B-parts are unique or that B+C combinations are unique."
             )
         seen_names.add(term_key)
-        out.append(TermSpec(term_name=term_name, b_part=row["b_part"], c_part=row["c_part"]))
+        out.append(
+            TermSpec(
+                term_name=term_name,
+                b_part=row["b_part"],
+                c_part=row["c_part"],
+                basin_wyt=row["basin_wyt"],
+            )
+        )
 
     return out
 
@@ -300,7 +335,9 @@ def read_terms_from_dss(
     for spec in term_specs:
         key = (norm_token(spec.b_part), norm_token(spec.c_part))
         if key not in series_by_key:
-            missing.append(f"{spec.term_name} ({spec.b_part}, {spec.c_part})")
+            missing.append(
+                f"{spec.term_name} ({spec.b_part}, {spec.c_part}, basin_wyt={spec.basin_wyt})"
+            )
             continue
 
         out[spec.term_name] = pd.to_numeric(
@@ -324,20 +361,78 @@ def read_terms_from_dss(
 
 
 
-def _load_historical_terms(
-    *,
-    term_specs_csv: Path,
-    historical_dssfile: Path,
-    dss_read_start: str,
-    dss_read_end: str,
-) -> Tuple[pd.DataFrame, List[str], List[TermSpec]]:
-    """Load historical terms from DSS using a term spec CSV."""
-    return read_terms_from_dss(
-        term_specs_csv=term_specs_csv,
-        dssfile=historical_dssfile,
-        dss_read_start=dss_read_start,
-        dss_read_end=dss_read_end,
-    )
+
+
+def _load_historical_wyts(
+    wyt_input_dir: Path,
+    basin_tags: list[str],
+) -> dict[str, pd.DataFrame]:
+    """Load the required historical WYT tables keyed by basin tag."""
+    out: dict[str, pd.DataFrame] = {}
+    missing: list[str] = []
+
+    for tag in sorted(set(basin_tags)):
+        path = Path(wyt_input_dir) / f"_Historical_{tag}WYT.csv"
+        if not path.exists():
+            missing.append(path.name)
+            continue
+        out[tag] = read_wyt_fixed(path)
+
+    if missing:
+        raise FileNotFoundError(
+            "Missing historical WYT file(s):\n  - " + "\n  - ".join(missing)
+        )
+
+    return out
+
+
+
+def _load_product_a_wyts(
+    wyt_target_dir: Path,
+    basin_tags: list[str],
+) -> dict[str, pd.DataFrame]:
+    """Load Product A target WYT tables keyed by basin tag."""
+    out: dict[str, pd.DataFrame] = {}
+    missing: list[str] = []
+
+    for tag in sorted(set(basin_tags)):
+        path = Path(wyt_target_dir) / f"_{tag}WYT.csv"
+        if not path.exists():
+            missing.append(path.name)
+            continue
+        out[tag] = read_wyt_fixed(path)
+
+    if missing:
+        raise FileNotFoundError(
+            "Missing Product A WYT file(s):\n  - " + "\n  - ".join(missing)
+        )
+
+    return out
+
+
+
+def _load_product_b_wyts(
+    wyt_target_dir: Path,
+    basin_tags: list[str],
+    ensemble: str,
+) -> dict[str, pd.DataFrame]:
+    """Load Product B target WYT tables keyed by basin tag for one ensemble."""
+    out: dict[str, pd.DataFrame] = {}
+    missing: list[str] = []
+
+    for tag in sorted(set(basin_tags)):
+        path = Path(wyt_target_dir) / f"_{tag}WYT_{ensemble}.csv"
+        if not path.exists():
+            missing.append(path.name)
+            continue
+        out[tag] = read_wyt_fixed(path)
+
+    if missing:
+        raise FileNotFoundError(
+            f"Missing Product B WYT file(s) for {ensemble}:\n  - " + "\n  - ".join(missing)
+        )
+
+    return out
 
 
 # -----------------------
@@ -345,13 +440,44 @@ def _load_historical_terms(
 # -----------------------
 
 
-def _pattern_wide(df_terms_wyt: pd.DataFrame, terms: List[str]) -> pd.DataFrame:
-    """Mean by (WYT, month), WIDE columns = term names."""
+def _term_pattern(
+    df_terms: pd.DataFrame,
+    hist_wyt: pd.DataFrame,
+    spec: TermSpec,
+) -> pd.DataFrame:
+    """Mean monthly pattern for one term using that term's assigned WYT basin."""
+    cols = ["WY", "month", spec.term_name]
+    df = df_terms[cols].merge(hist_wyt, on="WY", how="left")
     return (
-        df_terms_wyt.dropna(subset=["WYT"])
-        .groupby(["WYT", "month"], as_index=False)[terms]
+        df.dropna(subset=["WYT"])
+        .groupby(["WYT", "month"], as_index=False)[spec.term_name]
         .mean()
     )
+
+
+
+def _pattern_wide(
+    df_terms: pd.DataFrame,
+    term_specs: List[TermSpec],
+    hist_wyts: dict[str, pd.DataFrame],
+) -> pd.DataFrame:
+    """Mean by (WYT, month), WIDE columns = term names.
+
+    Each term is grouped against the historical WYT series for its own basin_wyt.
+    """
+    out: pd.DataFrame | None = None
+
+    for spec in term_specs:
+        pat = _term_pattern(df_terms, hist_wyts[spec.wyt_tag], spec)
+        if out is None:
+            out = pat
+        else:
+            out = out.merge(pat, on=["WYT", "month"], how="outer")
+
+    if out is None:
+        return pd.DataFrame(columns=["WYT", "month"])
+
+    return out
 
 
 
@@ -370,83 +496,120 @@ def _pattern_wide_for_output(pattern_wide: pd.DataFrame, terms: List[str]) -> pd
 
 
 def _hist_actual_vs_synth_wide(
-    df_hist: pd.DataFrame,
+    df_terms: pd.DataFrame,
     pattern_wide: pd.DataFrame,
-    terms: List[str],
+    term_specs: List[TermSpec],
+    hist_wyts: dict[str, pd.DataFrame],
 ) -> pd.DataFrame:
-    """Wide historical table with actual and synthetic columns side-by-side."""
-    syn = pattern_wide.rename(columns={c: f"{c}_synthetic" for c in terms})
-    df2 = df_hist.rename(columns={c: f"{c}_actual" for c in terms})
-    df2 = df2.merge(syn, on=["WYT", "month"], how="left")
+    """Wide historical table with actual and synthetic columns side-by-side.
 
-    wide_cols: List[str] = []
-    for c in terms:
-        wide_cols.extend([f"{c}_actual", f"{c}_synthetic"])
+    When multiple WYT basins are used across terms, one historical WYT column is
+    included per basin. When only one basin is used, the legacy single 'WYT'
+    column is preserved.
+    """
+    out = df_terms[["date", "WY", "month"]].copy()
+    basin_tags = sorted(hist_wyts)
 
-    out = df2[["date", "WY", "month", "WYT"] + wide_cols].copy()
+    if len(basin_tags) == 1:
+        wyt_col_map = {basin_tags[0]: "WYT"}
+    else:
+        wyt_col_map = {tag: f"{tag}_WYT" for tag in basin_tags}
+
+    for tag in basin_tags:
+        out = out.merge(
+            hist_wyts[tag].rename(columns={"WYT": wyt_col_map[tag]}),
+            on="WY",
+            how="left",
+        )
+
+    for spec in term_specs:
+        term = spec.term_name
+        wyt_col = wyt_col_map[spec.wyt_tag]
+        pat = pattern_wide[["WYT", "month", term]].rename(columns={term: "_synthetic"})
+        syn_lookup = out[[wyt_col, "month"]].rename(columns={wyt_col: "WYT"})
+        syn_series = syn_lookup.merge(pat, on=["WYT", "month"], how="left")["_synthetic"]
+
+        out[f"{term}_actual"] = pd.to_numeric(df_terms[term], errors="coerce").to_numpy()
+        out[f"{term}_synthetic"] = pd.to_numeric(syn_series, errors="coerce").to_numpy()
+
     out = out.sort_values("date").reset_index(drop=True)
     out["year"] = out["date"].dt.year
-    out = out[["year", "month", "WYT"] + wide_cols]
-    return out
+
+    wyt_cols = [wyt_col_map[tag] for tag in basin_tags]
+    wide_cols: List[str] = []
+    for spec in term_specs:
+        wide_cols.extend([f"{spec.term_name}_actual", f"{spec.term_name}_synthetic"])
+
+    return out[["year", "month"] + wyt_cols + wide_cols]
 
 
 
 def compute_target_from_wyt(
-    wyt_tbl: pd.DataFrame,
+    wyt_tbls: dict[str, pd.DataFrame],
     pattern_wide: pd.DataFrame,
     term_specs: List[TermSpec],
 ) -> pd.DataFrame:
-    """Reconstruct target monthly series (LONG format)."""
-    terms = [s.term_name for s in term_specs]
-    base = _make_monthly_index(int(wyt_tbl["WY"].min()), int(wyt_tbl["WY"].max()))
-    base = base.merge(wyt_tbl, on="WY", how="left")  # adds WYT
+    """Reconstruct target monthly series (LONG format).
 
-    wide = base.merge(pattern_wide, on=["WYT", "month"], how="left")
+    Each term uses the target WYT series associated with its own basin_wyt.
+    """
+    pieces: list[pd.DataFrame] = []
 
-    long = wide.melt(
-        id_vars=["date", "WY", "month", "WYT"],
-        value_vars=terms,
-        var_name="term",
-        value_name="wyt_monthly_avg",
-    )
-    spec_map = {s.term_name: (s.b_part, s.c_part) for s in term_specs}
-    long["part_b"] = long["term"].map(lambda t: spec_map[t][0])
-    long["part_c"] = long["term"].map(lambda t: spec_map[t][1])
-    long["year"] = long["date"].dt.year
-    return long[["year", "month", "WYT", "part_b", "part_c", "wyt_monthly_avg"]]
+    for term_order, spec in enumerate(term_specs):
+        wyt_tbl = wyt_tbls[spec.wyt_tag]
+        base = _make_monthly_index(int(wyt_tbl["WY"].min()), int(wyt_tbl["WY"].max()))
+        base = base.merge(wyt_tbl, on="WY", how="left")  # adds WYT
+
+        pat = pattern_wide[["WYT", "month", spec.term_name]].rename(
+            columns={spec.term_name: "wyt_monthly_avg"}
+        )
+        long = base.merge(pat, on=["WYT", "month"], how="left")
+        long["part_b"] = spec.b_part
+        long["part_c"] = spec.c_part
+        long["basin_wyt"] = spec.basin_wyt
+        long["year"] = long["date"].dt.year
+        long["_term_order"] = term_order
+        pieces.append(long[["year", "month", "basin_wyt", "WYT", "part_b", "part_c", "wyt_monthly_avg", "_term_order"]])
+
+    if not pieces:
+        return pd.DataFrame(
+            columns=["year", "month", "basin_wyt", "WYT", "part_b", "part_c", "wyt_monthly_avg"]
+        )
+
+    out = pd.concat(pieces, ignore_index=True)
+    out = out.sort_values(["_term_order", "year", "month"]).drop(columns=["_term_order"]).reset_index(drop=True)
+    return out
 
 
 # ── Public helpers (split DSS read from target computation) ─────────────
 
+
 def compute_wyt_pattern(
     *,
-    basin: str,
     wyt_input_dir: Path,
     term_specs_csv: Path,
     historical_dssfile: Path,
     dss_read_start: str = DEFAULT_DSS_READ_START,
     dss_read_end: str = DEFAULT_DSS_READ_END,
-) -> Tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame, "List[TermSpec]", str]:
-    """Compute the historical pattern and comparison (reads DSS once).
-
-    Returns:
-      pattern_df, hist_cmp_df, pat_wide, term_specs, tag
-    """
-    tag = basin_tag(basin)
-    df_terms, terms, term_specs = _load_historical_terms(
+) -> Tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame, List[TermSpec]]:
+    """Compute the historical pattern and comparison (reads DSS once)."""
+    df_terms, terms, term_specs = read_terms_from_dss(
         term_specs_csv=Path(term_specs_csv),
-        historical_dssfile=Path(historical_dssfile),
+        dssfile=Path(historical_dssfile),
         dss_read_start=dss_read_start,
         dss_read_end=dss_read_end,
     )
-    hist_wyt = read_wyt_fixed(Path(wyt_input_dir) / f"_Historical_{tag}WYT.csv")
-    df_hist = df_terms.merge(hist_wyt, on="WY", how="left")
 
-    pat_wide = _pattern_wide(df_hist, terms)
+    basin_tags = sorted({spec.wyt_tag for spec in term_specs})
+    hist_wyts = _load_historical_wyts(Path(wyt_input_dir), basin_tags)
+
+    pat_wide = _pattern_wide(df_terms, term_specs, hist_wyts)
     pattern_df = _pattern_wide_for_output(pat_wide, terms)
-    hist_cmp_df = _hist_actual_vs_synth_wide(df_hist, pat_wide, terms)
+    hist_cmp_df = _hist_actual_vs_synth_wide(df_terms, pat_wide, term_specs, hist_wyts)
 
-    return pattern_df, hist_cmp_df, pat_wide, term_specs, tag
+    return pattern_df, hist_cmp_df, pat_wide, term_specs
+
+
 
 
 def compute_product_targets(
@@ -454,8 +617,7 @@ def compute_product_targets(
     product: str,
     wyt_target_dir: Path,
     pat_wide: pd.DataFrame,
-    term_specs: "List[TermSpec]",
-    tag: str,
+    term_specs: List[TermSpec],
 ) -> Dict[str, pd.DataFrame]:
     """Compute targets for a single product using a precomputed pattern.
 
@@ -466,27 +628,18 @@ def compute_product_targets(
     if prod not in {"A", "B"}:
         raise ValueError("product must be 'A' or 'B'.")
 
+    basin_tags = sorted({spec.wyt_tag for spec in term_specs})
     targets: Dict[str, pd.DataFrame] = {}
 
     if prod == "A":
-        wytA_path = Path(wyt_target_dir) / f"_{tag}WYT.csv"
-        wytA = read_wyt_fixed(wytA_path)
-        name = f"product_a_{tag}WYT"
-        targets[name] = compute_target_from_wyt(wytA, pat_wide, term_specs)
+        wyt_tables = _load_product_a_wyts(Path(wyt_target_dir), basin_tags)
+        name = "product_a"
+        targets[name] = compute_target_from_wyt(wyt_tables, pat_wide, term_specs)
     else:
-        expected_files = [
-            Path(wyt_target_dir) / f"_{tag}WYT_n{str(i).zfill(2)}.csv"
-            for i in range(1, 11)
-        ]
-        missing = [p.name for p in expected_files if not p.exists()]
-        if missing:
-            raise FileNotFoundError(
-                "Product B requires ALL 10 ensemble WYT files, but these are missing:\n  - "
-                + "\n  - ".join(missing)
-            )
-        for p in expected_files:
-            wytB = read_wyt_fixed(p)
-            name = "product_b_" + p.stem.lstrip("_")
-            targets[name] = compute_target_from_wyt(wytB, pat_wide, term_specs)
+        for i in range(1, 11):
+            ensemble = f"n{str(i).zfill(2)}"
+            wyt_tables = _load_product_b_wyts(Path(wyt_target_dir), basin_tags, ensemble)
+            name = f"product_b_{ensemble}"
+            targets[name] = compute_target_from_wyt(wyt_tables, pat_wide, term_specs)
 
     return targets

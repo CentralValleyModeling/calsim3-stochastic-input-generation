@@ -17,13 +17,15 @@ import sys
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 from utils.paths import get_base_dir, get_module_generated_dir
 from utils.wyt_monthlyavg_framework import compute_wyt_pattern, compute_product_targets
+
+
 _SCRIPT_DIR = Path(__file__).resolve().parent
 _REPO_DIR = Path(__file__).resolve().parents[2]
 _gen = get_module_generated_dir("mod_hydrology/tulare_gw_terms")
 _wyt_gen = get_module_generated_dir("mod_hydrology/water_year_types")
 
 # %% ── CONFIG ───────────────────────────────────────────────────────────
-dss_file     = str(get_base_dir() / "CalSim3" / "__calsim_sv_default__.dss")
+dss_file = str(get_base_dir() / "CalSim3" / "__calsim_sv_default__.dss")
 terms_csv = str(_SCRIPT_DIR / "reference" / "wyt_avg_terms.csv")
 
 # Historical DSS date window used to build the monthly index.
@@ -33,10 +35,11 @@ DSS_READ_END = "2021-09-30"
 # Output prefix for filenames.
 OUTPUT_PREFIX = "tulare_gw_terms"
 
-# Choose which WYT definition to use for averaging:
-#    "sj"  -> San Joaquin WYT
-#    "sac" -> Sacramento WYT
-BASIN_WYT = "sj"
+# The term spec CSV now controls the WYT basin for each term.
+# Required columns in wyt_avg_terms.csv:
+#   - term_part_b
+#   - term_part_c
+#   - basin_wyt    (sj or sac; can vary by term)
 
 # Choose target WGEN product(s):
 #    "both" -> run Product A then Product B (default)
@@ -47,11 +50,12 @@ TARGET_PRODUCT = "Both"
 _WYT_INPUT_DIRS = {"A": "Product_A", "B": "Product_B"}
 _OUTPUT_DIRS = {"A": "_1_wyt_monthly_avg_product_a", "B": "_2_wyt_monthly_avg_product_b"}
 
-# Where the WYT CSVs
+# Where the historical WYT CSVs live
 wyt_hist_dir = str(_REPO_DIR / "mod_hydrology" / "water_year_types" / "reference")
 
 # %% ── RESULTS ROOT ─────────────────────────────────────────────────────
 BASE_RESULTS_DIR = _gen / "output"
+
 
 
 def _write_targets(product_key: str, prefix: str, targets) -> None:
@@ -70,6 +74,7 @@ def _write_targets(product_key: str, prefix: str, targets) -> None:
         print(f"  - {p}")
 
 
+
 def main() -> None:
     prefix = OUTPUT_PREFIX.strip() if OUTPUT_PREFIX else Path(terms_csv).stem
     choice = TARGET_PRODUCT.strip().upper()
@@ -83,14 +88,16 @@ def main() -> None:
 
     # Read DSS and compute pattern once
     print("Reading DSS and computing historical pattern...")
-    pattern_df, hist_cmp_df, pat_wide, term_specs, tag = compute_wyt_pattern(
+    pattern_df, hist_cmp_df, pat_wide, term_specs = compute_wyt_pattern(
         term_specs_csv=terms_csv,
         historical_dssfile=dss_file,
         dss_read_start=DSS_READ_START,
         dss_read_end=DSS_READ_END,
-        basin=BASIN_WYT,
         wyt_input_dir=wyt_hist_dir,
     )
+
+    basin_tags = sorted({spec.wyt_tag for spec in term_specs})
+    print(f"Using basin_wyt values from CSV: {', '.join(basin_tags)}")
 
     # Write historical outputs (same for all products)
     hist_dir = BASE_RESULTS_DIR / "0_wyt_monthly_avg_historical"
@@ -117,7 +124,6 @@ def main() -> None:
             wyt_target_dir=wyt_product_dir,
             pat_wide=pat_wide,
             term_specs=term_specs,
-            tag=tag,
         )
         _write_targets(prod_key, prefix, targets)
 
