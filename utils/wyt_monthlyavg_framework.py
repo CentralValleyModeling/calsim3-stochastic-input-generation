@@ -490,39 +490,3 @@ def compute_product_targets(
             targets[name] = compute_target_from_wyt(wytB, pat_wide, term_specs)
 
     return targets
-
-
-# ── Original all-in-one entry point (kept for backward compatibility) ───
-
-def compute_wyt_monthlyavg(
-    *,
-    basin: str,
-    target_product: str,
-    wyt_input_dir: Path,
-    wyt_target_dir: Path,
-    term_specs_csv: Path,
-    historical_dssfile: Path,
-    dss_read_start: str = DEFAULT_DSS_READ_START,
-    dss_read_end: str = DEFAULT_DSS_READ_END,
-) -> Tuple[pd.DataFrame, pd.DataFrame, Dict[str, pd.DataFrame]]:
-    """All-in-one entry point (reads DSS + computes targets in one call).
-
-    For running multiple products without re-reading DSS, use
-    ``compute_wyt_pattern`` + ``compute_product_targets`` instead.
-    """
-    pattern_df, hist_cmp_df, pat_wide, term_specs, tag = compute_wyt_pattern(
-        basin=basin,
-        wyt_input_dir=wyt_input_dir,
-        term_specs_csv=term_specs_csv,
-        historical_dssfile=historical_dssfile,
-        dss_read_start=dss_read_start,
-        dss_read_end=dss_read_end,
-    )
-    targets = compute_product_targets(
-        product=target_product,
-        wyt_target_dir=wyt_target_dir,
-        pat_wide=pat_wide,
-        term_specs=term_specs,
-        tag=tag,
-    )
-    return pattern_df, hist_cmp_df, targets
