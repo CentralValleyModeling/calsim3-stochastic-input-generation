@@ -1,0 +1,4 @@
+﻿target_part_b,target_part_c,predictor_part_b,predictor_part_c,lower_bound,upper_bound
+C_NFA048_SV,CHANNEL,I_NFA054,INFLOW,,
+C_SFY007_SV,CHANNEL,FOLSOM_INFLOW,INFLOW,,
+C_DER001_SV,CHANNEL,I_CSM035,INFLOW,,
