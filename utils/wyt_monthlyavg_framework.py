@@ -12,8 +12,8 @@ pattern_df  -> <prefix>_pattern_by_WYT_month.csv
     WIDE format: columns are terms, rows are (WYT, month)
     Month is a string abbreviation (Jan, Feb, Mar, ...).
 
-hist_cmp_df -> <prefix>_actual_vs_synthetic.csv
-    WIDE format: actual & synthetic values are side-by-side.
+hist_cmp_df -> <prefix>_actual_vs_reconstructed.csv
+    WIDE format: actual & reconstructed values are side-by-side.
     If all terms use the same WYT basin, the historical WYT column is named
     'WYT' for backward compatibility. If multiple basins are used, one WYT
     column is included per basin (for example, SJ_WYT and Sac_WYT).
@@ -495,13 +495,13 @@ def _pattern_wide_for_output(pattern_wide: pd.DataFrame, terms: List[str]) -> pd
 
 
 
-def _hist_actual_vs_synth_wide(
+def _hist_actual_vs_reconstructed_wide(
     df_terms: pd.DataFrame,
     pattern_wide: pd.DataFrame,
     term_specs: List[TermSpec],
     hist_wyts: dict[str, pd.DataFrame],
 ) -> pd.DataFrame:
-    """Wide historical table with actual and synthetic columns side-by-side.
+    """Wide historical table with actual and reconstructed columns side-by-side.
 
     When multiple WYT basins are used across terms, one historical WYT column is
     included per basin. When only one basin is used, the legacy single 'WYT'
@@ -525,19 +525,19 @@ def _hist_actual_vs_synth_wide(
     for spec in term_specs:
         term = spec.term_name
         wyt_col = wyt_col_map[spec.wyt_tag]
-        pat = pattern_wide[["WYT", "month", term]].rename(columns={term: "_synthetic"})
-        syn_lookup = out[[wyt_col, "month"]].rename(columns={wyt_col: "WYT"})
-        syn_series = syn_lookup.merge(pat, on=["WYT", "month"], how="left")["_synthetic"]
+        pat = pattern_wide[["WYT", "month", term]].rename(columns={term: "_reconstructed"})
+        recon_lookup = out[[wyt_col, "month"]].rename(columns={wyt_col: "WYT"})
+        recon_series = recon_lookup.merge(pat, on=["WYT", "month"], how="left")["_reconstructed"]
 
         out[f"{term}_actual"] = pd.to_numeric(df_terms[term], errors="coerce").to_numpy()
-        out[f"{term}_synthetic"] = pd.to_numeric(syn_series, errors="coerce").to_numpy()
+        out[f"{term}_reconstructed"] = pd.to_numeric(recon_series, errors="coerce").to_numpy()
 
     out = out.sort_values("date").reset_index(drop=True)
 
     wyt_cols = [wyt_col_map[tag] for tag in basin_tags]
     wide_cols: List[str] = []
     for spec in term_specs:
-        wide_cols.extend([f"{spec.term_name}_actual", f"{spec.term_name}_synthetic"])
+        wide_cols.extend([f"{spec.term_name}_actual", f"{spec.term_name}_reconstructed"])
 
     return out[["date"] + wyt_cols + wide_cols]
 
@@ -603,7 +603,7 @@ def compute_wyt_pattern(
 
     pat_wide = _pattern_wide(df_terms, term_specs, hist_wyts)
     pattern_df = _pattern_wide_for_output(pat_wide, terms)
-    hist_cmp_df = _hist_actual_vs_synth_wide(df_terms, pat_wide, term_specs, hist_wyts)
+    hist_cmp_df = _hist_actual_vs_reconstructed_wide(df_terms, pat_wide, term_specs, hist_wyts)
 
     return pattern_df, hist_cmp_df, pat_wide, term_specs
 

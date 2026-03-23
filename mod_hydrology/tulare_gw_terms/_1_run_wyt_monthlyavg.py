@@ -2,9 +2,7 @@
 
 Outputs are written under:
   <generated>/output/_1_run_wyt_monthlyavg/monthly_avg_historical/
-  <generated>/output/_1_run_wyt_monthlyavg/product_a/
   <generated>/output/_1_run_wyt_monthlyavg/product_a/_product_a_validation/
-  <generated>/output/_1_run_wyt_monthlyavg/product_b/
   <generated>/output/_1_run_wyt_monthlyavg/product_b/_product_b_final/
 
 Framework module:
@@ -21,7 +19,7 @@ import pandas as pd
 # Add repo root to path for utils imports
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 from utils.paths import get_base_dir, get_module_generated_dir
-from utils.wyt_monthlyavg_framework import compute_wyt_pattern, compute_product_targets
+from utils.wyt_monthlyavg_framework import compute_wyt_pattern, compute_product_targets, water_year
 
 
 _SCRIPT_DIR = Path(__file__).resolve().parent
@@ -75,21 +73,11 @@ def _to_sv_format(df: pd.DataFrame) -> pd.DataFrame:
 
 
 def _write_targets(product_key: str, prefix: str, targets) -> None:
-    """Write target CSVs for a single product, plus final SV-format outputs."""
+    """Write final SV-format CSVs (Part B, Part C, Year, Month, Value)."""
     prod_dir = BASE_RESULTS_DIR / _OUTPUT_DIRS[product_key]
-    prod_dir.mkdir(parents=True, exist_ok=True)
-
-    wrote = []
-    for name, df in targets.items():
-        out = prod_dir / f"{prefix}_{name}.csv"
-        df.to_csv(out, index=False)
-        wrote.append(out)
 
     print(f"\nProduct {product_key} targets:")
-    for p in wrote:
-        print(f"  - {p}")
 
-    # ── Final SV-format outputs ──────────────────────────────────────────
     if product_key == "B":
         final_dir = prod_dir / "_product_b_final"
         final_dir.mkdir(parents=True, exist_ok=True)
@@ -105,8 +93,8 @@ def _write_targets(product_key: str, prefix: str, targets) -> None:
         val_dir.mkdir(parents=True, exist_ok=True)
         for name, df in targets.items():
             sv = _to_sv_format(df)
-            wy_min = int(df["date"].dt.year.min())
-            wy_max = int(df["date"].dt.year.max())
+            wy_min = int(df["date"].apply(water_year).min())
+            wy_max = int(df["date"].apply(water_year).max())
             out = val_dir / f"{prefix}_productA_{wy_min}_{wy_max}.csv"
             sv.to_csv(out, index=False)
             print(f"  - {out}")
@@ -144,7 +132,7 @@ def main() -> None:
     pattern_path = hist_dir / f"{prefix}_pattern_by_WYT_month.csv"
     pattern_df.to_csv(pattern_path, index=False)
 
-    hist_cmp_path = hist_dir / f"{prefix}_actual_vs_synthetic.csv"
+    hist_cmp_path = hist_dir / f"{prefix}_actual_vs_reconstructed.csv"
     hist_cmp_df.to_csv(hist_cmp_path, index=False)
 
     print(f"\nHistorical outputs:")
