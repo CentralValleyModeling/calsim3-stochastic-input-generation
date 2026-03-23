@@ -20,7 +20,7 @@ hist_cmp_df -> <prefix>_actual_vs_synthetic.csv
 
 targets dict -> each target output CSV (Product A or Product B)
     LONG format:
-        year, month, basin_wyt, WYT, part_b, part_c, wyt_monthly_avg
+        date, basin_wyt, WYT, part_b, part_c, wyt_monthly_avg
 """
 
 from __future__ import annotations
@@ -533,14 +533,13 @@ def _hist_actual_vs_synth_wide(
         out[f"{term}_synthetic"] = pd.to_numeric(syn_series, errors="coerce").to_numpy()
 
     out = out.sort_values("date").reset_index(drop=True)
-    out["year"] = out["date"].dt.year
 
     wyt_cols = [wyt_col_map[tag] for tag in basin_tags]
     wide_cols: List[str] = []
     for spec in term_specs:
         wide_cols.extend([f"{spec.term_name}_actual", f"{spec.term_name}_synthetic"])
 
-    return out[["year", "month"] + wyt_cols + wide_cols]
+    return out[["date"] + wyt_cols + wide_cols]
 
 
 
@@ -567,17 +566,16 @@ def compute_target_from_wyt(
         long["part_b"] = spec.b_part
         long["part_c"] = spec.c_part
         long["basin_wyt"] = spec.basin_wyt
-        long["year"] = long["date"].dt.year
         long["_term_order"] = term_order
-        pieces.append(long[["year", "month", "basin_wyt", "WYT", "part_b", "part_c", "wyt_monthly_avg", "_term_order"]])
+        pieces.append(long[["date", "month", "basin_wyt", "WYT", "part_b", "part_c", "wyt_monthly_avg", "_term_order"]])
 
     if not pieces:
         return pd.DataFrame(
-            columns=["year", "month", "basin_wyt", "WYT", "part_b", "part_c", "wyt_monthly_avg"]
+            columns=["date", "basin_wyt", "WYT", "part_b", "part_c", "wyt_monthly_avg"]
         )
 
     out = pd.concat(pieces, ignore_index=True)
-    out = out.sort_values(["_term_order", "year", "month"]).drop(columns=["_term_order"]).reset_index(drop=True)
+    out = out.sort_values(["_term_order", "date"]).drop(columns=["_term_order", "month"]).reset_index(drop=True)
     return out
 
 
