@@ -1,8 +1,11 @@
 """Runner script: defines inputs, calls the framework, and writes outputs.
 
 Outputs are written under:
-  <generated>/output/_wyt_monthly_avg_historical
-  <generated>/output/_1_wyt_monthly_avg_product_a  or  _2_wyt_monthly_avg_product_b
+  <generated>/output/_1_run_wyt_monthlyavg/monthly_avg_historical/
+  <generated>/output/_1_run_wyt_monthlyavg/product_a/
+  <generated>/output/_1_run_wyt_monthlyavg/product_a/_product_a_validation/
+  <generated>/output/_1_run_wyt_monthlyavg/product_b/
+  <generated>/output/_1_run_wyt_monthlyavg/product_b/_product_b_final/
 
 Framework module:
   utils/wyt_monthlyavg_framework.py
@@ -12,6 +15,8 @@ from __future__ import annotations
 
 from pathlib import Path
 import sys
+
+import pandas as pd
 
 # Add repo root to path for utils imports
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
@@ -48,18 +53,29 @@ OUTPUT_PREFIX = "tulare_gw_terms"
 TARGET_PRODUCT = "Both"
 
 _WYT_INPUT_DIRS = {"A": "Product_A", "B": "Product_B"}
-_OUTPUT_DIRS = {"A": "_1_wyt_monthly_avg_product_a", "B": "_2_wyt_monthly_avg_product_b"}
+_OUTPUT_DIRS = {"A": "product_a", "B": "product_b"}
 
 # Where the historical WYT CSVs live
 wyt_hist_dir = str(_REPO_DIR / "mod_hydrology" / "water_year_types" / "reference")
 
 # %% ── RESULTS ROOT ─────────────────────────────────────────────────────
-BASE_RESULTS_DIR = _gen / "output"
+BASE_RESULTS_DIR = _gen / "output"/"_1_run_wyt_monthlyavg"
 
+
+def _to_sv_format(df: pd.DataFrame) -> pd.DataFrame:
+    """Convert framework long-format target to Part B,Part C,Year,Month,Value."""
+    out = pd.DataFrame({
+        "Part B": df["part_b"],
+        "Part C": df["part_c"],
+        "Year": df["date"].dt.year,
+        "Month": df["date"].dt.month,
+        "Value": df["wyt_monthly_avg"],
+    })
+    return out
 
 
 def _write_targets(product_key: str, prefix: str, targets) -> None:
-    """Write target CSVs for a single product."""
+    """Write target CSVs for a single product, plus final SV-format outputs."""
     prod_dir = BASE_RESULTS_DIR / _OUTPUT_DIRS[product_key]
     prod_dir.mkdir(parents=True, exist_ok=True)
 
@@ -72,6 +88,28 @@ def _write_targets(product_key: str, prefix: str, targets) -> None:
     print(f"\nProduct {product_key} targets:")
     for p in wrote:
         print(f"  - {p}")
+
+    # ── Final SV-format outputs ──────────────────────────────────────────
+    if product_key == "B":
+        final_dir = prod_dir / "_product_b_final"
+        final_dir.mkdir(parents=True, exist_ok=True)
+        for name, df in targets.items():
+            sv = _to_sv_format(df)
+            tag = name.replace("product_b_", "")  # e.g. "n01"
+            out = final_dir / f"{prefix}_productB_qmo_{tag}.csv"
+            sv.to_csv(out, index=False)
+            print(f"  - {out}")
+
+    elif product_key == "A":
+        val_dir = prod_dir / "_product_a_validation"
+        val_dir.mkdir(parents=True, exist_ok=True)
+        for name, df in targets.items():
+            sv = _to_sv_format(df)
+            wy_min = int(df["date"].dt.year.min())
+            wy_max = int(df["date"].dt.year.max())
+            out = val_dir / f"{prefix}_productA_{wy_min}_{wy_max}.csv"
+            sv.to_csv(out, index=False)
+            print(f"  - {out}")
 
 
 
@@ -100,7 +138,7 @@ def main() -> None:
     print(f"Using basin_wyt values from CSV: {', '.join(basin_tags)}")
 
     # Write historical outputs (same for all products)
-    hist_dir = BASE_RESULTS_DIR / "0_wyt_monthly_avg_historical"
+    hist_dir = BASE_RESULTS_DIR / "monthly_avg_historical"
     hist_dir.mkdir(parents=True, exist_ok=True)
 
     pattern_path = hist_dir / f"{prefix}_pattern_by_WYT_month.csv"
