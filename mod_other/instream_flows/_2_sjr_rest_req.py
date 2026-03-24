@@ -1,3 +1,20 @@
+"""
+SJR Restoration Flow Requirements
+==================================
+Reconstruct monthly REST_REQ_NP and REST_REQ_P from UNIMP_SJ unimpaired
+flow data, for historical comparison, Product A, and Product B.
+
+Dependencies
+------------
+- mod_hydrology/rim_inflow/_2_qmap_historical_validation.py
+    Product A UNIMP_SJ is read from the CalSim-format validation CSV:
+    ``data/GENERATED/mod_hydrology/rim_inflow/output/_2_qmap_historical_validation/_product_a_validation/_riminflow_productA_1972_2018.csv``
+    (filtered by Part B == UNIMP_SJ)
+
+- mod_hydrology/rim_inflow/_3_qmap_productB.py
+    Product B UNIMP_SJ is read from per-chunk CSVs:
+    ``data/GENERATED/mod_hydrology/rim_inflow/output/_3_qmap_product_b/UNIMP_SJ_qmo_n*.csv``
+"""
 from __future__ import annotations
 
 import math
@@ -21,17 +38,16 @@ except Exception:  #
 # -----------------------------------------------------------------------------
 # User-facing defaults
 # -----------------------------------------------------------------------------
-_SCRIPT_DIR = Path(__file__).resolve().parent
-
 DSS_FILE = get_base_dir() / "CalSim3" / "__calsim_sv_default__.dss"
-DEFAULT_DSS_READ_START = "1921-01-31"
+DEFAULT_DSS_READ_START = "1915-01-31"
 DEFAULT_DSS_READ_END = "2021-12-31"
-DEFAULT_PRODUCT_A = _SCRIPT_DIR / "reference" / "product_a" / "UNIMP_SJ_product_a.csv"
-DEFAULT_PRODUCT_B_DIR = _SCRIPT_DIR / "reference" / "product_b"
+_rim_gen = get_module_generated_dir("mod_hydrology/rim_inflow")
+DEFAULT_PRODUCT_A = _rim_gen / "output" / "_2_qmap_historical_validation" /"_product_a_validation"/"_riminflow_productA_1972_2018.csv"
+DEFAULT_PRODUCT_B_DIR = _rim_gen / "output" / "_3_qmap_product_b"
 _gen = get_module_generated_dir("mod_other/instream_flows")
-DEFAULT_OUT_HIST = _gen / "output" / "_2_sjr_restoration" / "0_historical"
-DEFAULT_OUT_A = _gen / "output" / "_2_sjr_restoration" / "1_product_a"
-DEFAULT_OUT_B = _gen / "output" / "_2_sjr_restoration" / "2_product_b"
+DEFAULT_OUT_HIST = _gen / "output" / "_2_sjr_rest_req"
+DEFAULT_OUT_A = _gen / "output" / "_product_a_validation"
+DEFAULT_OUT_B = _gen / "output" / "_product_b_final"
 
 #  Conversion Constants
 # -----------------------------------------------------------------------------
@@ -128,8 +144,8 @@ ALPHA_PROFILES: tuple[AlphaProfile, ...] = (
     ),
     AlphaProfile(
         "N-Wet (+)",
-        562.9996950416667,
-        (500.0, 1500.0, 2500.0, 4000.0, 1086.8169398907103, 350.0, 350.0, 350.0, 700.0, 700.0, 350.0, 350.0),
+        563.00000,
+        (500.0, 1500.0, 2500.0, 4000.0, 1086.8169, 350.0, 350.0, 350.0, 700.0, 700.0, 350.0, 350.0),
     ),
     AlphaProfile(
         "Wet",
@@ -231,23 +247,42 @@ def restoration_year_for_month(dt: pd.Timestamp) -> int:
 
 
 def read_unimp_csv(path: str | Path) -> pd.Series:
+    """Read UNIMP_SJ monthly flow from a rim-inflow output CSV.
+
+    Supports two formats:
+    - Product A (CalSim format): columns ``Part B``, ``Year``, ``Month``, ``Value``
+    - Product B (qmap format):   columns ``CalSim``, ``Year``, ``Month``, ``qmap_postAdj``
+    """
     path = Path(path)
     if not path.exists():
         raise FileNotFoundError(path)
 
-    df = pd.read_csv(path, usecols=lambda c: c in {"CalSim", "Year", "Month", "qmap_postAdj"})
-    required = {"CalSim", "Year", "Month", "qmap_postAdj"}
-    missing = required - set(df.columns)
-    if missing:
-        raise ValueError(f"{path} is missing required columns: {sorted(missing)}")
+    df = pd.read_csv(path)
+
+    # Detect format and normalise to common column names
+    if "Part B" in df.columns:
+        # Product A CalSim format
+        name_col, val_col = "Part B", "Value"
+    elif "CalSim" in df.columns:
+        # Product B qmap format
+        name_col, val_col = "CalSim", "qmap_postAdj"
+    else:
+        raise ValueError(
+            f"{path} has neither 'Part B' nor 'CalSim' column. "
+            f"Found: {sorted(df.columns)}"
+        )
+
+    for req in (name_col, val_col, "Year", "Month"):
+        if req not in df.columns:
+            raise ValueError(f"{path} is missing required column: {req}")
 
     df = df.copy()
-    if df["CalSim"].astype(str).str.upper().nunique() > 1:
-        df = df[df["CalSim"].astype(str).str.upper() == "UNIMP_SJ"]
+    if df[name_col].astype(str).str.upper().nunique() > 1:
+        df = df[df[name_col].astype(str).str.upper() == "UNIMP_SJ"]
     dates = pd.to_datetime(
         {"year": df["Year"].astype(int), "month": df["Month"].astype(int), "day": 1}
     ) + pd.offsets.MonthEnd(0)
-    series = pd.Series(df["qmap_postAdj"].astype(float).to_numpy(), index=dates).sort_index()
+    series = pd.Series(df[val_col].astype(float).to_numpy(), index=dates).sort_index()
     series.name = "UNIMP_SJ"
     return series
 
@@ -378,10 +413,15 @@ def final_fna_monthly_np_p(blocks: np.ndarray, dt: pd.Timestamp) -> tuple[float,
     return float(np_taf), 0.0
 
 
-def reconstruct_rest_req(monthly_unimp_sj: pd.Series) -> pd.DataFrame:
+def reconstruct_rest_req(
+    monthly_unimp_sj: pd.Series,
+) -> pd.DataFrame:
     """
-    Reconstruct monthly REST_REQ_NP and REST_REQ_P from a monthly UNIMP_SJ series,
+    Reconstruct monthly REST_REQ_NP and REST_REQ_P from a monthly UNIMP_SJ series.
 
+    Restoration years whose water year is incomplete in the input data are
+    skipped.  Callers should fill those leading-edge months from the default
+    CalSim DSS values (see ``get_default_calsim_rest_req``).
     """
     monthly_unimp_sj = monthly_unimp_sj.sort_index().astype(float)
     if not isinstance(monthly_unimp_sj.index, pd.DatetimeIndex):
@@ -431,32 +471,46 @@ def reconstruct_rest_req(monthly_unimp_sj: pd.Series) -> pd.DataFrame:
 # Output helpers
 # -----------------------------------------------------------------------------
 def to_output_format(series: pd.Series, part_b: str, part_c: str) -> pd.DataFrame:
-    df = series.rename("value").to_frame()
-    df.insert(0, "part_c", part_c)
-    df.insert(0, "Part_b", part_b)
-    df.insert(0, "Date", df.index.strftime("%Y-%m-%d"))
-    return df.reset_index(drop=True)
+    df = series.rename("Value").to_frame()
+    df["Year"] = df.index.year
+    df["Month"] = df.index.month
+    df.insert(0, "Part C", part_c)
+    df.insert(0, "Part B", part_b)
+    return df[["Part B", "Part C", "Year", "Month", "Value"]].reset_index(drop=True)
 
-
-def write_product_outputs(
-    recon_df: pd.DataFrame,
-    outdir: Path,
-    base_name: str,
-    pulse_bpart: str,
-    nonpulse_bpart: str,
-    part_c: str,
-) -> None:
-    outdir.mkdir(parents=True, exist_ok=True)
-    pulse_path = outdir / f"{pulse_bpart}_{base_name}.csv"
-    np_path = outdir / f"{nonpulse_bpart}_{base_name}.csv"
-
-    to_output_format(recon_df["reconstructed_REST_REQ_P"], pulse_bpart, part_c).to_csv(pulse_path, index=False)
-    to_output_format(recon_df["reconstructed_REST_REQ_NP"], nonpulse_bpart, part_c).to_csv(np_path, index=False)
 
 
 # -----------------------------------------------------------------------------
 # Main orchestration
 # -----------------------------------------------------------------------------
+def get_default_calsim_rest_req(
+    dssfile: Path = DSS_FILE,
+    pulse_bpart: str = "REST_REQ_P",
+    nonpulse_bpart: str = "REST_REQ_NP",
+    part_c: str = "RELEASE-HYDROGRAPH",
+) -> dict[str, pd.Series]:
+    """Read default CalSim REST_REQ_NP and REST_REQ_P from DSS.
+
+    Used for leading-edge months (e.g. Oct 1971–Feb 1972 for Product A,
+    Oct 1921–Feb 1922 for Product B) where the input UNIMP_SJ data does
+    not cover a complete water year needed for reconstruction.
+    """
+    series_map = read_calsim_monthly_pairs(
+        dssfile,
+        [(nonpulse_bpart, part_c), (pulse_bpart, part_c)],
+    )
+    return {
+        nonpulse_bpart: series_map.get(
+            (norm_token(nonpulse_bpart), norm_token(part_c)),
+            pd.Series(dtype=float),
+        ),
+        pulse_bpart: series_map.get(
+            (norm_token(pulse_bpart), norm_token(part_c)),
+            pd.Series(dtype=float),
+        ),
+    }
+
+
 def build_historical_comparison(
     dssfile: Path,
     outdir: Path,
@@ -500,6 +554,7 @@ def build_historical_comparison(
             "reconstructed_REST_REQ_NP",
         ]
     ]
+    comp = comp[comp.index >= "1921-10-31"]
     comp = comp.reset_index().rename(columns={"index": "Date"})
     comp["Date"] = pd.to_datetime(comp["Date"]).dt.strftime("%Y-%m-%d")
 
@@ -509,21 +564,45 @@ def build_historical_comparison(
     return outpath
 
 
-def run_product_a(product_a_csv: Path, outdir: Path, pulse_bpart: str, nonpulse_bpart: str, part_c: str) -> list[Path]:
+def _fill_leading_edge(
+    inflow_index: pd.DatetimeIndex,
+    recon: pd.DataFrame,
+    default_rest_req: dict[str, pd.Series] | None,
+    pulse_bpart: str,
+    nonpulse_bpart: str,
+) -> tuple[pd.Series, pd.Series]:
+    """Return (np_series, p_series) with leading-edge months filled from DSS defaults."""
+    np_series = recon["reconstructed_REST_REQ_NP"]
+    p_series = recon["reconstructed_REST_REQ_P"]
+    if default_rest_req is not None:
+        missing = inflow_index.difference(recon.index)
+        if not missing.empty:
+            dss_np = default_rest_req.get(nonpulse_bpart, pd.Series(dtype=float))
+            dss_p = default_rest_req.get(pulse_bpart, pd.Series(dtype=float))
+            np_series = pd.concat([dss_np.reindex(missing).dropna(), np_series]).sort_index()
+            p_series = pd.concat([dss_p.reindex(missing).dropna(), p_series]).sort_index()
+    return np_series, p_series
+
+
+def run_product_a(
+    product_a_csv: Path,
+    outdir: Path,
+    pulse_bpart: str,
+    nonpulse_bpart: str,
+    part_c: str,
+    default_rest_req: dict[str, pd.Series] | None = None,
+) -> list[Path]:
     inflow = read_unimp_csv(product_a_csv)
     recon = reconstruct_rest_req(inflow)
-    write_product_outputs(
-        recon_df=recon,
-        outdir=outdir,
-        base_name="product_a",
-        pulse_bpart=pulse_bpart,
-        nonpulse_bpart=nonpulse_bpart,
-        part_c=part_c,
+    np_series, p_series = _fill_leading_edge(
+        inflow.index, recon, default_rest_req, pulse_bpart, nonpulse_bpart,
     )
-    return [
-        outdir / f"{pulse_bpart}_product_a.csv",
-        outdir / f"{nonpulse_bpart}_product_a.csv",
-    ]
+    outdir.mkdir(parents=True, exist_ok=True)
+    pulse_path = outdir / "_SJRRPreqPulse_productA_1972_2018.csv"
+    np_path = outdir / "_SJRRPreqNonPulse_productA_1972_2018.csv"
+    to_output_format(p_series, pulse_bpart, part_c).to_csv(pulse_path, index=False)
+    to_output_format(np_series, nonpulse_bpart, part_c).to_csv(np_path, index=False)
+    return [pulse_path, np_path]
 
 
 def infer_b_suffix(path: Path) -> str:
@@ -533,7 +612,14 @@ def infer_b_suffix(path: Path) -> str:
     return f"n{match.group(1)}"
 
 
-def run_product_b(product_b_dir: Path, outdir: Path, pulse_bpart: str, nonpulse_bpart: str, part_c: str) -> list[Path]:
+def run_product_b(
+    product_b_dir: Path,
+    outdir: Path,
+    pulse_bpart: str,
+    nonpulse_bpart: str,
+    part_c: str,
+    default_rest_req: dict[str, pd.Series] | None = None,
+) -> list[Path]:
     if product_b_dir.is_file():
         files = [product_b_dir]
     else:
@@ -541,29 +627,30 @@ def run_product_b(product_b_dir: Path, outdir: Path, pulse_bpart: str, nonpulse_
     if not files:
         raise FileNotFoundError(f"No product B files found in {product_b_dir}")
 
+    outdir.mkdir(parents=True, exist_ok=True)
     written: list[Path] = []
     for f in files:
         suffix = infer_b_suffix(f)
         inflow = read_unimp_csv(f)
         recon = reconstruct_rest_req(inflow)
-        base_name = f"product_b_{suffix}"
-        write_product_outputs(
-            recon_df=recon,
-            outdir=outdir,
-            base_name=base_name,
-            pulse_bpart=pulse_bpart,
-            nonpulse_bpart=nonpulse_bpart,
-            part_c=part_c,
+        np_series, p_series = _fill_leading_edge(
+            inflow.index, recon, default_rest_req, pulse_bpart, nonpulse_bpart,
         )
-        written.extend([
-            outdir / f"{pulse_bpart}_{base_name}.csv",
-            outdir / f"{nonpulse_bpart}_{base_name}.csv",
-        ])
+        pulse_path = outdir / f"_SJRRPreqPulse_productB_qmo_{suffix}.csv"
+        np_path = outdir / f"_SJRRPreqNonPulse_productB_qmo_{suffix}.csv"
+        to_output_format(p_series, pulse_bpart, part_c).to_csv(pulse_path, index=False)
+        to_output_format(np_series, nonpulse_bpart, part_c).to_csv(np_path, index=False)
+        written.extend([pulse_path, np_path])
     return written
 
 
 if __name__ == "__main__":
     written: list[Path] = []
+
+    # Read default CalSim REST_REQ values once — used for leading-edge months
+    # (e.g. Oct 1971–Feb 1972, Oct 1921–Feb 1922) that lack complete WY data
+    # for reconstruction.
+    default_rest_req = get_default_calsim_rest_req(dssfile=DSS_FILE)
 
     written.append(
         build_historical_comparison(
@@ -582,6 +669,7 @@ if __name__ == "__main__":
             pulse_bpart="REST_REQ_P",
             nonpulse_bpart="REST_REQ_NP",
             part_c="RELEASE-HYDROGRAPH",
+            default_rest_req=default_rest_req,
         )
     )
 
@@ -592,6 +680,7 @@ if __name__ == "__main__":
             pulse_bpart="REST_REQ_P",
             nonpulse_bpart="REST_REQ_NP",
             part_c="RELEASE-HYDROGRAPH",
+            default_rest_req=default_rest_req,
         )
     )
 
