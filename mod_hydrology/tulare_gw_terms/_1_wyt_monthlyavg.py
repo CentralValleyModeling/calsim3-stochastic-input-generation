@@ -1,9 +1,9 @@
 """Runner script: defines inputs, calls the framework, and writes outputs.
 
 Outputs are written under:
-  <generated>/output/_1_run_wyt_monthlyavg/monthly_avg_historical/
-  <generated>/output/_1_run_wyt_monthlyavg/product_a/_product_a_validation/
-  <generated>/output/_1_run_wyt_monthlyavg/product_b/_product_b_final/
+  <generated>/output/_1_wyt_monthlyavg/monthly_avg_historical/
+  <generated>/output/_1_wyt_monthlyavg/product_a/_product_a_validation/
+  <generated>/output/_1_wyt_monthlyavg/product_b/_product_b_final/
 
 Framework module:
   utils/wyt_monthlyavg_framework.py
@@ -24,7 +24,7 @@ from utils.wyt_monthlyavg_framework import compute_wyt_pattern, compute_product_
 
 _SCRIPT_DIR = Path(__file__).resolve().parent
 _REPO_DIR = Path(__file__).resolve().parents[2]
-_gen = get_module_generated_dir("mod_other/miscellaneous")
+_gen = get_module_generated_dir("mod_hydrology/tulare_gw_terms")
 _wyt_gen = get_module_generated_dir("mod_hydrology/water_year_types")
 
 # %% ── CONFIG ───────────────────────────────────────────────────────────
@@ -36,7 +36,7 @@ DSS_READ_START = "1921-10-31"
 DSS_READ_END = "2021-09-30"
 
 # Output prefix for filenames.
-OUTPUT_PREFIX = "miscellaneous"
+OUTPUT_PREFIX = "tulare_gw_terms"
 
 # The term spec CSV now controls the WYT basin for each term.
 # Required columns in wyt_avg_terms.csv:
@@ -57,26 +57,7 @@ _OUTPUT_DIRS = {"A": "product_a", "B": "product_b"}
 wyt_hist_dir = str(_REPO_DIR / "mod_hydrology" / "water_year_types" / "reference")
 
 # %% ── RESULTS ROOT ─────────────────────────────────────────────────────
-BASE_RESULTS_DIR = _gen / "output"/"_1_run_wyt_monthlyavg"
-
-
-def _install_pandas_me_compat() -> None:
-    """Support newer 'ME' month-end alias on pandas versions that only accept 'M'."""
-    try:
-        pd.date_range("2000-01-31", periods=1, freq="ME")
-        return
-    except Exception:
-        pass
-
-    original_date_range = pd.date_range
-
-    def _date_range_compat(*args, **kwargs):
-        freq = kwargs.get("freq")
-        if isinstance(freq, str) and freq.upper() == "ME":
-            kwargs["freq"] = "M"
-        return original_date_range(*args, **kwargs)
-
-    pd.date_range = _date_range_compat
+BASE_RESULTS_DIR = _gen / "output"/"_1_wyt_monthlyavg"
 
 
 def _to_sv_format(df: pd.DataFrame) -> pd.DataFrame:
@@ -121,8 +102,6 @@ def _write_targets(product_key: str, prefix: str, targets) -> None:
 
 
 def main() -> None:
-    _install_pandas_me_compat()
-
     prefix = OUTPUT_PREFIX.strip() if OUTPUT_PREFIX else Path(terms_csv).stem
     choice = TARGET_PRODUCT.strip().upper()
 

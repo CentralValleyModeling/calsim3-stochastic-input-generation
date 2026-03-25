@@ -34,7 +34,7 @@ _rim_gen = get_module_generated_dir("mod_hydrology/rim_inflow")
 PAIR_CSV = _SCRIPT_DIR / "reference" / "qmap_pairs.csv"
 DSS_FILE = get_base_dir() / "CalSim3" / "__calsim_sv_default__.dss"
 SIM_IN_DIR = _rim_gen / "output" / "_3_qmap_product_b"
-OUT_DIR = _gen / "output" / "_2_qmap_product_b_upper_watershed"
+OUT_DIR = _gen / "output" / "_2_qmap_product_b"
 FINAL_DIR = _gen / "output" / "_product_b_final"
 
 
