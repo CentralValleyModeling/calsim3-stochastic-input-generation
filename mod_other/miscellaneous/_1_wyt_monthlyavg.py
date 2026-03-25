@@ -1,9 +1,9 @@
 """Runner script: defines inputs, calls the framework, and writes outputs.
 
 Outputs are written under:
-  <generated>/output/_1_run_wyt_monthlyavg/monthly_avg_historical/
-  <generated>/output/_1_run_wyt_monthlyavg/product_a/_product_a_validation/
-  <generated>/output/_1_run_wyt_monthlyavg/product_b/_product_b_final/
+  <generated>/output/_1_wyt_monthlyavg/monthly_avg_historical/
+  <generated>/output/_product_a_validation/
+  <generated>/output/_product_b_final/
 
 Framework module:
   utils/wyt_monthlyavg_framework.py
@@ -24,7 +24,7 @@ from utils.wyt_monthlyavg_framework import compute_wyt_pattern, compute_product_
 
 _SCRIPT_DIR = Path(__file__).resolve().parent
 _REPO_DIR = Path(__file__).resolve().parents[2]
-_gen = get_module_generated_dir("mod_hydrology/tulare_gw_terms")
+_gen = get_module_generated_dir("mod_other/miscellaneous")
 _wyt_gen = get_module_generated_dir("mod_hydrology/water_year_types")
 
 # %% ── CONFIG ───────────────────────────────────────────────────────────
@@ -36,7 +36,7 @@ DSS_READ_START = "1921-10-31"
 DSS_READ_END = "2021-09-30"
 
 # Output prefix for filenames.
-OUTPUT_PREFIX = "tulare_gw_terms"
+OUTPUT_PREFIX = "miscellaneous"
 
 # The term spec CSV now controls the WYT basin for each term.
 # Required columns in wyt_avg_terms.csv:
@@ -51,13 +51,33 @@ OUTPUT_PREFIX = "tulare_gw_terms"
 TARGET_PRODUCT = "Both"
 
 _WYT_INPUT_DIRS = {"A": "Product_A", "B": "Product_B"}
-_OUTPUT_DIRS = {"A": "product_a", "B": "product_b"}
 
 # Where the historical WYT CSVs live
 wyt_hist_dir = str(_REPO_DIR / "mod_hydrology" / "water_year_types" / "reference")
 
-# %% ── RESULTS ROOT ─────────────────────────────────────────────────────
-BASE_RESULTS_DIR = _gen / "output"/"_1_run_wyt_monthlyavg"
+# %% -- RESULTS ROOT ------------------------------------------------------
+BASE_RESULTS_DIR = _gen / "output"/"_1_wyt_monthlyavg"
+PRODUCT_A_DIR = _gen / "output" / "_product_a_validation"
+PRODUCT_B_DIR = _gen / "output" / "_product_b_final"
+
+
+def _install_pandas_me_compat() -> None:
+    """Support newer 'ME' month-end alias on pandas versions that only accept 'M'."""
+    try:
+        pd.date_range("2000-01-31", periods=1, freq="ME")
+        return
+    except Exception:
+        pass
+
+    original_date_range = pd.date_range
+
+    def _date_range_compat(*args, **kwargs):
+        freq = kwargs.get("freq")
+        if isinstance(freq, str) and freq.upper() == "ME":
+            kwargs["freq"] = "M"
+        return original_date_range(*args, **kwargs)
+
+    pd.date_range = _date_range_compat
 
 
 def _to_sv_format(df: pd.DataFrame) -> pd.DataFrame:
@@ -74,34 +94,34 @@ def _to_sv_format(df: pd.DataFrame) -> pd.DataFrame:
 
 def _write_targets(product_key: str, prefix: str, targets) -> None:
     """Write final SV-format CSVs (Part B, Part C, Year, Month, Value)."""
-    prod_dir = BASE_RESULTS_DIR / _OUTPUT_DIRS[product_key]
-
     print(f"\nProduct {product_key} targets:")
 
     if product_key == "B":
-        final_dir = prod_dir / "_product_b_final"
-        final_dir.mkdir(parents=True, exist_ok=True)
+        PRODUCT_B_DIR.mkdir(parents=True, exist_ok=True)
         for name, df in targets.items():
             sv = _to_sv_format(df)
-            tag = name.replace("product_b_", "")  # e.g. "n01"
-            out = final_dir / f"{prefix}_productB_qmo_{tag}.csv"
-            sv.to_csv(out, index=False)
-            print(f"  - {out}")
+            tag = name.replace("product_b_", "")
+            for part_b, grp in sv.groupby("Part B"):
+                out = PRODUCT_B_DIR / f"{part_b}_product_b_{tag}.csv"
+                grp.to_csv(out, index=False)
+                print(f"  - {out}")
 
     elif product_key == "A":
-        val_dir = prod_dir / "_product_a_validation"
-        val_dir.mkdir(parents=True, exist_ok=True)
+        PRODUCT_A_DIR.mkdir(parents=True, exist_ok=True)
         for name, df in targets.items():
             sv = _to_sv_format(df)
             wy_min = int(df["date"].apply(water_year).min())
             wy_max = int(df["date"].apply(water_year).max())
-            out = val_dir / f"{prefix}_productA_{wy_min}_{wy_max}.csv"
-            sv.to_csv(out, index=False)
-            print(f"  - {out}")
+            for part_b, grp in sv.groupby("Part B"):
+                out = PRODUCT_A_DIR / f"{part_b}_product_a_{wy_min}_{wy_max}.csv"
+                grp.to_csv(out, index=False)
+                print(f"  - {out}")
 
 
 
 def main() -> None:
+    _install_pandas_me_compat()
+
     prefix = OUTPUT_PREFIX.strip() if OUTPUT_PREFIX else Path(terms_csv).stem
     choice = TARGET_PRODUCT.strip().upper()
 

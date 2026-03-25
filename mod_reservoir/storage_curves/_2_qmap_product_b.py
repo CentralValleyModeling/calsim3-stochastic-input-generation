@@ -34,9 +34,26 @@ _rim_gen = get_module_generated_dir("mod_hydrology/rim_inflow")
 PAIR_CSV = _SCRIPT_DIR / "reference" / "qmap_pairs.csv"
 DSS_FILE = get_base_dir() / "CalSim3" / "__calsim_sv_default__.dss"
 SIM_IN_DIR = _rim_gen / "output" / "_3_qmap_product_b"
-OUT_DIR = _gen / "output" / "_2_qmap_product_b_mammoth_storage"
+OUT_DIR = _gen / "output" / "_2_qmap_product_b"
 FINAL_DIR = _gen / "output" / "_product_b_final"
 
+def _install_pandas_me_compat() -> None:
+    """Support newer 'ME' month-end alias on pandas versions that only accept 'M'."""
+    try:
+        pd.date_range("2000-01-31", periods=1, freq="ME")
+        return
+    except Exception:
+        pass
+
+    original_date_range = pd.date_range
+
+    def _date_range_compat(*args, **kwargs):
+        freq = kwargs.get("freq")
+        if isinstance(freq, str) and freq.upper() == "ME":
+            kwargs["freq"] = "M"
+        return original_date_range(*args, **kwargs)
+
+    pd.date_range = _date_range_compat
 
 def write_product_b_final(out_dir: Path, final_dir: Path, pair_csv: Path) -> None:
     """
@@ -80,6 +97,8 @@ def write_product_b_final(out_dir: Path, final_dir: Path, pair_csv: Path) -> Non
 
 
 def main() -> None:
+    _install_pandas_me_compat()
+
     run_product_b_qmap_from_pairs(
         pair_csv=str(PAIR_CSV),
         dss_file=str(DSS_FILE),
@@ -97,4 +116,5 @@ def main() -> None:
 
 
 if __name__ == "__main__":
+
     main()

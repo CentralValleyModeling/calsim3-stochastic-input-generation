@@ -1,9 +1,9 @@
 """Runner script: defines inputs, calls the framework, and writes outputs.
 
 Outputs are written under:
-  <generated>/output/_1_run_wyt_monthlyavg/monthly_avg_historical/
-  <generated>/output/_1_run_wyt_monthlyavg/product_a/_product_a_validation/
-  <generated>/output/_1_run_wyt_monthlyavg/product_b/_product_b_final/
+  <generated>/output/_1_wyt_monthlyavg/monthly_avg_historical/
+  <generated>/output/_product_a_validation/
+  <generated>/output/_product_b_final/
 
 Framework module:
   utils/wyt_monthlyavg_framework.py
@@ -51,13 +51,14 @@ OUTPUT_PREFIX = "upper_watershed"
 TARGET_PRODUCT = "Both"
 
 _WYT_INPUT_DIRS = {"A": "Product_A", "B": "Product_B"}
-_OUTPUT_DIRS = {"A": "product_a", "B": "product_b"}
 
 # Where the historical WYT CSVs live
 wyt_hist_dir = str(_REPO_DIR / "mod_hydrology" / "water_year_types" / "reference")
 
-# %% ── RESULTS ROOT ─────────────────────────────────────────────────────
-BASE_RESULTS_DIR = _gen / "output"/"_1_run_wyt_monthlyavg"
+# %% -- RESULTS ROOT ------------------------------------------------------
+BASE_RESULTS_DIR = _gen / "output"/"_1_wyt_monthlyavg"
+PRODUCT_A_DIR = _gen / "output" / "_product_a_validation"
+PRODUCT_B_DIR = _gen / "output" / "_product_b_final"
 
 
 def _install_pandas_me_compat() -> None:
@@ -93,30 +94,28 @@ def _to_sv_format(df: pd.DataFrame) -> pd.DataFrame:
 
 def _write_targets(product_key: str, prefix: str, targets) -> None:
     """Write final SV-format CSVs (Part B, Part C, Year, Month, Value)."""
-    prod_dir = BASE_RESULTS_DIR / _OUTPUT_DIRS[product_key]
-
     print(f"\nProduct {product_key} targets:")
 
     if product_key == "B":
-        final_dir = prod_dir / "_product_b_final"
-        final_dir.mkdir(parents=True, exist_ok=True)
+        PRODUCT_B_DIR.mkdir(parents=True, exist_ok=True)
         for name, df in targets.items():
             sv = _to_sv_format(df)
-            tag = name.replace("product_b_", "")  # e.g. "n01"
-            out = final_dir / f"{prefix}_productB_qmo_{tag}.csv"
-            sv.to_csv(out, index=False)
-            print(f"  - {out}")
+            tag = name.replace("product_b_", "")
+            for part_b, grp in sv.groupby("Part B"):
+                out = PRODUCT_B_DIR / f"{part_b}_product_b_{tag}.csv"
+                grp.to_csv(out, index=False)
+                print(f"  - {out}")
 
     elif product_key == "A":
-        val_dir = prod_dir / "_product_a_validation"
-        val_dir.mkdir(parents=True, exist_ok=True)
+        PRODUCT_A_DIR.mkdir(parents=True, exist_ok=True)
         for name, df in targets.items():
             sv = _to_sv_format(df)
             wy_min = int(df["date"].apply(water_year).min())
             wy_max = int(df["date"].apply(water_year).max())
-            out = val_dir / f"{prefix}_productA_{wy_min}_{wy_max}.csv"
-            sv.to_csv(out, index=False)
-            print(f"  - {out}")
+            for part_b, grp in sv.groupby("Part B"):
+                out = PRODUCT_A_DIR / f"{part_b}_product_a_{wy_min}_{wy_max}.csv"
+                grp.to_csv(out, index=False)
+                print(f"  - {out}")
 
 
 
