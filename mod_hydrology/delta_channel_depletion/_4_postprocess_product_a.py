@@ -19,6 +19,7 @@ Output:
 import os
 import sys
 import calendar
+import subprocess
 from pathlib import Path
 import numpy as np
 import pandas as pd
@@ -55,6 +56,36 @@ excel_partcs = {excel_to_part_BC(n): n for n in SmallWatersheds_SVnames}
 # Get desired sort order based on master file (column 7)
 desired_order = [excel_to_part_BC(name) for name in SmallWatersheds_rows.iloc[:, 7].tolist()]
 
+# %% ── Junction helper for long DSS paths ────────────────────────────────
+# The Fortran HEC-DSS library inside pydsstools limits path names to 256 chars.
+# The data directory may live on OneDrive with a very long path, so we create a
+# temporary Windows directory junction under the repo root to shorten it.
+
+_REPO_ROOT = Path(__file__).resolve().parents[2]
+_DSS_LINK = _REPO_ROOT / "_dss_link"
+_PATH_LIMIT = 200  # conservative limit vs Fortran's 256-char CNAME
+
+
+def _needs_junction(dss_path):
+    return len(str(dss_path)) > _PATH_LIMIT
+
+
+def _create_junction(target_dir):
+    """Create (or re-create) a directory junction at _DSS_LINK -> target_dir."""
+    if _DSS_LINK.exists():
+        subprocess.run(["cmd", "/c", "rmdir", str(_DSS_LINK)], capture_output=True)
+    subprocess.run(
+        ["cmd", "/c", "mklink", "/J", str(_DSS_LINK), str(target_dir)],
+        check=True, capture_output=True,
+    )
+
+
+def _remove_junction():
+    """Remove the _DSS_LINK junction (does not affect target directory)."""
+    if _DSS_LINK.exists():
+        subprocess.run(["cmd", "/c", "rmdir", str(_DSS_LINK)], capture_output=True)
+
+
 # %% ── DSS File Paths ───────────────────────────────────────────────────
 _dcd_runs = _GEN_DIR / "DeltaChannelDepletion_Runs"
 dss_paths = [
@@ -64,8 +95,27 @@ dss_paths = [
 
 # %% ── Function to Extract DSS Time Series ──────────────────────────────
 def extract_dss_data(dss_path):
+    dss_path = Path(dss_path).resolve()
+    print(f"    Reading DSS: {dss_path.name}")
+
+    use_junction = _needs_junction(dss_path)
+    if use_junction:
+        _create_junction(dss_path.parent)
+        work_path = str(_DSS_LINK / dss_path.name)
+        print(f"    Using junction: {work_path} ({len(work_path)} chars)")
+    else:
+        work_path = str(dss_path)
+
+    try:
+        return _read_dss(work_path)
+    finally:
+        if use_junction:
+            _remove_junction()
+
+
+def _read_dss(dss_path):
     data_dict = {}
-    with HecDss.Open(str(dss_path), version=7, catalog_flag=True) as dss:
+    with HecDss.Open(dss_path, version=7, catalog_flag=True) as dss:
         all_paths = dss.getPathnameList("/*/*/*/*/1MON/*")
         buckets = {}
         for p in all_paths:

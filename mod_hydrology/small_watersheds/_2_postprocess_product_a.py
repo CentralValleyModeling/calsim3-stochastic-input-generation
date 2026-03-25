@@ -11,13 +11,14 @@ Usage
 Default (runs postprocess + validation for WY 1972-2018):
     python _2_postprocess_product_a.py
 
-Custom validation period:
+Custom validation period (SWS product A output is 1921-2018):
     python _2_postprocess_product_a.py 1922 2018
 """
 #%%
 
 import os
 import sys
+import subprocess
 from pathlib import Path
 import numpy as np
 import pandas as pd
@@ -44,10 +45,10 @@ SHEET_NAME = "MASTER"
 _sws_runs = _GEN_DIR / "SmallWatersheds_Runs"
 DSS_PATHS = [
     str(_sws_runs / "SmallWatershed_Historical_1921-2018" / "CVSWShed_FlowContribution3pcntWBA24_2013Init_2021.dss"),      # Value 1
-    str(_sws_runs / "SmallWatershed_VICPrecip_1921-2018" / "CVSWShed_FlowContribution3pcntWBA24_2013Init_2021.dss"),       # Value 2
+    str(_sws_runs / "SmallWatershed_Product_A" / "CVSWShed_FlowContribution3pcntWBA24_2013Init_2021.dss"),                  # Value 2
 ]
 
-SCENARIO_LABELS = ['Historical_1921', 'VIC_Precip']
+SCENARIO_LABELS = ['Historical_1921', 'ProductA']
 
 
 # %% ── HELPER FUNCTIONS ────────────────────────────────────────────────
@@ -69,10 +70,60 @@ def load_master_inventory():
     return excel_partcs, desired_order
 
 
+# -- Junction helper for long DSS paths ---------------------------------------
+# The Fortran HEC-DSS library inside pydsstools limits path names to 256 chars.
+# The data directory may live on OneDrive with a very long path, so we create a
+# temporary Windows directory junction under the repo root to shorten it.
+
+_REPO_ROOT = Path(__file__).resolve().parents[2]
+_DSS_LINK = _REPO_ROOT / "_dss_link"
+_PATH_LIMIT = 200  # conservative limit vs Fortran's 256-char CNAME
+
+
+def _needs_junction(dss_path):
+    return len(str(dss_path)) > _PATH_LIMIT
+
+
+def _create_junction(target_dir):
+    """Create (or re-create) a directory junction at _DSS_LINK -> target_dir."""
+    if _DSS_LINK.exists():
+        subprocess.run(["cmd", "/c", "rmdir", str(_DSS_LINK)], capture_output=True)
+    subprocess.run(
+        ["cmd", "/c", "mklink", "/J", str(_DSS_LINK), str(target_dir)],
+        check=True, capture_output=True,
+    )
+
+
+def _remove_junction():
+    """Remove the _DSS_LINK junction (does not affect target directory)."""
+    if _DSS_LINK.exists():
+        subprocess.run(["cmd", "/c", "rmdir", str(_DSS_LINK)], capture_output=True)
+
+
 def extract_dss_data(dss_path, excel_partcs):
     """Extract time series from a DSS file for SmallWatersheds variables."""
+    dss_path = Path(dss_path).resolve()
+    print(f"    Reading DSS: {dss_path.name}")
+
+    use_junction = _needs_junction(dss_path)
+    if use_junction:
+        _create_junction(dss_path.parent)
+        work_path = str(_DSS_LINK / dss_path.name)
+        print(f"    Using junction: {work_path} ({len(work_path)} chars)")
+    else:
+        work_path = str(dss_path)
+
+    try:
+        return _read_dss(work_path, excel_partcs)
+    finally:
+        if use_junction:
+            _remove_junction()
+
+
+def _read_dss(dss_path, excel_partcs):
+    """Read monthly time series from a DSS file using pydsstools."""
     data_dict = {}
-    with HecDss.Open(str(dss_path), version=6, catalog_flag=True) as dss:
+    with HecDss.Open(dss_path, version=6, catalog_flag=True) as dss:
         all_paths = dss.getPathnameList("/*/*/*/*/1MON/*")
         buckets = {}
         for p in all_paths:
@@ -265,14 +316,14 @@ def create_validation_csv(merged_df=None, output_dir=None, start_wy=1972, end_wy
         print("No data found in the validation period.")
         return
 
-    # Build validation DataFrame using VIC_Precip (Product A) values
+    # Build validation DataFrame using ProductA values
     # SmallWatersheds DSS outputs in AF; CalSim baseline expects TAF
     val_df = pd.DataFrame({
         'Part B': df_filtered['PartB'].values,
         'Part C': df_filtered['PartC'].values,
         'Year':   df_filtered['Date'].dt.year.values,
         'Month':  df_filtered['Date'].dt.month.values,
-        'Value':  df_filtered['VIC_Precip'].values / 1000.0   # AF -> TAF
+        'Value':  df_filtered['ProductA'].values / 1000.0   # AF -> TAF
     })
 
     val_df = val_df.dropna(subset=['Value'])
