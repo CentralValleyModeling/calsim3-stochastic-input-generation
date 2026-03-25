@@ -66,6 +66,8 @@ import time
 import shutil
 import glob
 import argparse
+import subprocess
+import atexit
 import warnings
 import numpy as np
 import pandas as pd
@@ -100,6 +102,52 @@ DSS_PATTERN = "/*/*/*/*/1MON/*"
 # Overwrite window (inclusive end-of-month timestamps)
 OVERWRITE_START = pd.Timestamp(1971, 10, 31)
 OVERWRITE_END   = pd.Timestamp(2018,  9, 30)
+
+# -- Junction helper for long DSS paths ----------------------------------------
+# The Fortran HEC-DSS library inside pydsstools limits path names to 256 chars.
+# The data directory may live on OneDrive with a very long path, so we create a
+# temporary Windows directory junction under the repo root to shorten it.
+# All GENERATED paths in this script are under OUTPUT_DIR, so a single junction
+# covers all long paths.  BASELINE_DSS (under BASE/) is short enough as-is.
+
+_REPO_ROOT = Path(__file__).resolve().parents[2]
+_DSS_LINK = _REPO_ROOT / "_dss_link"
+_PATH_LIMIT = 200  # conservative limit vs Fortran's 256-char CNAME
+
+
+def _create_junction(target_dir):
+    """Create (or re-create) a directory junction at _DSS_LINK -> target_dir."""
+    if _DSS_LINK.exists():
+        subprocess.run(["cmd", "/c", "rmdir", str(_DSS_LINK)], capture_output=True)
+    subprocess.run(
+        ["cmd", "/c", "mklink", "/J", str(_DSS_LINK), str(target_dir)],
+        check=True, capture_output=True,
+    )
+
+
+def _remove_junction():
+    """Remove the _DSS_LINK junction (does not affect target directory)."""
+    if _DSS_LINK.exists():
+        subprocess.run(["cmd", "/c", "rmdir", str(_DSS_LINK)], capture_output=True)
+
+
+_USE_JUNCTION = len(str(OUTPUT_DSS)) > _PATH_LIMIT
+if _USE_JUNCTION:
+    OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
+    _create_junction(OUTPUT_DIR)
+    atexit.register(_remove_junction)
+
+
+def _dss_str(path):
+    """Return a DSS-safe string path, shortened via junction if active."""
+    s = str(path)
+    if not _USE_JUNCTION or len(s) <= _PATH_LIMIT:
+        return s
+    try:
+        rel = Path(path).relative_to(OUTPUT_DIR)
+        return str(_DSS_LINK / rel)
+    except ValueError:
+        return s
 
 # ── CLI arguments ────────────────────────────────────────────────────────────
 _parser = argparse.ArgumentParser(
@@ -650,7 +698,7 @@ def generate_per_variable_plots(stats_csv: Path, cached_series: dict = None):
         else:
             # Fallback: open DSS and merge blocks (slow path)
             with HecDss.Open(str(BASELINE_DSS), version=6, catalog_flag=True) as dss_base, \
-                 HecDss.Open(str(OUTPUT_DSS),   version=6, catalog_flag=True) as dss_mod:
+                 HecDss.Open(_dss_str(OUTPUT_DSS),   version=6, catalog_flag=True) as dss_mod:
                 for pk in all_keys:
                     if pk not in baseline_bucket:
                         continue
@@ -1172,7 +1220,7 @@ def compute_modification_statistics(all_modified_keys, baseline_bucket):
         _cat_lookup[(_ir["Part_B"], _ir["Part_C"])] = _ir["Input_Category"]
 
     with HecDss.Open(str(BASELINE_DSS), version=6, catalog_flag=True) as dss_base_r, \
-         HecDss.Open(str(OUTPUT_DSS), version=6, catalog_flag=True) as dss_mod_r:
+         HecDss.Open(_dss_str(OUTPUT_DSS), version=6, catalog_flag=True) as dss_mod_r:
 
         for pk in sorted(all_modified_keys):
             if pk not in baseline_bucket:
@@ -1536,7 +1584,7 @@ for label, csvs in available_modules.items():
     missing_parts = []
 
     with HecDss.Open(str(BASELINE_DSS), version=6, catalog_flag=True) as dss_in, \
-         HecDss.Open(str(int_dss), version=6) as dss_out:
+         HecDss.Open(_dss_str(int_dss), version=6) as dss_out:
 
         for part_key in sorted(override_dict):
             if part_key not in baseline_bucket:
@@ -1650,7 +1698,7 @@ const_rept_filled = set()
 
 if const_rept_to_fill:
     with HecDss.Open(str(BASELINE_DSS), version=6, catalog_flag=True) as dss_in, \
-         HecDss.Open(str(const_rept_dss), version=6) as dss_out:
+         HecDss.Open(_dss_str(const_rept_dss), version=6) as dss_out:
 
         for pk in sorted(const_rept_to_fill):
             overrides = build_constant_rept_overrides(
@@ -1705,8 +1753,8 @@ modified_records  = []
 all_modified_keys = set()
 
 for label, int_dss in module_dss_paths.items():
-    with HecDss.Open(str(int_dss), version=6, catalog_flag=True) as dss_mod, \
-         HecDss.Open(str(OUTPUT_DSS), version=6) as dss_out:
+    with HecDss.Open(_dss_str(int_dss), version=6, catalog_flag=True) as dss_mod, \
+         HecDss.Open(_dss_str(OUTPUT_DSS), version=6) as dss_out:
 
         mod_paths = dss_mod.getPathnameList(DSS_PATTERN)
         for mp in mod_paths:
