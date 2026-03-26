@@ -1,16 +1,20 @@
 """
-Reservoir Parameter Database
+Reservoir Parameter Database Extractor
 
-This module provides access to evaporation calculation parameters for all
-CalSim 3.0 reservoirs. Parameters are automatically loaded from the JSON
-database extracted from the Excel spreadsheets.
+Extracts evaporation calculation parameters (location, Ra values, calibration
+factors) from the CalSim 3.0 reservoir Excel spreadsheets and writes them to
+reference/reservoir_parameters.json, which is tracked in the repository and
+used by all downstream evaporation scripts.
+
+Run --extract whenever the Excel spreadsheets are updated. The default mode
+(no flag) reads the existing reference JSON and prints a summary.
 
 Usage:
-    # Extract parameters from Excel spreadsheets
-    python 0_reservoir_database.py --extract
+    # Re-extract from Excel spreadsheets -> overwrites reference/reservoir_parameters.json
+    python _0_extract_reservoir_database.py --extract
 
-    # Show database summary (default)
-    python 0_reservoir_database.py
+    # Print database summary from reference/reservoir_parameters.json (default)
+    python _0_extract_reservoir_database.py
 """
 
 import json
@@ -47,7 +51,7 @@ class ReservoirDatabase:
             Path to reservoir_parameters.json. If None, uses default location.
         """
         if params_file is None:
-            params_file = _gen / 'reservoir_parameters.json'
+            params_file = Path(__file__).resolve().parent / 'reference' / 'reservoir_parameters.json'
 
         with open(params_file, 'r') as f:
             self._params = json.load(f)
@@ -446,7 +450,8 @@ def extract_reservoir_parameters(
                 continue
 
     # Save to JSON
-    output_path = Path(output_file) if output_file is not None else _gen / 'reservoir_parameters.json'
+    _reference_dir = Path(__file__).resolve().parent / 'reference'
+    output_path = Path(output_file) if output_file is not None else _reference_dir / 'reservoir_parameters.json'
     output_path.parent.mkdir(parents=True, exist_ok=True)
 
     with open(output_path, 'w') as f:
@@ -527,7 +532,7 @@ def main():
 
     # Export to CSV
     print("\n" + "="*80)
-    output_dir = _gen / 'output' / '_0_reservoir_database'
+    output_dir = Path(__file__).resolve().parent / 'reference'
     output_dir.mkdir(parents=True, exist_ok=True)
     csv_file = output_dir / 'reservoir_database.csv'
     db.export_to_csv(str(csv_file))
