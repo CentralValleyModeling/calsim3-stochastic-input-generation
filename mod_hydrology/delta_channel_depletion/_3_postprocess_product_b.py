@@ -20,16 +20,16 @@ Inputs
 
 Outputs
 -------
-- output/_5_postprocess_product_b/_product_b_final/_dcd_productB_n{01..10}.csv
-- output/_5_postprocess_product_b/_dcd_productB_n{01..10}_summary.csv
-- output/_5_postprocess_product_b/_dcd_productB_vs_productA.csv  (--compare-a)
+- output/_3_postprocess_product_b/_product_b_final/_dcd_productB_n{01..10}.csv
+- output/_3_postprocess_product_b/_dcd_productB_n{01..10}_summary.csv
+- output/_3_postprocess_product_b/_dcd_productB_vs_productA.csv  (--compare-a)
 
 Usage
 -----
-    python _5_postprocess_product_b.py                    # all chunks
-    python _5_postprocess_product_b.py --chunks 1 2 3     # specific chunks only
-    python _5_postprocess_product_b.py --compare-a        # compare B vs A only
-    python _5_postprocess_product_b.py --plot             # plot B vs A comparison
+    python _3_postprocess_product_b.py                    # all chunks
+    python _3_postprocess_product_b.py --chunks 1 2 3     # specific chunks only
+    python _3_postprocess_product_b.py --compare-a        # compare B vs A only
+    python _3_postprocess_product_b.py --plot             # plot B vs A comparison
 """
 
 import sys
@@ -50,7 +50,7 @@ from utils.paths import get_module_generated_dir, get_inventory_dir
 
 # -- CONSTANTS -----------------------------------------------------------------
 _GEN_DIR = get_module_generated_dir("mod_hydrology/delta_channel_depletion")
-OUTPUT_DIR = _GEN_DIR / "output" / "_5_postprocess_product_b"
+OUTPUT_DIR = _GEN_DIR / "output" / "_3_postprocess_product_b"
 
 EXCEL_PATH = str(get_inventory_dir() / "_MASTER_INVENTORY_FOR_STOCHASTIC_INPUT_GENERATION_.xlsx")
 SHEET_NAME = "MASTER"
@@ -67,7 +67,7 @@ CFS_TAF_PER_DAY = 86400.0 / 43560.0 / 1000.0
 _DCD_RUNS = _GEN_DIR / "DeltaChannelDepletion_Runs"
 _PRODUCT_B_DIR = _DCD_RUNS / "DCD_Calsim3_PlanningStudy_Product_B"
 _PRODUCT_A_MERGED = (
-    _GEN_DIR / "output" / "_4_postprocess_product_a" / "DeltaChannelDepletion_DSS.csv"
+    _GEN_DIR / "output" / "_2_postprocess_product_a" / "DeltaChannelDepletion_DSS.csv"
 )
 
 DSS_TEMPLATE = "CS3sv_DCD_PRISM_Dtrnd_n{chunk:02d}.DSS"
@@ -374,14 +374,14 @@ def run_compare_a():
     if missing:
         print(f"\nERROR: Product B chunk CSVs not found: {', '.join(missing)}")
         print("Run Product B postprocessing first:")
-        print("  python _5_postprocess_product_b.py")
+        print("  python _3_postprocess_product_b.py")
         sys.exit(1)
 
     # -- Check that Product A merged CSV exists --------------------------------
     if not _PRODUCT_A_MERGED.exists():
         print(f"\nERROR: Product A merged CSV not found: {_PRODUCT_A_MERGED}")
         print("Run Product A postprocessing first:")
-        print("  python _4_postprocess_product_a.py")
+        print("  python _2_postprocess_product_a.py")
         sys.exit(1)
 
     # -- Compute Product A stats from merged CSV -------------------------------
