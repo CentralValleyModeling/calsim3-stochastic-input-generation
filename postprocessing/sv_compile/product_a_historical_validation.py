@@ -190,7 +190,7 @@ MODULE_CONFIG = OrderedDict([
         "Reservoir Storage Curves")),
     ("instream_flows",           (_gen_dir / "mod_other/instream_flows/output/_product_a_validation", 
         "Instream Flows")),
-    ("tulare_gw_terms",          (_gen_dir / "mod_hydrology/tulare_gw_terms/output/_1_wyt_monthly_avg/product_a/_product_a_validation", 
+    ("tulare_gw_terms",          (_gen_dir / "mod_hydrology/tulare_gw_terms/output/_1_wyt_monthlyavg/product_a/_product_a_validation", 
         "Tulare Groundwater Terms")),
     ("climate",                  (_gen_dir / "mod_forcing/climate/output/_product_a_validation",
         "Climate")),
