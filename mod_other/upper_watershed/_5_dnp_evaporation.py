@@ -22,14 +22,17 @@ Reference inputs (./reference/)
   s_pedro_sv_historical.csv
   er_pedro_sv_historical.csv
   e_pedro_sv_historical.csv
-  s_pedro_sv_product_a.csv
-  s_pedro_sv_product_b.csv   (when available)
 
 External inputs
 ---------------
-  mod_reservoir/evaporation output:
-    _2_run_reservoir_evap/Product_{A|B}/individual_reservoirs/
-      San_Joaquin_Valley/PEDRO.csv
+  mod_reservoir/evaporation output (ER_PEDRO):
+    _2_run_reservoir_evap/_product_a_validation/_reservoir_evaporation_productA_*.csv
+      (filter Part B == 'ER_PEDRO')
+    _2_run_reservoir_evap/_product_b_final/reservoir_evaporation_productB_n*.csv
+      (filter Part B == 'ER_PEDRO')
+  mod_other/upper_watershed GENERATED output (storage):
+    _product_a_validation/S_PEDRO_SV_product_a_*.csv
+    _product_b_final/S_PEDRO_SV_product_b_n*.csv
 
 Outputs  (data/GENERATED/mod_other/upper_watershed/output/)
 -------------------------------------------------------------------------------
@@ -102,13 +105,6 @@ IN_TO_FT     = 1 / 12
 def load_polynomial(coeffs_path: Path) -> np.poly1d:
     """Load degree-2 polynomial from CSV produced by run_calibrate()."""
     return np.poly1d(pd.read_csv(coeffs_path)["value"].values)
-
-
-def _pedro_evap_rate_path(product: str) -> Path:
-    return (
-        _EVAP_OUTROOT / f"Product_{product}"
-        / "individual_reservoirs" / "San_Joaquin_Valley" / "PEDRO.csv"
-    )
 
 
 def _compute_surface_area(e_cfs: np.ndarray, er_in: np.ndarray,
@@ -250,26 +246,112 @@ def run_calibrate() -> None:
 # ═══════════════════════════════════════════════════════════════════════════════
 
 def _load_storage_ref(product: str) -> pd.DataFrame:
-    path = REF_DIR / f"s_pedro_sv_product_{product.lower()}.csv"
-    if not path.exists():
-        raise FileNotFoundError(f"Storage file not found: {path}")
+    """
+    Load S_PEDRO_SV storage (TAF) for Product A from the GENERATED validation dir.
+
+    Expects standard SV CSV format: Part B, Part C, Year, Month, Value.
+    Globs for S_PEDRO_SV_product_a_*.csv in _product_a_validation/.
+    """
+    pattern = "S_PEDRO_SV_product_a_*.csv"
+    matches = sorted(CSV_A_DIR.glob(pattern))
+    if not matches:
+        raise FileNotFoundError(
+            f"No S_PEDRO_SV Product A storage file found in:\n  {CSV_A_DIR}\n"
+            f"  (pattern: {pattern})"
+        )
+    path = matches[-1]   # use most recent if multiple
     df = pd.read_csv(path)
-    df["date"] = pd.to_datetime(df["Date"])
-    df = df.rename(columns={"value": "storage_taf"})
-    print(f"  Storage (Product {product}): {len(df)} months, "
-          f"{df['date'].min().date()} – {df['date'].max().date()}")
+    df["date"] = pd.to_datetime(df[["Year", "Month"]].assign(Day=1))
+    df = df.rename(columns={"Value": "storage_taf"})
+    print(f"  Storage (Product A): {path.name}  ({len(df)} months, "
+          f"{df['date'].min().date()} - {df['date'].max().date()})")
     return df
 
 
-def _load_er(product: str) -> pd.DataFrame:
-    path = _pedro_evap_rate_path(product)
-    if not path.exists():
-        raise FileNotFoundError(f"Evaporation rate file not found:\n  {path}")
-    er = pd.read_csv(path, index_col=0, parse_dates=True).reset_index()
-    er.columns = ["date", "er_inches"]
-    print(f"  ER (Product {product}): {len(er)} months, "
-          f"{er['date'].min().date()} – {er['date'].max().date()}")
-    return er
+def _load_storage_chunks_b() -> list:
+    """
+    Load all S_PEDRO_SV Product B chunk CSVs from _product_b_final/.
+
+    Globs S_PEDRO_SV_product_b_n*.csv and returns a list of (label, df) pairs,
+    one per chunk (n01-n10). Each df has columns: date, storage_taf.
+    """
+    pattern = "S_PEDRO_SV_product_b_n*.csv"
+    matches = sorted(CSV_B_DIR.glob(pattern))
+    if not matches:
+        raise FileNotFoundError(
+            f"No S_PEDRO_SV Product B chunk files found in:\n  {CSV_B_DIR}\n"
+            f"  (pattern: {pattern})"
+        )
+    chunks = []
+    for f in matches:
+        label = f.stem.split("_")[-1]   # e.g. 'n01'
+        df = pd.read_csv(f)
+        df["date"] = pd.to_datetime(df[["Year", "Month"]].assign(Day=1))
+        df = df.rename(columns={"Value": "storage_taf"})
+        chunks.append((label, df))
+    labels = ", ".join(lb for lb, _ in chunks)
+    print(f"  Storage (Product B): {len(chunks)} chunks ({labels})")
+    return chunks
+
+
+def _load_er_a() -> pd.DataFrame:
+    """
+    Load ER_PEDRO (inches/month) for Product A from the evaporation validation CSV.
+
+    Globs _product_a_validation/_reservoir_evaporation_productA_*.csv,
+    filters rows where Part B == 'ER_PEDRO'.
+    Returns df with columns: date (month-start), er_inches.
+    """
+    search_dir = _EVAP_OUTROOT / "_product_a_validation"
+    pattern = "_reservoir_evaporation_productA_*.csv"
+    matches = sorted(search_dir.glob(pattern))
+    if not matches:
+        raise FileNotFoundError(
+            f"No Product A reservoir evaporation file found in:\n  {search_dir}\n"
+            f"  (pattern: {pattern})"
+        )
+    path = matches[-1]
+    df = pd.read_csv(path)
+    df = df[df["Part B"] == "ER_PEDRO"].copy()
+    if df.empty:
+        raise ValueError(f"No rows with Part B == 'ER_PEDRO' found in {path.name}")
+    df["date"] = pd.to_datetime(df[["Year", "Month"]].assign(Day=1))
+    df = df.rename(columns={"Value": "er_inches"})[["date", "er_inches"]]
+    print(f"  ER Product A: {path.name}  ({len(df)} months, "
+          f"{df['date'].min().date()} - {df['date'].max().date()})")
+    return df
+
+
+def _load_er_b_chunks() -> dict:
+    """
+    Load ER_PEDRO for each Product B chunk from the evaporation _product_b_final/ dir.
+
+    Globs reservoir_evaporation_productB_n*.csv, filters Part B == 'ER_PEDRO'.
+    Returns dict {label: df} where label is 'n01'..'n10' and df has
+    columns: date (month-start), er_inches.
+    """
+    search_dir = _EVAP_OUTROOT / "_product_b_final"
+    pattern = "reservoir_evaporation_productB_n*.csv"
+    matches = sorted(search_dir.glob(pattern))
+    if not matches:
+        raise FileNotFoundError(
+            f"No Product B reservoir evaporation chunk files found in:\n  {search_dir}\n"
+            f"  (pattern: {pattern})"
+        )
+    chunks = {}
+    for f in matches:
+        label = f.stem.split("_")[-1]   # e.g. 'n01'
+        df = pd.read_csv(f)
+        df = df[df["Part B"] == "ER_PEDRO"].copy()
+        if df.empty:
+            print(f"  WARNING: No ER_PEDRO rows in {f.name}, skipping")
+            continue
+        df["date"] = pd.to_datetime(df[["Year", "Month"]].assign(Day=1))
+        df = df.rename(columns={"Value": "er_inches"})[["date", "er_inches"]]
+        chunks[label] = df
+    labels = ", ".join(sorted(chunks.keys()))
+    print(f"  ER Product B: {len(chunks)} chunks ({labels})")
+    return chunks
 
 
 def run_generate(product: str) -> None:
@@ -293,13 +375,98 @@ def run_generate(product: str) -> None:
     c = pd.read_csv(coeffs_path)["value"].values
     print(f"  Polynomial: A = {c[0]:.6e}·S² + {c[1]:.6e}·S + {c[2]:.6e}")
 
-    # ── Load inputs ──────────────────────────────────────────────────────────
-    storage = _load_storage_ref(product)
-    er_data = _load_er(product)
+    def _wy(d: pd.Timestamp) -> int:
+        return d.year + 1 if d.month >= 10 else d.year
 
-    # ── Calculate E_PEDRO_SV ─────────────────────────────────────────────────
+    # ═════════════════════════════════════════════════════════════════════════
+    # Product B: process each storage chunk separately → 10 output files
+    # ═════════════════════════════════════════════════════════════════════════
+    if product == "B":
+        storage_chunks = _load_storage_chunks_b()
+        er_chunks = _load_er_b_chunks()
+        print(f"\nProcessing {len(storage_chunks)} Product B chunks...")
+
+        all_monthly = []
+        for label, stor in storage_chunks:
+            er_chunk = er_chunks.get(label)
+            if er_chunk is None:
+                print(f"  {label}: WARNING no ER chunk found, skipping")
+                continue
+            stor = stor.copy()
+            stor["date"] = stor["date"].dt.to_period("M").dt.to_timestamp()
+            stor["surface_area_acres"] = poly_func(stor["storage_taf"])
+            stor = stor.merge(er_chunk[["date", "er_inches"]], on="date", how="left")
+            stor["days"]  = stor["date"].dt.days_in_month
+            stor["e_cfs"] = _calc_evap_cfs(
+                stor["storage_taf"].values,
+                stor["er_inches"].values,
+                stor["days"].values,
+                poly_func,
+            )
+            missing_er = stor["er_inches"].isna().sum()
+            if missing_er:
+                print(f"  {label}: WARNING {missing_er} months missing ER")
+
+            out_csv = csv_dir / f"_e_pedro_sv_evaporation_productB_{label}.csv"
+            pd.DataFrame({
+                "Part B":  "E_PEDRO_SV",
+                "Part C":  "EVAPORATION",
+                "Year":    stor["date"].dt.year,
+                "Month":   stor["date"].dt.month,
+                "Value":   stor["e_cfs"],
+            }).to_csv(out_csv, index=False)
+            valid = stor["e_cfs"].dropna()
+            print(f"  {label}: {len(stor)} months | "
+                  f"E_PEDRO_SV {valid.min():.2f}-{valid.max():.2f} CFS | {out_csv.name}")
+            all_monthly.append((label, stor))
+
+        # Monthly pattern plot: each B chunk individually + Product A overlay
+        fig, ax = plt.subplots(figsize=(12, 6))
+
+        # Product A generated output (if available)
+        pa_files = sorted(CSV_A_DIR.glob("_e_pedro_sv_evaporation_productA_*.csv"))
+        if pa_files:
+            pa_e = pd.read_csv(pa_files[-1])
+            pa_monthly = pa_e.groupby("Month")["Value"].mean()
+            ax.plot(pa_monthly.index, pa_monthly.values, "o-", lw=2.5,
+                    color="steelblue", zorder=5, label="Product A")
+
+        # Each B chunk as a thin line
+        cmap = plt.get_cmap("Greens")
+        n = len(all_monthly)
+        for i, (lbl, stor) in enumerate(all_monthly):
+            stor["month_num"] = stor["date"].dt.month
+            m = stor.groupby("month_num")["e_cfs"].mean()
+            color = cmap(0.35 + 0.6 * i / max(n - 1, 1))
+            ax.plot(m.index, m.values, "-", lw=1, alpha=0.75, color=color, label=lbl)
+
+        ax.set_xticks(range(1, 13))
+        ax.set_xticklabels(list("JFMAMJJASOND"))
+        ax.set_xlabel("Month"); ax.set_ylabel("Average Evaporation (CFS)")
+        ax.set_title("Don Pedro: Monthly Average Evaporation -- Product A vs B Chunks")
+        ax.legend(ncol=4, fontsize=8); ax.grid(alpha=0.3)
+        plt.tight_layout()
+        plt.savefig(out_dir / "product_b_monthly_pattern.png", dpi=150, bbox_inches="tight")
+        plt.close()
+        print(f"\nProduct B outputs ({len(storage_chunks)} files): {csv_dir}")
+        return
+
+    # ═════════════════════════════════════════════════════════════════════════
+    # Product A: single continuous time series (partial period, e.g. 1972-2018)
+    # ═════════════════════════════════════════════════════════════════════════
+    storage = _load_storage_ref(product)
+    storage["date"] = storage["date"].dt.to_period("M").dt.to_timestamp()
+
+    storage_start = storage["date"].min().date()
+    storage_end   = storage["date"].max().date()
+    print(f"  Note: Product A storage covers {storage_start} to {storage_end}; "
+          f"E_PEDRO_SV output will be limited to this period.")
+
+    er_a = _load_er_a()
+    er_a["date"] = er_a["date"].dt.to_period("M").dt.to_timestamp()
+
     storage["surface_area_acres"] = poly_func(storage["storage_taf"])
-    storage = storage.merge(er_data[["date", "er_inches"]], on="date", how="left")
+    storage = storage.merge(er_a[["date", "er_inches"]], on="date", how="left")
 
     missing_er = storage["er_inches"].isna().sum()
     if missing_er:
@@ -315,16 +482,12 @@ def run_generate(product: str) -> None:
         poly_func,
     )
     valid = storage["e_cfs"].dropna()
-    print(f"  E_PEDRO_SV: {valid.min():.2f}–{valid.max():.2f} CFS  (mean {valid.mean():.2f})")
+    print(f"  E_PEDRO_SV: {valid.min():.2f}-{valid.max():.2f} CFS  (mean {valid.mean():.2f})")
 
-    # ── Write CalSim SV CSV ──────────────────────────────────────────────────
-    def _wy(d: pd.Timestamp) -> int:
-        return d.year + 1 if d.month >= 10 else d.year
-
-    valid_rows  = storage[storage["e_cfs"].notna()]
-    start_wy    = _wy(valid_rows["date"].min())
-    end_wy      = _wy(valid_rows["date"].max())
-    out_csv     = csv_dir / f"_e_pedro_sv_evaporation_product{product}_{start_wy}_{end_wy}.csv"
+    valid_rows = storage[storage["e_cfs"].notna()]
+    start_wy   = _wy(valid_rows["date"].min())
+    end_wy     = _wy(valid_rows["date"].max())
+    out_csv    = csv_dir / f"_e_pedro_sv_evaporation_productA_{start_wy}_{end_wy}.csv"
     pd.DataFrame({
         "Part B":  "E_PEDRO_SV",
         "Part C":  "EVAPORATION",
@@ -336,37 +499,33 @@ def run_generate(product: str) -> None:
 
     # ── Plots ────────────────────────────────────────────────────────────────
     e_hist = s_hist = None
-    if product == "A":
-        if (REF_DIR / "s_pedro_sv_historical.csv").exists():
-            s_hist = pd.read_csv(REF_DIR / "s_pedro_sv_historical.csv")
-            s_hist["date"] = pd.to_datetime(s_hist["Date"])
-            s_hist = s_hist.rename(columns={"value": "storage_taf"})
-        if (REF_DIR / "e_pedro_sv_historical.csv").exists():
-            e_hist = pd.read_csv(REF_DIR / "e_pedro_sv_historical.csv")
-            e_hist["date"] = pd.to_datetime(e_hist["Date"])
-            e_hist = e_hist.rename(columns={"value": "e_cfs"})
+    if (REF_DIR / "s_pedro_sv_historical.csv").exists():
+        s_hist = pd.read_csv(REF_DIR / "s_pedro_sv_historical.csv")
+        s_hist["date"] = pd.to_datetime(s_hist["Date"])
+        s_hist = s_hist.rename(columns={"value": "storage_taf"})
+    if (REF_DIR / "e_pedro_sv_historical.csv").exists():
+        e_hist = pd.read_csv(REF_DIR / "e_pedro_sv_historical.csv")
+        e_hist["date"] = pd.to_datetime(e_hist["Date"])
+        e_hist = e_hist.rename(columns={"value": "e_cfs"})
 
     fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(14, 10), sharex=True)
     if s_hist is not None:
         ax1.plot(s_hist["date"], s_hist["storage_taf"], lw=1,
                  color="blue", alpha=0.7, label="Historical")
-    ax1.plot(storage["date"], storage["storage_taf"], lw=1,
-             color="green", label=f"Product {product}")
+    ax1.plot(storage["date"], storage["storage_taf"], lw=1, color="green", label="Product A")
     ax1.set_ylabel("Storage (TAF)")
-    ax1.set_title(f"Don Pedro: Product {product} Storage")
+    ax1.set_title("Don Pedro: Product A Storage")
     ax1.legend(); ax1.grid(alpha=0.3)
 
     if e_hist is not None:
         ax2.plot(e_hist["date"], e_hist["e_cfs"], lw=1,
                  color="blue", alpha=0.7, label="Historical")
-    ax2.plot(storage["date"], storage["e_cfs"], lw=1,
-             color="green", label=f"Product {product}")
+    ax2.plot(storage["date"], storage["e_cfs"], lw=1, color="green", label="Product A")
     ax2.set_ylabel("Evaporation (CFS)")
-    ax2.set_title(f"Don Pedro: Product {product} Evaporation")
+    ax2.set_title("Don Pedro: Product A Evaporation")
     ax2.legend(); ax2.grid(alpha=0.3)
     plt.tight_layout()
-    plt.savefig(out_dir / f"product_{product.lower()}_evaporation_timeseries.png",
-                dpi=150, bbox_inches="tight")
+    plt.savefig(out_dir / "product_a_evaporation_timeseries.png", dpi=150, bbox_inches="tight")
     plt.close()
 
     storage["month_num"] = storage["date"].dt.month
@@ -378,19 +537,17 @@ def run_generate(product: str) -> None:
         ax3.plot(eh_m["month_num"], eh_m["e_cfs"], "o-", lw=2,
                  color="blue", alpha=0.7, label="Historical")
     ax3.plot(e_monthly["month_num"], e_monthly["e_cfs"], "s-", lw=2,
-             color="green", label=f"Product {product}")
+             color="green", label="Product A")
     ax3.set_xticks(range(1, 13))
     ax3.set_xticklabels(list("JFMAMJJASOND"))
     ax3.set_xlabel("Month"); ax3.set_ylabel("Average Evaporation (CFS)")
-    ax3.set_title(f"Don Pedro: Product {product} Monthly Average Evaporation")
+    ax3.set_title("Don Pedro: Product A Monthly Average Evaporation")
     ax3.legend(); ax3.grid(alpha=0.3)
     plt.tight_layout()
-    plt.savefig(out_dir / f"product_{product.lower()}_monthly_pattern.png",
-                dpi=150, bbox_inches="tight")
+    plt.savefig(out_dir / "product_a_monthly_pattern.png", dpi=150, bbox_inches="tight")
     plt.close()
 
-    # Comparison statistics (Product A only)
-    if product == "A" and e_hist is not None:
+    if e_hist is not None:
         comp = (storage[["date", "e_cfs"]]
                 .merge(e_hist[["date", "e_cfs"]], on="date",
                        how="inner", suffixes=("_gen", "_hist"))
