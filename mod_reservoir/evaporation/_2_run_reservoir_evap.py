@@ -6,11 +6,12 @@ for CalSim 3.0 reservoirs using the Hargreaves-Samani method.
 Automatically finds the nearest weather file for each reservoir.
 
 Usage:
-    python _2_run_reservoir_evap.py                         # Product A, all reservoirs
-    python _2_run_reservoir_evap.py FOLSM                   # Product A, single reservoir
-    python _2_run_reservoir_evap.py FOLSM SHSTA OROVL       # Product A, specific reservoirs
+    python _2_run_reservoir_evap.py --Product_A             # Product A, all reservoirs
+    python _2_run_reservoir_evap.py --Product_A FOLSM       # Product A, single reservoir
+    python _2_run_reservoir_evap.py --Product_A FOLSM SHSTA OROVL  # Product A, specific reservoirs
     python _2_run_reservoir_evap.py --Product_B             # Product B, all reservoirs
     python _2_run_reservoir_evap.py --Product_B FOLSM       # Product B, single reservoir
+    python _2_run_reservoir_evap.py --compare-a             # Compare B vs A (reads pre-generated outputs)
 
 Output (Product A):
     - Individual CSV files: output/_2_run_reservoir_evap/Product_A/individual_reservoirs/{Region}/{CODE}.csv
@@ -21,6 +22,12 @@ Output (Product A):
 Output (Product B):
     - Chunk CSVs: output/_2_run_reservoir_evap/_product_b_final/reservoir_evaporation_productB_n01.csv ... n10.csv
     - Format: Part B, Part C, Year, Month, Value (long format)
+
+Output (--compare-a):
+    - output/_2_run_reservoir_evap/_compare_ab/comparison_monthly_aggregated.csv
+        Monthly mean evaporation averaged across all reservoirs; Product A vs B.
+    - output/_2_run_reservoir_evap/_compare_ab/comparison_monthly_by_reservoir.csv
+        Monthly mean evaporation per reservoir; Product A vs B.
 """
 
 import pandas as pd
@@ -43,6 +50,11 @@ from evaporation import (
     get_all_reservoir_codes,
     get_reservoir_info
 )
+
+_MONTH_NAMES = {
+    1: 'Jan', 2: 'Feb', 3: 'Mar', 4: 'Apr', 5: 'May', 6: 'Jun',
+    7: 'Jul', 8: 'Aug', 9: 'Sep', 10: 'Oct', 11: 'Nov', 12: 'Dec',
+}
 
 
 def _load_climate_data_product_b(file_path: str) -> pd.DataFrame:
@@ -408,7 +420,7 @@ def create_product_b_chunk_outputs(
     total_chunks = 10
     total_needed = skip_months + months_per_chunk * total_chunks
 
-    date_template = pd.date_range('1921-10-31', periods=months_per_chunk, freq='M')
+    date_template = pd.date_range('1921-10-31', periods=months_per_chunk, freq='ME')
     output_path = Path(output_dir)
     output_path.mkdir(parents=True, exist_ok=True)
 
@@ -960,60 +972,229 @@ def create_annual_boxplot(
     plt.close()
 
 
+def compare_product_b_with_a(
+    product_a_dir=None,
+    product_b_dir=None,
+    output_dir=None,
+):
+    """
+    Compare Product B (n01-10) chunk outputs with Product A for reservoir evaporation.
+
+    Reads pre-generated outputs from disk:
+      - Product A: combined_evaporation.csv (wide format, date x reservoir)
+      - Product B: reservoir_evaporation_productB_n01.csv ... n10.csv (long format)
+
+    Outputs two comparison tables (columns: ProductA, n01, n02, ..., n10):
+      - comparison_monthly_aggregated.csv
+          Monthly mean evaporation averaged across ALL reservoirs.
+          Rows: month (1-12).
+      - comparison_monthly_by_reservoir.csv
+          Monthly mean evaporation per reservoir.
+
+    Parameters
+    ----------
+    product_a_dir : path-like, optional
+        Directory containing combined_evaporation.csv (Product A output).
+    product_b_dir : path-like, optional
+        Directory containing the Product B chunk CSV files.
+    output_dir : path-like, optional
+        Directory where comparison CSVs are written.
+    """
+    if product_a_dir is None:
+        product_a_dir = _gen / 'output' / '_2_run_reservoir_evap' / 'Product_A'
+    if product_b_dir is None:
+        product_b_dir = _gen / 'output' / '_2_run_reservoir_evap' / '_product_b_final'
+    if output_dir is None:
+        output_dir = _gen / 'output' / '_2_run_reservoir_evap' / '_compare_ab'
+
+    product_a_dir = Path(product_a_dir)
+    product_b_dir = Path(product_b_dir)
+    output_dir = Path(output_dir)
+
+    print("\n" + "=" * 80)
+    print("Product B vs Product A Comparison -- Reservoir Evaporation")
+    print("=" * 80)
+
+    # ------------------------------------------------------------------ #
+    # Load Product A
+    # ------------------------------------------------------------------ #
+    combined_a = product_a_dir / 'combined_evaporation.csv'
+    if not combined_a.exists():
+        print(f"Error: Product A combined file not found: {combined_a}")
+        print("Run without --compare-a first to generate Product A outputs.")
+        return
+
+    pa_wide = pd.read_csv(combined_a, index_col=0, parse_dates=True)
+    pa_wide.index = pd.to_datetime(pa_wide.index)
+    pa_wide['_month'] = pa_wide.index.month
+
+    pa_long_all = pa_wide.melt(id_vars='_month', var_name='reservoir', value_name='value')
+
+    print(f"Product A: {len(pa_wide)} months x {pa_wide.shape[1] - 1} reservoirs "
+          f"({pa_wide.index[0].strftime('%b %Y')} - {pa_wide.index[-1].strftime('%b %Y')})")
+
+    # ------------------------------------------------------------------ #
+    # Load Product B chunks individually
+    # ------------------------------------------------------------------ #
+    chunk_files = sorted(product_b_dir.glob('reservoir_evaporation_productB_n*.csv'))
+    if not chunk_files:
+        print(f"Error: No Product B chunk files found in: {product_b_dir}")
+        return
+
+    # Parse chunk label (n01, n02, ...) from filename
+    chunk_dfs = {}
+    for f in chunk_files:
+        label = f.stem.split('_')[-1]   # e.g. 'n01'
+        df = pd.read_csv(f)
+        df['reservoir'] = df['Part B'].str.replace('ER_', '', regex=False)
+        chunk_dfs[label] = df
+
+    chunk_labels = sorted(chunk_dfs.keys())
+    print(f"Product B: {len(chunk_labels)} chunks loaded: {', '.join(chunk_labels)}")
+
+    # ------------------------------------------------------------------ #
+    # Table 1: Aggregated monthly mean across ALL reservoirs
+    # ------------------------------------------------------------------ #
+    pa_agg = pa_long_all.groupby('_month')['value'].mean()
+
+    agg_rows = []
+    for m in range(1, 13):
+        row = {'month': m, 'month_name': _MONTH_NAMES[m], 'ProductA_mean_in': pa_agg.get(m, np.nan)}
+        for label, df in chunk_dfs.items():
+            row[label] = df[df['Month'] == m]['Value'].mean()
+        agg_rows.append(row)
+
+    col_order = ['month', 'month_name', 'ProductA_mean_in'] + chunk_labels
+    agg_table = pd.DataFrame(agg_rows)[col_order]
+
+    # ------------------------------------------------------------------ #
+    # Table 2: Reservoir-by-reservoir monthly mean
+    # ------------------------------------------------------------------ #
+    pa_res = (
+        pa_long_all
+        .groupby(['reservoir', '_month'])['value']
+        .mean()
+        .reset_index()
+        .rename(columns={'_month': 'month', 'value': 'ProductA_mean_in'})
+    )
+
+    res_table = pa_res.copy()
+    for label, df in chunk_dfs.items():
+        pb_res = (
+            df.groupby(['reservoir', 'Month'])['Value']
+            .mean()
+            .reset_index()
+            .rename(columns={'Month': 'month', 'Value': label})
+        )
+        res_table = pd.merge(res_table, pb_res, on=['reservoir', 'month'], how='outer')
+
+    res_table['month_name'] = res_table['month'].map(_MONTH_NAMES)
+    col_order_res = ['reservoir', 'month', 'month_name', 'ProductA_mean_in'] + chunk_labels
+    res_table = (
+        res_table[col_order_res]
+        .sort_values(['reservoir', 'month'])
+        .reset_index(drop=True)
+    )
+
+    # ------------------------------------------------------------------ #
+    # Save
+    # ------------------------------------------------------------------ #
+    output_dir.mkdir(parents=True, exist_ok=True)
+    agg_file = output_dir / 'comparison_monthly_aggregated.csv'
+    res_file = output_dir / 'comparison_monthly_by_reservoir.csv'
+
+    agg_table.to_csv(agg_file, index=False)
+    res_table.to_csv(res_file, index=False)
+
+    # Print aggregated table to console
+    chunk_hdr = ''.join(f'  {lbl:>10}' for lbl in chunk_labels)
+    hdr = f"  {'Month':<6}  {'Product A':>12}{chunk_hdr}"
+    sep = "  " + "-" * (len(hdr) - 2)
+    print("\nAggregated monthly evaporation -- mean across all reservoirs (in/mo):")
+    print(hdr)
+    print(sep)
+    for _, row in agg_table.iterrows():
+        chunk_vals = ''.join(f"  {row[lbl]:>10.4f}" for lbl in chunk_labels)
+        print(
+            f"  {row['month_name']:<6}  "
+            f"{row['ProductA_mean_in']:>12.4f}"
+            f"{chunk_vals}"
+        )
+    print(sep)
+
+    n_res = res_table['reservoir'].nunique()
+    print(f"\nBy-reservoir table: {n_res} reservoirs x 12 months")
+    print(f"\nOutputs written to: {output_dir}")
+    print(f"  {agg_file.name}")
+    print(f"  {res_file.name}")
+    print("=" * 80)
+
+
 def main():
     """Main entry point."""
+    product_a = '--Product_A' in sys.argv
     product_b = '--Product_B' in sys.argv
+    compare_a = '--compare-a' in sys.argv
     args = [a for a in sys.argv[1:] if not a.startswith('--')]
+
+    if not product_a and not product_b and not compare_a:
+        print("No action specified. Use --Product_A, --Product_B, or --compare-a.")
+        return
 
     if product_b:
         output_dir = str(_gen / 'output' / '_2_run_reservoir_evap' / '_product_b_final')
         weather_dir = str(get_base_dir() / 'WGEN' / 'Product_B' / '1')
+        product_label = "Product B (stochastic)"
     else:
         output_dir = str(_gen / 'output' / '_2_run_reservoir_evap' / 'Product_A')
         weather_dir = str(get_base_dir() / 'WGEN' / 'Product_A' / '1')
+        product_label = "Product A (1921-2018)"
 
-    product_label = "Product B (stochastic)" if product_b else "Product A (1921-2018)"
-    print(f"\n_2_run_reservoir_evap.py  |  {product_label}")
-    print(f"  weather : {weather_dir}")
-    print(f"  output  : {output_dir}\n")
+    if product_a or product_b:
+        print(f"\n_2_run_reservoir_evap.py  |  {product_label}")
+        print(f"  weather : {weather_dir}")
+        print(f"  output  : {output_dir}\n")
 
-    if args:
-        codes = [code.upper() for code in args]
-        print(f"\nProcessing {len(codes)} reservoir(s): {', '.join(codes)}\n")
-        results = process_reservoirs(
-            reservoir_codes=codes,
-            output_dir=output_dir,
-            weather_dir=weather_dir,
-            product_b=product_b,
-        )
-    else:
-        print("\nProcessing all reservoirs...\n")
-        results = process_reservoirs(
-            output_dir=output_dir,
-            weather_dir=weather_dir,
-            product_b=product_b,
-        )
-
-    if len(results) > 0:
-        if product_b:
-            create_product_b_chunk_outputs(results, output_dir=output_dir)
+        if args:
+            codes = [code.upper() for code in args]
+            print(f"\nProcessing {len(codes)} reservoir(s): {', '.join(codes)}\n")
+            results = process_reservoirs(
+                reservoir_codes=codes,
+                output_dir=output_dir,
+                weather_dir=weather_dir,
+                product_b=product_b,
+            )
         else:
-            create_combined_output(
-                results,
-                output_file=str(Path(output_dir) / 'combined_evaporation.csv')
+            print("\nProcessing all reservoirs...\n")
+            results = process_reservoirs(
+                output_dir=output_dir,
+                weather_dir=weather_dir,
+                product_b=product_b,
             )
-            create_summary_statistics(
-                results,
-                output_file=str(Path(output_dir) / 'summary_statistics.csv')
-            )
-            create_validation_csv(output_dir=output_dir)
-            create_annual_boxplot(output_dir=output_dir)
-            create_temperature_range_boxplot(output_dir=output_dir)
-            create_climate_boxplots(output_dir=output_dir)
 
-        print("\n" + "="*80)
-        print("Processing complete!")
-        print("="*80)
+        if len(results) > 0:
+            if product_b:
+                create_product_b_chunk_outputs(results, output_dir=output_dir)
+            else:
+                create_combined_output(
+                    results,
+                    output_file=str(Path(output_dir) / 'combined_evaporation.csv')
+                )
+                create_summary_statistics(
+                    results,
+                    output_file=str(Path(output_dir) / 'summary_statistics.csv')
+                )
+                create_validation_csv(output_dir=output_dir)
+                create_annual_boxplot(output_dir=output_dir)
+                create_temperature_range_boxplot(output_dir=output_dir)
+                create_climate_boxplots(output_dir=output_dir)
+
+            print("\n" + "="*80)
+            print("Processing complete!")
+            print("="*80)
+
+    if compare_a:
+        compare_product_b_with_a()
 
 
 if __name__ == '__main__':

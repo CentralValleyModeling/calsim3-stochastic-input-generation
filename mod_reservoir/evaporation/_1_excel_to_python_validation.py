@@ -5,9 +5,9 @@ Validates the Python evaporation calculations against the original Excel
 spreadsheets using the same input temperature data.
 
 Usage:
-    python run_validation.py                    # Validate all reservoirs
-    python run_validation.py FOLSM              # Validate single reservoir
-    python run_validation.py FOLSM SHSTA OROVL # Validate specific reservoirs
+    python _1_excel_to_python_validation.py                    # Validate all reservoirs
+    python _1_excel_to_python_validation.py FOLSM              # Validate single reservoir
+    python _1_excel_to_python_validation.py FOLSM SHSTA OROVL # Validate specific reservoirs
 """
 
 import openpyxl
@@ -256,8 +256,38 @@ def validate_reservoirs(
     output_file = output_dir / 'validation_results.csv'
     df.to_csv(output_file, index=False)
 
+    # Save region-level summary table
+    df['annual_evap_mean'] = df['excel_mean'] * 12
+    summary_rows = []
+    for region in ['Sacramento Valley', 'San Joaquin Valley', 'Other']:
+        rdf = df[df['region'] == region]
+        if len(rdf) == 0:
+            continue
+        summary_rows.append({
+            'Region': region,
+            'Count': len(rdf),
+            'Mean Diff (%)': rdf['mean_diff_pct'].mean(),
+            'Pass Rate (%)': rdf['pass_rate_pct'].mean(),
+            'Annual Evap Min (in)': rdf['annual_evap_mean'].min(),
+            'Annual Evap Mean (in)': rdf['annual_evap_mean'].mean(),
+            'Annual Evap Max (in)': rdf['annual_evap_mean'].max(),
+        })
+    summary_rows.append({
+        'Region': 'All Reservoirs',
+        'Count': len(df),
+        'Mean Diff (%)': df['mean_diff_pct'].mean(),
+        'Pass Rate (%)': df['pass_rate_pct'].mean(),
+        'Annual Evap Min (in)': df['annual_evap_mean'].min(),
+        'Annual Evap Mean (in)': df['annual_evap_mean'].mean(),
+        'Annual Evap Max (in)': df['annual_evap_mean'].max(),
+    })
+    summary_table = pd.DataFrame(summary_rows)
+    summary_file = output_dir / 'validation_summary_table.csv'
+    summary_table.to_csv(summary_file, index=False)
+
     print(f"\nResults saved to:")
-    print(f"  Summary: {output_file}")
+    print(f"  Summary:       {output_file}")
+    print(f"  Summary table: {summary_file}")
     print(f"  Details: {output_dir / 'reservoir_details'}/ ({len(df)} CSV files)")
 
     return df

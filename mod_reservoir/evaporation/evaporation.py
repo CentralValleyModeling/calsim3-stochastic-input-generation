@@ -18,7 +18,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 from utils.paths import get_module_generated_dir, get_base_dir
 
 _gen = get_module_generated_dir("mod_reservoir/evaporation")
-_PARAMS_FILE = _gen / "reservoir_parameters.json"
+_PARAMS_FILE = Path(__file__).resolve().parent / "reference" / "reservoir_parameters.json"
 _WGEN_PA_DIR  = get_base_dir() / "WGEN" / "Product_A" / "1"
 
 
