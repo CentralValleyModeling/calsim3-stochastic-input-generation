@@ -20,7 +20,7 @@ Key outputs (in --outdir)
 - wgen_block_hist_window.csv
 - closure_terms_historical_timeseries.csv
 - closure_term_correlation_boxplot.png
-- coverage_share_boxplot.png
+- coverage_pct_boxplot.png
 - corr_vs_coverage_scatter.png
 - r_squared_vs_coverage_points.csv
 """
@@ -168,21 +168,21 @@ def wgen_calendar(df_daily: pd.DataFrame) -> pd.DataFrame:
 
 def detect_dominant_4yr_windows(df_daily: pd.DataFrame) -> pd.DataFrame:
     """
-    For each 4-year WGEN block:
-      1) Compute the majority (unique mode) historical year for the first three WGEN years in the block.
-      2) Select the 4-year historical window [Y, Y+3] that maximizes coverage (total days from those years).
-      3) If the selected window's first year != majority of the first WGEN year:
-           If (Y+1 == maj_first) and (Y+2 == maj_second) and (Y+3 == maj_third) and the shifted window exists,
-           then shift the window to start at Y+1, recalc coverage, window_alignment='shifted',
-           and write the shifted window to the output so stitching can proceed.
-      4) If the selected window's first year == maj_first, accept (window_alignment='direct').
+    For each 4-year WGEN block, assign a historical 4-year window directly
+    from the dominant historical year of the block's first WGEN year (maj1).
+
+    Algorithm:
+      1) Compute maj1 -- the unique-mode hist_year for the first WGEN year.
+      2) Set the window as [maj1, maj1+3].
+      3) Compute coverage_pct as a diagnostic (percentage of block days
+         falling within the chosen window).
+      4) If maj1 is a tie or missing, hist_start/end are NaN and coverage is NaN.
 
     Output columns (one row per block_id):
       - block_id
       - hist_start_year, hist_end_year
-      - coverage_share
-      - dom_first_hist_year, dom_second_hist_year, dom_third_hist_year  (diagnostics)
-      - window_alignment: 'direct' | 'shifted' | 'unresolved'
+      - coverage_pct  (0-100)
+      - dom_first_hist_year, dom_second_hist_year, dom_third_hist_year, dom_fourth_hist_year
     """
     df = df_daily.copy()
     if "block_id" not in df.columns:
@@ -198,89 +198,54 @@ def detect_dominant_4yr_windows(df_daily: pd.DataFrame) -> pd.DataFrame:
 
     rows = []
     for b, g in df.groupby("block_id"):
-        # Identify first three WGEN years of the block
-        first_sy = int(g["stamp_year"].min())
+        first_sy  = int(g["stamp_year"].min())
         second_sy = first_sy + 1
         third_sy  = first_sy + 2
+        fourth_sy = first_sy + 3
 
         maj1 = _majority_hist_year(g, first_sy)
         maj2 = _majority_hist_year(g, second_sy)
         maj3 = _majority_hist_year(g, third_sy)
+        maj4 = _majority_hist_year(g, fourth_sy)
 
-        # 4-year window sums over hist_year counts
-        counts = g["hist_year"].value_counts().sort_index()
-        yrs = counts.index.to_numpy()
-        win: dict[int, int] = {}
-        if yrs.size >= 4:
-            y_min, y_max = int(yrs.min()), int(yrs.max())
-            for y in range(y_min, y_max - 3 + 2):
-                total = int(counts.loc[(counts.index >= y) & (counts.index <= y + 3)].sum())
-                win[y] = total
+        diag = {
+            "dom_first_hist_year":  (np.nan if maj1 is None else int(maj1)),
+            "dom_second_hist_year": (np.nan if maj2 is None else int(maj2)),
+            "dom_third_hist_year":  (np.nan if maj3 is None else int(maj3)),
+            "dom_fourth_hist_year": (np.nan if maj4 is None else int(maj4)),
+        }
 
-        # No usable window → flag
-        if not win:
+        if maj1 is None:
             rows.append({
                 "block_id": int(b),
                 "hist_start_year": np.nan,
                 "hist_end_year": np.nan,
-                "coverage_share": np.nan,
-                "dom_first_hist_year": (np.nan if maj1 is None else int(maj1)),
-                "dom_second_hist_year": (np.nan if maj2 is None else int(maj2)),
-                "dom_third_hist_year": (np.nan if maj3 is None else int(maj3)),
-                "window_alignment": "unresolved",
+                "coverage_pct": np.nan,
+                **diag,
             })
             continue
 
-        # Select the best-coverage window 
-        best = max(win.values())
-        cand = [y for y, s in win.items() if s == best]
-        start0 = min(cand)
-        cov_best = (best / len(g)) if len(g) else np.nan
+        start_y = int(maj1)
+        # Coverage: percentage of block days whose hist_year falls in [start_y, start_y+3]
+        in_window = g["hist_year"].between(start_y, start_y + 3).sum()
+        coverage_pct = (in_window / len(g) * 100.0) if len(g) else np.nan
 
-        accepted_start = None
-        coverage_share = cov_best
-        alignment = "unresolved"
+        rows.append({
+            "block_id": int(b),
+            "hist_start_year": start_y,
+            "hist_end_year": start_y + 3,
+            "coverage_pct": coverage_pct,
+            **diag,
+        })
 
-        # Accept if aligned with majority of the FIRST WGEN year
-        if maj1 is not None and start0 == maj1:
-            accepted_start = start0
-            coverage_share = (win[start0] / len(g)) if len(g) else np.nan
-            alignment = "direct"
-        else:
-            # If misaligned, apply your 1-year shift rule:
-            # second window year == maj1, third == maj2, fourth == maj3
-            if (maj1 is not None and maj2 is not None and maj3 is not None and
-                (start0 + 1) == maj1 and (start0 + 2) == maj2 and (start0 + 3) == maj3 and
-                (start0 + 1) in win):
-                accepted_start = start0 + 1
-                coverage_share = (win[accepted_start] / len(g)) if len(g) else np.nan
-                alignment = "shifted"
-
-        if accepted_start is not None:
-            rows.append({
-                "block_id": int(b),
-                "hist_start_year": int(accepted_start),
-                "hist_end_year": int(accepted_start + 3),
-                "coverage_share": coverage_share,
-                "dom_first_hist_year": (np.nan if maj1 is None else int(maj1)),
-                "dom_second_hist_year": (np.nan if maj2 is None else int(maj2)),
-                "dom_third_hist_year": (np.nan if maj3 is None else int(maj3)),
-                "window_alignment": alignment,
-            })
-        else:
-            # Keep best coverage for visibility; no window assigned
-            rows.append({
-                "block_id": int(b),
-                "hist_start_year": np.nan,
-                "hist_end_year": np.nan,
-                "coverage_share": cov_best,
-                "dom_first_hist_year": (np.nan if maj1 is None else int(maj1)),
-                "dom_second_hist_year": (np.nan if maj2 is None else int(maj2)),
-                "dom_third_hist_year": (np.nan if maj3 is None else int(maj3)),
-                "window_alignment": "unresolved",
-            })
-
-    return pd.DataFrame(rows)
+    result = pd.DataFrame(rows)
+    int_cols = ["block_id", "hist_start_year", "hist_end_year",
+                "dom_first_hist_year", "dom_second_hist_year",
+                "dom_third_hist_year", "dom_fourth_hist_year"]
+    for c in int_cols:
+        if c in result.columns:
+            result[c] = result[c].astype("Int64")
+    return result
 
 # -----------------------------
 # Closure transforms
@@ -485,14 +450,14 @@ def plot_corr_boxplots_13_terms(perblock_df: pd.DataFrame, out_path: Path) -> No
 
 
 # -----------------------------
-# HORIZONTAL box plot of coverage_share across blocks
+# HORIZONTAL box plot of coverage_pct across blocks
 # -----------------------------
-def plot_coverage_share_boxplot(block_map: pd.DataFrame, out_path: Path) -> None:
+def plot_coverage_pct_boxplot(block_map: pd.DataFrame, out_path: Path) -> None:
     """
-    One horizontal box plot of coverage_share across all blocks,
+    One horizontal box plot of coverage_pct across all blocks,
     with jittered points showing each block's value.
     """
-    vals = block_map["coverage_share"].dropna().to_numpy()
+    vals = block_map["coverage_pct"].dropna().to_numpy()
     fig, ax = plt.subplots(figsize=(7.5, 2.8))
     ax.boxplot([vals], vert=False, showmeans=True, whis=[5, 95],
                medianprops=dict(color='blue', linewidth=1.5))
@@ -501,9 +466,9 @@ def plot_coverage_share_boxplot(block_map: pd.DataFrame, out_path: Path) -> None
     ax.scatter(vals, yj, s=18, alpha=0.7, color="orange")
     ax.set_yticks([1])
     ax.set_yticklabels(["All blocks"])
-    ax.set_xlim(0.5, 1.0)
-    ax.set_xlabel("Coverage ratio of dominant 4-year window")
-    ax.set_title("Coverage ratio across blocks")
+    ax.set_xlim(50, 100)
+    ax.set_xlabel("Coverage (%) of dominant 4-year window")
+    ax.set_title("Coverage (%) across blocks")
     ax.grid(True, axis="x", linestyle="--", alpha=0.4)
     fig.tight_layout()
     fig.savefig(out_path, dpi=150)
@@ -517,7 +482,7 @@ def plot_corr_vs_coverage_scatter(perblock_df: pd.DataFrame,
                                   terms_filter: list[str] | None = None,
                                   title: str | None = None) -> None:
     """
-    Scatter: per-block R-squared (weighted vs block-stitched) vs coverage_share.
+    Scatter: per-block R-squared (weighted vs block-stitched) vs coverage_pct.
 
     If `terms_filter` is provided, only those closure terms are plotted.
     A least-squares trend is added when >= 2 finite points are available.
@@ -526,32 +491,32 @@ def plot_corr_vs_coverage_scatter(perblock_df: pd.DataFrame,
 
     Columns used:
       - perblock_df: [block_id, closure_term, r_squared, n_points]
-      - block_map:   [block_id, coverage_share]
+      - block_map:   [block_id, coverage_pct]
     """
-    # Merge correlation-per-block with the coverage share for that block
+    # Merge correlation-per-block with the coverage pct for that block
     merged = perblock_df.merge(
-        block_map[["block_id", "coverage_share"]],
+        block_map[["block_id", "coverage_pct"]],
         on="block_id", how="left"
     )
 
     if terms_filter is not None:
         merged = merged[merged["closure_term"].isin(terms_filter)]
 
-    # Keep rows that have both r_squared and coverage_share
-    pts = merged.dropna(subset=["r_squared", "coverage_share"]).copy()
+    # Keep rows that have both r_squared and coverage_pct
+    pts = merged.dropna(subset=["r_squared", "coverage_pct"]).copy()
 
     # Optional: export the plotted points
     if save_csv_path is not None:
-        cols = ["block_id", "closure_term", "coverage_share", "r_squared", "n_points"]
+        cols = ["block_id", "closure_term", "coverage_pct", "r_squared", "n_points"]
         pts[cols].to_csv(save_csv_path, index=False)
 
     # Build scatter
     fig, ax = plt.subplots(figsize=(7.0, 5.2))
     if not pts.empty:
-        ax.scatter(pts["coverage_share"], pts["r_squared"], s=12, alpha=0.35, edgecolors="none")
+        ax.scatter(pts["coverage_pct"], pts["r_squared"], s=12, alpha=0.35, edgecolors="none")
 
         # Simple least-squares trend line
-        x = pts["coverage_share"].to_numpy()
+        x = pts["coverage_pct"].to_numpy()
         y = pts["r_squared"].to_numpy()
         good = np.isfinite(x) & np.isfinite(y)
         if good.sum() >= 2:
@@ -561,20 +526,20 @@ def plot_corr_vs_coverage_scatter(perblock_df: pd.DataFrame,
             ax.plot(xx, yy, linewidth=1.6)
 
     # Axes, bounds, grid
-    ax.set_xlim(0.5, 1.0)      # typical coverage range here
+    ax.set_xlim(50, 100)
     ax.set_ylim(0.0, 1.05)
-    ax.set_xlabel("Coverage share (dominant 4-year window)")
+    ax.set_xlabel("Coverage (%) of dominant 4-year window")
     ax.set_ylabel("$R^2$: weighted vs block-stitched")
 
     if title:
         ax.set_title(title)
     else:
         if terms_filter is None:
-            ax.set_title("Per-block $R^2$ vs coverage share (all closure terms)")
+            ax.set_title("Per-block $R^2$ vs coverage % (all closure terms)")
         elif len(terms_filter) == 1:
-            ax.set_title(f"Per-block $R^2$ vs coverage share ({terms_filter[0]})")
+            ax.set_title(f"Per-block $R^2$ vs coverage % ({terms_filter[0]})")
         else:
-            ax.set_title("Per-block $R^2$ vs coverage share (selected terms)")
+            ax.set_title("Per-block $R^2$ vs coverage % (selected terms)")
 
     ax.axhline(0.0, linewidth=0.8, color="black")
     ax.grid(True, linestyle="--", alpha=0.35)
@@ -745,8 +710,8 @@ def main():
     block_map = detect_dominant_4yr_windows(dfd_for_blocks)
     block_map.to_csv(outdir / "wgen_block_hist_window.csv", index=False)
 
-    # NEW: Horizontal box plot of coverage_share across blocks
-    plot_coverage_share_boxplot(block_map, outdir / "coverage_share_boxplot.png")
+    # Horizontal box plot of coverage_pct across blocks
+    plot_coverage_pct_boxplot(block_map, outdir / "coverage_pct_boxplot.png")
 
     # Build WGEN month layout with block ids for stitching
     months_layout = cal_map.copy()
@@ -771,16 +736,16 @@ def main():
     out_fig = outdir / "closure_term_correlation_boxplot.png"
     plot_corr_boxplots_13_terms(perblock_df, out_fig)
 
-    # --- Scatter plot: R-squared vs coverage share
+    # --- Scatter plot: R-squared vs coverage %
     scatter_fig = outdir / "r_squared_vs_coverage_scatter.png"
     plot_corr_vs_coverage_scatter(
         perblock_df, block_map, scatter_fig,
         save_csv_path=outdir / "r_squared_vs_coverage_points.csv",
         terms_filter=None,
-        title="Per-block $R^2$ vs coverage share (all closure terms)"
+        title="Per-block $R^2$ vs coverage % (all closure terms)"
     )
 
-    print("Wrote:", (outdir / "coverage_share_boxplot.png").resolve())
+    print("Wrote:", (outdir / "coverage_pct_boxplot.png").resolve())
     print("Wrote:", out_fig.resolve())
     print("Wrote:", scatter_fig.resolve())
     print("Done. Outputs written to:", outdir.resolve())
