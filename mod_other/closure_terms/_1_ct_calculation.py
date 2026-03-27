@@ -310,13 +310,21 @@ def _write_product_b_chunks(
     term_cols: list[str],
 ) -> None:
     """
-    Split the weighted closure-term series (stamp_year 1..1000, stamp_month 1..12)
-    into 10 x 100-water-year chunk CSVs, following the standard Product B convention.
+    Split the weighted closure-term series into 10 x 100-water-year chunk CSVs,
+    following the standard Product B convention.
+
+    The input series must contain at least 12,009 months
+    (9 alignment months + 10 chunks x 1,200 months).  Typically this means the
+    WGEN synthetic calendar runs from stamp_year 1 through at least the first
+    9 months of stamp_year 1001 (i.e., stamp_year 1..1000 plus Jan-Sep of 1001).
 
     Steps:
-      1. Sort by (stamp_year, stamp_month) to get a contiguous 12,000-month series.
-      2. Skip the first 9 months (Jan-Sep of year 1) to align to an October start.
-      3. Slice into 10 chunks of 1,200 months (100 water years) each.
+      1. Sort by (stamp_year, stamp_month) to get a contiguous series of at
+         least 12,009 months.
+      2. Skip the first 9 months (Jan-Sep of stamp_year 1) to align to an
+         October (water-year) start.
+      3. Slice the remaining 12,000 months into 10 chunks of 1,200 months
+         (100 water years) each.
       4. Re-label each chunk with the historical WY 1922-2021 template.
       5. Write one CSV per chunk in long format:
          Part B, Part C, Year, Month, Value
