@@ -394,17 +394,55 @@ def compute_weighted_closure(counts: pd.DataFrame,
                              ct_month_table: pd.DataFrame,
                              term_cols: list[str]) -> pd.DataFrame:
     """
-    For each WGEN month, weighted-average closure terms across all contributing
-    (hist_year, hist_month) using 'share' as weights.
+    For each WGEN month, compute a weighted-average closure term across all
+    contributing (hist_year, hist_month) using 'share' as weights.
+
+    The weighted mean for each term is:
+        sum(value * share) / sum(share where value is non-null)
+    If the denominator is 0 (all contributing values are missing), the result
+    is NaN for that (stamp_year, stamp_month, term).
     """
-    joined = counts.merge(ct_month_table.reset_index(), on=["hist_year","hist_month"], how="left")
+    # Join daily/monthly share counts with historical closure term table
+    joined = counts.merge(
+        ct_month_table.reset_index(), on=["hist_year", "hist_month"], how="left"
+    )
+
+    # For each term, build weighted numerators and denominators that exclude
+    # NaN values from the denominator so weights are renormalized correctly.
+    weighted_cols = []
+    weight_cols = []
     for c in term_cols:
-        joined[c] = joined[c] * joined["share"]
-    wgt = joined.groupby(["stamp_year","stamp_month"], as_index=False)[term_cols].sum()
-    wgt = wgt.merge(cal_map[["stamp_year","stamp_month","Wgen_year_month"]], on=["stamp_year","stamp_month"], how="left")
-    return wgt.sort_values(["stamp_year","stamp_month"]).reset_index(drop=True)
+        num_col = f"{c}_weighted"
+        den_col = f"{c}_weight"
+        # Numerator: value * share (NaNs propagate in multiplication)
+        joined[num_col] = joined[c] * joined["share"]
+        # Denominator: share only where the value is non-null, else 0
+        joined[den_col] = joined["share"].where(joined[c].notna(), 0.0)
+        weighted_cols.append(num_col)
+        weight_cols.append(den_col)
 
+    group_cols = ["stamp_year", "stamp_month"]
+    # Sum numerators and denominators for each WGEN month
+    agg_cols = weighted_cols + weight_cols
+    summed = joined.groupby(group_cols, as_index=False)[agg_cols].sum()
 
+    # Compute weighted means; if total weight is 0, set result to NaN
+    for c, num_col, den_col in zip(term_cols, weighted_cols, weight_cols):
+        num = summed[num_col]
+        den = summed[den_col]
+        with np.errstate(divide="ignore", invalid="ignore"):
+            summed[c] = np.where(den > 0, num / den, np.nan)
+
+    # Keep only stamp_year, stamp_month, and the final term columns
+    wgt = summed[group_cols + term_cols]
+
+    # Merge back the WGEN year-month mapping
+    wgt = wgt.merge(
+        cal_map[["stamp_year", "stamp_month", "Wgen_year_month"]],
+        on=["stamp_year", "stamp_month"],
+        how="left",
+    )
+    return wgt.sort_values(["stamp_year", "stamp_month"]).reset_index(drop=True)
 def build_blockstitched_closure(months_layout: pd.DataFrame,
                                 block_map: pd.DataFrame,
                                 ct_month_table: pd.DataFrame,
