@@ -3,7 +3,7 @@ WGEN Closure Terms: Weighted vs 4-Year-Block Stitched, with Correlations
 
 What this does
 --------------
-1) Reads ALL monthly closure terms from a CalSim DSS file Part C ='CLOSURE-TERM'.
+1) Reads closure terms from a CalSim DSS file Part C ='CLOSURE-TERM'.
 2) Reads WGEN resampled dates CSV (daily mapping of WGEN -> historical date).
 3) For each WGEN month:
    - Weighted-average closure terms using sampled-day shares across (hist_year, hist_month).
@@ -16,13 +16,22 @@ Key outputs (in --outdir)
 - closure_weighted_timeseries.csv
 - closure_blockstitched_timeseries.csv
 - closure_correlation_overall.csv
-- closure_correlation_by_block.csv
 - wgen_block_hist_window.csv
 - closure_terms_historical_timeseries.csv
 - closure_term_correlation_boxplot.png
 - coverage_pct_boxplot.png
-- corr_vs_coverage_scatter.png
-- r_squared_vs_coverage_points.csv
+- r_squared_vs_coverage_scatter.png
+- r_squared_vs_coverage.csv
+
+Product B outputs (in DEFAULT_PROD_B_DIR)
+-----------------------------------------
+- <TERM>_productB_n01.csv through <TERM>_productB_n10.csv (10 chunks x 13 terms)
+
+Dependencies
+------------
+- utils.paths (get_base_dir, get_module_generated_dir)
+- pydsstools
+- numpy, pandas, matplotlib
 """
 from __future__ import annotations
 
@@ -34,12 +43,11 @@ import pandas as pd
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 from utils.paths import get_base_dir, get_module_generated_dir
-from utils.wyt_monthlyavg_framework import (
-    read_calsim_monthly_pairs,
-    norm_token,
-    DEFAULT_DSS_READ_START,
-    DEFAULT_DSS_READ_END,
-)
+from pydsstools.heclib.dss import HecDss
+
+# DSS read window (matches CalSim historical period)
+DEFAULT_DSS_READ_START = "1921-10-31"
+DEFAULT_DSS_READ_END   = "2021-09-30"
 
 # plotting (headless-safe)
 import matplotlib
@@ -55,6 +63,7 @@ _gen  = get_module_generated_dir("mod_other/closure_terms")
 DEFAULT_DSS        = _base / "CalSim3" / "__calsim_sv_default__.dss"
 DEFAULT_RESAMPLED  = _base / "WGEN" / "resampled.dates_Product_B_1000yr.csv"
 DEFAULT_OUTDIR     = _gen / "output" /"_1_ct_calculation" /"wgen_analysis_outputs"
+DEFAULT_PROD_B_DIR = _gen / "output" / "_product_b_final"
 
 # -----------------------------
 # Shared selection used by both box plot and filtered scatters
@@ -66,9 +75,10 @@ PART_B = [
 ]
 
 # -----------------------------
-# DSS reader: read closure terms via read_calsim_monthly_pairs
+# DSS reader: read closure terms directly via pydsstools
 # -----------------------------
 CLOSURE_C_PART = "CLOSURE-TERM"
+_NO_DOM = "tied"
 
 
 def read_all_closure_terms_monthly(
@@ -77,7 +87,13 @@ def read_all_closure_terms_monthly(
     dss_read_start: str = DEFAULT_DSS_READ_START,
     dss_read_end: str = DEFAULT_DSS_READ_END,
 ) -> pd.DataFrame:
-    """Read selected CLOSURE-TERM series from DSS using (B-part, C-part) pairs."""
+    """Read selected CLOSURE-TERM series from DSS via pydsstools.
+
+    Opens the DSS file, scans 1MON pathnames, and collects series whose
+    B-part and C-part match the requested closure terms (case-insensitive).
+    DSS end-of-period timestamps are shifted back one month so the pandas
+    index reflects the actual data month.
+    """
     dssfile = Path(dssfile)
     if not dssfile.is_file():
         raise FileNotFoundError(f"DSS file not found: {dssfile}")
@@ -85,26 +101,52 @@ def read_all_closure_terms_monthly(
     if term_filter is None:
         raise ValueError("term_filter (list of Part B names) is required.")
 
-    specs = [(b, CLOSURE_C_PART) for b in term_filter]
-    series_by_key = read_calsim_monthly_pairs(
-        dssfile=dssfile,
-        specs=specs,
-        dss_read_start=dss_read_start,
-        dss_read_end=dss_read_end,
-    )
+    c_upper = CLOSURE_C_PART.strip().upper()
+    requested = {b.strip().upper() for b in term_filter}
 
     full_idx = pd.date_range(dss_read_start, dss_read_end, freq="ME")
+    masters: dict[str, pd.Series] = {}
+
+    with HecDss.Open(str(dssfile), version=6, catalog_flag=True) as dss:
+        paths = dss.getPathnameList("/*/*/*/*/1MON/*")
+
+        # Bucket matching paths by B-part
+        bucket: dict[str, list[str]] = {}
+        for path in paths:
+            parts = path.strip("/").split("/")
+            if len(parts) != 6:
+                continue
+            b_part = parts[1].strip().upper()
+            c_part = parts[2].strip().upper()
+            if b_part in requested and c_part == c_upper:
+                bucket.setdefault(b_part, []).append(path)
+
+        for b_upper in sorted(requested):
+            if b_upper not in bucket:
+                continue
+            master = pd.Series(index=full_idx, dtype=float)
+            for path in sorted(bucket[b_upper],
+                               key=lambda x: (x.strip("/").split("/")[3], x)):
+                ts = dss.read_ts(path, trim_missing=True)
+                vals = np.asarray(ts.values, dtype=float)
+                vals = np.where(vals <= -900, np.nan, vals)
+                idx = (pd.to_datetime(ts.pytimes)
+                       .to_period("M") - 1).to_timestamp("M")
+                master.update(pd.Series(vals, index=idx))
+            if master.notna().any():
+                masters[b_upper] = master
+
     df = pd.DataFrame(index=full_idx)
     df.index.name = "date"
 
     missing: list[str] = []
     for b in term_filter:
-        key = (norm_token(b), norm_token(CLOSURE_C_PART))
-        if key not in series_by_key:
+        b_upper = b.strip().upper()
+        if b_upper not in masters:
             missing.append(b)
             continue
         df[b] = pd.to_numeric(
-            series_by_key[key].reindex(full_idx), errors="coerce"
+            masters[b_upper].reindex(full_idx), errors="coerce"
         ).to_numpy()
 
     if missing:
@@ -209,10 +251,10 @@ def detect_dominant_4yr_windows(df_daily: pd.DataFrame) -> pd.DataFrame:
         maj4 = _majority_hist_year(g, fourth_sy)
 
         diag = {
-            "dom_first_hist_year":  (np.nan if maj1 is None else int(maj1)),
-            "dom_second_hist_year": (np.nan if maj2 is None else int(maj2)),
-            "dom_third_hist_year":  (np.nan if maj3 is None else int(maj3)),
-            "dom_fourth_hist_year": (np.nan if maj4 is None else int(maj4)),
+            "dom_first_hist_year":  (_NO_DOM if maj1 is None else int(maj1)),
+            "dom_second_hist_year": (_NO_DOM if maj2 is None else int(maj2)),
+            "dom_third_hist_year":  (_NO_DOM if maj3 is None else int(maj3)),
+            "dom_fourth_hist_year": (_NO_DOM if maj4 is None else int(maj4)),
         }
 
         if maj1 is None:
@@ -239,13 +281,99 @@ def detect_dominant_4yr_windows(df_daily: pd.DataFrame) -> pd.DataFrame:
         })
 
     result = pd.DataFrame(rows)
-    int_cols = ["block_id", "hist_start_year", "hist_end_year",
-                "dom_first_hist_year", "dom_second_hist_year",
-                "dom_third_hist_year", "dom_fourth_hist_year"]
+    int_cols = ["block_id", "hist_start_year", "hist_end_year"]
     for c in int_cols:
         if c in result.columns:
             result[c] = result[c].astype("Int64")
+
+    # Flag blocks where the 4th year dominant doesn't match hist_end_year
+    def _fourth_year_flag(row):
+        d4 = row["dom_fourth_hist_year"]
+        he = row["hist_end_year"]
+        if pd.isna(he):
+            return "no window"
+        if d4 == _NO_DOM:
+            return "no clear dominant 4th year"
+        if int(d4) != int(he):
+            return f"end({he}) != dom_4th({d4})"
+        return ""
+    result["fourth_year_flag"] = result.apply(_fourth_year_flag, axis=1)
+
     return result
+
+
+# -----------------------------
+# Product B chunk writer
+# -----------------------------
+def _write_product_b_chunks(
+    weighted: pd.DataFrame,
+    term_cols: list[str],
+) -> None:
+    """
+    Split the weighted closure-term series (stamp_year 1..1000, stamp_month 1..12)
+    into 10 x 100-water-year chunk CSVs, following the standard Product B convention.
+
+    Steps:
+      1. Sort by (stamp_year, stamp_month) to get a contiguous 12,000-month series.
+      2. Skip the first 9 months (Jan-Sep of year 1) to align to an October start.
+      3. Slice into 10 chunks of 1,200 months (100 water years) each.
+      4. Re-label each chunk with the historical WY 1922-2021 template.
+      5. Write one CSV per chunk in long format:
+         Part B, Part C, Year, Month, Value
+    """
+    months_per_chunk = 100 * 12   # 1200 months = 100 water years
+    total_chunks = 10
+    skip_months = 9               # Jan-Sep of year 1 -> start at October
+    total_needed = skip_months + months_per_chunk * total_chunks  # 12009
+
+    # Sort to ensure contiguous ordering
+    wt = weighted.sort_values(["stamp_year", "stamp_month"]).reset_index(drop=True)
+    if len(wt) < total_needed:
+        raise ValueError(
+            f"Weighted series has {len(wt)} months; need at least {total_needed} "
+            f"({skip_months} skip + {total_chunks} x {months_per_chunk})."
+        )
+
+    # Skip first 9 months to align to October (WY start)
+    aligned = wt.iloc[skip_months:].reset_index(drop=True)
+
+    # Build the WY 1922-2021 date template (Year, Month) -- 1200 entries
+    years_tpl, months_tpl = [], []
+    for wy in range(1922, 2022):
+        for m in (10, 11, 12):           # Oct-Dec of previous calendar year
+            years_tpl.append(wy - 1)
+            months_tpl.append(m)
+        for m in range(1, 10):           # Jan-Sep of the WY calendar year
+            years_tpl.append(wy)
+            months_tpl.append(m)
+    years_tpl = np.array(years_tpl)
+    months_tpl = np.array(months_tpl)
+
+    product_b_dir = DEFAULT_PROD_B_DIR
+    product_b_dir.mkdir(parents=True, exist_ok=True)
+
+    for term in term_cols:
+        short = term.removeprefix("CT_").removesuffix("_SV")
+
+        for i in range(total_chunks):
+            start = i * months_per_chunk
+            end = (i + 1) * months_per_chunk
+            chunk = aligned.iloc[start:end]
+
+            df_out = pd.DataFrame({
+                "Part B": term,
+                "Part C": CLOSURE_C_PART,
+                "Year": years_tpl,
+                "Month": months_tpl,
+                "Value": chunk[term].values,
+            })
+            fname = f"{short}_productB_n{i + 1:02d}.csv"
+            df_out.to_csv(product_b_dir / fname, index=False)
+
+        print(f"  Wrote 10 chunks for {short}")
+
+    print(f"Product B chunks written to: {product_b_dir.resolve()}")
+
 
 # -----------------------------
 # Closure transforms
@@ -280,17 +408,16 @@ def compute_weighted_closure(counts: pd.DataFrame,
 def build_blockstitched_closure(months_layout: pd.DataFrame,
                                 block_map: pd.DataFrame,
                                 ct_month_table: pd.DataFrame,
-                                term_cols: list[str],
-                                align: str = "calendar") -> pd.DataFrame:
+                                term_cols: list[str]) -> pd.DataFrame:
     """
     For each WGEN 4-yr block, stitch closure terms from the chosen historic 4-yr window.
-    align='calendar' -> start at Jan; align='water' -> start at Oct.
+    Uses calendar-year alignment (Jan start), matching WGEN block structure.
 
     Adds:
       - block_id
       - historical_4yrs_block ('YYYY-YYYY'; empty if no mapping)
     """
-    align_month0 = 1 if align == "calendar" else 10  # 1=Jan, 10=Oct
+    align_month0 = 1  # January -- WGEN blocks are calendar-year based
     stitched_rows = []
 
     for b, grp in months_layout.groupby("block_id"):
@@ -393,7 +520,7 @@ def build_all_sources_column(counts: pd.DataFrame) -> pd.DataFrame:
             parts.append(f"{int(r['hist_year'])}-{int(r['hist_month']):02d}: {int(r['n_days_from_hist_pair'])}d ({share:.1%})")
         return pd.Series({"hist_sources_all": "; ".join(parts)})
     return (counts.groupby(["stamp_year","stamp_month"], as_index=False)
-                 .apply(_fmt_group)
+                 .apply(_fmt_group, include_groups=False)
                  .reset_index(drop=True))
 
 
@@ -458,20 +585,32 @@ def plot_coverage_pct_boxplot(block_map: pd.DataFrame, out_path: Path) -> None:
     with jittered points showing each block's value.
     """
     vals = block_map["coverage_pct"].dropna().to_numpy()
-    fig, ax = plt.subplots(figsize=(7.5, 2.8))
-    ax.boxplot([vals], vert=False, showmeans=True, whis=[5, 95],
-               medianprops=dict(color='blue', linewidth=1.5))
-    # jittered points along the single y-category
-    yj = np.random.normal(loc=1.0, scale=0.03, size=len(vals))
-    ax.scatter(vals, yj, s=18, alpha=0.7, color="orange")
+    fig, ax = plt.subplots(figsize=(8, 3))
+    bp = ax.boxplot(
+        [vals], vert=False, patch_artist=True, showmeans=True, whis=[5, 95],
+        boxprops=dict(facecolor="#A8C4E0", edgecolor="black", linewidth=0.8),
+        medianprops=dict(color="#E67E22", linewidth=1.5),
+        meanprops=dict(marker="D", markerfacecolor="#2980B9",
+                       markeredgecolor="#2980B9", markersize=5),
+        whiskerprops=dict(color="black", linewidth=0.8),
+        capprops=dict(color="black", linewidth=0.8),
+        flierprops=dict(marker="o", markerfacecolor="none",
+                        markeredgecolor="black", markersize=4, linestyle="none"),
+    )
+    # jittered strip overlay
+    yj = np.random.default_rng(42).normal(loc=1.0, scale=0.04, size=len(vals))
+    ax.scatter(vals, yj, s=10, alpha=0.45, color="#555555", edgecolors="none", zorder=3)
+
     ax.set_yticks([1])
-    ax.set_yticklabels(["All blocks"])
+    ax.set_yticklabels(["All blocks"], fontsize=9)
     ax.set_xlim(50, 100)
-    ax.set_xlabel("Coverage (%) of dominant 4-year window")
-    ax.set_title("Coverage (%) across blocks")
-    ax.grid(True, axis="x", linestyle="--", alpha=0.4)
+    ax.set_xlabel("Coverage (%) of dominant 4-year window", fontsize=10)
+    ax.set_title("Coverage (%) across WGEN blocks", fontsize=11, pad=10)
+    ax.axvline(100, color="#888", linewidth=0.5, linestyle=":")
+    ax.grid(True, axis="x", linestyle="--", alpha=0.3)
+
     fig.tight_layout()
-    fig.savefig(out_path, dpi=150)
+    fig.savefig(out_path, dpi=300, bbox_inches="tight")
     plt.close(fig)
 
 
@@ -508,7 +647,10 @@ def plot_corr_vs_coverage_scatter(perblock_df: pd.DataFrame,
     # Optional: export the plotted points
     if save_csv_path is not None:
         cols = ["block_id", "closure_term", "coverage_pct", "r_squared", "n_points"]
-        pts[cols].to_csv(save_csv_path, index=False)
+        out = pts[cols].copy()
+        out["r_squared"] = out["r_squared"].round(2)
+        out["coverage_pct"] = out["coverage_pct"].round(2)
+        out.to_csv(save_csv_path, index=False)
 
     # Build scatter
     fig, ax = plt.subplots(figsize=(7.0, 5.2))
@@ -561,11 +703,11 @@ def plot_cdf_num_distinct_pairs_excl_ones(counts_by_label: pd.DataFrame,
     ----------
     counts_by_label : DataFrame
         Must include columns: ['wgen_ym','hist_year','hist_month'].
-        (This is the table you already build via groupby over 'wgen_ym' × (hist_year, hist_month).)
+        Built via groupby over 'wgen_ym' x (hist_year, hist_month).
     out_path : Path
         Where to save the PNG figure.
     min_pairs : int, default 2
-        Minimum number of distinct (year, month) contributors to keep (2 per meeting notes).
+        Minimum number of distinct (year, month) contributors to include.
     title : str | None
         Optional plot title override.
 
@@ -573,7 +715,7 @@ def plot_cdf_num_distinct_pairs_excl_ones(counts_by_label: pd.DataFrame,
     -------
     pd.DataFrame
         Table with columns ['n_pairs','count','cdf'] used to draw the CDF.
-        (Returned for QA or if you want to export later.)
+        Can be exported separately for further analysis.
     """
     from matplotlib.ticker import PercentFormatter
 
@@ -604,7 +746,7 @@ def plot_cdf_num_distinct_pairs_excl_ones(counts_by_label: pd.DataFrame,
     ax.set_ylabel("CDF")
     ax.yaxis.set_major_formatter(PercentFormatter(1.0))
     if title is None:
-        title = "CDF of mixed months only (≥2 distinct pairs)"
+        title = "CDF of mixed months only (>=2 distinct pairs)"
     ax.set_title(title)
     ax.grid(True, linestyle="--", alpha=0.35)
 
@@ -631,8 +773,8 @@ def main():
                     help="CalSim DSS file with monthly closure terms")
     ap.add_argument("--outdir", default=DEFAULT_OUTDIR, type=Path,
                     help="Output folder")
-    ap.add_argument("--block-align", choices=["calendar","water"], default="calendar",
-                    help="Month alignment for stitching (Jan vs Oct)")
+    ap.add_argument("--Product_B", action="store_true",
+                    help="Only write Product B chunk CSVs (skip analysis)")
     args = ap.parse_args()
 
     outdir = args.outdir; outdir.mkdir(parents=True, exist_ok=True)
@@ -643,11 +785,6 @@ def main():
         raise RuntimeError("No closure term series found in DSS with Part C = 'CLOSURE-TERM'.")
     df_ct.index = pd.to_datetime(df_ct.index)
     term_cols = list(df_ct.columns)
-
-    # Save closure terms with their real historical dates to CSV
-    ct_with_dates = df_ct.copy()
-    ct_with_dates.index.name = 'date'
-    ct_with_dates.to_csv(outdir / "closure_terms_historical_timeseries.csv", index=True)
 
     # Make (hist_year, hist_month)-indexed table for lookups
     ct_month_table = make_month_table(df_ct)
@@ -693,21 +830,32 @@ def main():
         left_on="wgen_ym", right_on="Wgen_year_month", how="left"
     )
 
-    # Build "all sources" text
-    all_sources = build_all_sources_column(counts)
-
     # --- Weighted-average closure (uses shares computed by calendar month of wgen_date)
     weighted = compute_weighted_closure(counts, cal_map, ct_month_table, term_cols)
+
+    # --- Product B only mode: write chunks and exit
+    if args.Product_B:
+        _write_product_b_chunks(weighted, term_cols)
+        return
+
+    # --- Full analysis below ---
+
+    # Build "all sources" text
+    all_sources = build_all_sources_column(counts)
     weighted = weighted.merge(all_sources, on=["stamp_year","stamp_month"], how="left")
+
     # Add block_id as first column in the weighted CSV
     weighted["block_id"] = (weighted["stamp_year"] - 1)//4 + 1
     ordered_cols = ["block_id", "stamp_year", "stamp_month", "Wgen_year_month", "hist_sources_all"] + term_cols
     weighted[ordered_cols].to_csv(outdir / "closure_weighted_timeseries.csv", index=False)
 
+    # Save closure terms with their real historical dates to CSV
+    ct_with_dates = df_ct.copy()
+    ct_with_dates.index.name = 'date'
+    ct_with_dates.to_csv(outdir / "closure_terms_historical_timeseries.csv", index=True)
+
     # --- Dominant 4-yr windows per WGEN block
-    dfd_for_blocks = dfd.copy()
-    dfd_for_blocks["hist_year"] = dfd_for_blocks["hist_year"]  # already set
-    block_map = detect_dominant_4yr_windows(dfd_for_blocks)
+    block_map = detect_dominant_4yr_windows(dfd)
     block_map.to_csv(outdir / "wgen_block_hist_window.csv", index=False)
 
     # Horizontal box plot of coverage_pct across blocks
@@ -720,7 +868,7 @@ def main():
 
     # --- Block-stitched closure
     stitched = build_blockstitched_closure(
-        months_layout, block_map, ct_month_table, term_cols, align=args.block_align
+        months_layout, block_map, ct_month_table, term_cols
     )
     cols_order = ["block_id", "stamp_year", "stamp_month", "Wgen_year_month", "historical_4yrs_block"] + term_cols
     stitched[cols_order].to_csv(outdir / "closure_blockstitched_timeseries.csv", index=False)
@@ -728,9 +876,6 @@ def main():
     # --- Correlations
     overall_df, perblock_df = overall_and_perblock_correlations(stitched, weighted, term_cols)
     overall_df.to_csv(outdir / "closure_correlation_overall.csv", index=False)
-    perblock_wide = perblock_df.pivot(index="block_id", columns="closure_term", values="r_squared")
-    perblock_wide.columns.name = None
-    perblock_wide.to_csv(outdir / "closure_correlation_by_block.csv")
 
     # --- Single figure with box plots (one per requested closure term)
     out_fig = outdir / "closure_term_correlation_boxplot.png"
@@ -740,7 +885,7 @@ def main():
     scatter_fig = outdir / "r_squared_vs_coverage_scatter.png"
     plot_corr_vs_coverage_scatter(
         perblock_df, block_map, scatter_fig,
-        save_csv_path=outdir / "r_squared_vs_coverage_points.csv",
+        save_csv_path=outdir / "r_squared_vs_coverage.csv",
         terms_filter=None,
         title="Per-block $R^2$ vs coverage % (all closure terms)"
     )
@@ -748,12 +893,17 @@ def main():
     print("Wrote:", (outdir / "coverage_pct_boxplot.png").resolve())
     print("Wrote:", out_fig.resolve())
     print("Wrote:", scatter_fig.resolve())
-    print("Done. Outputs written to:", outdir.resolve())
 
+    # --- CDF of distinct (hist_year, hist_month) contributors per WGEN month
     plot_cdf_num_distinct_pairs_excl_ones(
         counts_by_label,
         outdir / "wgen_num_distinct_pairs_cdf.png"
     )
+
+    # --- Product B chunk CSVs (always in full run)
+    _write_product_b_chunks(weighted, term_cols)
+
+    print("Done. Outputs written to:", outdir.resolve())
 
 
 if __name__ == "__main__":
