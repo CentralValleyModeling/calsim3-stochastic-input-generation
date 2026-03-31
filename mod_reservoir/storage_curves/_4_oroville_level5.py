@@ -1,14 +1,35 @@
 #!/usr/bin/env python
 """
-Compute Oroville rule-curve target storage from wetness index.
+_4_oroville_level5.py
+
+Compute Oroville rule-curve level5 storage from wetness index.
+
+Usage:
+    python _4_oroville_level5.py                        # Both Product A and B (default)
+    python _4_oroville_level5.py --product A            # Product A only
+    python _4_oroville_level5.py --product B            # Product B only
+    python _4_oroville_level5.py --product B --chunks 1 2 3  # Product B, specific chunks
 
 Inputs:
-  1) <GENERATED>/mod_reservoir/storage_curves/output/_3_oroville_daily_precip/
-     Oroville_Daily_Precip_ProductA_Scenario1.csv
-      year, month, day, precip_inches
+  Product A:
+    <GENERATED>/mod_reservoir/storage_curves/output/_3_oroville_daily_precip/
+      Oroville_Daily_Precip_ProductA_Scenario1.csv  (year, month, day, precip_inches)
+  Product B:
+    <GENERATED>/mod_reservoir/storage_curves/output/_3_oroville_daily_precip/
+      oroville_daily_precip_productB_n01.csv ... n10.csv  (year, month, day, precip_inches)
+  Historical comparison (Product A only):
+    <BASE>/CalSim3/__calsim_sv_default__.dss
+      Part B: S_OROVLLEVEL5, Part C: STORAGE-LEVEL (monthly end-of-month series)
 
-  2) <BASE>/CalSim3/__calsim_sv_default__.dss
-     Part B: S_OROVLLEVEL5, Part C: STORAGE-LEVEL (monthly end-of-month series)
+Outputs:
+  Product A:
+    _product_a_validation/S_OROVLLEVEL5_productA_<WY1>_<WY2>.csv
+      columns: Part B, Part C, Year, Month, Value
+    _4_oroville_level5/oroville_level5.xlsx
+      sheets: daily, monthly, compare_level5
+  Product B:
+    _product_b_final/S_OROVLLEVEL5_productB_n01.csv ... n10.csv
+      columns: Part B, Part C, Year, Month, Value
 
 Wetness index:
   x_t = 0.97 * x_{t-1} + p_t
@@ -30,21 +51,15 @@ Wetness-to-reservation method:
       (3.5, 368.2) and (11.0, 737.3)
     i.e., linearly interpolate for wetness in (3.5, 11) and clamp outside.
 
-Outputs:
-  - Product A CSV:
-      _product_a_validation/S_OROVLLEVEL5_productA_<WY1>_<WY2>.csv
-        columns: Part B, Part C, Year, Month, Value
-  - Excel workbook:
-      oroville_level5.xlsx
-        * sheet "daily": date, wetness_index, S_target_TAF
-        * sheet "monthly": month_end, S_OROVLLEVEL5, S_target_eom_TAF
-        * sheet "compare_level5": diffs vs Level-5
+Dependencies:
+  _3_oroville_daily_precip.py (produces the daily precip input CSVs)
 """
 
 from __future__ import annotations
 
 import argparse
 import datetime as dt
+from concurrent.futures import ProcessPoolExecutor, as_completed
 from pathlib import Path
 import sys
 
@@ -59,13 +74,19 @@ _gen = get_module_generated_dir("mod_reservoir/storage_curves")
 INPUT_DIR = _gen / "output" / "_3_oroville_daily_precip"
 OUTPUT_DIR = _gen / "output" / "_4_oroville_level5"
 VALIDATION_DIR = _gen / "output" / "_product_a_validation"
+PRODUCT_B_DIR = _gen / "output" / "_product_b_final"
 DEFAULT_DSS = get_base_dir() / "CalSim3" / "__calsim_sv_default__.dss"
+N_CHUNKS = 10
 
 
 def load_daily_precip_csv(csv_path: Path) -> pd.DataFrame:
     df = pd.read_csv(csv_path)
-    df = df.copy()
-    df["date"] = pd.to_datetime(dict(year=df["year"], month=df["month"], day=df["day"]))
+    df["date"] = pd.to_datetime(
+        dict(year=df["year"], month=df["month"], day=df["day"]),
+        errors="coerce",
+    )
+    # Drop invalid dates (e.g. Feb 29 on non-leap years from WGEN)
+    df = df.dropna(subset=["date"])
     df = df.sort_values("date").reset_index(drop=True)
     return df[["date", "precip_inches"]]
 
@@ -122,7 +143,7 @@ def compute_target_storage(
     b_taf_per_day: float,
 ) -> np.ndarray:
     """
-    Eq. (13) style seasonal rule curve using fixed dates (Sep15, Oct15, Mar31),
+    Seasonal rule curve using fixed dates (Sep15, Oct15, Mar31),
     with season-year handling so Oct15->Mar31 spans across calendar years.
     """
     S = np.zeros(len(dates), dtype=float)
@@ -135,7 +156,6 @@ def compute_target_storage(
         sep15 = dt.datetime(season_year, 9, 15)
         oct15 = dt.datetime(season_year, 10, 15)
         mar31 = dt.datetime(season_year + 1, 3, 31)
-        sep15_next = dt.datetime(season_year + 1, 9, 15)
 
         if sep15 <= d < oct15:
             # ramp down from Smax at Sep15 to Smin(x_t) at Oct15
@@ -152,128 +172,164 @@ def compute_target_storage(
     return S
 
 
-def main() -> None:
-    parser = argparse.ArgumentParser()
-
-    parser.add_argument("--input-dir", default=str(INPUT_DIR))
-    parser.add_argument("--output-dir", default=str(OUTPUT_DIR))
-
-    parser.add_argument(
-        "--daily-csv",
-        default="Oroville_Daily_Precip_ProductA_Scenario1.csv",
-        help="Daily precip input CSV filename (inside input-dir)",
-    )
-    parser.add_argument(
-        "--dss-file",
-        default=str(DEFAULT_DSS),
-        help="CalSim DSS file containing S_OROVLLEVEL5",
-    )
-
-    parser.add_argument("--summer-pool-taf", type=float, default=3425.2)
-    parser.add_argument("--b-taf-per-day", type=float, default=10.0)
-    parser.add_argument("--xinit-prevday", type=float, default=3.5, help="Wetness index on day BEFORE first record (used only for first day)")
-
-    args = parser.parse_args()
-
-    input_dir = Path(args.input_dir)
-    output_dir = Path(args.output_dir)
-    output_dir.mkdir(parents=True, exist_ok=True)
-
-    daily_path = input_dir / args.daily_csv
-    dss_path = Path(args.dss_file)
-
-    for p in [daily_path, dss_path]:
-        if not p.exists():
-            raise FileNotFoundError(f"Required input not found: {p}")
-
-    daily_in = load_daily_precip_csv(daily_path)
-    level5 = load_level5(dss_path)
-
+def compute_storage_from_precip(daily_csv_path: Path, smax: float, b_taf_per_day: float,
+                      x_init_prevday: float) -> tuple[pd.DataFrame, pd.DataFrame]:
+    """Run the full pipeline for one precip CSV and return monthly EOM DataFrame."""
+    daily_in = load_daily_precip_csv(daily_csv_path)
     dates = daily_in["date"].dt.to_pydatetime()
     precip = daily_in["precip_inches"].fillna(0.0).to_numpy(dtype=float)
 
-    wet = compute_wetness_index(precip=precip, x_init_prevday=float(args.xinit_prevday), a=0.97)
-    smax = float(args.summer_pool_taf)
+    wet = compute_wetness_index(precip=precip, x_init_prevday=x_init_prevday, a=0.97)
 
-    # -----------------
-    # Endpoints-only interpolation
-    # -----------------
-    # reservation(wet) from ONLY two points:
-    #   wet<=3.5 => 368.2
-    #   wet>=11  => 737.3
-    # linear in between
     res = np.interp(wet, [3.5, 11.0], [368.2, 737.3]).astype(float)
-
     smin = smax - res
     S_target = compute_target_storage(
         dates=np.array(dates, dtype=object),
         smin=smin,
         smax=smax,
-        b_taf_per_day=float(args.b_taf_per_day),
+        b_taf_per_day=b_taf_per_day,
     )
 
-    # -----------------
-    # Daily output (minimal)
-    # -----------------
-    daily_out = pd.DataFrame(
-        {
-            "date": pd.to_datetime(dates),
-            "wetness_index": wet,
-            "S_target_TAF": S_target,
-        }
-    )
+    daily_out = pd.DataFrame({
+        "date": pd.to_datetime(dates),
+        "wetness_index": wet,
+        "S_target_TAF": S_target,
+    })
 
-    # -----------------
-    # Monthly EOM -> Product A CSV
-    # -----------------
     tmp = daily_out.set_index("date")
     monthly = tmp.resample("M").agg(
         S_target_eom_TAF=("S_target_TAF", "last"),
     ).reset_index().rename(columns={"date": "month_end"})
 
-    # Merge with historical Level-5
-    monthly = monthly.merge(level5, on="month_end", how="left")
+    return daily_out, monthly
 
-    # Water year range
-    monthly["WY"] = monthly["month_end"].dt.year + (monthly["month_end"].dt.month >= 10).astype(int)
-    wy_min = int(monthly["WY"].min())
-    wy_max = int(monthly["WY"].max())
 
-    # Product A format: Part B, Part C, Year, Month, Value (from WY 1972)
-    start_wy = 1972
-    val_mask = monthly["WY"] >= start_wy
-    val_monthly = monthly.loc[val_mask]
+def _process_one_chunk(csv_path: Path, smax: float, b_taf_per_day: float,
+                       x_init_prevday: float, out_csv: Path) -> str:
+    """Process a single Product B chunk. Top-level for ProcessPoolExecutor."""
+    _, monthly_b = compute_storage_from_precip(csv_path, smax, b_taf_per_day, x_init_prevday)
     val_df = pd.DataFrame({
         "Part B": "S_OROVLLEVEL5",
         "Part C": "STORAGE-LEVEL",
-        "Year": val_monthly["month_end"].dt.year.values,
-        "Month": val_monthly["month_end"].dt.month.values,
-        "Value": val_monthly["S_target_eom_TAF"].values,
+        "Year": monthly_b["month_end"].dt.year.values,
+        "Month": monthly_b["month_end"].dt.month.values,
+        "Value": monthly_b["S_target_eom_TAF"].values,
     })
     val_df = val_df.dropna(subset=["Value"])
     val_df = val_df.sort_values(["Part B", "Part C", "Year", "Month"]).reset_index(drop=True)
-
-    VALIDATION_DIR.mkdir(parents=True, exist_ok=True)
-    out_csv = VALIDATION_DIR / f"S_OROVLLEVEL5_productA_{start_wy}_{wy_max}.csv"
     val_df.to_csv(out_csv, index=False)
+    return str(out_csv)
 
-    # -----------------
-    # Excel workbook
-    # -----------------
-    # Compare sheet (months where Level-5 exists)
-    compare = monthly.dropna(subset=["S_OROVLLEVEL5"]).copy()
-    compare["diff_eom_TAF"] = compare["S_target_eom_TAF"] - compare["S_OROVLLEVEL5"]
-    compare["abs_diff_eom_TAF"] = compare["diff_eom_TAF"].abs()
 
-    out_xlsx = output_dir / "oroville_level5.xlsx"
-    with pd.ExcelWriter(out_xlsx, engine="openpyxl") as writer:
-        daily_out.to_excel(writer, sheet_name="daily", index=False)
-        monthly.drop(columns=["WY"]).to_excel(writer, sheet_name="monthly", index=False)
-        compare.drop(columns=["WY"]).to_excel(writer, sheet_name="compare_level5", index=False)
+def main() -> None:
+    parser = argparse.ArgumentParser(
+        description="Compute Oroville rule-curve level5 storage from wetness index.",
+    )
+    parser.add_argument(
+        "--product", choices=["A", "B", "both"], default="both",
+        help="Which product to run: A, B, or both (default: both)",
+    )
+    parser.add_argument(
+        "--chunks", nargs="+", type=int,
+        default=list(range(1, N_CHUNKS + 1)),
+        help="Chunk numbers to process for Product B, 1-10 (default: all)",
+    )
 
-    print(f"x_init_prevday used (only at start of record): {float(args.xinit_prevday):.3f}")
-    print(f"Wrote: {out_csv}")
-    print(f"Wrote: {out_xlsx}")
+    args = parser.parse_args()
+
+    input_dir = INPUT_DIR
+    output_dir = OUTPUT_DIR
+    output_dir.mkdir(parents=True, exist_ok=True)
+
+    smax = 3425.2
+    b_taf = 10.0
+    x_init = 3.5
+
+    # =====================
+    # Product A
+    # =====================
+    if args.product in ("A", "both"):
+        daily_path = input_dir / "Oroville_Daily_Precip_ProductA_Scenario1.csv"
+        dss_path = DEFAULT_DSS
+
+        for p in [daily_path, dss_path]:
+            if not p.exists():
+                raise FileNotFoundError(f"Required input not found: {p}")
+
+        daily_out, monthly = compute_storage_from_precip(daily_path, smax, b_taf, x_init)
+        level5 = load_level5(dss_path)
+
+        # Merge with historical Level-5
+        monthly = monthly.merge(level5, on="month_end", how="left")
+
+        # Water year range
+        monthly["WY"] = monthly["month_end"].dt.year + (monthly["month_end"].dt.month >= 10).astype(int)
+        wy_max = int(monthly["WY"].max())
+
+        # Product A format: Part B, Part C, Year, Month, Value (from WY 1972)
+        start_wy = 1972
+        val_mask = monthly["WY"] >= start_wy
+        val_monthly = monthly.loc[val_mask]
+        val_df = pd.DataFrame({
+            "Part B": "S_OROVLLEVEL5",
+            "Part C": "STORAGE-LEVEL",
+            "Year": val_monthly["month_end"].dt.year.values,
+            "Month": val_monthly["month_end"].dt.month.values,
+            "Value": val_monthly["S_target_eom_TAF"].values,
+        })
+        val_df = val_df.dropna(subset=["Value"])
+        val_df = val_df.sort_values(["Part B", "Part C", "Year", "Month"]).reset_index(drop=True)
+
+        VALIDATION_DIR.mkdir(parents=True, exist_ok=True)
+        out_csv = VALIDATION_DIR / f"S_OROVLLEVEL5_productA_{start_wy}_{wy_max}.csv"
+        val_df.to_csv(out_csv, index=False)
+
+        # Excel workbook
+        compare = monthly.dropna(subset=["S_OROVLLEVEL5"]).copy()
+        compare["diff_eom_TAF"] = compare["S_target_eom_TAF"] - compare["S_OROVLLEVEL5"]
+        compare["abs_diff_eom_TAF"] = compare["diff_eom_TAF"].abs()
+
+        out_xlsx = output_dir / "oroville_level5.xlsx"
+        with pd.ExcelWriter(out_xlsx, engine="openpyxl") as writer:
+            daily_out.to_excel(writer, sheet_name="daily", index=False)
+            monthly.drop(columns=["WY"]).to_excel(writer, sheet_name="monthly", index=False)
+            compare.drop(columns=["WY"]).to_excel(writer, sheet_name="compare_level5", index=False)
+
+        print(f"x_init_prevday used (only at start of record): {x_init}")
+        print(f"Wrote: {out_csv}")
+        print(f"Wrote: {out_xlsx}")
+
+    # =====================
+    # Product B
+    # =====================
+    if args.product in ("B", "both"):
+        PRODUCT_B_DIR.mkdir(parents=True, exist_ok=True)
+
+        # Build work list
+        jobs = []
+        for chunk_num in args.chunks:
+            chunk_tag = f"n{chunk_num:02d}"
+            csv_path = input_dir / f"oroville_daily_precip_productB_{chunk_tag}.csv"
+            if not csv_path.exists():
+                print(f"  WARNING: {csv_path} not found, skipping chunk {chunk_tag}")
+                continue
+            out_csv = PRODUCT_B_DIR / f"S_OROVLLEVEL5_productB_{chunk_tag}.csv"
+            jobs.append((chunk_tag, csv_path, out_csv))
+
+        if not jobs:
+            print("  No Product B chunk files found.")
+        else:
+            n_workers = min(N_CHUNKS, len(jobs))
+            print(f"  Processing {len(jobs)} chunks ({n_workers} workers) ...")
+            with ProcessPoolExecutor(max_workers=n_workers) as pool:
+                futures = {
+                    pool.submit(_process_one_chunk, csv_path, smax, b_taf, x_init, out_csv): tag
+                    for tag, csv_path, out_csv in jobs
+                }
+                for fut in as_completed(futures):
+                    tag = futures[fut]
+                    result = fut.result()  # raises if the worker failed
+                    print(f"  Wrote: {result}")
 
 
 if __name__ == "__main__":
