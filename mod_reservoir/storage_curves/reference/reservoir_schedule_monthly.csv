@@ -1,0 +1,13 @@
+partb,partc,month_wy,target_storage_taf,pattern
+S_PEDROLEVEL4,STORAGE-LEVEL,October,1660,repeating_annual
+S_PEDROLEVEL4,STORAGE-LEVEL,November,1690,repeating_annual
+S_PEDROLEVEL4,STORAGE-LEVEL,December,1690,repeating_annual
+S_PEDROLEVEL4,STORAGE-LEVEL,January,1690,repeating_annual
+S_PEDROLEVEL4,STORAGE-LEVEL,February,1690,repeating_annual
+S_PEDROLEVEL4,STORAGE-LEVEL,March,1690,repeating_annual
+S_PEDROLEVEL4,STORAGE-LEVEL,April,1713,repeating_annual
+S_PEDROLEVEL4,STORAGE-LEVEL,May,2002,repeating_annual
+S_PEDROLEVEL4,STORAGE-LEVEL,June,2030,repeating_annual
+S_PEDROLEVEL4,STORAGE-LEVEL,July,1910,repeating_annual
+S_PEDROLEVEL4,STORAGE-LEVEL,August,1790,repeating_annual
+S_PEDROLEVEL4,STORAGE-LEVEL,September,1700,repeating_annual
