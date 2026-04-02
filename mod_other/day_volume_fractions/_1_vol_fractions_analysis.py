@@ -1,3 +1,39 @@
+"""
+Day-Volume Fraction Analysis and WY Matching Validation
+=======================================================
+Reverse-engineers the historical bootstrap methodology used to assign
+daily VOL-FRACTION patterns to water years 1921-1954 by matching them
+to observation-based candidate years 1955-2003 via annual flow index.
+
+Workflow
+--------
+1. Extract all VOL-FRACTION records (Part C) from CalSim baseline DSS.
+2. Extract reference inflow series (14 Part B/C pairs) from the same DSS.
+3. Compute annual flow index per water year (sum of all reference inflows).
+4. Match each target WY (1921-1954) to the nearest candidate WY (1955-2003).
+5. Validate matches by computing RMSE of vol-fraction pattern vectors.
+
+Dependencies
+------------
+None -- reads directly from CalSim baseline DSS (no upstream scripts required).
+
+Inputs
+------
+- CalSim baseline DSS: BASE/CalSim3/__calsim_sv_default__.dss
+    VOL-FRACTION records and reference inflow series
+- Reference inflows:   reference/reference_inflows.csv
+    14 Part B / Part C pairs defining the flow index components
+
+Outputs
+-------
+- GENERATED/mod_other/day_volume_fractions/output/_1_vol_fractions_analysis/
+    wy_matches.csv  (target WY, matched candidate WY, flow indices, RMSE)
+
+Usage
+-----
+    python mod_other/day_volume_fractions/_1_vol_fractions_analysis.py
+"""
+
 # %% Imports
 import sys
 from pathlib import Path
