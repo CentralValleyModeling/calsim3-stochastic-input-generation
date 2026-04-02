@@ -1566,8 +1566,12 @@ if not CLI_ARGS.skip_comparison:
                 # One plot per SV
                 n_plotted = 0
                 for (partb, partc), sv_cmp in cat_cmp.groupby(["Part_B", "Part_C"]):
-                    sv_cmp = sv_cmp.sort_values("Month")
-                    months_data = sv_cmp["Month"].values
+                    wy_month_nums = [10, 11, 12, 1, 2, 3, 4, 5, 6, 7, 8, 9]
+                    month_pos = {month: i + 1 for i, month in enumerate(wy_month_nums)}
+                    sv_cmp = sv_cmp.copy()
+                    sv_cmp["Month_Position"] = sv_cmp["Month"].map(month_pos)
+                    sv_cmp = sv_cmp.sort_values("Month_Position")
+                    months_data = sv_cmp["Month_Position"].values
 
                     fig, ax = plt.subplots(figsize=(5.0, 2.5))
 
