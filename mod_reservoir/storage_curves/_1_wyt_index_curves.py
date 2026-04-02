@@ -557,21 +557,98 @@ def main():
     wyt_product_dir = _WYT_GEN / "output" / "_1_calc_WYTs"
 
     def _fill_from_dss(df: pd.DataFrame) -> None:
-        """Fill NaN Values in-place using historical DSS actuals."""
-        if df["Value"].isna().any():
-            dates = pd.to_datetime(
-                df[["Year", "Month"]].assign(Day=1).rename(
-                    columns={"Year": "year", "Month": "month", "Day": "day"}
-                )
-            ) + pd.offsets.MonthEnd(0)
-            for idx in df.index[df["Value"].isna()]:
-                key = (df.at[idx, "Part B"], df.at[idx, "Part C"])
+        """
+        Fill NaN values in-place using historical DSS actuals, but only for the
+        known initial boundary gap (first few months per Part B/C).
+
+        Any NaNs outside the initial boundary window, or NaNs that remain after
+        attempting the boundary fill, will raise a ValueError instead of being
+        silently back-filled.
+        """
+        # Quick exit if there are no NaNs at all
+        if not df["Value"].isna().any():
+            return
+
+        # Construct end-of-month timestamps corresponding to Year/Month columns
+        dates = (
+            pd.to_datetime(
+                df[["Year", "Month"]]
+                .assign(Day=1)
+                .rename(columns={"Year": "year", "Month": "month", "Day": "day"})
+            )
+            + pd.offsets.MonthEnd(0)
+        )
+
+        # Allow DSS fills only in the first few months of each Part B/C series
+        boundary_months = 3  # corresponds to first Oct–Dec when using WY alignment
+
+        nan_mask = df["Value"].isna()
+
+        # First, validate that all NaNs are within the allowed boundary window
+        invalid_nan_info = []
+        for (part_b, part_c), grp_idx in df.groupby(["Part B", "Part C"]).groups.items():
+            grp_idx = list(grp_idx)
+            grp = df.loc[grp_idx].sort_values(["Year", "Month"])
+            grp_nan = grp["Value"].isna()
+            if not grp_nan.any():
+                continue
+
+            # Indices of the first `boundary_months` rows in time order
+            boundary_idx = set(grp.head(boundary_months).index)
+            nan_idx = set(grp[grp_nan].index)
+
+            # NaNs that occur outside the initial boundary window are invalid
+            invalid_idx = nan_idx.difference(boundary_idx)
+            if invalid_idx:
+                # Capture a few offending rows for the error message
+                for bad in sorted(invalid_idx)[:5]:
+                    row = df.loc[bad]
+                    invalid_nan_info.append(
+                        f"(Part B={row['Part B']}, Part C={row['Part C']}, "
+                        f"Year={int(row['Year'])}, Month={int(row['Month'])})"
+                    )
+
+        if invalid_nan_info:
+            details = "; ".join(invalid_nan_info)
+            raise ValueError(
+                "Encountered NaN Value entries outside the allowed initial "
+                "boundary gap when generating reservoir WYT index curves. "
+                "These likely indicate missing schedule rows, WYT labels, or "
+                "merge issues that must be fixed upstream. Offending points: "
+                f"{details}"
+            )
+
+        # Perform the allowed DSS-based fills within the boundary window
+        for (part_b, part_c), grp_idx in df.groupby(["Part B", "Part C"]).groups.items():
+            grp_idx = list(grp_idx)
+            grp = df.loc[grp_idx].sort_values(["Year", "Month"])
+            boundary_idx = grp.head(boundary_months).index
+            # Only consider NaNs within the boundary window
+            fill_idx = [i for i in boundary_idx if df.at[i, "Value"] is np.nan or pd.isna(df.at[i, "Value"])]
+            for idx in fill_idx:
+                key = (part_b, part_c)
                 dt = dates[idx]
                 if key in dss_data:
                     val = dss_data[key].get(dt, np.nan)
                     if not np.isnan(val):
                         df.at[idx, "Value"] = val
 
+        # Final safety check: no NaNs should remain anywhere
+        remaining_nans = df["Value"].isna()
+        if remaining_nans.any():
+            bad_rows = df[remaining_nans].head(5)
+            examples = [
+                f"(Part B={row['Part B']}, Part C={row['Part C']}, "
+                f"Year={int(row['Year'])}, Month={int(row['Month'])})"
+                for _, row in bad_rows.iterrows()
+            ]
+            raise ValueError(
+                "NaN Value entries remain after attempting allowed DSS "
+                "boundary gap fill in reservoir WYT index curves. This "
+                "likely indicates missing DSS coverage or schedule issues "
+                "that must be addressed. Example points: "
+                + "; ".join(examples)
+            )
     for prod in products:
         print(f"\n{'='*60}")
         print(f"Generating Product {prod}")
