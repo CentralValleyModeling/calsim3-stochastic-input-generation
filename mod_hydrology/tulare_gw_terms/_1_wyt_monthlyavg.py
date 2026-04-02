@@ -2,8 +2,8 @@
 
 Outputs are written under:
   <generated>/output/_1_wyt_monthlyavg/monthly_avg_historical/
-  <generated>/output/_1_wyt_monthlyavg/product_a/_product_a_validation/
-  <generated>/output/_1_wyt_monthlyavg/product_b/_product_b_final/
+  <generated>/output/_1_wyt_monthlyavg/_product_a_validation/
+  <generated>/output/_1_wyt_monthlyavg/_product_b_final/
 
 Framework module:
   utils/wyt_monthlyavg_framework.py
@@ -51,7 +51,6 @@ OUTPUT_PREFIX = "tulare_gw_terms"
 TARGET_PRODUCT = "Both"
 
 _WYT_INPUT_DIRS = {"A": "Product_A", "B": "Product_B"}
-_OUTPUT_DIRS = {"A": "product_a", "B": "product_b"}
 
 # Where the historical WYT CSVs live
 wyt_hist_dir = str(_REPO_DIR / "mod_hydrology" / "water_year_types" / "reference")
@@ -74,12 +73,10 @@ def _to_sv_format(df: pd.DataFrame) -> pd.DataFrame:
 
 def _write_targets(product_key: str, prefix: str, targets) -> None:
     """Write final SV-format CSVs (Part B, Part C, Year, Month, Value)."""
-    prod_dir = BASE_RESULTS_DIR / _OUTPUT_DIRS[product_key]
-
     print(f"\nProduct {product_key} targets:")
 
     if product_key == "B":
-        final_dir = prod_dir / "_product_b_final"
+        final_dir = BASE_RESULTS_DIR / "_product_b_final"
         final_dir.mkdir(parents=True, exist_ok=True)
         for name, df in targets.items():
             sv = _to_sv_format(df)
@@ -89,7 +86,7 @@ def _write_targets(product_key: str, prefix: str, targets) -> None:
             print(f"  - {out}")
 
     elif product_key == "A":
-        val_dir = prod_dir / "_product_a_validation"
+        val_dir = BASE_RESULTS_DIR / "_product_a_validation"
         val_dir.mkdir(parents=True, exist_ok=True)
         for name, df in targets.items():
             sv = _to_sv_format(df)
