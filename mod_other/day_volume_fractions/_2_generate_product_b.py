@@ -28,6 +28,7 @@ Outputs
 - GENERATED/mod_other/day_volume_fractions/output/_product_b_final/
     vol_fraction_productB_n01.csv ... n10.csv
         Columns: Part B, Part C, Year, Month, Value
+- GENERATED/mod_other/day_volume_fractions/output/_2_generate_product_b/
     wy_matches_n01.csv ... n10.csv
         Columns: WY, matched_historical_WY, annual_flow_synthetic, annual_flow_historical
 
