@@ -22,6 +22,7 @@ Workflow
 Diagnostic outputs  (all written to ``product_b_compilation/``)
 ------------------------------------------------------------------------
 - ``compiled_input_files/<module>/*.csv``  -- local copies of source CSVs
+- ``_product_b_compiled_sv/ProductB_SV_n01.csv`` .. ``n10.csv``
 - ``_product_b_compiled_sv/ProductB_SV_n01.dss`` .. ``n10.dss``
 - ``inventory_expected_modified.csv``
 - ``inventory_expected_missing.csv``
@@ -990,6 +991,11 @@ for chunk_idx in ACTIVE_CHUNKS:
         ["Part B", "Part C", "Year", "Month"]
     ).reset_index(drop=True)
 
+    # Write per-chunk compiled CSV
+    COMPILED_DIR.mkdir(parents=True, exist_ok=True)
+    chunk_csv_path = COMPILED_DIR / f"ProductB_SV_{tag}.csv"
+    compiled.to_csv(chunk_csv_path, index=False)
+
     compiled_chunks[tag] = compiled
 
     sv_keys = set(zip(compiled["Part B"], compiled["Part C"]))
@@ -1571,8 +1577,12 @@ if not CLI_ARGS.skip_comparison:
                     # One plot per SV
                     n_plotted = 0
                     for (partb, partc), sv_cmp in cat_cmp.groupby(["Part_B", "Part_C"]):
-                        sv_cmp = sv_cmp.sort_values("Month")
-                        months_data = sv_cmp["Month"].values
+                        wy_month_nums = [10, 11, 12, 1, 2, 3, 4, 5, 6, 7, 8, 9]
+                        month_pos = {month: i + 1 for i, month in enumerate(wy_month_nums)}
+                        sv_cmp = sv_cmp.copy()
+                        sv_cmp["Month_Position"] = sv_cmp["Month"].map(month_pos)
+                        sv_cmp = sv_cmp.sort_values("Month_Position")
+                        months_data = sv_cmp["Month_Position"].values
 
                         fig, ax = plt.subplots(figsize=(5.0, 2.5))
 
@@ -1632,6 +1642,7 @@ lines = [
     f"  Baseline DSS:  {BASELINE_DSS.name}",
     f"  Inventory:     {INVENTORY_XLSX.name}",
     f"  Source CSVs:   {COMPILED_CSV}",
+    f"  CSV output:    {COMPILED_DIR}",
     f"  DSS output:    {COMPILED_DIR}",
     "",
     f"  Chunks compiled: {len(chunk_stats)} / {N_CHUNKS}",
