@@ -1073,6 +1073,7 @@ if not CLI_ARGS.skip_dss:
     use_junction = len(str(COMPILED_DIR / "ProductB_SV_n01.dss")) > _PATH_LIMIT
     if use_junction:
         _create_junction(COMPILED_DIR)
+        atexit.register(_remove_junction)
 
     def _get_dss_str(path):
         if use_junction:
