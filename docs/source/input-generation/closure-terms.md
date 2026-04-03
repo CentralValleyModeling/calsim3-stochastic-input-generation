@@ -4,7 +4,7 @@
 ```{admonition} Repository Module
 :class: tip
 
-**Module:** `mod_hydrology/closure_terms/`  
+**Module:** `mod_other/closure_terms/`  
 Water balance closure adjustments
 ```
 

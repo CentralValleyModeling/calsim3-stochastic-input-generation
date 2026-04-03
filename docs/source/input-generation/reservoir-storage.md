@@ -1,5 +1,5 @@
 
-# Reservoir Storage Curves (7 Variables)
+# Reservoir Storage Curves (9 Variables)
 
 ```{admonition} Repository Module
 :class: tip

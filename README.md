@@ -24,15 +24,38 @@ conda install pandss -c dwr-cvm
 
 ```
 root/
-├── mod_forcing/          VIC model forcing and climate extractions
-├── mod_hydrology/        CalSimHydro rim inflow, Delta, WYTs etc.
-├── mod_reservoir/        Reservoir evaporation and storage
-├── mod_other/            Day volume fractions, instream flows, upper watershed, misc SVs
-├── mod_postprocessing/   Final DSS compilation, Product A validation, and Product B analysis
-├── utils/                Shared utilities (quantile mapping, flow indices, WYT framework)
-├── inventory/            Master CalSim SV inventory
-├── config_default.json   Default config (data_dir = ./data)
-└── docs/                 Sphinx documentation
+├── mod_forcing/              
+│   ├── vic/                  Append wind to WGEN, compile rim inflows from VIC fluxes
+│   └── climate/              Point precip, basin-avg climate (T, PPT, VPD)
+│
+├── mod_hydrology/            
+│   ├── calsimhydro/          Sac Valley: compile precip/ET, postprocess Product A & B
+│   ├── calsimhydro_ee/       External Elements: compile precip, postprocess
+│   ├── rim_inflow/           Quantile-map VIC inflows, correlation analysis, NSE metrics
+│   ├── water_year_types/     Sac 40-30-30, SJ 60-20-20 WYT classification
+│   ├── delta_channel_depletion/  DETAW/DCD Delta
+│   ├── small_watersheds/     SWS precipitation compilation and postprocessing
+│   └── tulare_gw_terms/      Tulare GW terms: WYT monthly average reconstruction
+│
+├── mod_reservoir/            
+│   ├── evaporation/          Hargreaves-Samani for 95 reservoirs
+│   └── storage_curves/       WYT index-based curves, Mammoth Pool QM, Oroville Level 5
+│
+├── mod_other/                
+│   ├── closure_terms/        Closure term calculation
+│   ├── day_volume_fractions/ Day-volume fraction analysis and Product B generation
+│   ├── instream_flows/       Feather River minimum instream flow, SJR restoration
+│   ├── miscellaneous/        Misc SVs (extract baseline, NDOI accretion, WYT/hybrid/QM)
+│   └── upper_watershed/      Lower Yuba, Don Pedro: WYT/QM/hybrid reconstruction
+│
+├── postprocessing/           
+│   └── sv_compile/           Merge all module outputs -> DSS (Product A & B)
+│
+├── utils/                    Shared utilities (quantile mapping, flow indices, WYT framework)
+├── inventory/                Master CalSim SV inventory spreadsheet
+├── docs/                     Sphinx documentation
+├── config_default.json       Default config (data_dir = ./data)
+└── environment.yml           Conda environment spec
 ```
 
 ---

@@ -1,5 +1,5 @@
 
-# Rim Inflows (206 Variables)
+# Rim Inflows (241 Variables)
 
 ```{admonition} Repository Module
 :class: tip
@@ -9,13 +9,13 @@ Quantile mapping of VIC inflows to CalSim rim inflow series
 ```
 
 
-Rim inflows represent streamflow entering the CalSim 3 model domain from surrounding watersheds. They are the primary hydrologic drivers of reservoir inflows and river flows throughout the Central Valley, and their accurate reconstruction is arguably the single most consequential component of the stochastic generation effort. All 206 rim inflow locations have been processed through the quantile mapping methodology with comprehensive validation.
+Rim inflows represent streamflow entering the CalSim 3 model domain from surrounding watersheds. They are the primary hydrologic drivers of reservoir inflows and river flows throughout the Central Valley, and their accurate reconstruction is arguably the single most consequential component of the stochastic generation effort. Of the 241 total rim inflow variables, 227 require stochastic generation (13 have missing historical data and 1 is unused). All 227 generated rim inflow locations have been processed through the quantile mapping methodology with comprehensive validation.
 
 ## Methodology
 
 ### Correlation Analysis and VIC Selection
 
-The methodology development began with a systematic correlation analysis, matching each of the approximately 252 CalSim inflow variables against 32 modeled streamflow locations from both SAC-SMA and VIC hydrologic models to identify the strongest statistical predictors. Of the 206 non-missing variables, all had direct VIC counterparts, with 80–85% showing correlations exceeding 0.6 and approximately 50% exceeding 0.7.
+The methodology development began with a systematic correlation analysis, matching each of the approximately 252 CalSim inflow variables against 32 modeled streamflow locations from both SAC-SMA and VIC hydrologic models to identify the strongest statistical predictors. Of the 227 generated variables, all had direct VIC counterparts, with 80% showing correlations exceeding 0.6 and approximately 50% exceeding 0.7.
 
 An important early decision point arose when SAC-SMA showed higher average R² values than VIC, attributed to SAC-SMA's superior watershed-level calibration. However, the team elected to maintain VIC as the basis model for consistency with the CalSim 3 framework and to avoid the complexity of managing multiple hydrologic models within the generation pipeline. VIC-modeled flows carry an approximately 25–30% positive bias compared to CalSim 3 historical inputs, but quantile mapping is specifically designed to correct such distributional mismatches, making the magnitude of raw bias less important than the strength of the underlying correlation.
 
@@ -29,7 +29,7 @@ VIC model streamflow serves as the basis for quantile mapping to CalSim 3 histor
 
 To ensure mass balance consistency across river basins after quantile mapping, an anchor watershed adjustment methodology is applied. The approach recognizes that VIC model outputs are more reliable at integrated watershed scales than for individual small tributaries. Major downstream locations serve as "anchor" control points—quantile-mapped unimpaired watershed flows (e.g., UNIMP_FOLS)—and upstream tributary flows (e.g., I_ALD002) are adjusted to ensure they sum correctly to the anchor totals.
 
-Six major anchor watersheds require adjustment: Folsom (FOLS, 46 tributaries—the largest), Oroville (OROV), Sacramento River at Bend Bridge (SRBB), Yuba (YUBA), Stanislaus (ST), and Tuolumne (TU). A total of 116 of the 206 tributary flows are adjusted through this process. Four additional anchor watersheds—Shasta, Trinity, Merced, and San Joaquin—have no assigned sub-tributaries and require no adjustment.
+Six major anchor watersheds require adjustment: Folsom (FOLS, 46 tributaries—the largest), Oroville (OROV), Sacramento River at Bend Bridge (SRBB), Yuba (YUBA), Stanislaus (ST), and Tuolumne (TU). A total of 116 of the 227 tributary flows are adjusted through this process. Four additional anchor watersheds—Shasta, Trinity, Merced, and San Joaquin—have no assigned sub-tributaries and require no adjustment.
 
 The adjustment formula distributes any discrepancy proportionally among tributaries based on their contribution to the total:
 

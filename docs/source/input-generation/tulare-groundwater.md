@@ -4,7 +4,7 @@
 ```{admonition} Repository Module
 :class: tip
 
-**Module:** `mod_hydrology/tulare_gw/`  
+**Module:** `mod_hydrology/tulare_gw_terms/`  
 Tulare Basin groundwater terms via WYT averaging
 ```
 

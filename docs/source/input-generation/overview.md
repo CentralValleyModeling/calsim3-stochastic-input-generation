@@ -56,8 +56,8 @@ Each input category maps to a specific module in the repository. The table below
 | Climate | `mod_forcing/climate/` | Direct extraction from WGEN |
 | Upper Watershed Modules | `mod_other/upper_watershed/` | Hybrid QM / WYT averaging |
 | Day-Volume Fraction | `mod_other/day_volume_fractions/` | Date-stitching (bootstrap) |
-| Closure Terms | `mod_hydrology/closure_terms/` | WYT monthly averaging |
-| Tulare Groundwater Terms | `mod_hydrology/tulare_gw/` | WYT monthly averaging |
+| Closure Terms | `mod_other/closure_terms/` | WGEN date-weighted averaging |
+| Tulare Groundwater Terms | `mod_hydrology/tulare_gw_terms/` | WYT monthly averaging |
 | Salinity | `inventory/screening/salinity/` | Constant/repeating |
 | Other | `mod_other/miscellaneous/` | Mixed (WYT avg, direct calc, constant) |
 | Water Year Types | `mod_hydrology/water_year_types/` | Sac 40-30-30 / SJ 60-20-20 |

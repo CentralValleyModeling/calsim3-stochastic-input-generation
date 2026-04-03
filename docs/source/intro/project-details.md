@@ -40,19 +40,18 @@ calsim3-stochastic-input-generation/
 │   ├── small_watersheds/     #   Small tributary groundwater recharge
 │   ├── delta_channel_depletion/  # Delta ag demands (DCD/DETAW)
 │   ├── water_year_types/     #   Sac/SJ water year type classification
-│   ├── closure_terms/        #   Water balance closure adjustments
-│   └── tulare_gw/            #   Tulare Basin groundwater terms
+│   └── tulare_gw_terms/      #   Tulare Basin groundwater terms
 ├── mod_reservoir/            # Reservoir-specific terms
 │   ├── evaporation/          #   Hargreaves-Samani for 95 reservoirs
 │   └── storage_curves/       #   Storage reconstruction (Oroville, Mammoth)
 ├── mod_other/                # Ancillary & operational terms
+│   ├── closure_terms/        #   Water balance closure adjustments
 │   ├── day_volume_fractions/ #   Monthly-to-daily disaggregation
 │   ├── instream_flows/       #   Minimum flow requirements
 │   ├── upper_watershed/      #   Upper watershed modules (Yuba, Don Pedro)
 │   └── miscellaneous/        #   B120 forecasts, WYT indexes, NDOI, etc.
 ├── postprocessing/           # Final compilation & validation
-│   ├── sv_compile/           #   Merge all outputs → DSS
-│   └── product_a_validation/ #   Product A vs. historical CalSim comparison
+│   └── sv_compile/           #   Merge all outputs → DSS (Product A & B)
 ├── utils/                    # Shared Python utilities
 │   ├── quantile_mapping.py   #   qmap_single() — empirical CDF interpolation
 │   ├── flow_indices.py       #   flowAggregator() — seasonal flow aggregations
