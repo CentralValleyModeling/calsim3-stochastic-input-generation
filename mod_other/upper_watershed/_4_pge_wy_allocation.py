@@ -1,5 +1,5 @@
 """
-_2_pge_wy_allocation.py
+_4_pge_wy_allocation.py
 ========================
 Reconstructs PGE_WY_ALLOCATION_SV using threshold logic on annual unimpaired
 Folsom flow, replicating the Excel spreadsheet methodology.
@@ -23,30 +23,32 @@ Products:
   - Product B (1000-yr stochastic, 10 chunks): Uses synthetic FOLSM_INFLOW
     from _10_RimInflow QMap output with the same thresholds applied directly.
 
-Input files (in ./input/):
+Input files (in ./reference/):
   - PGE_WY_ALLOCATION_config.json            : Thresholds & configuration
 
 External dependencies:
   - rim_inflow/output/_2_qmap_historical_validation/
        calsim_qmap_validation_TS.csv  (Product A FOLSM_INFLOW)
   - rim_inflow/output/_3_qmap_product_b/
-       FOLSM_INFLOW_8RI_FOL_I_qmo_n01.csv ... n10.csv  (Product B inflows)
+       FOLSM_INFLOW_qmo_n01.csv ... n10.csv  (Product B inflows)
 
 Output:
   - output/_product_a_validation/
        _pge_wy_allocation_productA_1972_2018.csv
   - output/_product_b_final/
        _pge_wy_allocation_productB_n01.csv  ...  _pge_wy_allocation_productB_n10.csv
+
+Usage
+-----
+    cd mod_other/upper_watershed && python _4_pge_wy_allocation.py
 """
 
 from __future__ import annotations
 
 import sys
 import json
-import os
 from pathlib import Path
 
-import numpy as np
 import pandas as pd
 
 # Add repo root to path for utils imports
@@ -69,8 +71,8 @@ PRODUCT_A_END_WY = 2018
 PRODUCT_B_NCHUNKS = 10
 
 # Input paths (relative to this script)
-INPUT_DIR = RUN_DIR / "input"
-CONFIG_JSON = INPUT_DIR / "PGE_WY_ALLOCATION_config.json"
+REFERENCE_DIR = RUN_DIR / "reference"
+CONFIG_JSON = REFERENCE_DIR / "PGE_WY_ALLOCATION_config.json"
 
 # RimInflow directories
 _rim_gen = get_module_generated_dir("mod_hydrology/rim_inflow")
@@ -294,7 +296,7 @@ def read_folsm_product_b(chunk: int) -> pd.DataFrame:
     DataFrame
         Columns: Year, Month, FOLSM_INFLOW_TAF.
     """
-    fname = f"FOLSM_INFLOW_8RI_FOL_I_qmo_n{chunk:02d}.csv"
+    fname = f"FOLSM_INFLOW_qmo_n{chunk:02d}.csv"
     fpath = RIM_INFLOW_PRODUCT_B_DIR / fname
     if not fpath.exists():
         raise FileNotFoundError(f"Product B FOLSM_INFLOW not found: {fpath}")
@@ -335,6 +337,15 @@ def run_product_b(config: dict) -> list[Path]:
         wy_ratios = annual_flow_to_wy_ratio(
             df_folsm, "FOLSM_INFLOW_TAF", thresholds, default_ratio
         )
+
+        # The chunk starts at Oct 1921, so spread_ratio_to_monthly needs a WY
+        # 1921 entry to assign allocations for Oct 1921 – Apr 1922.  WY 1921
+        # cannot be computed (only 3 months of data available), so use WY 1922
+        # as the nearest proxy — same approach Product A uses for wy_before.
+        first_wy = int(wy_ratios["WY"].min())
+        wy_before = wy_ratios[wy_ratios["WY"] == first_wy].copy()
+        wy_before["WY"] = first_wy - 1
+        wy_ratios = pd.concat([wy_before, wy_ratios], ignore_index=True)
 
         n_dry = len(wy_ratios[wy_ratios["Ratio"] < 1.0])
         n_total = len(wy_ratios)
