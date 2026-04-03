@@ -36,7 +36,7 @@ import pandas as pd
 from pathlib import Path
 
 # Add repo root to path for utils imports
-sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 from utils.paths import get_base_dir, get_module_generated_dir
 
 
@@ -299,7 +299,7 @@ def write_product_b_chunks(summaries: list, output_folder):
     total_chunks     = 10
     total_needed     = skip_months + months_per_chunk * total_chunks
 
-    date_template = pd.date_range('1921-10-31', periods=months_per_chunk, freq='M')
+    date_template = pd.date_range('1921-10-31', periods=months_per_chunk, freq='ME')
     output_path = Path(output_folder)
     output_path.mkdir(parents=True, exist_ok=True)
 
@@ -394,7 +394,7 @@ def main():
     # Set up paths
     script_dir = Path(__file__).parent.resolve()
     base_dir = get_base_dir()
-    gen_dir = get_module_generated_dir("mod_climate")
+    gen_dir = get_module_generated_dir("mod_forcing/climate")
     
     # Input files
     point_locations_file = script_dir / "reference" / Path(args.locations).name
@@ -406,19 +406,20 @@ def main():
         # Historical data is in Historical_Climate folder, not WGEN
         data_folder = base_dir / "Historical_Climate"
         output_folder = gen_dir / "output" / "_1_pp_point_locations" / "historical"
+        script_output_folder = output_folder
     else:
         # Product_A or Product_B with scenario
         data_folder = base_dir / "WGEN" / args.source / args.scenario
         if args.source == 'Product_A':
             output_folder = gen_dir / "output" / "_1_pp_point_locations" / "product_a"
+            script_output_folder = output_folder
         else:
             output_folder = gen_dir / "output" / "_product_b_final"
-    
+            script_output_folder = gen_dir / "output" / "_1_pp_point_locations" / "product_b"
+
     output_folder.mkdir(parents=True, exist_ok=True)
-    
-    # Convert to string for file operations
+    script_output_folder.mkdir(parents=True, exist_ok=True)
     data_folder_str = str(data_folder)
-    
     print("="*80)
     print("EXTRACTING MONTHLY PRECIPITATION FOR PP POINT LOCATIONS")
     print("="*80)
@@ -467,7 +468,7 @@ def main():
         # Strip internal keys before writing summary CSV
         summary_rows = [{k: v for k, v in s.items() if not k.startswith('_')} for s in summaries]
         summary_df = pd.DataFrame(summary_rows)
-        summary_file = output_folder / "_summary.csv"
+        summary_file = script_output_folder / "_summary.csv"
         summary_df.to_csv(summary_file, index=False)
         print(f"\n{'='*80}")
         print(f"Processing complete!")
