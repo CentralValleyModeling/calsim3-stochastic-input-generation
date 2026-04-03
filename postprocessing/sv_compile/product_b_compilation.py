@@ -961,6 +961,7 @@ print("-" * 72)
 t0_compile = time.time()
 chunk_stats = {}           # tag -> {n_rows, n_svs, modules}
 chunk_sv_sets = {}         # tag -> set of (Part B, Part C)
+chunk_sv_month_counts = {} # tag -> Series indexed by (Part B, Part C)
 compiled_chunks = {}       # tag -> DataFrame  (kept in memory for DSS / comparison)
 
 for chunk_idx in ACTIVE_CHUNKS:
@@ -1010,6 +1011,15 @@ for chunk_idx in ACTIVE_CHUNKS:
 
     sv_keys = set(zip(compiled["Part B"], compiled["Part C"]))
     chunk_sv_sets[tag] = sv_keys
+
+    # Per-SV month counts for this chunk
+    sv_counts = compiled.groupby(["Part B", "Part C"]).size()
+    chunk_sv_month_counts[tag] = sv_counts
+    wrong_months = sv_counts[sv_counts != 1200]
+    if not wrong_months.empty:
+        print(f"  {tag}: WARNING -- {len(wrong_months)} SVs with != 1200 months:")
+        for (b, c), cnt in wrong_months.items():
+            print(f"    {b} / {c}: {cnt} months")
 
     chunk_stats[tag] = {
         "n_rows": len(compiled),
@@ -1218,12 +1228,30 @@ bool_cols = [c for c in ACTIVE_TAGS if c in coverage_df.columns]
 if bool_cols:
     coverage_df["All_Chunks"] = coverage_df[bool_cols].all(axis=1)
 
+# Add per-chunk month counts and a summary flag for unexpected counts
+for tag in ACTIVE_TAGS:
+    sv_counts = chunk_sv_month_counts.get(tag, pd.Series(dtype=int))
+    coverage_df[f"months_{tag}"] = coverage_df.apply(
+        lambda r: sv_counts.get((r["Part_B"], r["Part_C"]), 0), axis=1
+    )
+month_cols = [f"months_{t}" for t in ACTIVE_TAGS if f"months_{t}" in coverage_df.columns]
+if month_cols:
+    coverage_df["Min_Months"] = coverage_df[month_cols].replace(0, pd.NA).min(axis=1)
+    coverage_df["Max_Months"] = coverage_df[month_cols].replace(0, pd.NA).max(axis=1)
+    coverage_df["Months_Uniform"] = coverage_df["Min_Months"] == coverage_df["Max_Months"]
+
 fp = OUTPUT_DIR / "sv_coverage_by_chunk.csv"
 coverage_df.to_csv(fp, index=False)
 incomplete = coverage_df[~coverage_df.get("All_Chunks", True)].shape[0]
+non_uniform = int((~coverage_df.get("Months_Uniform", pd.Series([True]*len(coverage_df)))).sum())
+not_1200 = int((coverage_df.get("Min_Months", pd.Series([1200]*len(coverage_df))) != 1200).sum())
 print(f"  {fp.name:45s}  {len(coverage_df):>6,} SVs")
 if incomplete > 0:
     print(f"  WARNING: {incomplete} SVs are missing from at least one chunk!")
+if not_1200 > 0:
+    print(f"  WARNING: {not_1200} SVs have != 1200 months in at least one chunk!")
+if non_uniform > 0:
+    print(f"  WARNING: {non_uniform} SVs have different month counts across chunks!")
 print()
 
 

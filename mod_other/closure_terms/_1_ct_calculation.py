@@ -368,12 +368,17 @@ def _write_product_b_chunks(
             end = (i + 1) * months_per_chunk
             chunk = aligned.iloc[start:end]
 
+            # Forward-fill then back-fill any NaN values so every
+            # month has a valid closure term (avoids row-count mismatches
+            # downstream when the compilation script drops NaN rows).
+            vals = chunk[term].copy().ffill().bfill().values
+
             df_out = pd.DataFrame({
                 "Part B": term,
                 "Part C": CLOSURE_C_PART,
                 "Year": years_tpl,
                 "Month": months_tpl,
-                "Value": chunk[term].values,
+                "Value": vals,
             })
             fname = f"{short}_productB_n{i + 1:02d}.csv"
             df_out.to_csv(product_b_dir / fname, index=False)

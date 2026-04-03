@@ -224,8 +224,21 @@ def compute_chunk_annual_index(df_chunk: pd.DataFrame) -> pd.Series:
 
 
 # %% Match each synthetic WY to nearest historical WY
-def match_to_historical(synthetic_index: pd.Series, hist_index: pd.Series) -> pd.DataFrame:
-    """For each synthetic WY, find the historical WY with nearest annual flow."""
+def match_to_historical(
+    synthetic_index: pd.Series,
+    hist_index: pd.Series,
+    available_wys: set | None = None,
+) -> pd.DataFrame:
+    """For each synthetic WY, find the historical WY with nearest annual flow.
+
+    Parameters
+    ----------
+    available_wys : set, optional
+        If provided, restrict matching to only these historical WYs
+        (e.g. those present in the vol-fraction lookup).
+    """
+    if available_wys is not None:
+        hist_index = hist_index[hist_index.index.isin(available_wys)]
 
     records = []
     for wy in synthetic_index.index:
@@ -304,6 +317,7 @@ def build_product_b_vf(df_match: pd.DataFrame, vf_lookup: dict) -> pd.DataFrame:
                     np.array(src_vals), tgt_feb_days,
                 )
 
+                written_parts = set()
                 for i, new_val in enumerate(new_fracs):
                     if i < len(src_parts):
                         pb = src_parts[i]
@@ -312,6 +326,7 @@ def build_product_b_vf(df_match: pd.DataFrame, vf_lookup: dict) -> pd.DataFrame:
                         used = set(src_parts)
                         extra = [p for p in part_b_cols if p not in used]
                         pb = extra[0] if extra else src_parts[-1]
+                    written_parts.add(pb)
                     rows.append({
                         "Part B": pb,
                         "Part C": "VOL-FRACTION",
@@ -319,19 +334,30 @@ def build_product_b_vf(df_match: pd.DataFrame, vf_lookup: dict) -> pd.DataFrame:
                         "Month": month,
                         "Value": new_val,
                     })
+                # Write 0 for any Part B columns not covered by resampling
+                for pb in part_b_cols:
+                    if pb not in written_parts:
+                        rows.append({
+                            "Part B": pb,
+                            "Part C": "VOL-FRACTION",
+                            "Year": year,
+                            "Month": month,
+                            "Value": 0.0,
+                        })
                 continue
 
             # -- All other months (or Feb with matching day count): direct --
             for part_b in part_b_cols:
                 val = vf_row[part_b]
-                if not np.isnan(val):
-                    rows.append({
-                        "Part B": part_b,
-                        "Part C": "VOL-FRACTION",
-                        "Year": year,
-                        "Month": month,
-                        "Value": val,
-                    })
+                # Write 0.0 for NaN (day does not contribute flow)
+                # so every Part B gets a row for every month.
+                rows.append({
+                    "Part B": part_b,
+                    "Part C": "VOL-FRACTION",
+                    "Year": year,
+                    "Month": month,
+                    "Value": 0.0 if np.isnan(val) else val,
+                })
 
     df = pd.DataFrame(rows)
     if not df.empty:
@@ -349,7 +375,8 @@ def _process_chunk(chunk, rim_dir, ref_csv, hist_annual, vf_lookup, out_dir, mat
         return chunk_tag, 0, "no inflow data"
 
     syn_annual = compute_chunk_annual_index(df_chunk)
-    df_match = match_to_historical(syn_annual, hist_annual)
+    df_match = match_to_historical(syn_annual, hist_annual,
+                                    available_wys=set(vf_lookup.keys()))
     df_vf_chunk = build_product_b_vf(df_match, vf_lookup)
 
     out_dir.mkdir(parents=True, exist_ok=True)
