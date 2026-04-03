@@ -32,9 +32,12 @@ Diagnostic outputs  (all written to ``product_b_compilation/``)
 - ``inventory_unexpected.csv``
 - ``sv_coverage_by_chunk.csv``
 - ``product_b_vs_a_comparison.csv``
+- ``product_b_vs_calsim_base_comparison.csv``
 - ``compilation_summary.txt``
-- ``figures/monthly_climatology_by_category.png``
-- ``figures/chunk_spread_by_category.png``
+- ``figures/vs_product_a/chunk_spread_by_category/*.png``
+- ``figures/vs_product_a/monthly_climatology/<category>/*.png``
+- ``figures/vs_calsim_base/chunk_spread_by_category/*.png``
+- ``figures/vs_calsim_base/monthly_climatology/<category>/*.png``
 
 CLI flags
 ---------
@@ -89,9 +92,13 @@ CHUNK_TAGS   = [f"n{i:02d}" for i in range(1, N_CHUNKS + 1)]
 PB_START_YM  = (1921, 10)   # first data month
 PB_END_YM    = (2021,  9)   # last data month
 
-# Product A overwrite window (for comparison statistics)
+# Product A comparison window (WY 1972-2018)
 PA_START = pd.Timestamp(1971, 10, 31)
 PA_END   = pd.Timestamp(2018,  9, 30)
+
+# CalSim baseline comparison window (full period, WY 1922-2021)
+CB_START = pd.Timestamp(1921, 10, 31)
+CB_END   = pd.Timestamp(2021,  9, 30)
 
 
 # -- Junction helper for long DSS paths -----------------------------------
@@ -548,6 +555,309 @@ def read_product_a_monthly_means(product_a_dss: Path, baseline_bucket: dict,
     return result
 
 
+def read_calsim_base_monthly_means(baseline_bucket: dict,
+                                   keys_to_read: set,
+                                   start: pd.Timestamp,
+                                   end: pd.Timestamp) -> dict:
+    """Read CalSim baseline DSS monthly means per (Part B, Part C).
+
+    Returns dict: (Part_B, Part_C) -> {month: mean_value}
+    """
+    from pydsstools.heclib.dss import HecDss
+
+    result = {}
+    with HecDss.Open(str(BASELINE_DSS), version=6) as dss:
+        for pk in sorted(keys_to_read):
+            if pk not in baseline_bucket:
+                continue
+            merged = {}
+            for pathname in baseline_bucket[pk]:
+                try:
+                    ts = dss.read_ts(pathname, trim_missing=False)
+                except Exception:
+                    continue
+                eom = dss_eom(ts.pytimes)
+                vals = np.array(ts.values, dtype=float)
+                for i, dt in enumerate(eom):
+                    if vals[i] > -900 and start <= dt <= end:
+                        merged[dt] = vals[i]
+            if not merged:
+                continue
+            ser = pd.Series(merged)
+            monthly_means = {}
+            for m in range(1, 13):
+                mm = ser[ser.index.month == m]
+                if not mm.empty:
+                    monthly_means[m] = mm.mean()
+            result[pk] = monthly_means
+    return result
+
+
+def _compute_pb_chunk_means(compiled_chunks, active_tags, start_ym=None, end_ym=None):
+    """Compute Product B monthly means per chunk, with optional year-month filter.
+
+    Parameters
+    ----------
+    start_ym, end_ym : int or None
+        Year-month as YYYYMM (e.g. 197110 for Oct 1971).  None = no filter.
+
+    Returns dict: tag -> {(Part_B, Part_C): {month: mean_value}}
+    """
+    pb_chunk_means = {}
+    for tag in active_tags:
+        if tag not in compiled_chunks:
+            pb_chunk_means[tag] = {}
+            continue
+        df_chunk = compiled_chunks[tag]
+        if start_ym is not None and end_ym is not None:
+            ym = df_chunk["Year"] * 100 + df_chunk["Month"]
+            df_chunk = df_chunk[(ym >= start_ym) & (ym <= end_ym)]
+        tag_means = {}
+        for (b, c), grp in df_chunk.groupby(["Part B", "Part C"]):
+            mm = {}
+            for m_val, mg in grp.groupby("Month"):
+                mm[int(m_val)] = mg["Value"].mean()
+            tag_means[(b, c)] = mm
+        pb_chunk_means[tag] = tag_means
+    return pb_chunk_means
+
+
+def _build_comparison_df(ref_means, pb_chunk_means, all_compiled_svs, active_tags):
+    """Build comparison DataFrame: reference monthly means vs PB chunk means.
+
+    Returns DataFrame with columns: Part_B, Part_C, Month, Ref_mean,
+    {tag}_mean, chunk_median, pct_diff, Input_Category
+    """
+    cmp_rows = []
+    for pk in sorted(all_compiled_svs):
+        if pk not in ref_means:
+            continue
+        ref_mm = ref_means[pk]
+        for m in range(1, 13):
+            row = {
+                "Part_B": pk[0],
+                "Part_C": pk[1],
+                "Month": m,
+                "Ref_mean": ref_mm.get(m, np.nan),
+            }
+            chunk_means_for_month = []
+            for tag in active_tags:
+                val = pb_chunk_means.get(tag, {}).get(pk, {}).get(m, np.nan)
+                row[f"{tag}_mean"] = val
+                if np.isfinite(val):
+                    chunk_means_for_month.append(val)
+            if chunk_means_for_month:
+                row["chunk_median"] = np.median(chunk_means_for_month)
+                ref_val = ref_mm.get(m, np.nan)
+                if np.isfinite(ref_val) and abs(ref_val) > 1e-6:
+                    row["pct_diff"] = (
+                        (row["chunk_median"] - ref_val) / abs(ref_val)
+                    ) * 100.0
+                else:
+                    row["pct_diff"] = np.nan
+            else:
+                row["chunk_median"] = np.nan
+                row["pct_diff"] = np.nan
+            cmp_rows.append(row)
+
+    cmp_df = pd.DataFrame(cmp_rows)
+    inv = read_master_inventory()
+    cat_map = {}
+    for _, r in inv.iterrows():
+        cat_map[(r["Part_B"], r["Part_C"])] = r["Input_Category"]
+    cmp_df["Input_Category"] = cmp_df.apply(
+        lambda r: cat_map.get((r["Part_B"], r["Part_C"]), "Unknown"), axis=1
+    )
+    return cmp_df
+
+
+def _generate_comparison_figures(cmp_df, fig_dir, ref_label, active_tags,
+                                units_map, skip_climatology=False):
+    """Generate chunk_spread and monthly_climatology figures for a comparison."""
+    import matplotlib
+    matplotlib.use("Agg")
+    import matplotlib.pyplot as plt
+    from matplotlib.gridspec import GridSpec
+
+    _FS = 7
+    plt.rcParams.update({
+        "font.size": _FS, "axes.titlesize": _FS,
+        "axes.labelsize": _FS, "xtick.labelsize": _FS,
+        "ytick.labelsize": _FS, "legend.fontsize": _FS,
+        "figure.dpi": 300, "savefig.dpi": 300,
+        "figure.facecolor": "white",
+    })
+
+    _MONTH_LABELS = ["Oct", "Nov", "Dec", "Jan", "Feb", "Mar",
+                     "Apr", "May", "Jun", "Jul", "Aug", "Sep"]
+    _SUM_UNITS = {"TAF", "IN", "INCHES"}
+
+    fig_dir.mkdir(parents=True, exist_ok=True)
+    cats_present = sorted(cmp_df["Input_Category"].dropna().unique())
+
+    # -- Aggregate to mean-annual values --
+    annual_rows = []
+    for (b, c), grp in cmp_df.groupby(["Part_B", "Part_C"]):
+        unit = units_map.get((b, c), "UNKNOWN")
+        cat = grp["Input_Category"].iloc[0]
+        use_sum = unit.upper() in _SUM_UNITS
+        ref_vals = grp["Ref_mean"].values
+        ref_ann = float(np.nansum(ref_vals) if use_sum
+                        else np.nanmean(ref_vals))
+        row = {"Part_B": b, "Part_C": c, "Units": unit,
+               "Input_Category": cat, "Ref_annual": ref_ann}
+        for tag in active_tags:
+            col = f"{tag}_mean"
+            if col not in grp.columns:
+                continue
+            ch_vals = grp[col].values
+            ch_ann = float(np.nansum(ch_vals) if use_sum
+                           else np.nanmean(ch_vals))
+            row[f"{tag}_annual"] = ch_ann
+            if (np.isfinite(ref_ann) and abs(ref_ann) > 1e-6
+                    and np.isfinite(ch_ann)):
+                row[f"{tag}_pct_diff"] = (
+                    (ch_ann - ref_ann) / abs(ref_ann) * 100.0
+                )
+                row[f"{tag}_abs_diff"] = ch_ann - ref_ann
+            else:
+                row[f"{tag}_pct_diff"] = np.nan
+                row[f"{tag}_abs_diff"] = np.nan
+        annual_rows.append(row)
+
+    annual_df = pd.DataFrame(annual_rows)
+
+    # -- Per-category chunk spread (one figure per category) --
+    spread_dir = fig_dir / "chunk_spread_by_category"
+    spread_dir.mkdir(exist_ok=True)
+
+    for cat in cats_present:
+        cat_df = annual_df[annual_df["Input_Category"] == cat]
+        if cat_df.empty:
+            continue
+        unique_units = sorted(cat_df["Units"].dropna().unique())
+        if not unique_units:
+            unique_units = ["UNKNOWN"]
+        n_unit_panels = len(unique_units)
+        n_sv = len(cat_df)
+
+        n_cols_bot = max(1, n_unit_panels)
+        gs = GridSpec(2, n_cols_bot, height_ratios=[1, 1])
+        fig = plt.figure(figsize=(6.5, 5.0))
+
+        ax_top = fig.add_subplot(gs[0, :])
+        pct_data = []
+        for tag in active_tags:
+            col = f"{tag}_pct_diff"
+            if col in cat_df.columns:
+                pct_data.append(cat_df[col].dropna().values)
+            else:
+                pct_data.append(np.array([]))
+        if any(len(d) > 0 for d in pct_data):
+            bp = ax_top.boxplot(
+                pct_data, vert=True, patch_artist=True, widths=0.6,
+                labels=list(active_tags),
+            )
+            for patch in bp["boxes"]:
+                patch.set_facecolor("#5B9BD5")
+                patch.set_alpha(0.7)
+            for cap in bp["caps"]:
+                cap.set_visible(False)
+            for flier in bp["fliers"]:
+                flier.set(marker="o", markersize=1,
+                          markerfacecolor="k", markeredgecolor="none")
+        ax_top.axhline(0.0, color="red", ls="--", lw=0.6, alpha=0.5)
+        ax_top.set_ylabel(f"Mean Annual % Diff (vs {ref_label})")
+        ax_top.set_title(f"{cat}  (n={n_sv} SVs)")
+        ax_top.tick_params(axis="x", rotation=45)
+
+        for u_idx, unit in enumerate(unique_units):
+            ax = fig.add_subplot(gs[1, u_idx])
+            unit_df = cat_df[cat_df["Units"] == unit]
+            n_unit_sv = len(unit_df)
+            abs_data = []
+            for tag in active_tags:
+                col = f"{tag}_abs_diff"
+                if col in unit_df.columns:
+                    abs_data.append(unit_df[col].dropna().values)
+                else:
+                    abs_data.append(np.array([]))
+            if any(len(d) > 0 for d in abs_data):
+                bp = ax.boxplot(
+                    abs_data, vert=True, patch_artist=True, widths=0.6,
+                    labels=list(active_tags),
+                )
+                for patch in bp["boxes"]:
+                    patch.set_facecolor("#E8A54B")
+                    patch.set_alpha(0.7)
+                for cap in bp["caps"]:
+                    cap.set_visible(False)
+                for flier in bp["fliers"]:
+                    flier.set(marker="o", markersize=1,
+                              markerfacecolor="k", markeredgecolor="none")
+            ax.axhline(0.0, color="red", ls="--", lw=0.6, alpha=0.5)
+            ax.set_ylabel(f"Mean Annual Abs Diff ({unit})")
+            if n_unit_panels > 1:
+                ax.set_title(f"{unit}  (n={n_unit_sv})")
+            ax.tick_params(axis="x", rotation=45)
+
+        fig.tight_layout()
+        cat_safe = cat.replace(" ", "_").replace("/", "_")
+        fig.savefig(
+            spread_dir / f"{cat_safe}.png", bbox_inches="tight"
+        )
+        plt.close(fig)
+
+    print(f"    Figures: {fig_dir.name}/chunk_spread_by_category/ "
+          f"({len(cats_present)} categories)")
+
+    # -- Monthly climatology (per SV, per category) --
+    if not skip_climatology:
+        scatter_dir = fig_dir / "monthly_climatology"
+        scatter_dir.mkdir(exist_ok=True)
+
+        for cat in cats_present:
+            cat_cmp = cmp_df[cmp_df["Input_Category"] == cat]
+            sv_list = cat_cmp.groupby(["Part_B", "Part_C"]).ngroups
+            if sv_list == 0:
+                continue
+            n_plotted = 0
+            for (partb, partc), sv_cmp in cat_cmp.groupby(["Part_B", "Part_C"]):
+                wy_month_nums = [10, 11, 12, 1, 2, 3, 4, 5, 6, 7, 8, 9]
+                month_pos = {month: i + 1 for i, month in enumerate(wy_month_nums)}
+                sv_cmp = sv_cmp.copy()
+                sv_cmp["Month_Position"] = sv_cmp["Month"].map(month_pos)
+                sv_cmp = sv_cmp.sort_values("Month_Position")
+                months_data = sv_cmp["Month_Position"].values
+
+                fig, ax = plt.subplots(figsize=(5.0, 2.5))
+                chunk_cols = [f"{t}_mean" for t in active_tags
+                              if f"{t}_mean" in sv_cmp.columns]
+                for i, col in enumerate(chunk_cols):
+                    vals = sv_cmp[col].values
+                    ax.plot(months_data, vals, color="tab:orange", alpha=0.3,
+                            lw=0.8, label="Product B" if i == 0 else None)
+                ref_vals = sv_cmp["Ref_mean"].values
+                ax.plot(months_data, ref_vals, color="tab:blue", lw=1.2,
+                        label=ref_label)
+                ax.set_xticks(range(1, 13))
+                ax.set_xticklabels(_MONTH_LABELS)
+                ax.set_xlabel("Month")
+                ax.set_ylabel("Monthly Mean")
+                ax.set_title(f"{partb}/{partc}")
+                ax.legend(loc="best", framealpha=0.7)
+                fig.tight_layout()
+
+                cat_safe = cat.replace(" ", "_").replace("/", "_")
+                cat_plot_dir = scatter_dir / cat_safe
+                cat_plot_dir.mkdir(parents=True, exist_ok=True)
+                fname = f"{partb}__{partc}.png".replace("/", "_")
+                fig.savefig(cat_plot_dir / fname, bbox_inches="tight")
+                plt.close(fig)
+                n_plotted += 1
+            print(f"      {cat}: {n_plotted} climatology plots")
+
+
 # ======================================================================
 # MAIN EXECUTION
 # ======================================================================
@@ -592,17 +902,6 @@ if CLI_ARGS.summary_figures:
     print("--- Running in --summary-figures mode (figures only) ---")
     print()
 
-    _cmp_csv = OUTPUT_DIR / "product_b_vs_a_comparison.csv"
-    if not _cmp_csv.exists():
-        sys.exit(f"ERROR: Comparison CSV not found from a previous run:\n  {_cmp_csv}")
-
-    cmp_df = pd.read_csv(_cmp_csv)
-    print(f"  Loaded {_cmp_csv.name} ({len(cmp_df):,} rows)")
-
-    all_compiled_svs = set(
-        zip(cmp_df["Part_B"], cmp_df["Part_C"])
-    )
-
     # Catalog baseline DSS for unit extraction
     from pydsstools.heclib.dss import HecDss
     with HecDss.Open(str(BASELINE_DSS), version=6, catalog_flag=True) as _dss_b:
@@ -612,175 +911,61 @@ if CLI_ARGS.summary_figures:
         k = path_key(p)
         baseline_bucket.setdefault(k, []).append(p)
 
-    # No baseline_ts_cache in this mode
-    baseline_ts_cache = {}
+    # Collect all SVs across available comparison CSVs
+    all_compiled_svs = set()
+    _comparisons_to_plot = []  # (csv_path, ref_col, ref_label, fig_subdir)
 
-    # Jump into the figure generation code (same as Step 7 figures)
-    print("  Generating summary figures ...")
-    try:
-        import matplotlib
-        matplotlib.use("Agg")
-        import matplotlib.pyplot as plt
+    _cmp_a_csv = OUTPUT_DIR / "product_b_vs_a_comparison.csv"
+    if _cmp_a_csv.exists():
+        _comparisons_to_plot.append(
+            (_cmp_a_csv, "Product_A_mean", "Product A", "vs_product_a"))
 
-        _FS = 7
-        plt.rcParams.update({
-            "font.size": _FS, "axes.titlesize": _FS,
-            "axes.labelsize": _FS, "xtick.labelsize": _FS,
-            "ytick.labelsize": _FS, "legend.fontsize": _FS,
-            "figure.dpi": 300, "savefig.dpi": 300,
-            "figure.facecolor": "white",
-        })
+    _cmp_b_csv = OUTPUT_DIR / "product_b_vs_calsim_base_comparison.csv"
+    if _cmp_b_csv.exists():
+        _comparisons_to_plot.append(
+            (_cmp_b_csv, "CalSim_Base_mean", "CalSim Base", "vs_calsim_base"))
 
-        fig_dir = OUTPUT_DIR / "figures"
-        fig_dir.mkdir(exist_ok=True)
+    if not _comparisons_to_plot:
+        sys.exit(f"ERROR: No comparison CSVs found from a previous run in:\n  {OUTPUT_DIR}")
 
-        # -- Extract SV units from baseline DSS --
-        units_map = {}
-        _missing_unit_keys = all_compiled_svs
-        with HecDss.Open(str(BASELINE_DSS), version=6) as _dss_u:
-            for _pk in sorted(_missing_unit_keys):
-                if _pk not in baseline_bucket:
-                    continue
-                try:
-                    _ts_u = _dss_u.read_ts(
-                        baseline_bucket[_pk][0], trim_missing=False
-                    )
-                    units_map[_pk] = _ts_u.units
-                except Exception:
-                    units_map[_pk] = "UNKNOWN"
-        print(f"  Extracted units for {len(units_map):,} SVs")
+    # Extract units (once, for all SVs)
+    for _csv_path, _, _, _ in _comparisons_to_plot:
+        _df_tmp = pd.read_csv(_csv_path)
+        all_compiled_svs |= set(zip(_df_tmp["Part_B"], _df_tmp["Part_C"]))
 
-        # -- Aggregate comparison to mean-annual values --
-        _SUM_UNITS = {"TAF", "IN", "INCHES"}
-        cats_present = sorted(cmp_df["Input_Category"].dropna().unique())
-
-        annual_rows = []
-        for (b, c), grp in cmp_df.groupby(["Part_B", "Part_C"]):
-            unit = units_map.get((b, c), "UNKNOWN")
-            cat = grp["Input_Category"].iloc[0]
-            use_sum = unit.upper() in _SUM_UNITS
-            pa_vals = grp["Product_A_mean"].values
-            pa_ann = float(np.nansum(pa_vals) if use_sum
-                           else np.nanmean(pa_vals))
-
-            row = {"Part_B": b, "Part_C": c, "Units": unit,
-                   "Input_Category": cat, "PA_annual": pa_ann}
-
-            for tag in ACTIVE_TAGS:
-                col = f"{tag}_mean"
-                if col not in grp.columns:
-                    continue
-                ch_vals = grp[col].values
-                ch_ann = float(np.nansum(ch_vals) if use_sum
-                               else np.nanmean(ch_vals))
-                row[f"{tag}_annual"] = ch_ann
-                if (np.isfinite(pa_ann) and abs(pa_ann) > 1e-6
-                        and np.isfinite(ch_ann)):
-                    row[f"{tag}_pct_diff"] = (
-                        (ch_ann - pa_ann) / abs(pa_ann) * 100.0
-                    )
-                    row[f"{tag}_abs_diff"] = ch_ann - pa_ann
-                else:
-                    row[f"{tag}_pct_diff"] = np.nan
-                    row[f"{tag}_abs_diff"] = np.nan
-
-            annual_rows.append(row)
-
-        annual_df = pd.DataFrame(annual_rows)
-
-        # -- Per-category chunk spread (one figure per category) --
-        spread_dir = fig_dir / "chunk_spread_by_category"
-        spread_dir.mkdir(exist_ok=True)
-
-        for cat in cats_present:
-            cat_df = annual_df[annual_df["Input_Category"] == cat]
-            if cat_df.empty:
+    units_map = {}
+    with HecDss.Open(str(BASELINE_DSS), version=6) as _dss_u:
+        for _pk in sorted(all_compiled_svs):
+            if _pk not in baseline_bucket:
                 continue
-
-            unique_units = sorted(cat_df["Units"].dropna().unique())
-            if not unique_units:
-                unique_units = ["UNKNOWN"]
-            n_unit_panels = len(unique_units)
-            n_sv = len(cat_df)
-
-            from matplotlib.gridspec import GridSpec
-            n_cols_bot = max(1, n_unit_panels)
-            gs = GridSpec(2, n_cols_bot, height_ratios=[1, 1])
-            fig = plt.figure(figsize=(6.5, 5.0))
-
-            # -- Top row: % diff (spans all columns) --
-            ax_top = fig.add_subplot(gs[0, :])
-            pct_data = []
-            for tag in ACTIVE_TAGS:
-                col = f"{tag}_pct_diff"
-                if col in cat_df.columns:
-                    pct_data.append(cat_df[col].dropna().values)
-                else:
-                    pct_data.append(np.array([]))
-
-            if any(len(d) > 0 for d in pct_data):
-                bp = ax_top.boxplot(
-                    pct_data, vert=True, patch_artist=True, widths=0.6,
-                    labels=list(ACTIVE_TAGS),
+            try:
+                _ts_u = _dss_u.read_ts(
+                    baseline_bucket[_pk][0], trim_missing=False
                 )
-                for patch in bp["boxes"]:
-                    patch.set_facecolor("#5B9BD5")
-                    patch.set_alpha(0.7)
-                for cap in bp["caps"]:
-                    cap.set_visible(False)
-                for flier in bp["fliers"]:
-                    flier.set(marker="o", markersize=1,
-                              markerfacecolor="k", markeredgecolor="none")
-            ax_top.axhline(0.0, color="red", ls="--", lw=0.6, alpha=0.5)
-            ax_top.set_ylabel("Mean Annual % Diff")
-            ax_top.set_title(f"{cat}  (n={n_sv} SVs)")
-            ax_top.tick_params(axis="x", rotation=45)
+                units_map[_pk] = _ts_u.units
+            except Exception:
+                units_map[_pk] = "UNKNOWN"
+    print(f"  Extracted units for {len(units_map):,} SVs")
 
-            # -- Bottom row: abs diff (one column per unit) --
-            for u_idx, unit in enumerate(unique_units):
-                ax = fig.add_subplot(gs[1, u_idx])
-                unit_df = cat_df[cat_df["Units"] == unit]
-                n_unit_sv = len(unit_df)
+    fig_root = OUTPUT_DIR / "figures"
+    fig_root.mkdir(exist_ok=True)
 
-                abs_data = []
-                for tag in ACTIVE_TAGS:
-                    col = f"{tag}_abs_diff"
-                    if col in unit_df.columns:
-                        abs_data.append(unit_df[col].dropna().values)
-                    else:
-                        abs_data.append(np.array([]))
+    for _csv_path, _ref_col, _ref_label, _fig_subdir in _comparisons_to_plot:
+        cmp_df = pd.read_csv(_csv_path)
+        print(f"  Loaded {_csv_path.name} ({len(cmp_df):,} rows)")
 
-                if any(len(d) > 0 for d in abs_data):
-                    bp = ax.boxplot(
-                        abs_data, vert=True, patch_artist=True, widths=0.6,
-                        labels=list(ACTIVE_TAGS),
-                    )
-                    for patch in bp["boxes"]:
-                        patch.set_facecolor("#E8A54B")
-                        patch.set_alpha(0.7)
-                    for cap in bp["caps"]:
-                        cap.set_visible(False)
-                    for flier in bp["fliers"]:
-                        flier.set(marker="o", markersize=1,
-                                  markerfacecolor="k", markeredgecolor="none")
-                ax.axhline(0.0, color="red", ls="--", lw=0.6, alpha=0.5)
-                ax.set_ylabel(f"Mean Annual Abs Diff ({unit})")
-                if n_unit_panels > 1:
-                    ax.set_title(f"{unit}  (n={n_unit_sv})")
-                ax.tick_params(axis="x", rotation=45)
+        # Rename reference column to Ref_mean for the figure function
+        if _ref_col in cmp_df.columns:
+            cmp_df = cmp_df.rename(columns={_ref_col: "Ref_mean"})
 
-            fig.tight_layout()
-            cat_safe = cat.replace(" ", "_").replace("/", "_")
-            fig.savefig(
-                spread_dir / f"{cat_safe}.png", bbox_inches="tight"
+        print(f"  Generating {_ref_label} figures ...")
+        try:
+            _generate_comparison_figures(
+                cmp_df, fig_root / _fig_subdir, _ref_label,
+                ACTIVE_TAGS, units_map, skip_climatology=True,
             )
-            plt.close(fig)
-
-        print(f"  Figures: figures/chunk_spread_by_category/ "
-              f"({len(cats_present)} categories)")
-
-    except ImportError:
-        print("  WARNING: matplotlib not available, skipping figures.")
+        except ImportError:
+            print("  WARNING: matplotlib not available, skipping figures.")
 
     print(f"\nDone (--summary-figures).  Output in: {OUTPUT_DIR}")
     sys.exit(0)
@@ -1322,339 +1507,112 @@ print()
 
 
 # ==================================================================
-# STEP 7 -- Product A vs Product B comparison
+# STEP 7 -- Product B comparisons (vs Product A & vs CalSim Base)
 # ==================================================================
 if not CLI_ARGS.skip_comparison:
-    print("Step 7: Comparing Product B chunks against Product A ...")
+    print("Step 7: Comparing Product B chunks against references ...")
     t0_cmp = time.time()
 
+    # -- Extract SV units from baseline DSS (shared by both comparisons) --
+    try:
+        _bt_cache = baseline_ts_cache
+    except NameError:
+        _bt_cache = {}
+    units_map = {}
+    for _pn, _cached in _bt_cache.items():
+        _pk = path_key(_pn)
+        if _pk not in units_map:
+            units_map[_pk] = _cached["units"]
+    _missing_unit_keys = all_compiled_svs - set(units_map.keys())
+    if _missing_unit_keys:
+        with HecDss.Open(str(BASELINE_DSS), version=6) as _dss_u:
+            for _pk in sorted(_missing_unit_keys):
+                if _pk not in baseline_bucket:
+                    continue
+                try:
+                    _ts_u = _dss_u.read_ts(
+                        baseline_bucket[_pk][0], trim_missing=False
+                    )
+                    units_map[_pk] = _ts_u.units
+                except Exception:
+                    units_map[_pk] = "UNKNOWN"
+    print(f"  Extracted units for {len(units_map):,} SVs")
+
+    fig_root = OUTPUT_DIR / "figures"
+    fig_root.mkdir(exist_ok=True)
+
+    # -- 7a: Product A comparison (WY 1972-2021) --
     if not PRODUCT_A_DSS.exists():
-        print(f"  WARNING: Product A DSS not found, skipping comparison.")
+        print(f"  WARNING: Product A DSS not found, skipping Product A comparison.")
         print(f"    Expected: {PRODUCT_A_DSS}")
     else:
-        # Read Product A monthly means for all compiled SVs
-        print(f"  Reading Product A DSS ({PRODUCT_A_DSS.name}) ...")
+        print()
+        print(f"  7a: Comparing against Product A (WY 1972-2021) ...")
         pa_means = read_product_a_monthly_means(
             PRODUCT_A_DSS, baseline_bucket, all_compiled_svs
         )
-        print(f"  Product A: {len(pa_means):,} (B,C) with data in overwrite window")
+        print(f"    Product A: {len(pa_means):,} (B,C) with data in comparison window")
 
-        # Compute Product B chunk monthly means
-        print("  Computing Product B chunk monthly means ...")
-
-        # Compute monthly means per (Part B, Part C) from in-memory data.
-        cmp_rows = []
-        pb_chunk_means = {}  # tag -> {(B,C): {month: mean}}
-
-        for tag in ACTIVE_TAGS:
-            if tag not in compiled_chunks:
-                pb_chunk_means[tag] = {}
-                continue
-
-            df_chunk = compiled_chunks[tag]
-
-            tag_means = {}
-            for (b, c), grp in df_chunk.groupby(["Part B", "Part C"]):
-                mm = {}
-                for m_val, mg in grp.groupby("Month"):
-                    mm[int(m_val)] = mg["Value"].mean()
-                tag_means[(b, c)] = mm
-
-            pb_chunk_means[tag] = tag_means
-
-        # Build comparison rows
-        for pk in sorted(all_compiled_svs):
-            if pk not in pa_means:
-                continue
-
-            pa_mm = pa_means[pk]
-
-            for m in range(1, 13):
-                row = {
-                    "Part_B": pk[0],
-                    "Part_C": pk[1],
-                    "Month": m,
-                    "Product_A_mean": pa_mm.get(m, np.nan),
-                }
-
-                chunk_means_for_month = []
-                for tag in ACTIVE_TAGS:
-                    val = pb_chunk_means.get(tag, {}).get(pk, {}).get(m, np.nan)
-                    row[f"{tag}_mean"] = val
-                    if np.isfinite(val):
-                        chunk_means_for_month.append(val)
-
-                if chunk_means_for_month:
-                    row["chunk_median"] = np.median(chunk_means_for_month)
-                    pa_val = pa_mm.get(m, np.nan)
-                    if np.isfinite(pa_val) and abs(pa_val) > 1e-6:
-                        row["pct_diff"] = (
-                            (row["chunk_median"] - pa_val) / abs(pa_val)
-                        ) * 100.0
-                    else:
-                        row["pct_diff"] = np.nan
-                else:
-                    row["chunk_median"] = np.nan
-                    row["pct_diff"] = np.nan
-
-                cmp_rows.append(row)
-
-        cmp_df = pd.DataFrame(cmp_rows)
-
-        # Join with inventory category
-        inv = read_master_inventory()
-        cat_map = {}
-        for _, r in inv.iterrows():
-            cat_map[(r["Part_B"], r["Part_C"])] = r["Input_Category"]
-        cmp_df["Input_Category"] = cmp_df.apply(
-            lambda r: cat_map.get((r["Part_B"], r["Part_C"]), "Unknown"), axis=1
+        pb_means_pa = _compute_pb_chunk_means(
+            compiled_chunks, ACTIVE_TAGS,
+            start_ym=197110, end_ym=202109,
         )
 
+        cmp_a = _build_comparison_df(
+            pa_means, pb_means_pa, all_compiled_svs, ACTIVE_TAGS
+        )
+
+        # Write CSV (rename Ref_mean -> Product_A_mean for backward compat)
+        cmp_a_out = cmp_a.rename(columns={"Ref_mean": "Product_A_mean"})
         fp = OUTPUT_DIR / "product_b_vs_a_comparison.csv"
-        cmp_df.to_csv(fp, index=False)
-        n_svs_compared = cmp_df.groupby(["Part_B", "Part_C"]).ngroups
-        print(f"  {fp.name:45s}  {n_svs_compared:>6,} SVs compared")
+        cmp_a_out.to_csv(fp, index=False)
+        n_svs_compared = cmp_a_out.groupby(["Part_B", "Part_C"]).ngroups
+        print(f"    {fp.name:45s}  {n_svs_compared:>6,} SVs compared")
 
-        # -- Summary figures --
-        print("  Generating comparison figures ...")
+        print("    Generating Product A comparison figures ...")
         try:
-            import matplotlib
-            matplotlib.use("Agg")
-            import matplotlib.pyplot as plt
-
-            _FS = 7
-            plt.rcParams.update({
-                "font.size": _FS, "axes.titlesize": _FS,
-                "axes.labelsize": _FS, "xtick.labelsize": _FS,
-                "ytick.labelsize": _FS, "legend.fontsize": _FS,
-                "figure.dpi": 300, "savefig.dpi": 300,
-                "figure.facecolor": "white",
-            })
-
-            fig_dir = OUTPUT_DIR / "figures"
-            fig_dir.mkdir(exist_ok=True)
-
-            _MONTH_LABELS = ["Oct", "Nov", "Dec", "Jan", "Feb", "Mar",
-                             "Apr", "May", "Jun", "Jul", "Aug", "Sep"]
-            _MONTH_NUMS = [10, 11, 12, 1, 2, 3, 4, 5, 6, 7, 8, 9]
-
-            # -- Extract SV units from baseline DSS --
-            units_map = {}  # (Part_B, Part_C) -> unit string
-            try:
-                _bt_cache = baseline_ts_cache
-            except NameError:
-                _bt_cache = {}
-            for _pn, _cached in _bt_cache.items():
-                _pk = path_key(_pn)
-                if _pk not in units_map:
-                    units_map[_pk] = _cached["units"]
-            _missing_unit_keys = all_compiled_svs - set(units_map.keys())
-            if _missing_unit_keys:
-                with HecDss.Open(str(BASELINE_DSS), version=6) as _dss_u:
-                    for _pk in sorted(_missing_unit_keys):
-                        if _pk not in baseline_bucket:
-                            continue
-                        try:
-                            _ts_u = _dss_u.read_ts(
-                                baseline_bucket[_pk][0], trim_missing=False
-                            )
-                            units_map[_pk] = _ts_u.units
-                        except Exception:
-                            units_map[_pk] = "UNKNOWN"
-            print(f"  Extracted units for {len(units_map):,} SVs")
-
-            # -- Aggregate comparison to mean-annual values --
-            # Volume/depth units are summed across 12 months; rates are averaged.
-            _SUM_UNITS = {"TAF", "IN", "INCHES"}
-            cats_present = sorted(cmp_df["Input_Category"].dropna().unique())
-
-            annual_rows = []
-            for (b, c), grp in cmp_df.groupby(["Part_B", "Part_C"]):
-                unit = units_map.get((b, c), "UNKNOWN")
-                cat = grp["Input_Category"].iloc[0]
-                use_sum = unit.upper() in _SUM_UNITS
-                pa_vals = grp["Product_A_mean"].values
-                pa_ann = float(np.nansum(pa_vals) if use_sum
-                               else np.nanmean(pa_vals))
-
-                row = {"Part_B": b, "Part_C": c, "Units": unit,
-                       "Input_Category": cat, "PA_annual": pa_ann}
-
-                for tag in ACTIVE_TAGS:
-                    col = f"{tag}_mean"
-                    if col not in grp.columns:
-                        continue
-                    ch_vals = grp[col].values
-                    ch_ann = float(np.nansum(ch_vals) if use_sum
-                                   else np.nanmean(ch_vals))
-                    row[f"{tag}_annual"] = ch_ann
-                    if (np.isfinite(pa_ann) and abs(pa_ann) > 1e-6
-                            and np.isfinite(ch_ann)):
-                        row[f"{tag}_pct_diff"] = (
-                            (ch_ann - pa_ann) / abs(pa_ann) * 100.0
-                        )
-                        row[f"{tag}_abs_diff"] = ch_ann - pa_ann
-                    else:
-                        row[f"{tag}_pct_diff"] = np.nan
-                        row[f"{tag}_abs_diff"] = np.nan
-
-                annual_rows.append(row)
-
-            annual_df = pd.DataFrame(annual_rows)
-
-            # -- Fig 1: Per-category chunk spread (one figure per category) --
-            spread_dir = fig_dir / "chunk_spread_by_category"
-            spread_dir.mkdir(exist_ok=True)
-
-            for cat in cats_present:
-                cat_df = annual_df[annual_df["Input_Category"] == cat]
-                if cat_df.empty:
-                    continue
-
-                unique_units = sorted(cat_df["Units"].dropna().unique())
-                if not unique_units:
-                    unique_units = ["UNKNOWN"]
-                n_unit_panels = len(unique_units)
-                n_sv = len(cat_df)
-
-                # Layout: row 0 = % diff (spans all cols), row 1 = abs diff (one col per unit)
-                from matplotlib.gridspec import GridSpec
-                n_cols_bot = max(1, n_unit_panels)
-                gs = GridSpec(2, n_cols_bot, height_ratios=[1, 1])
-                fig = plt.figure(figsize=(6.5, 5.0))
-
-                # -- Top row: mean-annual % diff (spans all columns) --
-                ax_top = fig.add_subplot(gs[0, :])
-                pct_data = []
-                for tag in ACTIVE_TAGS:
-                    col = f"{tag}_pct_diff"
-                    if col in cat_df.columns:
-                        pct_data.append(cat_df[col].dropna().values)
-                    else:
-                        pct_data.append(np.array([]))
-
-                if any(len(d) > 0 for d in pct_data):
-                    bp = ax_top.boxplot(
-                        pct_data, vert=True, patch_artist=True, widths=0.6,
-                        labels=list(ACTIVE_TAGS),
-                    )
-                    for patch in bp["boxes"]:
-                        patch.set_facecolor("#5B9BD5")
-                        patch.set_alpha(0.7)
-                    for cap in bp["caps"]:
-                        cap.set_visible(False)
-                    for flier in bp["fliers"]:
-                        flier.set(marker="o", markersize=1,
-                                  markerfacecolor="k", markeredgecolor="none")
-                ax_top.axhline(0.0, color="red", ls="--", lw=0.6, alpha=0.5)
-                ax_top.set_ylabel("Mean Annual % Diff")
-                ax_top.set_title(f"{cat}  (n={n_sv} SVs)")
-                ax_top.tick_params(axis="x", rotation=45)
-
-                # -- Bottom row: mean-annual abs diff (one column per unit) --
-                for u_idx, unit in enumerate(unique_units):
-                    ax = fig.add_subplot(gs[1, u_idx])
-                    unit_df = cat_df[cat_df["Units"] == unit]
-                    n_unit_sv = len(unit_df)
-
-                    abs_data = []
-                    for tag in ACTIVE_TAGS:
-                        col = f"{tag}_abs_diff"
-                        if col in unit_df.columns:
-                            abs_data.append(unit_df[col].dropna().values)
-                        else:
-                            abs_data.append(np.array([]))
-
-                    if any(len(d) > 0 for d in abs_data):
-                        bp = ax.boxplot(
-                            abs_data, vert=True, patch_artist=True, widths=0.6,
-                            labels=list(ACTIVE_TAGS),
-                        )
-                        for patch in bp["boxes"]:
-                            patch.set_facecolor("#E8A54B")
-                            patch.set_alpha(0.7)
-                        for cap in bp["caps"]:
-                            cap.set_visible(False)
-                        for flier in bp["fliers"]:
-                            flier.set(marker="o", markersize=1,
-                                      markerfacecolor="k", markeredgecolor="none")
-                    ax.axhline(0.0, color="red", ls="--", lw=0.6, alpha=0.5)
-                    ax.set_ylabel(f"Mean Annual Abs Diff ({unit})")
-                    if n_unit_panels > 1:
-                        ax.set_title(f"{unit}  (n={n_unit_sv})")
-                    ax.tick_params(axis="x", rotation=45)
-
-                fig.tight_layout()
-                cat_safe = cat.replace(" ", "_").replace("/", "_")
-                fig.savefig(
-                    spread_dir / f"{cat_safe}.png", bbox_inches="tight"
-                )
-                plt.close(fig)
-
-            print(f"  Figures: figures/chunk_spread_by_category/ "
-                  f"({len(cats_present)} categories)")
-
-            # -- Fig 2: Monthly climatology example (per-category) --
-            #    For each category, pick the SV with median chunk_median,
-            #    plot Product A monthly means vs Product B chunk envelope.
-            if not CLI_ARGS.summary_figures:
-              scatter_dir = fig_dir / "monthly_climatology"
-              scatter_dir.mkdir(exist_ok=True)
-
-              for cat in cats_present:
-                  cat_cmp = cmp_df[cmp_df["Input_Category"] == cat]
-                  # Get unique SVs
-                  sv_list = cat_cmp.groupby(["Part_B", "Part_C"]).ngroups
-                  if sv_list == 0:
-                      continue
-
-                  # One plot per SV
-                  n_plotted = 0
-                  for (partb, partc), sv_cmp in cat_cmp.groupby(["Part_B", "Part_C"]):
-                      wy_month_nums = [10, 11, 12, 1, 2, 3, 4, 5, 6, 7, 8, 9]
-                      month_pos = {month: i + 1 for i, month in enumerate(wy_month_nums)}
-                      sv_cmp = sv_cmp.copy()
-                      sv_cmp["Month_Position"] = sv_cmp["Month"].map(month_pos)
-                      sv_cmp = sv_cmp.sort_values("Month_Position")
-                      months_data = sv_cmp["Month_Position"].values
-
-                      fig, ax = plt.subplots(figsize=(5.0, 2.5))
-
-                      # Product B chunks (orange envelope)
-                      chunk_cols = [f"{t}_mean" for t in ACTIVE_TAGS if f"{t}_mean" in sv_cmp.columns]
-                      for i, col in enumerate(chunk_cols):
-                          vals = sv_cmp[col].values
-                          ax.plot(months_data, vals, color="tab:orange", alpha=0.3,
-                                  lw=0.8, label="Product B" if i == 0 else None)
-
-                      # Product A (blue)
-                      pa_vals = sv_cmp["Product_A_mean"].values
-                      ax.plot(months_data, pa_vals, color="tab:blue", lw=1.2,
-                              label="Product A")
-
-                      ax.set_xticks(range(1, 13))
-                      ax.set_xticklabels(_MONTH_LABELS)
-                      ax.set_xlabel("Month")
-                      ax.set_ylabel("Monthly Mean")
-                      ax.set_title(f"{partb}/{partc}")
-                      ax.legend(loc="best", framealpha=0.7)
-                      fig.tight_layout()
-
-                      cat_safe = cat.replace(" ", "_").replace("/", "_")
-                      cat_plot_dir = scatter_dir / cat_safe
-                      cat_plot_dir.mkdir(parents=True, exist_ok=True)
-                      fname = f"{partb}__{partc}.png".replace("/", "_")
-                      fig.savefig(cat_plot_dir / fname, bbox_inches="tight")
-                      plt.close(fig)
-                      n_plotted += 1
-
-                  print(f"    {cat}: {n_plotted} climatology plots")
-
+            _generate_comparison_figures(
+                cmp_a, fig_root / "vs_product_a", "Product A",
+                ACTIVE_TAGS, units_map, skip_climatology=False,
+            )
         except ImportError:
-            print("  WARNING: matplotlib not available, skipping figures.")
+            print("    WARNING: matplotlib not available, skipping figures.")
 
-        print(f"  Comparison completed in {time.time()-t0_cmp:.1f}s")
-        print()
+    # -- 7b: CalSim baseline comparison (full 1921-2021) --
+    print()
+    print(f"  7b: Comparing against CalSim baseline (WY 1922-2021) ...")
+    cb_means = read_calsim_base_monthly_means(
+        baseline_bucket, all_compiled_svs, CB_START, CB_END
+    )
+    print(f"    CalSim Base: {len(cb_means):,} (B,C) with data in comparison window")
+
+    pb_means_cb = _compute_pb_chunk_means(
+        compiled_chunks, ACTIVE_TAGS,
+        start_ym=192110, end_ym=202109,
+    )
+
+    cmp_b = _build_comparison_df(
+        cb_means, pb_means_cb, all_compiled_svs, ACTIVE_TAGS
+    )
+
+    # Write CSV
+    cmp_b_out = cmp_b.rename(columns={"Ref_mean": "CalSim_Base_mean"})
+    fp = OUTPUT_DIR / "product_b_vs_calsim_base_comparison.csv"
+    cmp_b_out.to_csv(fp, index=False)
+    n_svs_compared = cmp_b_out.groupby(["Part_B", "Part_C"]).ngroups
+    print(f"    {fp.name:45s}  {n_svs_compared:>6,} SVs compared")
+
+    print("    Generating CalSim Base comparison figures ...")
+    try:
+        _generate_comparison_figures(
+            cmp_b, fig_root / "vs_calsim_base", "CalSim Base",
+            ACTIVE_TAGS, units_map, skip_climatology=False,
+        )
+    except ImportError:
+        print("    WARNING: matplotlib not available, skipping figures.")
+
+    print(f"\n  Comparisons completed in {time.time()-t0_cmp:.1f}s")
+    print()
 else:
     print("Step 7: Skipped (--skip-comparison)")
     print()
