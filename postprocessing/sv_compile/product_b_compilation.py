@@ -313,7 +313,10 @@ def detect_chunk_tag(filename: str) -> str:
 # ======================================================================
 def read_standard_csv(csv_path: Path) -> pd.DataFrame:
     """Read a standard SV CSV (Part B, Part C, Year, Month, Value)."""
-    df = pd.read_csv(csv_path)
+    _p = str(csv_path)
+    if sys.platform == "win32" and len(_p) >= 260 and not _p.startswith("\\\\?\\"):
+        _p = "\\\\?\\" + _p
+    df = pd.read_csv(_p)
     df.columns = [c.strip() for c in df.columns]
     required = {"Part B", "Part C", "Year", "Month", "Value"}
     if not required.issubset(set(df.columns)):
@@ -334,7 +337,10 @@ def read_rim_inflow_csv(csv_path: Path) -> pd.DataFrame:
     Input columns:  CalSim, Matched_inflow, Year, Month, vic_val, qmap_preAdj, qmap_postAdj
     Output columns: Part B, Part C, Year, Month, Value
     """
-    df = pd.read_csv(csv_path)
+    _p = str(csv_path)
+    if sys.platform == "win32" and len(_p) >= 260 and not _p.startswith("\\\\?\\"):
+        _p = "\\\\?\\" + _p
+    df = pd.read_csv(_p)
     df.columns = [c.strip() for c in df.columns]
     if "CalSim" not in df.columns or "qmap_postAdj" not in df.columns:
         # Try case-insensitive lookup
@@ -981,6 +987,10 @@ for chunk_idx in ACTIVE_CHUNKS:
 
     compiled = pd.concat(frames, ignore_index=True)
 
+    # Trim to canonical Product B window (Oct 1921 - Sep 2021)
+    ym = compiled["Year"] * 100 + compiled["Month"]
+    compiled = compiled[(ym >= 192110) & (ym <= 202109)].copy()
+
     # De-duplicate: keep last occurrence for each (Part B, Part C, Year, Month)
     compiled = compiled.drop_duplicates(
         subset=["Part B", "Part C", "Year", "Month"], keep="last"
@@ -1564,57 +1574,53 @@ if not CLI_ARGS.skip_comparison:
               scatter_dir.mkdir(exist_ok=True)
 
               for cat in cats_present:
-                scatter_dir = fig_dir / "monthly_climatology"
-                scatter_dir.mkdir(exist_ok=True)
+                  cat_cmp = cmp_df[cmp_df["Input_Category"] == cat]
+                  # Get unique SVs
+                  sv_list = cat_cmp.groupby(["Part_B", "Part_C"]).ngroups
+                  if sv_list == 0:
+                      continue
 
-                for cat in cats_present:
-                    cat_cmp = cmp_df[cmp_df["Input_Category"] == cat]
-                    # Get unique SVs
-                    sv_list = cat_cmp.groupby(["Part_B", "Part_C"]).ngroups
-                    if sv_list == 0:
-                        continue
+                  # One plot per SV
+                  n_plotted = 0
+                  for (partb, partc), sv_cmp in cat_cmp.groupby(["Part_B", "Part_C"]):
+                      wy_month_nums = [10, 11, 12, 1, 2, 3, 4, 5, 6, 7, 8, 9]
+                      month_pos = {month: i + 1 for i, month in enumerate(wy_month_nums)}
+                      sv_cmp = sv_cmp.copy()
+                      sv_cmp["Month_Position"] = sv_cmp["Month"].map(month_pos)
+                      sv_cmp = sv_cmp.sort_values("Month_Position")
+                      months_data = sv_cmp["Month_Position"].values
 
-                    # One plot per SV
-                    n_plotted = 0
-                    for (partb, partc), sv_cmp in cat_cmp.groupby(["Part_B", "Part_C"]):
-                        wy_month_nums = [10, 11, 12, 1, 2, 3, 4, 5, 6, 7, 8, 9]
-                        month_pos = {month: i + 1 for i, month in enumerate(wy_month_nums)}
-                        sv_cmp = sv_cmp.copy()
-                        sv_cmp["Month_Position"] = sv_cmp["Month"].map(month_pos)
-                        sv_cmp = sv_cmp.sort_values("Month_Position")
-                        months_data = sv_cmp["Month_Position"].values
+                      fig, ax = plt.subplots(figsize=(5.0, 2.5))
 
-                        fig, ax = plt.subplots(figsize=(5.0, 2.5))
+                      # Product B chunks (orange envelope)
+                      chunk_cols = [f"{t}_mean" for t in ACTIVE_TAGS if f"{t}_mean" in sv_cmp.columns]
+                      for i, col in enumerate(chunk_cols):
+                          vals = sv_cmp[col].values
+                          ax.plot(months_data, vals, color="tab:orange", alpha=0.3,
+                                  lw=0.8, label="Product B" if i == 0 else None)
 
-                        # Product B chunks (orange envelope)
-                        chunk_cols = [f"{t}_mean" for t in ACTIVE_TAGS if f"{t}_mean" in sv_cmp.columns]
-                        for i, col in enumerate(chunk_cols):
-                            vals = sv_cmp[col].values
-                            ax.plot(months_data, vals, color="tab:orange", alpha=0.3,
-                                    lw=0.8, label="Product B" if i == 0 else None)
+                      # Product A (blue)
+                      pa_vals = sv_cmp["Product_A_mean"].values
+                      ax.plot(months_data, pa_vals, color="tab:blue", lw=1.2,
+                              label="Product A")
 
-                        # Product A (blue)
-                        pa_vals = sv_cmp["Product_A_mean"].values
-                        ax.plot(months_data, pa_vals, color="tab:blue", lw=1.2,
-                                label="Product A")
+                      ax.set_xticks(range(1, 13))
+                      ax.set_xticklabels(_MONTH_LABELS)
+                      ax.set_xlabel("Month")
+                      ax.set_ylabel("Monthly Mean")
+                      ax.set_title(f"{partb}/{partc}")
+                      ax.legend(loc="best", framealpha=0.7)
+                      fig.tight_layout()
 
-                        ax.set_xticks(range(1, 13))
-                        ax.set_xticklabels(_MONTH_LABELS)
-                        ax.set_xlabel("Month")
-                        ax.set_ylabel("Monthly Mean")
-                        ax.set_title(f"{partb}/{partc}")
-                        ax.legend(loc="best", framealpha=0.7)
-                        fig.tight_layout()
+                      cat_safe = cat.replace(" ", "_").replace("/", "_")
+                      cat_plot_dir = scatter_dir / cat_safe
+                      cat_plot_dir.mkdir(parents=True, exist_ok=True)
+                      fname = f"{partb}__{partc}.png".replace("/", "_")
+                      fig.savefig(cat_plot_dir / fname, bbox_inches="tight")
+                      plt.close(fig)
+                      n_plotted += 1
 
-                        cat_safe = cat.replace(" ", "_").replace("/", "_")
-                        cat_plot_dir = scatter_dir / cat_safe
-                        cat_plot_dir.mkdir(parents=True, exist_ok=True)
-                        fname = f"{partb}__{partc}.png".replace("/", "_")
-                        fig.savefig(cat_plot_dir / fname, bbox_inches="tight")
-                        plt.close(fig)
-                        n_plotted += 1
-
-                    print(f"    {cat}: {n_plotted} climatology plots")
+                  print(f"    {cat}: {n_plotted} climatology plots")
 
         except ImportError:
             print("  WARNING: matplotlib not available, skipping figures.")
