@@ -46,8 +46,9 @@ import matplotlib.pyplot as plt
 from matplotlib.patches import Patch
 
 # Add repo root to path for utils imports
-sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 from utils.paths import get_base_dir, get_module_generated_dir
+from utils.quantile_mapping import qmap_single
 
 
 def parse_grid_info_file(grid_info_path):
@@ -349,15 +350,14 @@ def apply_vpd_quantile_mapping(temp_monthly, target_vpd, source_type):
     if source_type == 'Product_B':
         # Product B has synthetic year labels (2025-3033) that don't overlap with
         # historical VPD years (1921-2018), so year-based filtering/merging won't work.
-        # Instead: use first N months of synthetic temp sequence as calibration basis
-        # and assign the corresponding historical year/month labels so qmap_single
-        # can match them by month.
-        n_calib = len(target_vpd)
+        # qmap_single builds independent per-month (1-12) distributions for basis
+        # and target, so only the month labels need to be correct -- years are
+        # irrelevant.  Product B months are already correct calendar months from
+        # the PeriodIndex, so we use them directly (no label overwriting).
+        # Use up to 1200 months (~100 WY), truncated to whichever series is shorter.
+        n_calib = min(len(temp_basis_sim), len(target_vpd), 1200)
         basis_hist_temp = temp_basis_sim.iloc[:n_calib].copy().reset_index(drop=True)
-        target_hist_vpd = target_vpd.reset_index(drop=True)
-        # Overwrite synthetic year/month in basis_hist with historical labels
-        basis_hist_temp['year']  = target_hist_vpd['year'].values
-        basis_hist_temp['month'] = target_hist_vpd['month'].values
+        target_hist_vpd = target_vpd.iloc[:n_calib].copy().reset_index(drop=True)
     else:
         # Product_A / Historical: filter to calibration window then inner-merge
         calib_start = (1921, 10)
@@ -1073,7 +1073,7 @@ def run_validate_outputs(scenario):
         Scenario number (e.g., '1')
     """
     script_dir = Path(__file__).parent.resolve()
-    gen_dir = get_module_generated_dir("mod_climate")
+    gen_dir = get_module_generated_dir("mod_forcing/climate")
     excel_file = script_dir / "reference" / "calsim_climate_sv.xlsx"
     if not excel_file.exists():
         excel_file = script_dir / "input" / "calsim_climate_sv.xlsx"
@@ -1235,7 +1235,7 @@ def write_product_b_chunks(summaries: list, output_folder):
     total_chunks    = 10
     total_needed    = skip_months + months_per_chunk * total_chunks
 
-    date_template = pd.date_range('1921-10-31', periods=months_per_chunk, freq='M')
+    date_template = pd.date_range('1921-10-31', periods=months_per_chunk, freq='ME')
     output_path = Path(output_folder)
     output_path.mkdir(parents=True, exist_ok=True)
 
@@ -1325,8 +1325,8 @@ def parse_arguments():
     parser.add_argument(
         '--locations',
         type=str,
-        default='input/uhh_locations.csv',
-        help='CSV file with UHH locations (default: input/uhh_locations.csv)'
+        default='reference/uhh_locations.csv',
+        help='CSV file with UHH locations (default: reference/uhh_locations.csv)'
     )
     parser.add_argument(
         '--start_date',
@@ -1371,28 +1371,33 @@ def main():
     # Set up paths
     script_dir = Path(__file__).parent.resolve()
     base_dir = get_base_dir()
-    gen_dir = get_module_generated_dir("mod_climate")
+    gen_dir = get_module_generated_dir("mod_forcing/climate")
     
     # Input files
     uhh_locations_file = script_dir / args.locations
     excel_file = script_dir / "reference" / "calsim_climate_sv.xlsx"
     if not excel_file.exists():
         excel_file = script_dir / "input" / "calsim_climate_sv.xlsx"
-    grid_info_folder = base_dir / "CS3_Baseline_Hydrology" / "CDEC" / "Rim_Inflows"
+    repo_root = Path(__file__).resolve().parents[2]
+    grid_info_folder = repo_root / "mod_forcing" / "vic" / "reference" / "GridInfo"
     
     # Build data path based on source type
     if args.source == "Historical":
         data_folder = base_dir / "Historical_Climate"
         output_folder = gen_dir / "output" / "_2_uhh_basin_averages" / "historical"
+        script_output_folder = output_folder
     else:
         # Product_A or Product_B with scenario
         data_folder = base_dir / "WGEN" / args.source / args.scenario
         if args.source == 'Product_A':
             output_folder = gen_dir / "output" / "_2_uhh_basin_averages" / "product_a"
+            script_output_folder = output_folder
         else:
             output_folder = gen_dir / "output" / "_product_b_final"
+            script_output_folder = gen_dir / "output" / "_2_uhh_basin_averages" / "product_b"
     
     output_folder.mkdir(parents=True, exist_ok=True)
+    script_output_folder.mkdir(parents=True, exist_ok=True)
     
     # Convert to string for file operations
     data_folder_str = str(data_folder)
@@ -1456,7 +1461,7 @@ def main():
         # Strip internal keys (prefixed _) before writing CSV
         summary_rows = [{k: v for k, v in s.items() if not k.startswith('_')} for s in summaries]
         summary_df = pd.DataFrame(summary_rows)
-        summary_file = output_folder / "_summary.csv"
+        summary_file = script_output_folder / "_summary.csv"
         summary_df.to_csv(summary_file, index=False)
         print(f"\n{'='*80}")
         print(f"Processing complete!")
