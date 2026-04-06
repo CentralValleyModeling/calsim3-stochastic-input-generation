@@ -43,6 +43,28 @@ For stochastic Product B generation, the expanded observation pool from 1955-202
 
 The matching process emphasizes annual unimpaired flow sums as the primary similarity metric, capturing overall wetness conditions that correlate with runoff timing patterns. Wet years tend to have earlier snowmelt and storm-driven peaks, while dry years show constrained, late-season patterns. Matching on annual sum preserves these relationships even though specific storm timing differs between synthetic and historical sequences.
 
+```{mermaid}
+flowchart TD
+    SYN["Synthetic Water Year\n(Product B)"] --> CALC_IDX["Calculate Flow Index\n(8-river annual sum)"]
+    CALC_IDX --> MATCH["Find Nearest Historical Year\nby Flow Index Distance"]
+
+    subgraph POOL["Historical Observation Pool (1955-2021)"]
+        direction LR
+        Y55["1955"] ~~~ Y70["1970"] ~~~ Y90["1990"] ~~~ Y21["2021"]
+    end
+
+    MATCH --> POOL
+    POOL --> BEST["Best-Match Historical Year"]
+    BEST --> BORROW["Borrow Day Volume\nFraction Pattern\n(Days 1-30 per month)"]
+    BORROW --> OUTPUT["Synthetic DVF\n(fractions sum to 1.0\nper month)"]
+
+    style SYN fill:#264653,color:#fff
+    style OUTPUT fill:#2d6a4f,color:#fff
+    style POOL fill:#f0f4f8,stroke:#264653
+```
+
+_Day volume fraction bootstrap methodology. Each synthetic year is matched to the historical year with the nearest flow index, then borrows that year's within-month disaggregation pattern._
+
 ## Results
 
 ### Validation

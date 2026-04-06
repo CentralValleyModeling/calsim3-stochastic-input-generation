@@ -37,6 +37,75 @@ Table 1 shows the final inventory of input categories and variable counts extrac
 
 _Note: Total = total variables in category; Generate = variables requiring stochastic generation; Missing = variables with missing data in historical record; Constant/Rep. = variables held constant or using repeating patterns (not stochastically generated); Not Used = variables not used in DCR 2023 baseline or dynamic in CalSim 3._
 
+## Data Flow Pipeline
+
+The diagram below illustrates the end-to-end processing pipeline from WGEN climate generation through final DSS compilation. Modules are organized by processing tier, where each tier depends on outputs from the tier above.
+
+```{mermaid}
+flowchart TD
+    WGEN["WGEN\nSynthetic Climate\n(Temp + Precip)"]
+
+    subgraph Tier1["Tier 1: Forcing"]
+        VIC["VIC Hydrologic Model\n(mod_forcing/vic)"]
+    end
+
+    subgraph Tier2["Tier 2: Climate Extraction"]
+        CLIMATE["Climate\n56 vars\n(mod_forcing/climate)"]
+    end
+
+    subgraph Tier3["Tier 3: Core Hydrology"]
+        CSHYDRO["CalSimHydro\n746 vars"]
+        CSHYDRO_EE["CalSimHydroEE\n17 vars"]
+        RIM["Rim Inflow\n227 vars"]
+        SWS["Small Watersheds\n210 vars"]
+        DCD["Delta Channel\nDepletion\n28 vars"]
+    end
+
+    subgraph Tier4["Tier 4: Water Year Types"]
+        WYT["Sac 40-30-30\nSJ 60-20-20\n(water_year_types)"]
+    end
+
+    subgraph Tier5["Tier 5: Dependent Modules"]
+        EVAP["Reservoir Evap\n95 vars"]
+        STORAGE["Storage Curves\n7 vars"]
+        TULARE["Tulare GW\n14 vars"]
+        INSTREAM["Instream Flows\n3 vars"]
+        UPPER["Upper Watershed\n12 vars"]
+        DVF["Day Volume\nFractions\n31 vars"]
+        CLOSURE["Closure Terms\n13 vars"]
+        OTHER["Other / Misc\n6 vars"]
+    end
+
+    subgraph Tier6["Tier 6: Final Compilation"]
+        COMPILE["sv_compile\n(postprocessing)\nProduct A / Product B DSS"]
+    end
+
+    WGEN --> VIC
+    WGEN --> CLIMATE
+    WGEN --> CSHYDRO
+    WGEN --> CSHYDRO_EE
+    WGEN --> SWS
+    WGEN --> DCD
+    WGEN --> EVAP
+    WGEN --> CLOSURE
+    VIC --> RIM
+    VIC --> CSHYDRO
+    RIM --> WYT
+    WYT --> TULARE
+    WYT --> UPPER
+    WYT --> OTHER
+    RIM --> INSTREAM
+    RIM --> UPPER
+    RIM --> DVF
+    RIM --> STORAGE
+    Tier3 --> COMPILE
+    Tier4 --> COMPILE
+    Tier5 --> COMPILE
+    Tier2 --> COMPILE
+```
+
+_Data flow from WGEN through processing tiers to final DSS compilation. Arrows indicate data dependencies between modules._
+
 ## Module Mapping
 
 Each input category maps to a specific module in the repository. The table below provides the correspondence between categories and their code locations.

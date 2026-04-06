@@ -39,6 +39,35 @@ $$\text{Final Flow} = \text{Trib}_{\text{QM}} + \text{Trib}_{\text{adjust}}$$
 
 This ensures that the downstream anchor flow equals the sum of all upstream tributary contributions, maintaining hydrologic mass balance while allowing individual tributary flows to reflect their quantile-mapped distributions.
 
+```{mermaid}
+flowchart TD
+    VIC["VIC Streamflow Outputs"] --> QM_ANC["Quantile Map\nAnchor Watershed\n(e.g., UNIMP_FOLS)"]
+    VIC --> QM_T1["Quantile Map\nTributary 1"]
+    VIC --> QM_T2["Quantile Map\nTributary 2"]
+    VIC --> QM_TN["Quantile Map\nTributary N"]
+
+    QM_ANC --> COMPARE{"Anchor QM =\nSum of Tribs QM?"}
+    QM_T1 --> SUM["Sum Tributary QMs"]
+    QM_T2 --> SUM
+    QM_TN --> SUM
+    SUM --> COMPARE
+
+    COMPARE -->|Yes| DONE["No Adjustment Needed"]
+    COMPARE -->|No| RESIDUAL["Compute Residual\nAnchor_QM - Sum_Tribs_QM"]
+    RESIDUAL --> DIST["Distribute Proportionally\nby Tributary Share"]
+    DIST --> ADJ1["Trib 1 Final =\nTrib 1 QM + Adjustment"]
+    DIST --> ADJ2["Trib 2 Final =\nTrib 2 QM + Adjustment"]
+    DIST --> ADJN["Trib N Final =\nTrib N QM + Adjustment"]
+
+    style QM_ANC fill:#264653,color:#fff
+    style DONE fill:#2d6a4f,color:#fff
+    style ADJ1 fill:#2d6a4f,color:#fff
+    style ADJ2 fill:#2d6a4f,color:#fff
+    style ADJN fill:#2d6a4f,color:#fff
+```
+
+_Anchor watershed mass balance adjustment. After independent quantile mapping, tributary flows are proportionally adjusted so their sum matches the anchor watershed total._
+
 ## Results
 
 The quantile mapping methodology achieved substantial improvements across the rim inflow network. The average NSE improved by 0.10 points compared to raw VIC flows, and approximately 80% of total CalSim 3 rim inflow volume achieved NSE of 0.78 or better after quantile mapping. The minimum NSE was raised from 0.3 to 0.6 for the poorest performing locations. Monthly bias was reduced by approximately 50% at major anchor watersheds, with Shasta's annual error declining from 750 TAF to 375 TAF. Trinity's enormous negative bias in raw VIC was nearly eliminated through quantile mapping.

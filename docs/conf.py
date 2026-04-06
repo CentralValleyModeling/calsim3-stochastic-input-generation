@@ -22,6 +22,7 @@ extensions = [
     'sphinx.ext.viewcode',       # Link to source code
     'sphinx.ext.intersphinx',    # Cross-reference Python docs
     'sphinx_copybutton',         # Copy button on code blocks
+    'sphinxcontrib.mermaid',     # Mermaid diagram rendering
 ]
 
 # MyST parser options

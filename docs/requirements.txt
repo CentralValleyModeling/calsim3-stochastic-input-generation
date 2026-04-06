@@ -4,3 +4,4 @@ myst-parser>=3.0
 sphinx-book-theme
 sphinx-copybutton
 sphinx-autobuild
+sphinxcontrib-mermaid
