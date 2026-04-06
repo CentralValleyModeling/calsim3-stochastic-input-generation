@@ -44,7 +44,6 @@ CLI flags
 - ``--skip-comparison``  Skip the Product A vs B comparison step.
 - ``--skip-dss``         Skip DSS file generation.
 - ``--chunks 1 2 3``     Process only specific chunks (default: all 10).
-- ``--n-workers 10``     Number of parallel threads for DSS writing (default: 10).
 """
 
 import os
@@ -148,10 +147,6 @@ _parser.add_argument(
     "--chunks", nargs="+", type=int,
     default=list(range(1, N_CHUNKS + 1)),
     help="Chunk numbers to compile, 1-10 (default: all).",
-)
-_parser.add_argument(
-    "--n-workers", type=int, default=10,
-    help="Number of parallel threads for DSS writing (default: 10).",
 )
 _parser.add_argument(
     "--summary-figures", action="store_true", default=False,
@@ -1228,7 +1223,6 @@ if not CLI_ARGS.skip_dss:
     print("-" * 72)
 
     from pydsstools.core import TimeSeriesContainer
-    from concurrent.futures import ThreadPoolExecutor, as_completed
 
     t0_dss = time.time()
     dss_chunk_paths = {}  # tag -> Path
@@ -1347,30 +1341,18 @@ if not CLI_ARGS.skip_dss:
 
         return tag, n_paths_written, len(n_svs_written)
 
-    # -- 4b-v: Execute (threaded or sequential) ------------------------
-    n_workers = max(1, min(CLI_ARGS.n_workers, len(chunk_lookups)))
+    # -- 4b-v: Execute (sequential) ------------------------------------
+    # NOTE: DSS writing must be sequential. The HEC-DSS C library uses
+    # global state that is not thread-safe; concurrent writes to separate
+    # files can corrupt DSS internal pointers.
     tags_to_write = sorted(chunk_lookups)
-
-    if n_workers > 1:
-        print(f"  Writing {len(tags_to_write)} chunks with {n_workers} threads ...")
-        with ThreadPoolExecutor(max_workers=n_workers) as executor:
-            futures = {
-                executor.submit(_write_chunk, tag): tag
-                for tag in tags_to_write
-            }
-            for future in as_completed(futures):
-                tag, n_paths, n_svs = future.result()
-                dss_chunk_paths[tag] = COMPILED_DIR / f"ProductB_SV_{tag}.dss"
-                print(f"  {tag}:  {n_paths:>6,} DSS paths written  |  "
-                      f"{n_svs:>5,} (B,C)")
-    else:
-        print(f"  Writing {len(tags_to_write)} chunks (single-threaded) ...")
-        for tag in tags_to_write:
-            t_one = time.time()
-            tag, n_paths, n_svs = _write_chunk(tag)
-            dss_chunk_paths[tag] = COMPILED_DIR / f"ProductB_SV_{tag}.dss"
-            print(f"  {tag}:  {n_paths:>6,} DSS paths written  |  "
-                  f"{n_svs:>5,} (B,C)  ({time.time()-t_one:.1f}s)")
+    print(f"  Writing {len(tags_to_write)} chunks (sequential) ...")
+    for tag in tags_to_write:
+        t_one = time.time()
+        tag, n_paths, n_svs = _write_chunk(tag)
+        dss_chunk_paths[tag] = COMPILED_DIR / f"ProductB_SV_{tag}.dss"
+        print(f"  {tag}:  {n_paths:>6,} DSS paths written  |  "
+              f"{n_svs:>5,} (B,C)  ({time.time()-t_one:.1f}s)")
 
     if use_junction:
         _remove_junction()
