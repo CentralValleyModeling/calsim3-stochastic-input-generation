@@ -33,9 +33,7 @@ import pandas as pd
 from pydsstools.heclib.dss import HecDss
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[4]))
-from utils.paths import get_base_dir, get_data_dir, get_generated_dir
-
-DATA_DIR = get_data_dir()
+from utils.paths import get_base_dir, get_generated_dir
 COMPILED = (get_generated_dir() / "postprocessing" / "sv_compile"
             / "product_b_compilation" / "_product_b_compiled_sv")
 RIM_DIR = (get_generated_dir() / "postprocessing" / "sv_compile"
