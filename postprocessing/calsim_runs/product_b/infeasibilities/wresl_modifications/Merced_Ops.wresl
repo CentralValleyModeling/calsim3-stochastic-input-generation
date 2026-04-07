@@ -1,0 +1,21 @@
+! Fix 2: Bear Creek / Deadman Creek Delivery Guard (low-flow)
+! File: Run/SanJoaquin/Merced/Merced_Ops.wresl, line ~611
+! Problem: Seepage terms go negative under zero inflow, making RHS < 0 while delivery >= 0
+! Fix: Add conditional guard that caps delivery at zero when both inflows are dry
+
+! --- ORIGINAL ---
+!goal setD_BCK006_ESC004_WR_2 {D_BCK006_ESC004_WR < I_BUR005 + I_BCK040 + SG105_BCK040_15 + SG106_BCK035_15 + SG107_BCK031_15 + SG108_BCK024_15 + SG109_BCK017_15 + SG110_BCK010_15 + SG111_BCK006_15}
+
+! --- MODIFIED ---
+goal setD_BCK006_ESC004_WR_2 {
+    lhs D_BCK006_ESC004_WR
+    case noInflow {
+        condition I_BCK040 < 0.001 .AND. I_BUR005 < 0.001
+        rhs 0.
+    }
+    case normalOps {
+        condition always
+        rhs I_BUR005 + I_BCK040 + SG105_BCK040_15 + SG106_BCK035_15 + SG107_BCK031_15 + SG108_BCK024_15 + SG109_BCK017_15 + SG110_BCK010_15 + SG111_BCK006_15
+        lhs<rhs penalty 0
+    }
+}

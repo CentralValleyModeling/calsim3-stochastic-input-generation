@@ -42,6 +42,7 @@ CalSim Synthetic Hydroclimate
    :caption: CalSim Run
 
    source/calsim-run/overview
+   source/calsim-run/sjr_infeasibility_report
 
 .. toctree::
    :maxdepth: 1

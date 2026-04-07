@@ -55,6 +55,21 @@ html_theme_options = {
     'navigation_with_keys': True,
 }
 
+# -- Mermaid -------------------------------------------------------------------
+mermaid_init_js = """
+mermaid.initialize({
+    startOnLoad: true,
+    theme: "base",
+    themeVariables: {
+        fontSize: "16px"
+    },
+    flowchart: {
+        useMaxWidth: true,
+        htmlLabels: true
+    }
+});
+"""
+
 # -- Intersphinx ---------------------------------------------------------------
 intersphinx_mapping = {
     'python': ('https://docs.python.org/3', None),
