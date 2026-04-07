@@ -1,7 +1,7 @@
 # WRESL Modifications for SJR Cycle 14 Infeasibility
 
 Modified copies of CalSim 3 WRESL files addressing Product B stochastic infeasibilities.
-See `docs/source/findings/sjr_infeasibility/sjr_infeasibility_report.md` for full analysis.
+See `docs/source/calsim-run/sjr_infeasibility_report.md` for full analysis.
 
 Source study: `9.3.1_danube_hist`
 
