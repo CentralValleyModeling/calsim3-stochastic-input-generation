@@ -23,6 +23,28 @@ Given the limitations of correlation-based approaches, the team developed a nove
 
 The methodology leverages a key insight: since WGEN constructs each synthetic month by sampling from historical days, and those sampling dates are recorded, the closure terms can be reconstructed by applying the same temporal mixing. A WGEN month that draws 80% of its days from January 1987 and 20% from January 1992 would receive a closure term value that is 80% of the January 1987 historical closure term plus 20% of January 1992. This approach inherits whatever physical or operational processes originally generated the closure terms without requiring an independent physical model.
 
+```{mermaid}
+flowchart TD
+    WGEN_MONTH["Synthetic WGEN Month\n(e.g., Jan Year 450)"] --> DATES["Extract Sampled\nHistorical Dates"]
+    DATES --> PCT["Calculate % of Days\nfrom Each Historical Month/Year"]
+
+    PCT --> H1["Historical Jan 1987\n(80% of days)"]
+    PCT --> H2["Historical Jan 1992\n(20% of days)"]
+
+    H1 --> CT1["Closure Term Value\nJan 1987"]
+    H2 --> CT2["Closure Term Value\nJan 1992"]
+
+    CT1 --> WAVG["Weighted Average\n0.80 x CT_1987 + 0.20 x CT_1992"]
+    CT2 --> WAVG
+
+    WAVG --> OUTPUT["Synthetic Closure Term\nfor Jan Year 450"]
+
+    style WGEN_MONTH fill:#264653,color:#fff
+    style OUTPUT fill:#2d6a4f,color:#fff
+```
+
+_WGEN date-weighted closure term reconstruction. Each synthetic month's closure term is a weighted average of historical values, with weights determined by the fraction of days sampled from each historical period._
+
 It is worth noting that closure terms are being retired in future CalSim versions as model improvements reduce the need for empirical error corrections. Several closure terms were already retired in the DCR 2025 draft, simplifying both the CalSim model and this stochastic generation framework. This methodology may not require extensive refinement for Phase II.
 
 ## Results

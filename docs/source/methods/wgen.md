@@ -14,6 +14,30 @@ The WGEN produces two distinct output products that serve different roles in the
 
 The distinction between products is central to the project's validation strategy. Product A serves as the basis for all validation metrics. For example, quantile mapping relationships are trained on the first half of the historical period (1921–1971) and tested on the second half (1972–2018) where reconstructed values can be compared directly against known CalSim inputs. Once validation confirms acceptable performance, the same methodologies are applied to Product B inputs (using the entire historical record as the training basis) to generate the 1,000-year stochastic sequences used for CalSim planning runs. This two-product structure ensures that every generation method is validated against historical truth before being applied to produce synthetic inputs.
 
+```{mermaid}
+flowchart LR
+    subgraph PRODUCTA["Product A (Validation)"]
+        direction TB
+        WA["WGEN Historical Mode\n(WY 1915-2018)"] --> VA["VIC / Models"]
+        VA --> QMA["Quantile Mapping\n(Train: 1921-1971)"]
+        QMA --> VALIDATE["Validate vs CalSim\n(Test: 1972-2018)"]
+    end
+
+    subgraph PRODUCTB["Product B (Production)"]
+        direction TB
+        WB["WGEN Stochastic\n(1000 years)"] --> VB["VIC / Models"]
+        VB --> QMB["Quantile Mapping\n(Train: full record)"]
+        QMB --> STOCH["1000-yr Stochastic\nCalSim Inputs"]
+    end
+
+    VALIDATE -->|"Methods confirmed"| QMB
+
+    style PRODUCTA fill:#e8f4f8,stroke:#264653
+    style PRODUCTB fill:#e8f8e8,stroke:#2d6a4f
+```
+
+_Product A validates reconstruction methodologies against historical truth. Once confirmed, the same methods are applied to Product B using the full historical record as training data._
+
 ### Algorithm Overview
 
 The WGEN algorithm operates in two phases: model fitting and simulation. During model fitting, daily weather regimes (WRs) are identified from historical atmospheric circulation data using an NHMM. The model classifies each historical day into one of eight distinct weather regimes based on large-scale atmospheric circulation patterns over the western United States. Historical daily precipitation and temperature data across California are then associated with these historically identified weather regimes, establishing the conditional distributions that drive generation.
@@ -21,6 +45,34 @@ The WGEN algorithm operates in two phases: model fitting and simulation. During 
 During simulation, the model creates new sequences of weather regimes through forward simulation of the fitted NHMM. For each simulated day, the algorithm selects a weather regime, then bootstraps daily precipitation and temperature values from the pool of historical days sharing that regime. The weather regime provides the bridge between large-scale atmospheric patterns and local weather outcomes, ensuring that generated sequences respect observed teleconnections between synoptic conditions and surface climate.
 
 Within a given simulation day, the process works as follows: the NHMM generates a new weather regime (for example, regime 3), the algorithm identifies all historical days classified as regime 3, and one of those historical days is selected as the source for temperature and precipitation values.
+
+```{mermaid}
+flowchart LR
+    subgraph FIT["Model Fitting"]
+        direction TB
+        ATMOS["Atmospheric\nCirculation Data\n(NCEP/NCAR)"] --> NHMM["NHMM Classification\n(8 Weather Regimes)"]
+        HIST_WX["Historical Daily\nPrecip + Temp"] --> ASSOC["Associate Weather\nwith Regimes"]
+        NHMM --> ASSOC
+    end
+
+    subgraph SIM["Simulation"]
+        direction TB
+        FWD["Forward Simulate\nNHMM Regime Sequence"] --> SELECT["Select Weather Regime\nfor Simulated Day"]
+        SELECT --> POOL["Identify Historical Days\nMatching Regime"]
+        POOL --> BOOT["Bootstrap: Sample\nTemp + Precip"]
+        BOOT --> JITTER{"Heavy\nPrecip?"}
+        JITTER -->|Yes| COPULA["Copula Jittering\n(extend tails)"]
+        JITTER -->|No| OUTPUT["Synthetic Daily\nWeather"]
+        COPULA --> OUTPUT
+    end
+
+    FIT --> SIM
+
+    style FIT fill:#f0f4f8,stroke:#264653
+    style SIM fill:#f0f4f8,stroke:#2d6a4f
+```
+
+_WGEN two-phase algorithm. Model fitting (left) classifies historical weather into regimes. Simulation (right) generates new regime sequences and bootstraps daily weather from matching historical days._
 
 ![WGEN Algorithm Overview](../figures/s2-methods_wgen-algorithm-overview.png)
 *Figure 1. Overview of the weather regime-based stochastic weather generator algorithm. During model fitting (left), weather regimes are identified from historical atmospheric circulation data. During simulation (right), new weather regime sequences drive bootstrapping of precipitation and temperature values.*

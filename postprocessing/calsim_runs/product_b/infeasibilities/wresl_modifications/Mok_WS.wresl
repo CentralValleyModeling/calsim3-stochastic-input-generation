@@ -1,0 +1,14 @@
+! Fix 1: Mokelumne Allocation Floor (low-flow)
+! File: Run/SanJoaquin/LowerMokelumne/Mok_WS.wresl, line ~225
+! Problem: July dry-year adjustment goes negative when cumulative demand fraction > 0.78
+! Fix: Floor the result at zero with max(0., ...)
+
+! --- ORIGINAL ---
+!	case July{
+!	     condition month == JUL .AND. AnnAlloc60n_NA5 <= 17
+!	     value (16.1-20.6*Cumdist_60N_NA5dv(-1)-20.6*dist_60N_NA5_OctFebdv(-1))/(1-Cumdist_60N_NA5dv(-1)-dist_60N_NA5_OctFebdv(-1))}
+
+! --- MODIFIED ---
+	case July{
+	     condition month == JUL .AND. AnnAlloc60n_NA5 <= 17
+	     value max(0., (16.1-20.6*Cumdist_60N_NA5dv(-1)-20.6*dist_60N_NA5_OctFebdv(-1))/(1-Cumdist_60N_NA5dv(-1)-dist_60N_NA5_OctFebdv(-1)))}

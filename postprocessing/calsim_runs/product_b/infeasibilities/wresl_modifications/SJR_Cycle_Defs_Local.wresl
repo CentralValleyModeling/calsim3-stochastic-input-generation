@@ -1,0 +1,18 @@
+! Fix 3: Mendota Pool DMC Balance Headroom (high-flow)
+! File: Run/Other/SJR_Cycle_Defs_Local.wresl, line ~149
+! Problem: mdota_max = 10000 overflows when stochastic Millerton inflow exceeds ~34,500 cfs
+! Fix: Increase mdota_max from 10000 to 50000
+
+! --- ORIGINAL ---
+!define mdota_max {value 10000.0} !zrc@
+
+! --- MODIFIED ---
+define mdota_max {value 50000.0} !zrc@ increased from 10000 for stochastic high-flow feasibility
+
+
+
+
+
+
+
+

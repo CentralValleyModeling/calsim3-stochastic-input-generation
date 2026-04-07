@@ -22,6 +22,7 @@ extensions = [
     'sphinx.ext.viewcode',       # Link to source code
     'sphinx.ext.intersphinx',    # Cross-reference Python docs
     'sphinx_copybutton',         # Copy button on code blocks
+    'sphinxcontrib.mermaid',     # Mermaid diagram rendering
 ]
 
 # MyST parser options
@@ -53,6 +54,21 @@ html_theme_options = {
     'show_toc_level': 2,
     'navigation_with_keys': True,
 }
+
+# -- Mermaid -------------------------------------------------------------------
+mermaid_init_js = """
+mermaid.initialize({
+    startOnLoad: true,
+    theme: "base",
+    themeVariables: {
+        fontSize: "16px"
+    },
+    flowchart: {
+        useMaxWidth: true,
+        htmlLabels: true
+    }
+});
+"""
 
 # -- Intersphinx ---------------------------------------------------------------
 intersphinx_mapping = {

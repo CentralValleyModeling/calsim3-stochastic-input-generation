@@ -60,6 +60,25 @@ The quantile mapping procedure operates through a sequence of carefully designed
 
 When values fall outside the historical range, tail extrapolation becomes necessary. If the value is above or below the historical range, a fitted Gamma distribution handles the tail extrapolation. Finally, the target CDF is inverted at the interpolated probability to obtain the mapped value, using the fitted Gamma for tail values.
 
+```{mermaid}
+flowchart TD
+    INPUT["Simulated Basis Value\n(e.g., VIC streamflow)"] --> SPLIT["Split by Calendar Month"]
+    SPLIT --> CDF["Build Empirical CDFs\n(Basis + Target, training period)"]
+    CDF --> INTERP["Interpolate Probability\nfrom Basis CDF"]
+    INTERP --> RANGE{"Value within\nhistorical range?"}
+    RANGE -->|Yes| INVERT["Invert Target CDF\nat interpolated probability"]
+    RANGE -->|No| GAMMA["Fit Gamma Distribution\nfor tail extrapolation"]
+    GAMMA --> INVERT_TAIL["Invert Target CDF\nusing Gamma tail"]
+    INVERT --> CLIP["Zero-clip\n(prevent negative flows)"]
+    INVERT_TAIL --> CLIP
+    CLIP --> OUTPUT["Mapped CalSim Value"]
+
+    style INPUT fill:#264653,color:#fff
+    style OUTPUT fill:#2d6a4f,color:#fff
+```
+
+_Quantile mapping procedure for a single variable. Each calendar month is processed independently to preserve seasonal patterns._
+
 ### Validation Approach
 
 Validation of the quantile mapping methodology uses a historical data split approach. The overlapping historical period (October 1921 through September 2018) is divided into a training period (1921–1971) and a testing period (1972–2018). The statistical relationship is developed using training data, then applied to the testing period where mapped values can be compared against actual CalSim inputs that were held out. This 50/50 split provides approximately equal-length samples for relationship development and independent testing, with evaluation via monthly boxplots, mean percentage error, and R².
@@ -120,7 +139,34 @@ Change-in-storage quantile mapping addresses a specific challenge with reservoir
 
 Date-stitching using WGEN sampling dates provides a path forward for variables with weak or no correlation to physical drivers. The methodology matches synthetic years to historical years based on flow indices (four-river or eight-river unimpaired flow sums), then borrows patterns from the matched historical year. This bootstrap approach works particularly well for day volume fractions where 1921-1948 validation shows exact matches for many years.
 
-:::note Suggested Plot  
-Decision tree flowchart showing the methodology selection process: starting with correlation assessment, branching to QM (R² > 0.7), hybrid QM (R² 0.5-0.7), WYT averaging (regular seasonal patterns), threshold logic (allocation ratios), direct calculation (known relationships), or date-stitching (weak correlation).
-:::
+```{mermaid}
+flowchart TD
+    START["Variable to Reconstruct"] --> PHYS{"Direct physical\nmodel available?"}
+    PHYS -->|Yes| MODEL["Model-Based Generation\n(VIC, CalSimHydro, DCD, etc.)"]
+    PHYS -->|No| FORMULA{"Known physical\nrelationship?"}
+    FORMULA -->|Yes| DIRECT["Direct Calculation\n(e.g., precip x area x coeff)"]
+    FORMULA -->|No| CORR{"Correlation with\nVIC/flow basis?"}
+    CORR -->|"R-squared > 0.7"| QM["Quantile Mapping"]
+    CORR -->|"R-squared 0.5-0.7"| PEAKS{"Peak overshoot\nproblem?"}
+    PEAKS -->|Yes| HYBRID["Hybrid QM\n(QM + WYT) / 2"]
+    PEAKS -->|No| QM
+    CORR -->|"R-squared < 0.5"| PATTERN{"Regular seasonal\npattern?"}
+    PATTERN -->|Yes| WYT_AVG["WYT Monthly\nAveraging"]
+    PATTERN -->|No| THRESH{"Threshold /\nallocation logic?"}
+    THRESH -->|Yes| THRESH_LOGIC["Threshold-Based\nReconstruction\n(Solver-optimized)"]
+    THRESH -->|No| DATES{"WGEN date\nmapping usable?"}
+    DATES -->|Yes| STITCH["Date-Stitching\n(Bootstrap from matched year)"]
+    DATES -->|No| WTAVG["WGEN Weighted\nAveraging"]
+
+    style MODEL fill:#2d6a4f,color:#fff
+    style QM fill:#2d6a4f,color:#fff
+    style HYBRID fill:#2d6a4f,color:#fff
+    style WYT_AVG fill:#2d6a4f,color:#fff
+    style DIRECT fill:#2d6a4f,color:#fff
+    style THRESH_LOGIC fill:#2d6a4f,color:#fff
+    style STITCH fill:#2d6a4f,color:#fff
+    style WTAVG fill:#2d6a4f,color:#fff
+```
+
+_Method selection decision tree. Starting from variable characteristics, the appropriate reconstruction methodology is determined through correlation strength, seasonal pattern regularity, and available physical relationships._
 
