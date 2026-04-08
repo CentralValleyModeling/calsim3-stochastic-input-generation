@@ -127,9 +127,6 @@ PATH_UNIMP_OROV_PA = _rim_gen / "output" / "_2_qmap_historical_validation" / "ca
 # Input 3: Product B directory (10 chunk CSVs)
 PATH_UNIMP_OROV_PB_DIR = _rim_gen / "output" / "_3_qmap_product_b"
 
-# Reference for validation comparison (CalSim3 historical MINFLOWFEATHER)
-PATH_VALIDATION_REF = _gen / "output" / "_product_a_validation" / "_InstreamFlows_terms_MINFLOWFEATHER_1971_2018.csv"
-
 # Spreadsheet with original computed schedule (for 3-way validation comparison)
 PATH_XLSX = _gen / "term_development" / "MINFLOWFEATHER" / "MIF_FEATHER_Logic_Reconstruction.xlsx"
 
@@ -332,6 +329,34 @@ def _load_xlsx_thresholds() -> dict:
     }
 
 
+def _load_xlsx_cs3_values() -> pd.Series:
+    """
+    Load the CS3 actual MINFLOWFEATHER (cfs) from the Graph sheet, column B
+    of MIF_FEATHER_Logic_Reconstruction.xlsx.
+
+    Graph sheet layout (data rows start at index 2, 0-indexed):
+      Col A : Date (end-of-month datetime)
+      Col B : ACTUAL INPUT MIN FLOW FEATHER (cfs)
+
+    Returns end-of-month DatetimeIndex Series of integer cfs values.
+    """
+    import openpyxl
+    from datetime import datetime as _dt
+    wb = openpyxl.load_workbook(PATH_XLSX, read_only=True, data_only=True)
+    rows = list(wb['Graph'].iter_rows(values_only=True))
+    wb.close()
+    flows = {}
+    for row in rows[2:]:  # skip header rows
+        dt, val = row[0], row[1]
+        if not isinstance(dt, _dt) or val is None:
+            continue
+        ts = pd.Timestamp(dt) + pd.offsets.MonthEnd(0)
+        flows[ts] = int(val)
+    s = pd.Series(flows, name='Value_CS3', dtype=int).sort_index()
+    s.index.name = 'date'
+    return s
+
+
 def _load_spreadsheet_values() -> pd.Series:
     """
     Extract the monthly MINFLOWFEATHER values (cfs) as originally computed
@@ -473,15 +498,13 @@ def run_validation():
     df_val_wide = to_calsim_csv(mf_val, 'MINFLOWFEATHER', 'FLOW-MIN-REQUIRED') \
                       .rename(columns={'Value': 'Value_Python'})
 
-    if os.path.exists(PATH_VALIDATION_REF):
-        df_cs3 = pd.read_csv(PATH_VALIDATION_REF)[['Year', 'Month', 'Value']]
-        df_val_wide = df_val_wide.merge(
-            df_cs3.rename(columns={'Value': 'Value_CS3'}),
-            on=['Year', 'Month'], how='left'
-        )
-    else:
-        print("  (CS3 reference not found — Value_CS3 will be NaN)")
-        df_val_wide['Value_CS3'] = pd.NA
+    cs3_vals = _load_xlsx_cs3_values()
+    cs3_df = pd.DataFrame({
+        'Year':  cs3_vals.index.year,
+        'Month': cs3_vals.index.month,
+        'Value_CS3': cs3_vals.values,
+    })
+    df_val_wide = df_val_wide.merge(cs3_df, on=['Year', 'Month'], how='left')
 
     if os.path.exists(PATH_XLSX):
         ss_vals = _load_spreadsheet_values()
