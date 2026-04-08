@@ -1,4 +1,4 @@
-# Input Generation
+# Overview
 
 This section documents input generation across 15 input categories comprising 1,733 study variables for CalSim 3 stochastic generation. Each category represents a distinct component of California's water system modeling framework, from primary hydrologic drivers to water management constraints and operational rules.
 
@@ -43,41 +43,41 @@ The diagram below illustrates the end-to-end processing pipeline from WGEN clima
 
 ```{mermaid}
 flowchart TD
-    WGEN["WGEN\nSynthetic Climate\n(Temp + Precip)"]
+    WGEN["WGEN<br/>Synthetic Climate<br/>(Temp + Precip)"]
 
     subgraph Tier1["Tier 1: Forcing"]
-        VIC["VIC Hydrologic Model\n(mod_forcing/vic)"]
+        VIC["VIC Hydrologic Model<br/>(mod_forcing/vic)"]
     end
 
     subgraph Tier2["Tier 2: Climate Extraction"]
-        CLIMATE["Climate\n56 vars\n(mod_forcing/climate)"]
+        CLIMATE["Climate<br/>56 vars<br/>(mod_forcing/climate)"]
     end
 
     subgraph Tier3["Tier 3: Core Hydrology"]
-        CSHYDRO["CalSimHydro\n746 vars"]
-        CSHYDRO_EE["CalSimHydroEE\n17 vars"]
-        RIM["Rim Inflow\n227 vars"]
-        SWS["Small Watersheds\n210 vars"]
-        DCD["Delta Channel\nDepletion\n28 vars"]
+        CSHYDRO["CalSimHydro<br/>746 vars"]
+        CSHYDRO_EE["CalSimHydroEE<br/>17 vars"]
+        RIM["Rim Inflow<br/>227 vars"]
+        SWS["Small Watersheds<br/>210 vars"]
+        DCD["Delta Channel<br/>Depletion<br/>28 vars"]
     end
 
     subgraph Tier4["Tier 4: Water Year Types"]
-        WYT["Sac 40-30-30\nSJ 60-20-20\n(water_year_types)"]
+        WYT["Sac 40-30-30<br/>SJ 60-20-20<br/>(water_year_types)"]
     end
 
     subgraph Tier5["Tier 5: Dependent Modules"]
-        EVAP["Reservoir Evap\n95 vars"]
-        STORAGE["Storage Curves\n7 vars"]
-        TULARE["Tulare GW\n14 vars"]
-        INSTREAM["Instream Flows\n3 vars"]
-        UPPER["Upper Watershed\n12 vars"]
-        DVF["Day Volume\nFractions\n31 vars"]
-        CLOSURE["Closure Terms\n13 vars"]
-        OTHER["Other / Misc\n6 vars"]
+        EVAP["Reservoir Evap<br/>95 vars"]
+        STORAGE["Storage Curves<br/>7 vars"]
+        TULARE["Tulare GW<br/>14 vars"]
+        INSTREAM["Instream Flows<br/>3 vars"]
+        UPPER["Upper Watershed<br/>12 vars"]
+        DVF["Day Volume<br/>Fractions<br/>31 vars"]
+        CLOSURE["Closure Terms<br/>13 vars"]
+        OTHER["Other / Misc<br/>6 vars"]
     end
 
     subgraph Tier6["Tier 6: Final Compilation"]
-        COMPILE["sv_compile\n(postprocessing)\nProduct A / Product B DSS"]
+        COMPILE["sv_compile<br/>(postprocessing)<br/>Product A / Product B DSS"]
     end
 
     WGEN --> VIC

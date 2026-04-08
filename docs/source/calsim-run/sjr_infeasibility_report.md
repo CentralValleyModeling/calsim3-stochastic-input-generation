@@ -1,4 +1,4 @@
-# SJR Cycle Infeasibility in Product B CalSim Runs
+# Infeasibility Fixes in Product B Runs
 
 ## Summary
 
@@ -97,7 +97,7 @@ CalSim error output confirms violations at: `setnegsg105_bck040_15`, `setnegsg98
 
 ### Figure 1: Mokelumne / Pardee Inflow Traces Around WY 1922
 
-![Mokelumne and Pardee inflow traces for WY 1922-1923](fig1_mok_parde_traces_wy1922.png)
+![Mokelumne and Pardee inflow traces for WY 1922-1923](./figures/fig1_mok_parde_traces_wy1922.png)
 
 Failing chunks n03 and n07 (red) show zero inflows for I_MOK079 and I_PARDE through most of WY 1922. The blue line shows the CalSim historical baseline.
 
@@ -142,7 +142,7 @@ CalSim error output confirms `mendotabalance` and `mpinf_abv_force` are named in
 
 ### Figure 2: Millerton Inflow Traces Around WY 1944 (n06)
 
-![Millerton inflow traces for WY 1944-1945](fig2_mlrtn_traces_wy1944.png)
+![Millerton inflow traces for WY 1944-1945](./figures/fig2_mlrtn_traces_wy1944.png)
 
 Chunk n06 (red) shows a June 1944 inflow of 2054 TAF, far exceeding the historical baseline (blue, 285.7 TAF). Chunk n05 hits the identical ceiling at Jun 1968 (not shown).
 

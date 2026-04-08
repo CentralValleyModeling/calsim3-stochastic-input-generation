@@ -20,7 +20,7 @@ html:
 
 # Live-reload during authoring (requires sphinx-autobuild)
 livehtml:
-	sphinx-autobuild "$(SOURCEDIR)" "$(BUILDDIR)/html" $(SPHINXOPTS) $(O)
+	sphinx-autobuild "$(SOURCEDIR)" "$(BUILDDIR)/html" $(SPHINXOPTS) $(O) -a
 
 # Catch-all: pass targets through to sphinx-build
 %: Makefile

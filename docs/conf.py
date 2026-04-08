@@ -23,6 +23,7 @@ extensions = [
     'sphinx.ext.intersphinx',    # Cross-reference Python docs
     'sphinx_copybutton',         # Copy button on code blocks
     'sphinxcontrib.mermaid',     # Mermaid diagram rendering
+    'sphinx_design',             # Tabs, cards, grids
 ]
 
 # MyST parser options
@@ -49,9 +50,10 @@ exclude_patterns = ['_build', 'Thumbs.db', '.DS_Store', 'source/MIGRATION.md', '
 html_theme       = 'sphinx_book_theme'
 html_title       = 'CalSim Stochastic Hydroclimate Input Generation Documentation'
 html_static_path = ['_static']
+html_css_files   = ['custom.css']
 
 html_theme_options = {
-    'show_toc_level': 2,
+    'show_toc_level': 3,
     'navigation_with_keys': True,
 }
 
