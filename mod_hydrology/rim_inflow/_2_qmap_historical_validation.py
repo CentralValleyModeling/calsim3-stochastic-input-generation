@@ -65,7 +65,6 @@ vic_end_year = 2018
 
 df_master  = pd.read_excel(master_xlsx, sheet_name="MASTER")
 col_C, col_I = df_master.columns[2], df_master.columns[8]
-col_O, col_P = df_master.columns[15], df_master.columns[16]
 
 # Filter for "Rim Inflow"
 df_inflow    = df_master[df_master[col_I].astype(str).str.strip().str.lower() == 'rim inflow']
@@ -114,8 +113,8 @@ def load_vic_dir(vic_path:str)->pd.DataFrame:
         name  = file[len("CS3_"):-len("_qmo.csv")]  # VIC inflow name
         fpath = os.path.join(vic_path, file)
         df    = pd.read_csv(fpath, header=None)
-        df.iloc[:, 0] = pd.to_datetime(df.iloc[:, 0], errors="coerce")
-        ser = pd.Series(df.iloc[:, 1].values, index=df.iloc[:, 0].values, name=name)
+        idx   = pd.to_datetime(df.iloc[:, 0], errors="coerce")
+        ser = pd.Series(df.iloc[:, 1].values, index=idx, name=name)
         # normalize to month-end to match CalSim
         ser.index = pd.to_datetime(pd.to_datetime(ser.index).to_period('M').to_timestamp('M'))
         data[name] = ser
@@ -130,7 +129,7 @@ def excel_to_partB(name:str) -> str:
     return name.upper().replace(' ','_')
 
 def read_calsim_monthly_multi(dssfile, strList):
-    full_idx = pd.date_range('1915-01-31', f'{vic_end_year}-12-31', freq='M')
+    full_idx = pd.date_range('1915-01-31', f'{vic_end_year}-12-31', freq='ME')
     with HecDss.Open(dssfile, version=6, catalog_flag=True) as dss:
         paths   = dss.getPathnameList("/*/*/*/*/1MON/*")
         bucket  = {}
@@ -439,13 +438,13 @@ def _nse_safe(sim, obs):
     return 1 - np.sum((obs - sim)**2) / den
 
 post_metrics = (
-    detail_df.groupby("CalSim", as_index=False)
+    detail_df.groupby("CalSim", as_index=False, observed=True)
              .apply(lambda g: pd.Series({
                  "qmap_rPearson_TestPeriod_postAdj":  _pearson_safe(g["qmap_postAdj"].values, g["cs3_val"].values),
                  "qmap_r2Pearson_TestPeriod_postAdj": (lambda r: r*r if np.isfinite(r) else np.nan)(
                      _pearson_safe(g["qmap_postAdj"].values, g["cs3_val"].values)),
                  "qmap_NSE_TestPeriod_postAdj":       _nse_safe(g["qmap_postAdj"].values, g["cs3_val"].values),
-             }))
+             }), include_groups=False)
              .reset_index(drop=True)
 )
 detail_df = detail_df.merge(post_metrics, on="CalSim", how="left")
@@ -616,7 +615,7 @@ if RUN_PLOTS:
     def save_annual_mean_boxes(df: pd.DataFrame, value_col: str, title: str, fname: str, ylabel: str):
         d = df[np.isfinite(df[value_col])].copy()
         if d.empty: return
-        d = d.groupby('CalSim', as_index=False).mean()
+        d = d.groupby('CalSim', as_index=False, observed=True).mean(numeric_only=True)
         plt.figure(figsize=(8,5))
         sns.boxplot(
             data=d, y=value_col, whis=(5,95),
@@ -640,7 +639,7 @@ if RUN_PLOTS:
         vlabel      = "Pre-Adjustment" if variant == 'preAdj' else "Post-Adjustment"
 
         # Per‑location monthly plots (QMAP)
-        for cal_name, grp in detail_df.groupby('CalSim'):
+        for cal_name, grp in detail_df.groupby('CalSim', observed=True):
             g = grp.copy()
             g['error_pct'] = g[err_pct_col]
             g['Error']     = g[err_abs_col]
@@ -652,7 +651,7 @@ if RUN_PLOTS:
         wy = detail_df.copy()
         if 'WaterYear' not in wy.columns:
             wy['WaterYear'] = np.where(wy['Month'] >= 10, wy['Year'] + 1, wy['Year']).astype(int)
-        df_annual_qmap = (wy.groupby(['CalSim','WaterYear'], as_index=False)
+        df_annual_qmap = (wy.groupby(['CalSim','WaterYear'], as_index=False, observed=True)
                             .agg(cs3_sum=('cs3_val','sum'),
                                  qmap_sum=(flow_col, 'sum')))
         with np.errstate(divide='ignore', invalid='ignore'):
@@ -693,7 +692,7 @@ if RUN_PLOTS:
         _plot_for_variant(PLOT_VARIANT)
 
     # VIC monthly (whole overlap)
-    for cal_name, grp in vic_detail_df.groupby('CalSim'):
+    for cal_name, grp in vic_detail_df.groupby('CalSim', observed=True):
         save_monthly_box_per_location_general(grp, cal_name, value_col='VIC_Error_pct')
         save_monthly_box_per_location_general(grp, cal_name, value_col='VIC_Error')
 
