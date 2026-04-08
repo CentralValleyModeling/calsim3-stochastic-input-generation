@@ -1,44 +1,4 @@
-# Model Forcing (mod_forcing)
-
-VIC model forcing and climate extractions providing the upstream climate inputs for CalSim 3 stochastic generation. The VIC hydrologic model sits at the top of the processing pipeline, translating synthetic weather into gridded water and energy fluxes that drive rim inflow quantile mapping, CalSimHydro ET, and water year type classification. Climate extractions provide point precipitation and basin-averaged climate summaries for the CalSim forecast DLL.
-
----
-
-## VIC Hydrologic Model
-
-```{admonition} Repository Module
-:class: tip
-
-**Module:** `mod_forcing/vic/`  
-Append wind to WGEN, run VIC, compile rim inflows from VIC fluxes
-```
-
-The Variable Infiltration Capacity (VIC) model is a macroscale distributed hydrologic model that translates daily climate inputs (precipitation, temperature, wind speed) into gridded water and energy fluxes including evapotranspiration, runoff, and baseflow. VIC does not produce CalSim 3 state variables directly -- it does not appear in the input variable inventory -- but its flux outputs serve as the upstream basis for over 1,000 downstream variables through rim inflow quantile mapping (`mod_hydrology/rim_inflow/`), CalSimHydro ET quantile mapping (`mod_hydrology/calsimhydro/`), and water year type classification (`mod_hydrology/water_year_types/`).
-
-### Wind Data Processing
-
-WGEN generates daily precipitation and temperature but does not produce wind speed, which VIC requires as a forcing input. This gap is filled differently for each product:
-
-- **Product A** (`_1_append_wind_wgen_hist.py`): Historical observed wind data (1915--2021) is appended directly to the WGEN meteorological files. Since Product A replicates the historical weather regime sequence, actual historical wind is the appropriate match.
-- **Product B** (`_1_append_wind_wgen_stochastic.py`): Wind is resampled from historical records using the WGEN internal date mapping (`resampled.dates_Product_B_1000yr.csv`). Each synthetic day's wind comes from the historical day that WGEN sampled for that position, maintaining consistency between precipitation/temperature patterns and wind conditions.
-
-Both scripts rename WGEN output files from `data_*` to `meteo_*` format and merge wind as an additional column alongside the existing precipitation, maximum temperature, and minimum temperature fields. The resulting files are the complete forcing inputs consumed by VIC.
-
-### Rim Inflow Compilation
-
-The `compile_rim_inflows` class (`_2_compile_rim_inflows.py`) aggregates VIC flux files into watershed-level streamflow time series that serve as the basis for downstream quantile mapping. For each grid cell in a watershed:
-
-1. Daily runoff and baseflow fluxes are summed: $Q_{cell} = \text{RUNOFF} + \text{BASEFLOW}$
-2. Cell contributions are weighted by the grid information ratio $f_2 / f_1$, accounting for partial cell coverage and area adjustments
-3. Weighted cell flows are summed across the watershed and converted from mm to TAF
-
-Product A uses standard `DatetimeIndex` (1915--2021), while Product B requires `PeriodIndex` (2025--3033) to handle 1,000-year sequences that exceed pandas Timestamp limits. The compiled watershed flows become the VIC basis series for quantile mapping in `mod_hydrology/rim_inflow/`.
-
-VIC also produces ET-related flux outputs (EVAP, PET_H2OSURF, PET_SHORT) that are consumed by `mod_hydrology/calsimhydro/` for area-weighted ET quantile mapping to CalSim reference ET targets.
-
----
-
-## Climate (57 Variables)
+# mod_forcing/climate
 
 ```{admonition} Repository Module
 :class: tip
@@ -50,31 +10,31 @@ Climate extractions at point locations and basin averages
 
 Climate point locations and basin averages providing forecast DLL inputs and watershed climate summaries for CalSim 3. The 56 inputs span 26 point locations (monthly precipitation at reservoir locations) plus 30 basin-averaged inputs covering precipitation, temperature, and vapor pressure deficit for 10 watershed basins. These variables enable the forecast module to project future water availability based on current climate conditions, replicating operational decision-making processes.
 
-### Methodology
+## Methodology
 
-#### Point Locations and Basin Averages
+### Point Locations and Basin Averages
 
 The 10 watershed basins receiving full climate characterization (precipitation, temperature, VPD) represent key hydrologic regions across the CalSim domain. Basin averaging appropriately scales point measurements to watershed spatial extent, accounting for elevation gradients, orographic effects, and spatial heterogeneity. The forecast DLL uses these basin averages to develop water year outlooks that inform operational decisions within CalSim's simulation framework.
 
 Upper Horseshoe Bar (UHH) serves as a representative basin for Sacramento River forecasting, with particular importance for Folsom and American River operations. Other basins span the Delta tributaries, San Joaquin tributaries, and eastside streams, ensuring comprehensive climate coverage for forecast generation across all CalSim regions.
 
-#### Vapor Pressure Deficit Reconstruction
+### Vapor Pressure Deficit Reconstruction
 
 Vapor pressure deficit (VPD) presents a unique reconstruction challenge since the weather generator does not produce relative humidity or dew point temperature, which are typically required for VPD calculation. VIC model outputs include humidity-related variables, but these are known to have problematic biases that would propagate into VPD estimates. The solution identified exceptional correlation between temperature and VPD at basin scales.
 
 Correlation analysis across all 10 watershed basins revealed R > 0.97 between temperature and VPD, enabling a quantile mapping approach using temperature as the basis variable. This high correlation reflects the fundamental physical relationship where warmer air can hold more water vapor, increasing the vapor pressure deficit for a given absolute humidity. The methodology quantile maps VPD using basin-averaged temperature as the predictor, preserving the statistical relationship while avoiding VIC humidity biases.
 
-### Results
+## Results
 
-#### Point Precipitation
+### Point Precipitation
 
 The 26 point precipitation locations are extracted from the nearest WGEN grid cell to each reservoir coordinate. Because WGEN precipitation is used directly without bias correction, Product A values inherit the WGEN precipitation deficit relative to the CalSim historical record. Validation confirms that spatial patterns are preserved -- basins with higher historical precipitation receive proportionally higher synthetic values -- even though absolute magnitudes are slightly lower across most locations.
 
-#### Basin Averages
+### Basin Averages
 
-Basin-averaged precipitation and temperature are computed using area-weighted grid cells from the VIC grid information files (`_2_uhh_basin_averages.py`). Temperature validation shows a slight positive Product A bias, consistent with WGEN behavior. Precipitation shows a corresponding slight negative bias. These biases propagate consistently to downstream modules: lower precipitation drives reduced CalSimHydro surface runoff, while slightly higher temperatures contribute to the compressed diurnal range observed in reservoir evaporation (see {doc}`/source/input-generation/mod-reservoir`).
+Basin-averaged precipitation and temperature are computed using area-weighted grid cells from the VIC grid information files (`_2_uhh_basin_averages.py`). Temperature validation shows a slight positive Product A bias, consistent with WGEN behavior. Precipitation shows a corresponding slight negative bias. These biases propagate consistently to downstream modules: lower precipitation drives reduced CalSimHydro surface runoff, while slightly higher temperatures contribute to the compressed diurnal range observed in reservoir evaporation (see {doc}`/source/input-generation/mod-reservoir-evaporation`).
 
-#### Vapor Pressure Deficit Validation
+### Vapor Pressure Deficit Validation
 
 Product A validation shows expected bias patterns consistent with temperature-VPD coupling. Temperature exhibits slightly higher values in Product A compared to historical, which propagates to VPD reconstruction as expected from the quantile mapping basis. Precipitation shows slightly lower values in Product A, consistent with documented weather generator behavior. The VPD bias follows temperature trends as anticipated, validating the temperature-based reconstruction methodology.
 
@@ -105,11 +65,12 @@ Product A validation shows expected bias patterns consistent with temperature-VP
 :::
 ::::
 
-:::note Suggested Plot
+:::{admonition} Suggested Plot
+:class: note
 Three-panel comparison showing monthly time series (WY 1972-2018) for a representative watershed basin: (1) Temperature showing slight positive Product A bias, (2) Precipitation showing slight negative Product A bias, (3) VPD showing positive bias matching temperature pattern. Include monthly box plots showing distribution shifts.
 :::
 
-#### Trinity Watershed Anomaly
+### Trinity Watershed Anomaly
 
 Trinity watershed precipitation exhibits significantly different behavior from other watersheds in the domain, with validation showing larger discrepancies than expected. Investigation revealed potential grid file discrepancies in the source data. The precipitation compilation used a VIC grid file from the CDC/rim inflow folder in baseline hydrology datasets, but the forecast DLL may use a different grid file or spatial averaging approach.
 
@@ -117,6 +78,7 @@ The anomaly was flagged during the January 2026 progress meeting, where further 
 
 Resolution requires comparing grid files and determining which spatial definition the forecast DLL actually employs. If the discrepancy stems from grid file differences rather than methodology issues, updating to the correct grid file should resolve the anomaly. This highlights the importance of verifying spatial definitions when multiple data sources contribute to CalSim inputs, and the risk of assuming geographic consistency across independently developed model components.
 
-:::note Suggested Plot
+:::{admonition} Suggested Plot
+:class: note
 Map of the 10 watershed basins with shading indicating Product A vs Historical precipitation difference (blue = wetter, red = drier). Overlay the 26 point locations as markers. Highlight Trinity watershed with annotation about grid file investigation. Include representative basin time series insets showing typical validation performance.
 :::

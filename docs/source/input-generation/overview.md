@@ -6,36 +6,60 @@ This section documents input generation across 15 input categories comprising 1,
 
 Table 1 shows the final inventory of input categories and variable counts extracted from the master CalSim SV inventory. The following high-level observations can be drawn from the input inventory counts:
 
-1. **CalSimHydro dominates the variable count.** Sacramento Valley hydrology accounts for 746 of 1,733 variables (43%), reflecting the spatial resolution of water budget accounting across dozens of water balance areas. Together with Rim Inflow and Small Watersheds, these three hydrologic categories comprise 69% of all study variables.
+1. **Hydrology modules dominate the variable count.** Watershed and valley floor hydrology collectively account for 1,256 of 1,733 variables (72%).
 
 2. **Most variables require stochastic generation.** Of the 1,733 total, 1,465 (85%) require active generation from synthetic climate inputs. The remaining variables are either constant or repeating (130), not used in the current baseline (106), or have zero/missing values (32).
 
-3. **Upper Watershed Modules are largely pre-covered.** Despite 104 total variables, only 12 require new generation; the remaining 89 are already produced by other categories in the main inventory, and 3 are held constant. This cross-category overlap was identified through systematic inventory reconciliation.
+3. **Upper Watershed Modules are largely pre-covered.** Despite 104 total variables, only 12 require new generation; the remaining 89 are already produced dynamically in the CalSim run with the upper watershed modules turned on, and 3 are held constant.
 
-4. **Miscellaneous variables are predominantly constant.** The Other category (143 variables) contains 111 constant or repeating values. Similarly, all 5 Salinity variables use repeating historical patterns.
+4. **Miscellaneous variables are predominantly constant or repeating.** The Other category (143 variables) contains 111 constant or repeating values. Similarly, all 5 Salinity variables use repeating historical patterns.
    
 **Table 1. CalSim 3 Stochastic Input Categories and Variable Counts**
 
-| Category | Total | Generate | Missing | Const./Rep. | Not Used | Description |
-|----------|------:|-------:|--------:|--------------:|---------:|-------------|
-| **Rim Inflow** | 241 | 227 | 13 | 0 | 1 | Unimpaired inflows to major rim reservoirs, quantile mapped from VIC (`mod_hydrology/rim_inflow`) |
-| **CalSimHydro** | 746 | 746 | 0 | 0 | 0 | Sacramento Valley hydrology: precipitation, ET, deep percolation, runoff (`mod_hydrology/calsimhydro`) |
-| **CalSimHydroEE** | 17 | 17 | 0 | 0 | 0 | External Elements boundary conditions for groundwater recharge (`mod_hydrology/calsimhydro_ee`) |
-| **Small Watersheds** | 210 | 210 | 0 | 0 | 0 | Small tributary contributions not resolved by VIC (`mod_hydrology/small_watersheds`) |
-| **Delta Channel Depletion** | 28 | 28 | 0 | 0 | 0 | Delta agricultural demands via DETAW/DCD (`mod_hydrology/delta_channel_depletion`) |
-| **Reservoir Evaporation** | 96 | 95 | 1 | 0 | 0 | Evaporation from 95 major reservoirs using Hargreaves-Samani (`mod_reservoir/evaporation`) |
-| **Reservoir Storage Curves** | 9 | 7 | 0 | 2 | 0 | Storage-based terms (Oroville, Mammoth) aligned to rule curves (`mod_reservoir/storage_curves`) |
-| **Instream Flows** | 6 | 3 | 0 | 1 | 2 | Minimum flow requirements: San Joaquin Restoration, Feather River (`mod_other/instream_flows`) |
-| **Climate** | 57 | 56 | 0 | 0 | 1 | Point locations and basin averages for climate metrics (`mod_forcing/climate`) |
-| **Upper Watershed Modules** | 104 | 12 | 0 | 3 | 89 | Preprocessed variables for upper watershed operations (`mod_other/upper_watershed`) |
-| **Day-Volume Fraction** | 31 | 31 | 0 | 0 | 0 | Monthly-to-daily disaggregation fractions (`mod_other/day_volume_fractions`) |
-| **Closure Terms** | 26 | 13 | 5 | 8 | 0 | Water balance closure adjustments (`mod_other/closure_terms`) |
-| **Tulare Groundwater Terms** | 14 | 14 | 0 | 0 | 0 | Groundwater correlations for Tulare Basin (`mod_hydrology/tulare_gw_terms`) |
-| **Salinity** | 5 | 0 | 0 | 5 | 0 | Delta salinity boundary conditions, constant/repeating (`inventory/screening/salinity`) |
-| **Other** | 143 | 6 | 13 | 111 | 13 | Miscellaneous operational variables: B120 forecasts, WYT indexes, etc. (`mod_other/miscellaneous`) |
-| **TOTAL** | **1,733** | **1,465** | **32** | **130** | **106** | Complete study variable set |
+_Total = total variables; Generate = requiring stochastic generation; Missing = missing historical data; Const./Rep. = constant or repeating; Not Used = not active in DCR 2023 baseline._
 
-_Note: Total = total variables in category; Generate = variables requiring stochastic generation; Missing = variables with missing data in historical record; Constant/Rep. = variables held constant or using repeating patterns (not stochastically generated); Not Used = variables not used in DCR 2023 baseline or dynamic in CalSim 3._
+**Hydrology (mod_hydrology)**
+
+| Category | Total | Generate | Missing | Const./Rep. | Not Used |
+|----------|------:|--------:|--------:|------------:|---------:|
+| [Rim Inflow](mod-hydrology-rim-inflow.md) | 241 | 227 | 13 | 0 | 1 |
+| [CalSimHydro](mod-hydrology-calsimhydro.md) | 746 | 746 | 0 | 0 | 0 |
+| [CalSimHydroEE](mod-hydrology-calsimhydro-ee.md) | 17 | 17 | 0 | 0 | 0 |
+| [Small Watersheds](mod-hydrology-small-watersheds.md) | 210 | 210 | 0 | 0 | 0 |
+| [Delta Channel Depletion](mod-hydrology-delta-channel-depletion.md) | 28 | 28 | 0 | 0 | 0 |
+| [Tulare Groundwater Terms](mod-hydrology-tulare-gw.md) | 14 | 14 | 0 | 0 | 0 |
+| **Subtotal** | **1,256** | **1,242** | **13** | **0** | **1** |
+
+_Water year type classification (Sac 40-30-30, SJ 60-20-20) is computed from these rim inflows in `mod_hydrology/water_year_types/` and consumed by several downstream modules. See [Water Year Types](mod-hydrology-water-year-types.md) for details._
+
+**Reservoir (mod_reservoir)**
+
+| Category | Total | Generate | Missing | Const./Rep. | Not Used |
+|----------|------:|--------:|--------:|------------:|---------:|
+| [Reservoir Evaporation](mod-reservoir-evaporation.md) | 96 | 95 | 1 | 0 | 0 |
+| [Reservoir Storage Curves](mod-reservoir-storage-curves.md) | 9 | 7 | 0 | 2 | 0 |
+| **Subtotal** | **105** | **102** | **1** | **2** | **0** |
+
+**Forcing (mod_forcing)**
+
+| Category | Total | Generate | Missing | Const./Rep. | Not Used |
+|----------|------:|--------:|--------:|------------:|---------:|
+| [Climate](mod-forcing-climate.md) | 57 | 56 | 0 | 0 | 1 |
+| **Subtotal** | **57** | **56** | **0** | **0** | **1** |
+
+**Other Modules (mod_other)**
+
+| Category | Total | Generate | Missing | Const./Rep. | Not Used |
+|----------|------:|--------:|--------:|------------:|---------:|
+| [Instream Flows](mod-other-instream-flows.md) | 6 | 3 | 0 | 1 | 2 |
+| [Upper Watershed Modules](mod-other-upper-watershed.md) | 104 | 12 | 0 | 3 | 89 |
+| [Day Volume Fractions](mod-other-day-volume-fractions.md) | 31 | 31 | 0 | 0 | 0 |
+| [Closure Terms](mod-other-closure-terms.md) | 26 | 13 | 5 | 8 | 0 |
+| [Salinity](mod-other-salinity.md) | 5 | 0 | 0 | 5 | 0 |
+| [Other Variables](mod-other-other-variables.md) | 143 | 6 | 13 | 111 | 13 |
+| **Subtotal** | **315** | **65** | **18** | **128** | **104** |
+
+**TOTAL: 1,733 variables -- 1,465 generated, 130 constant/repeating, 32 missing, 106 not used.**
 
 ## Data Flow Pipeline
 
@@ -106,7 +130,6 @@ flowchart TD
 
 _Data flow from WGEN through processing tiers to final DSS compilation. Arrows indicate data dependencies between modules._
 
-Water year type classification (Sac 40-30-30, SJ 60-20-20) is computed in `mod_hydrology/water_year_types/` and consumed by Tiers 4-5. Upstream forcing (VIC model, wind processing) is in `mod_forcing/vic/`. Final DSS compilation and validation are in `postprocessing/sv_compile/`. Shared utilities (quantile mapping, flow indices, WYT framework) are in `utils/`.
 
 
 

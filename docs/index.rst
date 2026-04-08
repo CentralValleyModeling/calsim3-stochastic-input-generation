@@ -18,10 +18,23 @@ CalSim Synthetic Hydroclimate
    :caption: Input Generation
 
    source/input-generation/overview
-   source/input-generation/mod-forcing
-   source/input-generation/mod-hydrology
-   source/input-generation/mod-reservoir
-   source/input-generation/mod-other
+   source/input-generation/mod-forcing-vic
+   source/input-generation/mod-forcing-climate
+   source/input-generation/mod-hydrology-rim-inflow
+   source/input-generation/mod-hydrology-calsimhydro
+   source/input-generation/mod-hydrology-calsimhydro-ee
+   source/input-generation/mod-hydrology-small-watersheds
+   source/input-generation/mod-hydrology-delta-channel-depletion
+   source/input-generation/mod-hydrology-tulare-gw
+   source/input-generation/mod-hydrology-water-year-types
+   source/input-generation/mod-reservoir-evaporation
+   source/input-generation/mod-reservoir-storage-curves
+   source/input-generation/mod-other-instream-flows
+   source/input-generation/mod-other-upper-watershed
+   source/input-generation/mod-other-day-volume-fractions
+   source/input-generation/mod-other-closure-terms
+   source/input-generation/mod-other-other-variables
+   source/input-generation/mod-other-salinity
 
 .. toctree::
    :maxdepth: 1
