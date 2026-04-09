@@ -1,0 +1,17 @@
+Group,Metric,Key,Calsim Part B Construction
+Delta,Delta Inflow,DELTAINFLOWFORNDOI,DELTAINFLOWFORNDOI
+Delta,SAC River at Freeport,C_SAC048,C_SAC048
+Delta,Cache Slough,C_CSL004A,C_CSL004A
+Delta,San Joaquin River at Vernalis,C_SJR070,C_SJR070
+Delta,Delta Outflow,NDOI,NDOI
+Delta,Total Banks Exports,C_CAA003,C_CAA003
+Delta,Total Jones Exports,C_DMC000,C_DMC000
+Deliveries,CVP Total Delivery,DEL_CVP_TOTAL,DEL_CVP_TOTAL_N + DEL_CVP_TOTAL_S
+Deliveries,CVP North of Delta Delivery,DEL_CVP_TOTAL_N,DEL_CVP_TOTAL_N
+Deliveries,CVP South of Delta Delivery,DEL_CVP_TOTAL_S,DEL_CVP_TOTAL_S
+Deliveries,SWP Total Delivery,DEL_SWP_TOTAL,SWP_TA_TOTAL + SWP_IN_TOTAL + SWP_CO_TOTAL
+Storage,Shasta Storage,S_SHSTA,S_SHSTA
+Storage,Oroville Storage,S_OROVL,S_OROVL
+Storage,San Luis Storage Total,S_SLUIS_TOTAL,S_SLUIS_CVP + S_SLUIS_SWP
+Storage,San Luis Storage CVP,S_SLUIS_CVP,S_SLUIS_CVP
+Storage,San Luis Storage SWP,S_SLUIS_SWP,S_SLUIS_SWP
