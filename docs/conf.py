@@ -58,19 +58,17 @@ html_theme_options = {
 }
 
 # -- Mermaid -------------------------------------------------------------------
-mermaid_init_js = """
-mermaid.initialize({
-    startOnLoad: true,
-    theme: "base",
-    themeVariables: {
-        fontSize: "16px"
+mermaid_init_config = {
+    "startOnLoad": False,
+    "theme": "base",
+    "themeVariables": {
+        "fontSize": "16px"
     },
-    flowchart: {
-        useMaxWidth: true,
-        htmlLabels: true
+    "flowchart": {
+        "useMaxWidth": True,
+        "htmlLabels": True
     }
-});
-"""
+}
 
 # -- Intersphinx ---------------------------------------------------------------
 intersphinx_mapping = {
