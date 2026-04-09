@@ -10,12 +10,12 @@ definitions live in ../reference/metrics.csv.
 
 Example:
 
-    python 2_pickle_builder.py ^
-        --baseline-name Benchmark ^
+    python _pickle_builder.py ^
+        --baseline-name Historical ^
         --baseline-dss "..\benchmark\DSS\output\benchmark.dss" ^
-        --product-b-root "_ProductB_Run" ^
+        --product-b-root "data\GENERATED\postprocessing\calsim_runs\product_b\dv_out" ^
         --glob "**\*.dss" ^
-        --out-dir "output\_2_pickle_builder\cache\Benchmark_vs_ProductB"
+        --out-dir "data\GENERATED\postprocessing\calsim_runs\product_b\pickle_files"
 
 The Product B block scenarios are auto-discovered from the path names using a
 case-insensitive n01...n10 pattern.
@@ -40,7 +40,7 @@ from utils.paths import get_base_dir, get_generated_dir
 
 BASELINE_DSS = (get_base_dir() / "CalSim3" / "Studies" / "9.3.1_danube_hist"
                 / "DSS" / "output" / "DCR2023_DV_9.3.1_Danube_Hist_v1.7.dss")
-PRODUCT_B_DV_DIR = get_generated_dir() / "postprocessing" / "calsim_runs" / "product_b" / "dv_out"
+PRODUCT_B_DV_DIR = Path(r"C:\Users\mmani\Documents\Test")
 
 
 _BLOCK_RE = re.compile(r"(?<![A-Za-z0-9])n0*([1-9]|10)(?![A-Za-z0-9])", flags=re.IGNORECASE)
@@ -104,7 +104,7 @@ def build_product_b_pickles(
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="Build Product B pickles from a benchmark DSS and n01..n10 DSS blocks.")
-    parser.add_argument("--baseline-name", default="Benchmark", help="Baseline scenario name")
+    parser.add_argument("--baseline-name", default="Historical", help="Baseline scenario name")
     parser.add_argument(
         "--baseline-dss",
         default=str(BASELINE_DSS),
@@ -123,7 +123,7 @@ def main() -> None:
     )
     parser.add_argument(
         "--out-dir",
-        default=str(RUN_DIR / "output" / "_2_pickle_builder" / "cache" / "Benchmark_vs_ProductB"),
+        default=str(get_generated_dir() / "postprocessing" / "calsim_runs" / "product_b" / "pickle_files"),
         help="Output directory for pickle cache",
     )
     args = parser.parse_args()

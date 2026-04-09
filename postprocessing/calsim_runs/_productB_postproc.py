@@ -14,7 +14,7 @@ Outputs:
 
 2) rolling_minima.xlsx
    - benchmark_rolling_minima
-   - ensemble_rolling_minima
+   - stochastic_rolling_minima
 
 3) figures/annual_cdf/<metric>.png
    - annual water-year CDFs, with one line for the benchmark and one line per Product B block
@@ -31,10 +31,10 @@ Assumptions:
 
 Typical usage:
 
-    python 3_productB_postproc.py ^
-        --pickle-dir "output\_2_pickle_builder\cache\Benchmark_vs_ProductB" ^
-        --benchmark-name Benchmark ^
-        --out-dir "output\_3_productB_postproc"
+    python _productB_postproc.py ^
+        --pickle-dir "data\GENERATED\postprocessing\calsim_runs\product_b\pickle_files" ^
+        --benchmark-name Historical ^
+        --out-dir "data\GENERATED\postprocessing\calsim_runs\product_b\output"
 """
 
 from __future__ import annotations
@@ -51,6 +51,14 @@ import pandas as pd
 from openpyxl import load_workbook
 from openpyxl.styles import Alignment, Font, PatternFill
 
+
+RUN_DIR = Path(__file__).resolve().parent
+REPO_ROOT = RUN_DIR.parents[1]
+import sys as _sys; _sys.path.insert(0, str(REPO_ROOT))
+from utils.paths import get_generated_dir
+
+PICKLE_DIR = get_generated_dir() / "postprocessing" / "calsim_runs" / "product_b" / "pickle_files"
+OUT_DIR = get_generated_dir() / "postprocessing" / "calsim_runs" / "product_b"  / "output"
 
 FIXED_COLS = {"Date", "Scenario", "OctSeptYear", "MarFebYear", "Year", "Month", "JanDecYear"}
 _BLOCK_RE = re.compile(r"(?<![A-Za-z0-9])n0*([1-9]|10)(?![A-Za-z0-9])", flags=re.IGNORECASE)
@@ -144,6 +152,7 @@ def annualize_all_metrics(
         wy.insert(0, "Group", group)
         wy["Block_Index"] = wy["Scenario"].map(extract_block_index)
         wy["Block"] = wy["Block_Index"].map(block_label_from_index)
+        wy["Block"] = wy["Block"].replace("", "Historical")
         frames.append(wy)
 
     annual_long = pd.concat(frames, ignore_index=True)
@@ -156,12 +165,12 @@ def benchmark_summary_table(annual_long: pd.DataFrame, benchmark_name: str) -> p
     table = (
         benchmark.groupby(["Group", "Metric", "Metric_Label"], as_index=False)["WY_Value"]
         .agg(
-            Benchmark_Years="count",
-            Benchmark_Mean_WY_TAF="mean",
-            Benchmark_Median_WY_TAF="median",
-            Benchmark_Min_WY_TAF="min",
-            Benchmark_Max_WY_TAF="max",
-            Benchmark_Std_WY_TAF="std",
+            Historical_Years="count",
+            Historical_Mean_WY_TAF="mean",
+            Historical_Median_WY_TAF="median",
+            Historical_Min_WY_TAF="min",
+            Historical_Max_WY_TAF="max",
+            Historical_Std_WY_TAF="std",
         )
     )
     return table.sort_values(["Group", "Metric"]).reset_index(drop=True)
@@ -192,13 +201,16 @@ def block_summary_table(annual_long: pd.DataFrame, benchmark_name: str) -> pd.Da
         how="left",
         validate="many_to_one",
     )
-    table["Mean_Diff_vs_Benchmark_TAF"] = table["Mean_WY_TAF"] - table["Benchmark_Mean_WY_TAF"]
-    table["Mean_Diff_vs_Benchmark_pct"] = np.where(
-        table["Benchmark_Mean_WY_TAF"].ne(0),
-        table["Mean_Diff_vs_Benchmark_TAF"] / table["Benchmark_Mean_WY_TAF"] * 100.0,
+    table["Mean_Diff_vs_Historical_TAF"] = table["Mean_WY_TAF"] - table["Historical_Mean_WY_TAF"]
+    table["Mean_Diff_vs_Historical_pct"] = np.where(
+        table["Historical_Mean_WY_TAF"].ne(0),
+        table["Mean_Diff_vs_Historical_TAF"] / table["Historical_Mean_WY_TAF"] * 100.0,
         np.nan,
     )
+    hist_cols = [c for c in table.columns if c.startswith("Historical_")]
+    table = table.drop(columns=hist_cols)
     table = table.sort_values(["Group", "Metric", "Block_Index"]).reset_index(drop=True)
+    table = table.drop(columns=["Scenario", "Block_Index"])
     return table
 
 
@@ -240,9 +252,6 @@ def benchmark_rolling_minima_table(
             if candidates.empty:
                 continue
 
-            min_value = candidates["RollingAvg_TAF"].min()
-            tie_count = int(np.isclose(candidates["RollingAvg_TAF"], min_value).sum())
-
             best = (
                 candidates.sort_values(["RollingAvg_TAF", "WY_Start", "WY_End"])
                 .iloc[0]
@@ -255,11 +264,10 @@ def benchmark_rolling_minima_table(
                     "Metric": metric,
                     "Metric_Label": label,
                     "Window_Years": int(best["Window_Years"]),
-                    "Benchmark_Min_RollingAvg_TAF": float(best["RollingAvg_TAF"]),
-                    "Benchmark_WY_Start": int(best["WY_Start"]),
-                    "Benchmark_WY_End": int(best["WY_End"]),
-                    "Benchmark_Tie_Count": tie_count,
-                    "Benchmark_Scenario": benchmark_name,
+                    "Historical_Min_RollingAvg_TAF": float(best["RollingAvg_TAF"]),
+                    "Historical_WY_Start": int(best["WY_Start"]),
+                    "Historical_WY_End": int(best["WY_End"]),
+                    "Historical_Scenario": benchmark_name,
                 }
             )
 
@@ -270,9 +278,8 @@ def benchmark_rolling_minima_table(
     return table.sort_values(["Group", "Metric", "Window_Years"]).reset_index(drop=True)
 
 
-def ensemble_rolling_minima_table(
+def stochastic_rolling_minima_table(
     annual_long: pd.DataFrame,
-    benchmark_rolling: pd.DataFrame,
     min_window_years: int = 2,
     max_window_years: int = 10,
 ) -> pd.DataFrame:
@@ -299,8 +306,6 @@ def ensemble_rolling_minima_table(
                 continue
 
             candidates_all = pd.concat(candidate_frames, ignore_index=True)
-            min_value = candidates_all["RollingAvg_TAF"].min()
-            tie_count = int(np.isclose(candidates_all["RollingAvg_TAF"], min_value).sum())
 
             best = (
                 candidates_all.sort_values(["RollingAvg_TAF", "Block_Index", "WY_Start", "WY_End"])
@@ -315,12 +320,9 @@ def ensemble_rolling_minima_table(
                     "Metric_Label": label,
                     "Window_Years": int(best["Window_Years"]),
                     "Min_RollingAvg_TAF": float(best["RollingAvg_TAF"]),
-                    "Scenario": best["Scenario"],
                     "Block": best["Block"],
-                    "Block_Index": int(best["Block_Index"]),
                     "WY_Start": int(best["WY_Start"]),
                     "WY_End": int(best["WY_End"]),
-                    "Tie_Count": tie_count,
                 }
             )
 
@@ -328,22 +330,144 @@ def ensemble_rolling_minima_table(
     if table.empty:
         return table
 
-    table = table.merge(
-        benchmark_rolling,
-        on=["Group", "Metric", "Metric_Label", "Window_Years"],
-        how="left",
-        validate="one_to_one",
-    )
-    table["Min_RollingAvg_Diff_vs_Benchmark_TAF"] = (
-        table["Min_RollingAvg_TAF"] - table["Benchmark_Min_RollingAvg_TAF"]
-    )
-    table["Min_RollingAvg_Diff_vs_Benchmark_pct"] = np.where(
-        table["Benchmark_Min_RollingAvg_TAF"].ne(0),
-        table["Min_RollingAvg_Diff_vs_Benchmark_TAF"] / table["Benchmark_Min_RollingAvg_TAF"] * 100.0,
-        np.nan,
-    )
-
     return table.sort_values(["Group", "Metric", "Window_Years"]).reset_index(drop=True)
+
+
+# ---------------------------------------------------------------------------
+# Metric-by-block heatmap: % diff vs benchmark
+# ---------------------------------------------------------------------------
+
+def _percentile10(x):
+    return np.percentile(x.dropna(), 10) if len(x.dropna()) > 0 else np.nan
+
+
+def build_heatmap_data(
+    annual_long: pd.DataFrame,
+    benchmark_name: str,
+    min_window_years: int = 2,
+    max_window_years: int = 10,
+) -> pd.DataFrame:
+    """Build a long-form DataFrame with % diff vs benchmark for key stats.
+
+    Stats: Mean Annual, P10 Annual, Worst 5-yr Rolling Avg, Worst 10-yr Rolling Avg.
+    """
+    benchmark = annual_long[annual_long["Scenario"] == benchmark_name].copy()
+    blocks = annual_long[annual_long["Block_Index"].notna()].copy()
+
+    bm_mean = benchmark.groupby(["Group", "Metric", "Metric_Label"])["WY_Value"].mean()
+    bm_p10 = benchmark.groupby(["Group", "Metric", "Metric_Label"])["WY_Value"].agg(_percentile10)
+
+    blk_mean = blocks.groupby(["Group", "Metric", "Metric_Label", "Block"])["WY_Value"].mean()
+    blk_p10 = blocks.groupby(["Group", "Metric", "Metric_Label", "Block"])["WY_Value"].agg(_percentile10)
+
+    def _pct_diff(block_stat, bm_stat):
+        df = block_stat.reset_index()
+        df = df.rename(columns={"WY_Value": "Block_Value"})
+        df = df.set_index(["Group", "Metric", "Metric_Label"])
+        df["BM_Value"] = bm_stat
+        df["Pct_Diff"] = np.where(
+            df["BM_Value"].ne(0),
+            (df["Block_Value"] - df["BM_Value"]) / df["BM_Value"].abs() * 100.0,
+            np.nan,
+        )
+        return df.reset_index()
+
+    mean_diff = _pct_diff(blk_mean, bm_mean)
+    mean_diff["Stat"] = "Mean Annual"
+
+    p10_diff = _pct_diff(blk_p10, bm_p10)
+    p10_diff["Stat"] = "P10 Annual"
+
+    # Worst N-year rolling averages
+    rolling_frames = []
+    for window_years in (5, 10):
+        if window_years > max_window_years:
+            continue
+
+        bm_rolling = {}
+        for (group, metric, label), mdf in benchmark.groupby(["Group", "Metric", "Metric_Label"], sort=False):
+            candidates = _rolling_candidates(mdf, window_years)
+            bm_rolling[(group, metric, label)] = candidates["RollingAvg_TAF"].min() if not candidates.empty else np.nan
+
+        blk_rows = []
+        for (group, metric, label, scenario, block, block_idx), bdf in blocks.groupby(
+            ["Group", "Metric", "Metric_Label", "Scenario", "Block", "Block_Index"], sort=False
+        ):
+            candidates = _rolling_candidates(bdf, window_years)
+            blk_min = candidates["RollingAvg_TAF"].min() if not candidates.empty else np.nan
+            bm_val = bm_rolling.get((group, metric, label), np.nan)
+            pct = ((blk_min - bm_val) / abs(bm_val) * 100.0) if bm_val != 0 and not np.isnan(bm_val) else np.nan
+            blk_rows.append({
+                "Group": group, "Metric": metric, "Metric_Label": label,
+                "Block": block, "Block_Value": blk_min, "BM_Value": bm_val,
+                "Pct_Diff": pct, "Stat": f"Worst {window_years}-yr Rolling Avg",
+            })
+
+        if blk_rows:
+            rolling_frames.append(pd.DataFrame(blk_rows))
+
+    all_frames = [mean_diff, p10_diff] + rolling_frames
+    heatmap_long = pd.concat(all_frames, ignore_index=True)
+    heatmap_long = heatmap_long[["Group", "Metric", "Metric_Label", "Block", "Stat", "Pct_Diff", "Block_Value", "BM_Value"]]
+    return heatmap_long.sort_values(["Stat", "Group", "Metric", "Block"]).reset_index(drop=True)
+
+
+def plot_heatmap(
+    heatmap_long: pd.DataFrame,
+    out_dir: str | Path,
+) -> Dict[str, str]:
+    """Generate one heatmap PNG per stat (Mean Annual, P10, Worst 5-yr, Worst 10-yr)."""
+    import matplotlib.colors as mcolors
+
+    out_dir = Path(out_dir)
+    fig_dir = out_dir / "figures" / "heatmap"
+    fig_dir.mkdir(parents=True, exist_ok=True)
+
+    outputs: Dict[str, str] = {}
+
+    for stat_name, stat_df in heatmap_long.groupby("Stat", sort=False):
+        pivot = stat_df.pivot_table(
+            index="Metric_Label", columns="Block", values="Pct_Diff", aggfunc="first",
+        )
+        block_cols = sorted(pivot.columns, key=lambda b: int(b.replace("n", "")) if b.replace("n", "").isdigit() else 0)
+        pivot = pivot[block_cols]
+
+        n_rows, n_cols = pivot.shape
+        fig_height = max(4.0, 0.4 * n_rows + 1.5)
+        fig_width = max(6.0, 0.8 * n_cols + 3.0)
+        fig, ax = plt.subplots(figsize=(fig_width, fig_height))
+
+        vmax = max(abs(np.nanmin(pivot.values)), abs(np.nanmax(pivot.values)), 1.0)
+        norm = mcolors.TwoSlopeNorm(vmin=-vmax, vcenter=0, vmax=vmax)
+        cmap = plt.cm.RdBu
+
+        im = ax.imshow(pivot.values, aspect="auto", cmap=cmap, norm=norm)
+
+        ax.set_xticks(range(n_cols))
+        ax.set_xticklabels(block_cols, fontsize=8)
+        ax.set_yticks(range(n_rows))
+        ax.set_yticklabels(pivot.index, fontsize=7)
+
+        for i in range(n_rows):
+            for j in range(n_cols):
+                val = pivot.values[i, j]
+                if np.isfinite(val):
+                    color = "white" if abs(val) > vmax * 0.6 else "black"
+                    ax.text(j, i, f"{val:+.1f}%", ha="center", va="center", fontsize=6, color=color)
+
+        ax.set_title(f"{stat_name} -- % Diff vs Historical", fontsize=10, fontweight="bold")
+        ax.set_xlabel("Product B Block")
+        cbar = fig.colorbar(im, ax=ax, shrink=0.8, pad=0.02)
+        cbar.set_label("% Diff vs Historical", fontsize=8)
+
+        fig.tight_layout()
+        safe_name = str(stat_name).replace(" ", "_").replace("-", "").lower()
+        out_png = fig_dir / f"heatmap_{safe_name}.png"
+        fig.savefig(out_png, dpi=300, bbox_inches="tight", facecolor="white")
+        plt.close(fig)
+        outputs[str(stat_name)] = str(out_png)
+
+    return outputs
 
 
 def empirical_cdf(x: Iterable[float]) -> Tuple[np.ndarray, np.ndarray]:
@@ -437,7 +561,7 @@ def format_excel_workbook(path: str | Path) -> None:
 
                 if "pct" in header:
                     cell.number_format = '0.0'
-                elif header in {"wy", "wy_start", "wy_end", "block_index", "window_years", "tie_count", "benchmark_tie_count", "benchmark_years", "block_years"}:
+                elif header in {"wy", "wy_start", "wy_end", "block_index", "window_years", "historical_years", "block_years"}:
                     cell.number_format = '0'
                 elif any(token in header for token in ["taf", "mean", "median", "min", "max", "std", "rollingavg"]):
                     cell.number_format = '#,##0.0'
@@ -474,9 +598,8 @@ def run_post_processing_package(
         min_window_years=min_window_years,
         max_window_years=max_window_years,
     )
-    ensemble_rolling = ensemble_rolling_minima_table(
+    stochastic_rolling = stochastic_rolling_minima_table(
         annual_long=annual_long,
-        benchmark_rolling=benchmark_rolling,
         min_window_years=min_window_years,
         max_window_years=max_window_years,
     )
@@ -484,17 +607,40 @@ def run_post_processing_package(
     out_path = Path(out_dir)
     out_path.mkdir(parents=True, exist_ok=True)
 
+    # -- Heatmap: metric-by-block % diff vs benchmark --
+    heatmap_long = build_heatmap_data(
+        annual_long=annual_long,
+        benchmark_name=benchmark_name,
+        min_window_years=min_window_years,
+        max_window_years=max_window_years,
+    )
+
+    heatmap_xlsx = out_path / "heatmap_block_summary.xlsx"
+    with pd.ExcelWriter(heatmap_xlsx, engine="openpyxl") as writer:
+        for stat_name, stat_df in heatmap_long.groupby("Stat", sort=False):
+            pivot = stat_df.pivot_table(
+                index="Metric_Label", columns="Block", values="Pct_Diff", aggfunc="first",
+            )
+            block_cols = sorted(pivot.columns, key=lambda b: int(b.replace("n", "")) if b.replace("n", "").isdigit() else 0)
+            pivot = pivot[block_cols]
+            safe_sheet = f"{stat_name} % Diff"[:31]
+            pivot.to_excel(writer, sheet_name=safe_sheet)
+    format_excel_workbook(heatmap_xlsx)
+
+    heatmap_pngs = plot_heatmap(heatmap_long=heatmap_long, out_dir=out_path)
+
+    # -- Annual summary Excel --
     annual_summary_xlsx = out_path / "annual_block_summary.xlsx"
     with pd.ExcelWriter(annual_summary_xlsx, engine="openpyxl") as writer:
-        benchmark_summary.to_excel(writer, sheet_name="benchmark_summary", index=False)
+        benchmark_summary.to_excel(writer, sheet_name="historical_summary", index=False)
         block_summary.to_excel(writer, sheet_name="block_summary", index=False)
-        annual_long.to_excel(writer, sheet_name="annual_values_long", index=False)
+        annual_long.drop(columns=["Scenario", "Block_Index"]).to_excel(writer, sheet_name="annual_values_long", index=False)
     format_excel_workbook(annual_summary_xlsx)
 
     rolling_minima_xlsx = out_path / "rolling_minima.xlsx"
     with pd.ExcelWriter(rolling_minima_xlsx, engine="openpyxl") as writer:
-        benchmark_rolling.to_excel(writer, sheet_name="benchmark_rolling_minima", index=False)
-        ensemble_rolling.to_excel(writer, sheet_name="ensemble_rolling_minima", index=False)
+        benchmark_rolling.to_excel(writer, sheet_name="historical_rolling_minima", index=False)
+        stochastic_rolling.to_excel(writer, sheet_name="stochastic_rolling_minima", index=False)
     format_excel_workbook(rolling_minima_xlsx)
 
     fig_dir = out_path / "figures" / "annual_cdf"
@@ -509,6 +655,8 @@ def run_post_processing_package(
         )
 
     return {
+        "heatmap_xlsx": str(heatmap_xlsx),
+        "heatmap_figures": str(out_path / "figures" / "heatmap"),
         "annual_summary_xlsx": str(annual_summary_xlsx),
         "rolling_minima_xlsx": str(rolling_minima_xlsx),
         "annual_cdf_dir": str(fig_dir),
@@ -519,11 +667,11 @@ def run_post_processing_package(
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="Run Product B stochastic post-processing.")
-    parser.add_argument("--pickle-dir", required=True, help="Directory containing values.pkl / diffs.pkl / units.pkl / fields.pkl")
-    parser.add_argument("--benchmark-name", default="Benchmark", help="Benchmark scenario name in values.pkl")
+    parser.add_argument("--pickle-dir", default=str(PICKLE_DIR), help="Directory containing values.pkl / diffs.pkl / units.pkl / fields.pkl")
+    parser.add_argument("--benchmark-name", default="Historical", help="Benchmark scenario name in values.pkl")
     parser.add_argument(
         "--out-dir",
-        default=str(Path(__file__).resolve().parent / "output" / "_3_productB_postproc"),
+        default=str(OUT_DIR),
         help="Output directory for Product B post-processing",
     )
     parser.add_argument("--min-window-years", type=int, default=2, help="Minimum rolling window in years")

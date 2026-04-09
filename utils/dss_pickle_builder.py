@@ -198,55 +198,6 @@ def _find_col(df: pd.DataFrame, want: str) -> str:
     raise KeyError(want)
 
 
-def _subst_drive_for_path(dss_str: str) -> Tuple[str, str]:
-    """
-    Map the DSS file's parent directory to a free drive letter via 'subst'.
-    Works with OneDrive cloud files. Returns (short_dss_path, drive_letter).
-    Caller must invoke _remove_subst_drive(drive_letter) when done.
-    """
-    import ctypes
-    import string
-    import subprocess
-
-    p = Path(dss_str)
-    parent = str(p.parent)
-
-    used_mask = ctypes.windll.kernel32.GetLogicalDrives()
-    free_letter = None
-    for letter in string.ascii_uppercase:
-        if letter in ("A", "B"):
-            continue
-        if not (used_mask >> (ord(letter) - ord("A")) & 1):
-            free_letter = letter
-            break
-
-    if free_letter is None:
-        raise OSError("No free drive letters available for subst workaround.")
-
-    result = subprocess.run(
-        ["subst", f"{free_letter}:", parent],
-        capture_output=True,
-        text=True,
-    )
-    if result.returncode != 0:
-        raise OSError(
-            f"subst failed for '{parent}':\n"
-            f"{(result.stderr or result.stdout).strip()}"
-        )
-
-    short = f"{free_letter}:\\{p.name}"
-    if len(short) > 256:
-        subprocess.run(["subst", f"{free_letter}:", "/D"], capture_output=True)
-        raise OSError(f"subst path still exceeds 256 chars ({len(short)}): {short}")
-
-    return short, free_letter
-
-
-def _remove_subst_drive(drive_letter: str) -> None:
-    import subprocess
-    subprocess.run(["subst", f"{drive_letter}:", "/D"], capture_output=True)
-
-
 def load_metric_specs_from_csv(metrics_csv_path: str) -> List[MetricSpec]:
     """Load MetricSpec rows from a shared metrics.csv."""
 
@@ -295,6 +246,13 @@ def load_metric_specs_from_csv(metrics_csv_path: str) -> List[MetricSpec]:
     return specs
 
 
+def _strip_long_path_prefix(p: str) -> str:
+    """Remove the ``\\\\?\\`` Windows long-path prefix that confuses Fortran."""
+    if p.startswith("\\\\?\\"):
+        return p[4:]
+    return p
+
+
 def single_scenario_pull(
     dss_path: str,
     bparts: Sequence[str],
@@ -305,24 +263,38 @@ def single_scenario_pull(
     _require_pydsstools()
     from pydsstools.heclib.dss import HecDss
 
-    # HEC-DSS Fortran CNAME is limited to 256 chars.
-    # Strip \\?\ prefix first; if still too long, use subst virtual drive.
-    dss_str = str(dss_path)
-    if dss_str.startswith("\\\\?\\"):
-        dss_str = dss_str[4:]
+    dss_path_clean = _strip_long_path_prefix(str(dss_path))
 
-    drive_letter = None
-    if len(dss_str) > 256:
-        dss_str, drive_letter = _subst_drive_for_path(dss_str)
+    if len(dss_path_clean) > 256:
+        raise OSError(
+            f"DSS path exceeds 256-char Fortran CNAME limit ({len(dss_path_clean)} chars).\n"
+            f"  Copy the file to a shorter path.\n"
+            f"  Path: {dss_path_clean}"
+        )
+
+    fid = HecDss.Open(dss_path_clean)
 
     try:
-        fid = HecDss.Open(dss_str, version=6, catalog_flag=True)
+        try:
+            pathnames_raw = fid.getPathnameList("/*/*/*/*/*/", sort=1)
+        except Exception:
+            pathnames_dict = fid.getPathnameDict()
+            pathnames_raw = list(pathnames_dict.values())[0]
 
-        raw_pathnames = fid.getPathnameList("/*/*/*/*/1MON/*")
-        pathnames = [path for path in raw_pathnames if isinstance(path, str) and path.startswith("/")]
+        # Keep only valid string pathnames within 256-char Fortran CNAME limit
+        pathnames = [
+            p for p in pathnames_raw
+            if isinstance(p, str) and p.startswith("/") and len(p) <= 256
+        ]
+        n_skipped = len(pathnames_raw) - len(pathnames)
+        if n_skipped:
+            print(f"  Warning: skipped {n_skipped} DSS pathname(s) (non-string or exceeding 256-char limit)")
+
         if not pathnames:
             raise RuntimeError(
-                f"No valid monthly DSS pathnames returned for: {dss_path}"
+                f"No valid pathnames found in DSS file (0 records). "
+                f"This often means the path is too long for HEC-DSS Fortran.\n"
+                f"  Path: {dss_path_clean}"
             )
 
         df_paths = pd.DataFrame(pathnames, columns=["AllPaths"])
@@ -369,18 +341,15 @@ def single_scenario_pull(
                 )
             except Exception as exc:
                 print(f"  Warning: could not read B-part '{bpart_up}' -- {exc}")
-
+    finally:
         fid.close()
 
-        if not df_ts.empty:
-            df_ts.index = pd.to_datetime(df_ts.index)
-            if shift_index_days != 0:
-                df_ts.index = df_ts.index + timedelta(days=shift_index_days)
+    if not df_ts.empty:
+        df_ts.index = pd.to_datetime(df_ts.index)
+        if shift_index_days != 0:
+            df_ts.index = df_ts.index + timedelta(days=shift_index_days)
 
-        return df_ts, base_units, base_paths
-    finally:
-        if drive_letter is not None:
-            _remove_subst_drive(drive_letter)
+    return df_ts, base_units, base_paths
 
 
 def _compute_time_columns(df: pd.DataFrame) -> pd.DataFrame:
