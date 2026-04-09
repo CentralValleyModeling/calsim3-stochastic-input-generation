@@ -15,6 +15,12 @@
     padding-bottom: 0.1rem;
 } */
 
+/* Left sidebar (navigation) */
+.bd-sidebar-primary {
+    min-width: 320px;
+}
+
+
 /* Mermaid diagrams: responsive width, no fixed height cap */
 div.mermaid svg,
 pre.mermaid svg,

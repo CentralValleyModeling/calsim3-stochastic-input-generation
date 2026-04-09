@@ -9,7 +9,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 # -- Project information -------------------------------------------------------
-project   = 'CalSim Stochastic Hydroclimate Input Generation'
+project   = 'CalSim Stochastic Hydroclimate'
 copyright = '2026, California Department of Water Resources'
 author    = 'Wyatt Arnold, Melika Mani, Mehrdad Bastani, Karandev Singh'
 release   = '1.0'
@@ -48,7 +48,7 @@ exclude_patterns = ['_build', 'Thumbs.db', '.DS_Store', 'source/MIGRATION.md', '
 
 # -- HTML output ---------------------------------------------------------------
 html_theme       = 'sphinx_book_theme'
-html_title       = 'CalSim Stochastic Hydroclimate Input Generation Documentation'
+html_title       = 'CalSim Stochastic Hydroclimate'
 html_static_path = ['_static']
 html_css_files   = ['custom.css']
 

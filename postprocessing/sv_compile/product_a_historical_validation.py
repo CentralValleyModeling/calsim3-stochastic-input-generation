@@ -48,6 +48,8 @@ Diagnostic outputs  (all written to ``_product_a_validation/``)
 - ``figures/all-terms-constant-rept/``     — per-variable plots (12-month repeat)
 - ``figures/all-terms-constant/``          — per-variable plots (constant value)
 - ``compilation_summary.txt``              — full statistics
+- ``summary_tables.csv``                   — per-category summary table
+                                             (R2, NSE, annual averages)
 
 CLI flags
 ---------
@@ -58,6 +60,10 @@ CLI flags
   ``modification_statistics.csv``.  Can be combined with ``--compute-stats``
   or run independently after stats have already been computed.
 - ``--no-term-plots``  Skip per-variable diagnostic plots (time series + scatter).
+- ``--summary-tables``  Generate per-category summary Excel workbook
+  (``summary_tables.csv``) from ``modification_statistics.csv``.  Produces
+  one section per input category with R2, NSE, and annual-average columns.
+  Standalone mode -- exits after writing.
 """
 
 import os
@@ -167,6 +173,11 @@ _parser.add_argument(
     "--no-term-plots", action="store_true", default=False,
     help="Skip per-variable diagnostic plots (time series + scatter). "
          "By default these are generated as part of the stats report.",
+)
+_parser.add_argument(
+    "--summary-tables", action="store_true", default=False,
+    help="Generate per-category summary Excel workbook from "
+         "modification_statistics.csv.  Standalone mode — exits after writing.",
 )
 CLI_ARGS = _parser.parse_args()
 
@@ -903,9 +914,25 @@ def generate_stats_report(stats_csv: Path, cached_series: dict = None):
     # Subset excluding Constant/Rept terms — used for summary figures only
     df_plots = df[~df["Constant_Rept"]].copy()
     n_rept = n_total - len(df_plots)
-    # Keep only categories that still have rows after filtering
+    # Keep only categories that still have rows after filtering.
+    # Reorder for figures: group by parent module so bracket annotations
+    # are contiguous (mod_hydrology, mod_reservoir, mod_forcing, mod_other).
     _present_plots = set(df_plots["Input_Category"].unique())
-    cat_order_plots = [c for c in cat_order if c in _present_plots]
+    _CATS_GROUPED_BY_MODULE = [
+        # mod_hydrology
+        "CalSimHydro", "CalSimHydroEE", "Rim Inflow",
+        "Delta Channel Depletion", "Small Watersheds",
+        "Tulare Groundwater Terms",
+        # mod_reservoir
+        "Reservoir Evaporation", "Reservoir Storage Curves",
+        # mod_forcing
+        "Climate",
+        # mod_other
+        "Closure Terms", "Day-Volume Fraction", "Salinity",
+        "Instream Flows", "Other", "Upper Watershed Modules",
+    ]
+    cat_order_plots = [c for c in _CATS_GROUPED_BY_MODULE if c in _present_plots]
+    cat_order_plots += sorted(_present_plots - set(cat_order_plots))
 
     _MONTHS = ["Oct", "Nov", "Dec", "Jan", "Feb", "Mar",
                "Apr", "May", "Jun", "Jul", "Aug", "Sep"]
@@ -1008,7 +1035,68 @@ def generate_stats_report(stats_csv: Path, cached_series: dict = None):
 
     n_cats = len(cat_order_plots)
 
-    # ── Figs 1-4: Individual R²/NSE box plots by category ───────────────
+    # ── Module group mapping for bracket annotations ──────────────────
+    _CAT_TO_MODULE_GROUP = {
+        "CalSimHydro":              "mod_hydrology",
+        "CalSimHydroEE":            "mod_hydrology",
+        "Rim Inflow":               "mod_hydrology",
+        "Delta Channel Depletion":  "mod_hydrology",
+        "Small Watersheds":         "mod_hydrology",
+        "Tulare Groundwater Terms": "mod_hydrology",
+        "Reservoir Evaporation":    "mod_reservoir",
+        "Reservoir Storage Curves": "mod_reservoir",
+        "Climate":                  "mod_forcing",
+        "Instream Flows":           "mod_other",
+        "Other":                    "mod_other",
+        "Upper Watershed Modules":  "mod_other",
+        "Closure Terms":            "mod_other",
+        "Day-Volume Fraction":      "mod_other",
+        "Salinity":                 "mod_other",
+    }
+
+    def _add_module_group_brackets(ax, fig, categories):
+        """Draw module-group brackets below vertical x-tick labels."""
+        # Build contiguous groups in display order
+        groups = []
+        prev_group = None
+        for i, cat in enumerate(categories):
+            grp = _CAT_TO_MODULE_GROUP.get(cat, "")
+            if grp == prev_group and groups:
+                groups[-1]["end"] = i
+            else:
+                groups.append({"name": grp, "start": i, "end": i})
+                prev_group = grp
+
+        # Draw brackets in axes fraction coordinates below the x-axis
+        fig.canvas.draw()  # force layout so tick positions are computed
+        trans = ax.get_xaxis_transform()  # x = data, y = axes fraction
+        bracket_y  = -0.48   # vertical position below tick labels
+        tick_y     = -0.44   # top of bracket ticks
+        label_y    = -0.54   # label position below bracket
+
+        for g in groups:
+            if not g["name"]:
+                continue
+            x_start = g["start"] + 1  # boxplot positions are 1-indexed
+            x_end   = g["end"] + 1
+            x_mid   = (x_start + x_end) / 2.0
+
+            # Horizontal bracket line
+            ax.plot([x_start - 0.3, x_end + 0.3], [bracket_y, bracket_y],
+                    transform=trans, color="0.3", lw=0.8, clip_on=False)
+            # Left tick
+            ax.plot([x_start - 0.3, x_start - 0.3], [tick_y, bracket_y],
+                    transform=trans, color="0.3", lw=0.8, clip_on=False)
+            # Right tick
+            ax.plot([x_end + 0.3, x_end + 0.3], [tick_y, bracket_y],
+                    transform=trans, color="0.3", lw=0.8, clip_on=False)
+            # Group label
+            ax.text(x_mid, label_y, g["name"],
+                    transform=trans, ha="center", va="top",
+                    fontsize=6, fontstyle="italic", color="0.3",
+                    clip_on=False)
+
+    # ── Figs 1-4: Individual R2/NSE box plots by category ───────────────
     #    (Constant/Rept terms excluded; n= reflects non-NaN count per metric)
     for col, title, fname in [
         ("R2-Monthly",  "R² (Monthly)",  "r2_monthly_by_category.png"),
@@ -1016,19 +1104,29 @@ def generate_stats_report(stats_csv: Path, cached_series: dict = None):
         ("R2-Ann",      "R² (Annual)",   "r2_annual_by_category.png"),
         ("NSE-Ann",     "NSE (Annual)",  "nse_annual_by_category.png"),
     ]:
-        fig, ax = plt.subplots(figsize=(6.5, 4.0))
+        fig, ax = plt.subplots(figsize=(min(7, 0.65 * n_cats + 2), 5.0))
         # Filter to rows where R2-Monthly is non-NaN, then extract the metric values
         box_data = [df_plots.loc[(df_plots["Input_Category"] == c) & df_plots["R2-Monthly"].notna(), col].values
                     for c in cat_order_plots]
         # n= reflects non-NaN R2-Monthly count (consistent across all metric plots)
         r2m_counts = {c: len(df_plots.loc[(df_plots["Input_Category"] == c) & df_plots["R2-Monthly"].notna()])
                       for c in cat_order_plots}
-        box_labels = [f"{c} (n={r2m_counts[c]})" for c in cat_order_plots]
+        # Break long category names onto two lines for readability
+        _LABEL_BREAKS = {
+            "Delta Channel Depletion":  "Delta Channel\nDepletion",
+            "Tulare Groundwater Terms": "Tulare Groundwater\nTerms",
+            "Reservoir Evaporation":    "Reservoir\nEvaporation",
+            "Reservoir Storage Curves": "Reservoir\nStorage Curves",
+            "Upper Watershed Modules":  "Upper Watershed\nModules",
+            "Instream Flows":           "Instream\nFlows",
+            "Small Watersheds":         "Small\nWatersheds",
+        }
+        box_labels = [f"{_LABEL_BREAKS.get(c, c)}\n(n={r2m_counts[c]})" for c in cat_order_plots]
         bp = ax.boxplot(box_data, vert=True, patch_artist=True, widths=0.6)
         for patch in bp["boxes"]:
             patch.set_facecolor("#5B9BD5")
             patch.set_alpha(0.7)
-        ax.set_xticklabels(box_labels, rotation=45, ha="right")
+        ax.set_xticklabels(box_labels, rotation=90, ha="center")
         ax.set_ylabel(title)
         ax.set_title(f"{title} by Input Category  (excl. Constant/Rept)")
         ax.axhline(0.0, color="red", ls="--", lw=0.6, alpha=0.5)
@@ -1045,6 +1143,8 @@ def generate_stats_report(stats_csv: Path, cached_series: dict = None):
         else:
             ax.axhline(1.0, color="green", ls="--", lw=0.6, alpha=0.5)
 
+        _add_module_group_brackets(ax, fig, cat_order_plots)
+        fig.subplots_adjust(bottom=0.40)
         fig.savefig(fig_dir / fname, bbox_inches="tight")
         plt.close(fig)
         print(f"  Figure:  figures/{fname}")
@@ -1172,6 +1272,213 @@ def generate_stats_report(stats_csv: Path, cached_series: dict = None):
         print("    (skipped — --no-term-plots flag set)")
 
     return rpt_path
+
+
+def generate_summary_tables(stats_csv: Path):
+    """Build per-category summary CSV from modification_statistics.csv.
+
+    Sections (separated by blank rows in a single CSV)
+    ---------------------------------------------------
+    - CalSimHydro, CalSimHydroEE, ResEvap, DCD, SWS, Tulare GW, Climate
+          Grouped by Part C.  R2/NSE are averaged; annual totals are summed
+          across terms (except Climate and ResEvap, which use mean).  Absolute
+          and percent differences between Historical and Product A are included.
+    - Rim - Unimpaired
+          Individual rows for each UNIMP_* flow.
+    - Rim - Total
+          Grand-total mean across all I_* nodes (excluding UNIMP equivalents,
+          UHH duplicates, and special non-standard terms).
+    - Rim - Total Detail
+          Every Rim Inflow Part_B with INCLUDED / EXCLUDED status and reason.
+    - ResCurves, Instream Flows, Miscellaneous, Upper Watershed
+          By Part B, excluding constant/repeating terms.
+    """
+    df = pd.read_csv(stats_csv)
+    inv = read_master_inventory()
+
+    # Identify inventory constant/rept (Part_B, Part_C) keys
+    const_keys = set(
+        zip(inv.loc[inv["Constant_Rept"], "Part_B"],
+            inv.loc[inv["Constant_Rept"], "Part_C"])
+    )
+
+    # Columns for every summary table
+    METRIC_COLS = ["R2-Monthly", "NSE-Monthly"]
+    ANN_COLS    = ["Base-Ann-Avg", "Mod-Ann-Avg"]
+    DST_METRICS = ["R2 (Monthly)", "NSE (Monthly)"]
+    DST_ANN     = ["Historical (Ann Avg)", "Product A (Ann Avg)"]
+    rename_map  = dict(zip(METRIC_COLS + ANN_COLS, DST_METRICS + DST_ANN))
+
+    def _add_diffs(tbl):
+        """Append Abs Diff and Pct Diff columns in-place."""
+        h = tbl["Historical (Ann Avg)"]
+        p = tbl["Product A (Ann Avg)"]
+        tbl["Abs Diff (Ann Avg)"] = p - h
+        tbl["Pct Diff (Ann Avg)"] = ((p - h) / h.replace(0, np.nan)) * 100.0
+        return tbl
+
+    output_csv = OUTPUT_DIR / "summary_tables.csv"
+    sections = []   # list of (section_name, DataFrame) — written sequentially
+
+    def _append_section(name, tbl):
+        """Add a titled section DataFrame to the sections list."""
+        # Reset index so all identifier columns become regular columns
+        tbl = tbl.reset_index()
+        tbl.insert(0, "Section", name)
+        sections.append(tbl)
+
+    # ==================================================================
+    # Part-C-grouped categories
+    # ==================================================================
+    partc_cats = [
+        ("CalSimHydro",              "CalSimHydro"),
+        ("CalSimHydroEE",            "CalSimHydroEE"),
+        ("Reservoir Evaporation",    "ResEvap"),
+        ("Delta Channel Depletion",  "DCD"),
+        ("Small Watersheds",         "SWS"),
+        ("Tulare Groundwater Terms", "Tulare GW"),
+        ("Climate",                  "Climate"),
+    ]
+    # Climate and ResEvap use mean for annual columns; everything else uses sum.
+    mean_ann_cats = {"Climate", "Reservoir Evaporation"}
+
+    for cat_name, section_name in partc_cats:
+        sub = df[df["Input_Category"] == cat_name]
+        if sub.empty:
+            continue
+        use_mean = cat_name in mean_ann_cats
+        grp = sub.groupby("Part_C")
+        tbl = pd.DataFrame(index=grp.groups.keys())
+        for src, dst in zip(METRIC_COLS, DST_METRICS):
+            tbl[dst] = grp[src].mean()
+        ann_func = "mean" if use_mean else "sum"
+        for src, dst in zip(ANN_COLS, DST_ANN):
+            tbl[dst] = grp[src].agg(ann_func)
+        tbl["Count"] = grp[METRIC_COLS[0]].count()
+        _add_diffs(tbl)
+        tbl.index.name = "Part C"
+        _append_section(section_name, tbl)
+
+    # ==================================================================
+    # Rim Inflow — Individual Unimpaired
+    # ==================================================================
+    rim = df[df["Input_Category"] == "Rim Inflow"].copy()
+    unimp_terms = [
+        "UNIMP_FOLS", "UNIMP_ME", "UNIMP_OROV",
+        "UNIMP_SJ", "UNIMP_SRBB", "UNIMP_ST", "UNIMP_TRIN",
+        "UNIMP_TU", "UNIMP_YUBA",
+    ]
+    unimp_df = (
+        rim[rim["Part_B"].isin(unimp_terms)]
+        [["Part_B"] + METRIC_COLS + ANN_COLS]
+        .rename(columns=rename_map)
+        .set_index("Part_B")
+        .reindex(unimp_terms)          # keep canonical order
+    )
+    _add_diffs(unimp_df)
+    unimp_df.index.name = "Part B"
+    _append_section("Rim - Unimpaired", unimp_df)
+
+    # ==================================================================
+    # Rim Inflow — Grand Total of I_* nodes
+    # ==================================================================
+    # Exclude all UNIMP_* flows except UNIMP_WH (which has no constituent
+    # I_* nodes in the stats CSV and must be included directly).
+    # Also exclude UHH duplicates and non-standard special terms.
+    unimp_equivalent_i = {
+        "I_MELON",   # = UNIMP_ST (may not exist in current data)
+    }
+    exclude_pb = (
+        set(unimp_terms)
+        | {"UNIMP_SHAS", "UNIMP_WH"}   # not on unimpaired sheet but still excluded from total
+        | {pb for pb in rim["Part_B"].unique() if "_UHH" in pb}
+        | {"FOLSM_INFLOW", "FOLSOM_INFLOW", "I_MELON_FCST", "I_MLRTN_IMP"}
+        | unimp_equivalent_i
+    )
+    total_mask = ~rim["Part_B"].isin(exclude_pb)
+    total_sub = rim[total_mask]
+    n_total = len(total_sub)
+
+    total_row = pd.DataFrame({
+        "R2 (Monthly)":         [total_sub["R2-Monthly"].mean()],
+        "NSE (Monthly)":        [total_sub["NSE-Monthly"].mean()],
+        "Historical (Ann Avg)": [total_sub["Base-Ann-Avg"].sum()],
+        "Product A (Ann Avg)":  [total_sub["Mod-Ann-Avg"].sum()],
+    }, index=["TOTAL"])
+    total_row["Count"] = n_total
+    _add_diffs(total_row)
+    total_row.index.name = "Rim Inflow"
+    _append_section("Rim - Total", total_row)
+
+    # ==================================================================
+    # Rim Inflow — Included / Excluded detail for grand total validation
+    # ==================================================================
+    all_rim_pb = sorted(rim["Part_B"].unique())
+    detail_records = []
+    _unimp_excl_only = {"UNIMP_SHAS", "UNIMP_WH"}   # excluded from total, not on unimpaired sheet
+    for pb in all_rim_pb:
+        if pb in exclude_pb:
+            if "_UHH" in pb:
+                reason = "UHH duplicate"
+            elif pb in unimp_equivalent_i:
+                reason = "UNIMP equivalent (" + pb + ")"
+            elif pb in _unimp_excl_only:
+                reason = "Unimpaired flow (excluded, not on separate sheet)"
+            elif pb in set(unimp_terms):
+                reason = "Unimpaired flow (separate sheet)"
+            else:
+                reason = "Special / non-standard"
+            detail_records.append({"Part_B": pb, "Status": "EXCLUDED",
+                                   "Reason": reason})
+        else:
+            detail_records.append({"Part_B": pb, "Status": "INCLUDED",
+                                   "Reason": ""})
+    detail_df = pd.DataFrame(detail_records)
+    _append_section("Rim - Total Detail", detail_df)
+
+    # ==================================================================
+    # Part-B tables (non-constant only)
+    # ==================================================================
+    partb_cats = [
+        ("Reservoir Storage Curves",  "ResCurves"),
+        ("Instream Flows",            "Instream Flows"),
+        ("Other",                     "Miscellaneous"),
+        ("Upper Watershed Modules",   "Upper Watershed"),
+    ]
+    for cat_name, section_name in partb_cats:
+        sub = df[df["Input_Category"] == cat_name].copy()
+        if sub.empty:
+            continue
+        # Drop constant/rept per inventory flags
+        sub["_const_key"] = list(zip(sub["Part_B"], sub["Part_C"]))
+        sub = sub[~sub["_const_key"].isin(const_keys)]
+        # Safety net: also drop rows where R2 rounds to 1.0 or is NaN
+        # (indistinguishable base vs. mod → effectively constant)
+        sub = sub[sub["R2-Monthly"].notna() & (sub["R2-Monthly"] < 0.9999)]
+        tbl = (
+            sub[["Part_B", "Part_C"] + METRIC_COLS + ANN_COLS]
+            .rename(columns=rename_map)
+            .set_index(["Part_B", "Part_C"])
+            .sort_index()
+        )
+        _add_diffs(tbl)
+        _append_section(section_name, tbl)
+
+    # Write all sections to a single CSV, separated by blank rows
+    rows = []
+    all_cols = ["Section"] + list(dict.fromkeys(
+        col for tbl in sections for col in tbl.columns if col != "Section"
+    ))
+    for tbl in sections:
+        for _, row in tbl.iterrows():
+            rows.append({c: row.get(c, "") for c in all_cols})
+        rows.append({c: "" for c in all_cols})   # blank separator
+
+    out_df = pd.DataFrame(rows, columns=all_cols)
+    out_df.to_csv(str(output_csv), index=False)
+
+    print(f"  Summary tables written to: {output_csv}")
+    return output_csv
 
 
 def compute_modification_statistics(all_modified_keys, baseline_bucket):
@@ -1433,6 +1740,24 @@ if CLI_ARGS.stats_report:
 
     print("Generating summary report & figures ...")
     generate_stats_report(stats_csv)
+    print(f"\nDone.  Outputs in: {OUTPUT_DIR}")
+    sys.exit(0)
+
+
+# ── Summary-tables-only mode ─────────────────────────────────────────────────
+if CLI_ARGS.summary_tables:
+    print("=" * 72)
+    print("  Product A Historical Validation — Summary Tables")
+    print("=" * 72)
+
+    stats_csv = OUTPUT_DIR / "modification_statistics.csv"
+    if not stats_csv.exists():
+        sys.exit(
+            f"ERROR: modification_statistics.csv not found — "
+            f"run --compute-stats first.\n  Expected: {stats_csv}"
+        )
+
+    generate_summary_tables(stats_csv)
     print(f"\nDone.  Outputs in: {OUTPUT_DIR}")
     sys.exit(0)
 

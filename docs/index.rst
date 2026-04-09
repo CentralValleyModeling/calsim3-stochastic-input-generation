@@ -11,6 +11,7 @@ CalSim Synthetic Hydroclimate
 
    source/intro
    source/methods
+   source/results_product_a
    source/summary
 
 .. toctree::

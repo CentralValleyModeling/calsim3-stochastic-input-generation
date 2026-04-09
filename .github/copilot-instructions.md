@@ -25,7 +25,7 @@ root/
 │
 ├── mod_hydrology/            Sacramento Valley, East Side, rim inflow, Delta, WYTs
 │   ├── calsimhydro/          Sac Valley: compile precip/ET, postprocess Product A & B
-│   ├── calsimhydro_ee/       East Side (Mono Lake basin): compile precip, postprocess
+│   ├── calsimhydro_ee/       External elements: compile precip, postprocess
 │   ├── rim_inflow/           Quantile-map VIC inflows, correlation analysis, NSE metrics
 │   ├── water_year_types/     Sac 40-30-30, SJ 60-20-20 WYT classification
 │   ├── delta_channel_depletion/  DETAW/DCD Delta ag demands
