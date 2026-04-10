@@ -23,7 +23,7 @@ Key features:
 - Loads metric definitions from a shared metrics.csv.
 
 Compared with the earlier single-purpose version, this shared builder:
-- lives in postprocessing/calsim_runs/utils/
+- lives in utils/dss_pickle_builder.py
 - computes diffs by aligning on the monthly time columns instead of row order
 - is intended to be imported by both product_a and product_b run scripts
 """
