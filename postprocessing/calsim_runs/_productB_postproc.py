@@ -152,7 +152,8 @@ def annualize_all_metrics(
         wy.insert(0, "Group", group)
         wy["Block_Index"] = wy["Scenario"].map(extract_block_index)
         wy["Block"] = wy["Block_Index"].map(block_label_from_index)
-        wy["Block"] = wy["Block"].replace("", "Historical")
+        non_block = wy["Block"] == ""
+        wy.loc[non_block, "Block"] = wy.loc[non_block, "Scenario"]
         frames.append(wy)
 
     annual_long = pd.concat(frames, ignore_index=True)
@@ -415,6 +416,7 @@ def build_heatmap_data(
 def plot_heatmap(
     heatmap_long: pd.DataFrame,
     out_dir: str | Path,
+    benchmark_name: str = "Historical",
 ) -> Dict[str, str]:
     """Generate one heatmap PNG per stat (Mean Annual, P10, Worst 5-yr, Worst 10-yr)."""
     import matplotlib.colors as mcolors
@@ -455,10 +457,10 @@ def plot_heatmap(
                     color = "white" if abs(val) > vmax * 0.6 else "black"
                     ax.text(j, i, f"{val:+.1f}%", ha="center", va="center", fontsize=6, color=color)
 
-        ax.set_title(f"{stat_name} -- % Diff vs Historical", fontsize=10, fontweight="bold")
+        ax.set_title(f"{stat_name} -- % Diff vs {benchmark_name}", fontsize=10, fontweight="bold")
         ax.set_xlabel("Product B Block")
         cbar = fig.colorbar(im, ax=ax, shrink=0.8, pad=0.02)
-        cbar.set_label("% Diff vs Historical", fontsize=8)
+        cbar.set_label(f"% Diff vs {benchmark_name}", fontsize=8)
 
         fig.tight_layout()
         safe_name = str(stat_name).replace(" ", "_").replace("-", "").lower()
@@ -627,7 +629,7 @@ def run_post_processing_package(
             pivot.to_excel(writer, sheet_name=safe_sheet)
     format_excel_workbook(heatmap_xlsx)
 
-    heatmap_pngs = plot_heatmap(heatmap_long=heatmap_long, out_dir=out_path)
+    heatmap_pngs = plot_heatmap(heatmap_long=heatmap_long, out_dir=out_path, benchmark_name=benchmark_name)
 
     # -- Annual summary Excel --
     annual_summary_xlsx = out_path / "annual_block_summary.xlsx"
