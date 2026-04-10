@@ -38,9 +38,14 @@ sys.path.insert(0, str(REPO_ROOT))
 from utils.dss_pickle_builder import Scenario, build_pickles_from_metrics_csv
 from utils.paths import get_base_dir, get_generated_dir
 
-BASELINE_DSS = (get_base_dir() / "CalSim3" / "Studies" / "9.3.1_danube_hist"
-                / "DSS" / "output" / "DCR2023_DV_9.3.1_Danube_Hist_v1.7.dss")
-PRODUCT_B_DV_DIR = Path(r"C:\Users\mmani\Documents\Test")
+BASELINE_DSS = get_base_dir() / "CalSim3" / "__calsim_sv_default__.dss"
+PRODUCT_B_DV_DIR = (
+    get_generated_dir()
+    / "postprocessing"
+    / "calsim_runs"
+    / "product_b"
+    / "dv_out"
+)
 
 
 _BLOCK_RE = re.compile(r"(?<![A-Za-z0-9])n0*([1-9]|10)(?![A-Za-z0-9])", flags=re.IGNORECASE)
