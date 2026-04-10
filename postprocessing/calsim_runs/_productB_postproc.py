@@ -53,7 +53,7 @@ from openpyxl.styles import Alignment, Font, PatternFill
 
 
 RUN_DIR = Path(__file__).resolve().parent
-REPO_ROOT = RUN_DIR.parents[1]
+REPO_ROOT = RUN_DIR.parents[2]
 import sys as _sys; _sys.path.insert(0, str(REPO_ROOT))
 from utils.paths import get_generated_dir
 
