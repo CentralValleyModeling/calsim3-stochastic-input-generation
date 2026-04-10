@@ -30,7 +30,7 @@ import sys
 from typing import Dict, List
 
 RUN_DIR = Path(__file__).resolve().parent
-REPO_ROOT = RUN_DIR.parents[1]
+REPO_ROOT = RUN_DIR.parents[2]
 REFERENCE_DIR = RUN_DIR / "reference"
 
 sys.path.insert(0, str(REPO_ROOT))

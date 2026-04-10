@@ -276,7 +276,7 @@ def single_scenario_pull(
 
     try:
         try:
-            pathnames_raw = fid.getPathnameList("/*/*/*/*/*/", sort=1)
+            pathnames_raw = fid.getPathnameList("/*/*/*/*/*/*/", sort=1)
         except Exception:
             pathnames_dict = fid.getPathnameDict()
             pathnames_raw = list(pathnames_dict.values())[0]
