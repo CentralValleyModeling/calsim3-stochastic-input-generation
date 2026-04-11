@@ -1,0 +1,44 @@
+! Fix 4+5: SJR Restoration Bypass Guard (low-Millerton-storage)
+! File: Run/SanJoaquin/Friant/SJR_Rest_Req_Cycle1.wresl, line 50
+!
+! Fix 4 (Apr 1962 infeasibility):
+!   Hard equality on restoration bypass flow (meetSJRR) forces an exact release
+!   through Gravelly Ford that exceeds available supply when Millerton storage is
+!   at min operational pool with low inflows.
+!   n09 Apr 1962: I_MLRTN = 37.5 TAF, REST_REQ_NP = 72.0 TAF (1.9x ratio),
+!   S_MLRTN driven to 6 TAF (min operational pool ~130 TAF).
+!   When previous-month storage < 130 TAF, relax meetSJRR to a penalized soft
+!   constraint so the solver can reduce bypass flow to match available supply.
+!
+! Fix 5 (Jun 1933 unboundedness):
+!   With Fix 4's lhs>rhs penalty 0, the over-delivery side of meetSJRR is
+!   unconstrained. D_SJR205_SJR201 has a solver reward of -500,000 (from its
+!   priority weighting in SJRBASE) and no effective upper bound in cycle 14 --
+!   later cycles include setSJRRflow but SJRBASE does not. The zero penalty on
+!   over-delivery combined with the -500K reward makes the LP unbounded, which
+!   WRIMS/CBC misreports as "infeasible".
+!   S_MLRTN(-1) = 123.67 TAF at Jun 1933 (below 130, triggers lowStorage case).
+!   Fix: Change lhs>rhs penalty from 0 to 9999999, so over-delivery costs
+!   +9,499,999 net (penalty 9,999,999 - reward 500,000), preventing unboundedness.
+!   Under-delivery penalty (lhs<rhs) remains 9999999.
+
+! --- UNCHANGED (line 10) ---
+goal setMLRTN_rel {C_MLRTN > MLRTN_rel}
+
+! --- ORIGINAL (line 50) ---
+!goal meetSJRR {D_SJR205_SJR201 = REST_RCH_NP}
+
+! --- MODIFIED ---
+goal meetSJRR {
+    lhs D_SJR205_SJR201
+    case lowStorage {
+        condition S_MLRTN(-1) < 130.
+        rhs REST_RCH_NP
+        lhs>rhs penalty 9999999
+        lhs<rhs penalty 9999999
+    }
+    case normalOps {
+        condition always
+        rhs REST_RCH_NP
+    }
+}
