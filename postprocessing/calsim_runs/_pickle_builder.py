@@ -38,7 +38,15 @@ sys.path.insert(0, str(REPO_ROOT))
 from utils.dss_pickle_builder import Scenario, build_pickles_from_metrics_csv
 from utils.paths import get_base_dir, get_generated_dir
 
-BASELINE_DSS = get_base_dir() / "CalSim3" / "__calsim_sv_default__.dss"
+BASELINE_DSS = (
+    get_base_dir()
+    / "CalSim3"
+    / "Studies"
+    / "9.3.1_danube_hist"
+    / "DSS"
+    / "output"
+    / "DCR2023_DV_9.3.1_Danube_Hist_v1.7.dss"
+)
 PRODUCT_B_DV_DIR = (
     get_generated_dir()
     / "postprocessing"
@@ -84,7 +92,7 @@ def build_product_b_pickles(
     baseline_dss: str | Path,
     product_b_root: str | Path,
     out_dir: str | Path,
-    glob_pattern: str = "**/*.dss",
+    glob_pattern: str = "*.dss",
     metrics_csv_path: str | Path | None = None,
 ) -> Dict[str, str]:
     metrics_csv = Path(metrics_csv_path) if metrics_csv_path is not None else (REFERENCE_DIR / "metrics.csv")
@@ -120,7 +128,7 @@ def main() -> None:
         default=str(PRODUCT_B_DV_DIR),
         help="Root directory containing Product B DSS files",
     )
-    parser.add_argument("--glob", default="**/*.dss", help="Glob pattern used to find Product B DSS files")
+    parser.add_argument("--glob", default="*.dss", help="Glob pattern used to find Product B DSS files")
     parser.add_argument(
         "--metrics-csv",
         default=str(REFERENCE_DIR / "metrics.csv"),

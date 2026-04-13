@@ -2,7 +2,7 @@ r"""
 Product B stochastic post-processing.
 
 This module is tailored to the 10 x 100-year Product B block structure:
-- one benchmark / baseline scenario
+- one baseline scenario
 - ten stochastic block scenarios n01 ... n10
 - each block spans the same 100 water years
 
@@ -81,6 +81,7 @@ _BLOCK_RE = re.compile(r"(?<![A-Za-z0-9])n0*([1-9]|10)(?![A-Za-z0-9])", flags=re
 
 DEFAULT_DROUGHT_PERCENTILE = 5.0
 HEATMAP_ROLLING_WINDOWS: Tuple[int, ...] = (5, 10)
+COMPACT_SUMMARY_WINDOWS: Tuple[int, ...] = (2, 5, 10)
 DEFAULT_SEQUENCE_WINDOWS: Tuple[int, ...] = (5,)
 DEFAULT_SEQUENCE_FRAME_YEARS = 15
 
@@ -390,6 +391,64 @@ def stochastic_rolling_minima_table(
         return table
 
     return table.sort_values(["Group", "Metric", "Window_Years"]).reset_index(drop=True)
+
+
+# ---------------------------------------------------------------------------
+# Compact summary table (one row per metric)
+# ---------------------------------------------------------------------------
+
+def build_compact_summary_table(
+    benchmark_summary: pd.DataFrame,
+    block_summary: pd.DataFrame,
+    benchmark_rolling: pd.DataFrame,
+    stochastic_rolling: pd.DataFrame,
+    rolling_windows: Sequence[int] = COMPACT_SUMMARY_WINDOWS,
+) -> pd.DataFrame:
+    """Build a wide one-row-per-metric summary with annual avg and rolling minima.
+
+    Columns
+    -------
+    Group, Metric, Metric_Label
+    Hist_Annual_Avg               -- historical mean annual value
+    N1_10_Annual_Avg_Min          -- minimum block mean across N1-N10
+    N1_10_Annual_Avg_Max          -- maximum block mean across N1-N10
+    N1_10_Abs_Range               -- max block mean - min block mean
+    N1_10_Pct_Range               -- abs range / |hist mean| * 100
+    Hist_{w}yr_Min                -- historical worst w-yr rolling avg
+    N1_10_{w}yr_Min               -- stochastic worst w-yr rolling avg (single worst across all blocks)
+    """
+    table = benchmark_summary[["Group", "Metric", "Metric_Label", "Historical_Mean_WY_TAF"]].copy()
+    table = table.rename(columns={"Historical_Mean_WY_TAF": "Hist_Annual_Avg"})
+
+    # Range of block means across N1-N10
+    block_range = (
+        block_summary.groupby(["Group", "Metric", "Metric_Label"])["Mean_WY_TAF"]
+        .agg(N1_10_Annual_Avg_Min="min", N1_10_Annual_Avg_Max="max")
+        .reset_index()
+    )
+    block_range["N1_10_Abs_Range"] = block_range["N1_10_Annual_Avg_Max"] - block_range["N1_10_Annual_Avg_Min"]
+    table = table.merge(block_range, on=["Group", "Metric", "Metric_Label"], how="left")
+    table["N1_10_Pct_Range"] = np.where(
+        table["Hist_Annual_Avg"].ne(0),
+        table["N1_10_Abs_Range"] / table["Hist_Annual_Avg"].abs() * 100.0,
+        np.nan,
+    )
+
+    # Rolling minima columns
+    for w in sorted(rolling_windows):
+        # Historical
+        hist_w = benchmark_rolling[benchmark_rolling["Window_Years"] == w][
+            ["Group", "Metric", "Metric_Label", "Historical_Min_RollingAvg_TAF"]
+        ].rename(columns={"Historical_Min_RollingAvg_TAF": f"Hist_{w}yr_Min"})
+        table = table.merge(hist_w, on=["Group", "Metric", "Metric_Label"], how="left")
+
+        # Stochastic (single worst across all blocks)
+        stoch_w = stochastic_rolling[stochastic_rolling["Window_Years"] == w][
+            ["Group", "Metric", "Metric_Label", "Min_RollingAvg_TAF"]
+        ].rename(columns={"Min_RollingAvg_TAF": f"N1_10_{w}yr_Min"})
+        table = table.merge(stoch_w, on=["Group", "Metric", "Metric_Label"], how="left")
+
+    return table.sort_values(["Group", "Metric"]).reset_index(drop=True)
 
 
 # ---------------------------------------------------------------------------
@@ -902,8 +961,8 @@ def plot_worst_window_sequences(
             for block_label, block_index, block_frame in block_frames:
                 color = _BLOCK_COLORS[(block_index - 1) % len(_BLOCK_COLORS)]
                 label = (
-                    f"{block_label} (WY {block_frame['wy_start']}"
-                    f"\u2013{block_frame['wy_end']}"
+                    f"{block_label} (Yr {block_frame['seq_start']}"
+                    f"\u2013{block_frame['seq_end']}"
                     f", avg {block_frame['rolling_avg']:,.0f})"
                 )
                 _plot_sequence_trace(
@@ -1188,6 +1247,18 @@ def run_post_processing_package(
     out_path = Path(out_dir)
     out_path.mkdir(parents=True, exist_ok=True)
 
+    # -- Compact summary table (one row per metric) --
+    compact_summary = build_compact_summary_table(
+        benchmark_summary=benchmark_summary,
+        block_summary=block_summary,
+        benchmark_rolling=benchmark_rolling,
+        stochastic_rolling=stochastic_rolling,
+    )
+    compact_summary_xlsx = out_path / "compact_summary.xlsx"
+    with pd.ExcelWriter(compact_summary_xlsx, engine="openpyxl") as writer:
+        compact_summary.to_excel(writer, sheet_name="summary", index=False)
+    format_excel_workbook(compact_summary_xlsx)
+
     # -- Heatmap: metric-by-block % diff vs benchmark --
     heatmap_long = build_heatmap_data(
         annual_long=annual_long,
@@ -1280,6 +1351,7 @@ def run_post_processing_package(
     )
 
     return {
+        "compact_summary_xlsx": str(compact_summary_xlsx),
         "heatmap_xlsx": str(heatmap_xlsx),
         "heatmap_figures": str(out_path / "figures" / "heatmap"),
         "annual_summary_xlsx": str(annual_summary_xlsx),
