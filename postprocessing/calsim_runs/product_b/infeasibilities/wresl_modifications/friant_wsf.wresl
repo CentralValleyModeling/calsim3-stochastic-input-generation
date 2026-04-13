@@ -1,0 +1,26 @@
+! Fix 8a: Zero-area guard for Friant water supply forecast evaporation
+! File: Run/SanJoaquin/Friant/friant_wsf.wresl, line 41
+!
+! Problem: TREvap_sep divides by A_MLRTNlast (Millerton surface area from
+!   previous timestep). When Fixes 4-7 allow Millerton storage to drop to
+!   ~0 TAF, A_MLRTNlast = 0 and WRIMS throws "divided by 0".
+!   This file is globally included (all cycles), so any timestep following
+!   a near-zero Millerton month will fail.
+!
+! Fix: Add zeroArea case returning 0.0 when A_MLRTNlast < 0.01 acres.
+!   Physically correct: zero reservoir area means zero evaporation.
+
+! --- ORIGINAL (line 41) ---
+!define TREvap_sep {value A17last*FREvap_sep/A_MLRTNlast}
+
+! --- MODIFIED ---
+define TREvap_sep {
+    case zeroArea {
+        condition A_MLRTNlast < 0.01
+        value 0.0
+    }
+    case normalOps {
+        condition always
+        value A17last*FREvap_sep/A_MLRTNlast
+    }
+}

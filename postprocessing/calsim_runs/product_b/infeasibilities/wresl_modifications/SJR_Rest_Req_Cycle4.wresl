@@ -1,0 +1,64 @@
+! Fix 10: SJR Restoration Bypass Guard for Cycle 4 (SJR_WQ2)
+! File: Run/SanJoaquin/Friant/SJR_Rest_Req_Cycle4.wresl, lines ~202, ~205
+!
+! Problem (proactive): Cycle 4 has two hard equalities:
+!   - boundC_MLRTNmain: C_MLRTNM = SJRR_rel_new (line ~202)
+!   - meetSJRR: D_SJR205_SJR201 = REST_RCH_P/NP (line ~205)
+!   Same pattern as Cycle 2 (Fix 6). When S_MLRTN(-1) is near zero,
+!   neither equality can be satisfied.
+!
+! Fix: Apply lowStorage guard (S_MLRTN(-1) < 130) to both goals.
+!   Under low storage, both become penalized soft constraints.
+!   Under normal operations, original behavior is preserved.
+!   meetSJRR's lowStorage case takes priority over the April/May split.
+
+! --- UNCHANGED (line ~9) ---
+goal setMLRTN_rel {C_MLRTN > MLRTN_rel}
+
+! --- ORIGINAL (line ~202) ---
+!goal boundC_MLRTNmain { C_MLRTNM = SJRR_rel_new  }
+
+! --- MODIFIED ---
+goal boundC_MLRTNmain {
+    lhs C_MLRTNM
+    case lowStorage {
+        condition S_MLRTN(-1) < 130.
+        rhs SJRR_rel_new
+        lhs>rhs penalty 9999999
+        lhs<rhs penalty 9999999
+    }
+    case normalOps {
+        condition always
+        rhs SJRR_rel_new
+    }
+}
+
+! --- ORIGINAL (line ~205) ---
+!goal meetSJRR {
+!    lhs D_SJR205_SJR201
+!    case April {
+!        condition month==APR
+!        rhs REST_RCH_P }
+!    case MayOtherwise {
+!        condition always
+!        rhs REST_RCH_NP }
+!}
+
+! --- MODIFIED ---
+goal meetSJRR {
+    lhs D_SJR205_SJR201
+    case lowStorage {
+        condition S_MLRTN(-1) < 130.
+        rhs REST_RCH_NP
+        lhs>rhs penalty 9999999
+        lhs<rhs penalty 9999999
+    }
+    case April {
+        condition month==APR
+        rhs REST_RCH_P
+    }
+    case MayOtherwise {
+        condition always
+        rhs REST_RCH_NP
+    }
+}

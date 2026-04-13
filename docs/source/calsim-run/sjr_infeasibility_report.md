@@ -6,7 +6,7 @@ Eight of ten Product B chunks failed during the SJR cycle (SJRBASE). Four failur
 
 1. **Low-flow failures** (n03, n07 -- Jul 1922): Near-zero inflows across all SJR tributaries propogate and cause Mokelumne allocation formula to go negative and seepage constraints to become unsatisfiable.
 2. **High-flow failures** (n01, n04, n05, n06 -- June): Millerton inflows of 1,904--2,054 TAF (1.6--1.8x historical max) propagate to overflow a hardcoded 10,000 cfs bookkeeping cap in the Mendota Pool DMC balance.
-3. **Low-storage Friant failure** (n09 -- Apr 1962, then Jun 1933): Two-stage failure. First, sustained low Millerton inflows deplete storage below min operational pool while the SJR restoration requirement remains high, making the hard equality constraint infeasible (Apr 1962). After fixing the hard equality (Fix 4), the relaxed constraint introduces LP unboundedness when the low-storage case fires with zero penalty on over-delivery (Jun 1933).
+3. **Low-storage Friant failure** (n09 -- seven fixes): (a) Apr 1962, c14: hard restoration equality infeasible with depleted storage (Fix 4+5); (b) Jun 1933, c14: unboundedness from zero over-delivery penalty misreported as infeasible (Fix 5); (c) Apr 1962, c19: same hard equalities in `SJR_Rest_Req_Cycle2.wresl` (Fix 6); (d) Apr 1962, c24: standalone `boundC_MLRTNmain` equality in `SJR_Rest_Full.wresl` (Fix 7); (e) May 1962, all cycles: divide-by-zero in evaporation scaling when Millerton area = 0 (Fix 8); (f,g) proactive guards on `SJR_Rest_Req_Cycle3.wresl` and `SJR_Rest_Req_Cycle4.wresl` hard equalities (Fix 9, 10).
 4. **Initial-timestep failure** (n10 -- Oct 1921): Failure at the first simulation timestep. Root cause not yet identified. Resolved by restoring baseline (historical) SV values for October 1921 from `__calsim_sv_default__.dss`.
 
 *Note: "min operational pool" refers to the minimum storage level (~130 TAF) below which Millerton Lake cannot physically release water through its outlets.*
@@ -273,6 +273,151 @@ goal meetSJRR {
         lhs<rhs penalty 9999999
     }
     case normalOps {
+        condition always
+        rhs REST_RCH_NP
+    }
+}
+```
+
+**Fix 6 -- Cycle 2 restoration guard** (`SJR_Rest_Req_Cycle2.wresl`, lines ~109-110, cycle 19 sjr_wq1): After Fixes 4+5 resolved the cycle 14 failures, n09 was re-run and failed again at April 1962 in cycle 19. `SJR_Rest_Req_Cycle2.wresl` (included in sjr_wq1) contains two independent hard equalities that impose the same restoration flow requirement:
+- `meetSJRR`: `D_SJR205_SJR201 = REST_RCH_NP` (2122 CFS = 126 TAF)
+- `boundC_MLRTNmain`: `C_MLRTNM = SJRR_rel_new` (2068 CFS = 123 TAF)
+
+With S_MLRTN(-1) = 85 TAF and near-zero Millerton inflow at April 1962, the available water cannot satisfy either constraint. HiGHS confirms true infeasibility (LP relaxation with zero objective is infeasible), distinct from the unboundedness in Fix 5. Fix: apply the same `lowStorage` guard (S_MLRTN(-1) < 130) to both goals in Cycle 2, with penalty 9999999 on both sides. Verified: LP kOptimal, MIP kOptimal. Solution: D_SJR205_SJR201 = 1482 CFS (640 CFS deficit vs 2122 target), C_MLRTN = C_MLRTNM = 1428 CFS (all available water released).
+
+```
+! lines ~109-110 -- modified (Fix 6)
+goal boundC_MLRTNmain {
+    lhs C_MLRTNM
+    case lowStorage {
+        condition S_MLRTN(-1) < 130.
+        rhs SJRR_rel_new
+        lhs>rhs penalty 9999999
+        lhs<rhs penalty 9999999
+    }
+    case normalOps {
+        condition always
+        rhs SJRR_rel_new
+    }
+}
+
+goal meetSJRR {
+    lhs D_SJR205_SJR201
+    case lowStorage {
+        condition S_MLRTN(-1) < 130.
+        rhs REST_RCH_NP
+        lhs>rhs penalty 9999999
+        lhs<rhs penalty 9999999
+    }
+    case normalOps {
+        condition always
+        rhs REST_RCH_NP
+    }
+}
+```
+
+**Fix 7 -- Full-system restoration guard** (`SJR_Rest_Full.wresl`, line ~133, cycle 24 gw_initial): After Fix 6 resolved cycle 19, n09 failed again at April 1962 in cycle 24. `SJR_Rest_Full.wresl` (included in gw_initial) has a standalone `boundC_MLRTNmain` equality with no accompanying `meetSJRR` -- `setSJRRflow` is an upper-bound inequality (`D_SJR205_SJR201 <= Rest_Rch_Target`) that is already safe. With S_MLRTN(-1) = 85 TAF, `fix_c_mlrtnf = 0` (locked from SJR_PULSE cycle), and near-zero Millerton inflow, C_MLRTNM cannot reach the required 1698 CFS (~101 TAF). HiGHS confirms genuine infeasibility (zero-objective LP is infeasible, distinct from the Fix 5 unboundedness). Fix: apply the same `lowStorage` guard to `boundC_MLRTNmain` alone. Verified: LP kOptimal, MIP kOptimal. Solution: C_MLRTN = C_MLRTNM = 1428 CFS, deficit = 270 CFS vs 1698 CFS target.
+
+```
+! line ~133 -- modified (Fix 7)
+goal boundC_MLRTNmain {
+    lhs C_MLRTNM
+    case lowStorage {
+        condition S_MLRTN(-1) < 130.
+        rhs SJRR_rel_new
+        lhs>rhs penalty 9999999
+        lhs<rhs penalty 9999999
+    }
+    case normalOps {
+        condition always
+        rhs SJRR_rel_new
+    }
+}
+```
+
+**Fix 8 -- Zero-area evaporation guard** (`friant_wsf.wresl` line 41, `friant_rain_fld_est.wresl` line 15, all cycles): After Fixes 4-7 resolved the LP infeasibilities, n09 failed at May 1962 cycle 13 with two divide-by-zero errors. Both `TREvap_sep` and `TF_est_evap` compute evaporation via `A17last * evap / A_MLRTNlast`, which divides by Millerton surface area from the previous timestep. When Fixes 4-7 allow Millerton to drain to ~0 TAF in April 1962, `A_MLRTNlast = 0` for May. Both files are globally included (all cycles). Fix: add a `zeroArea` case returning 0.0 when `A_MLRTNlast < 0.01`. Physically correct: zero reservoir area means zero evaporation scaling.
+
+```
+! friant_wsf.wresl line 41 -- modified (Fix 8a)
+define TREvap_sep {
+    case zeroArea {
+        condition A_MLRTNlast < 0.01
+        value 0.0
+    }
+    case normalOps {
+        condition always
+        value A17last*FREvap_sep/A_MLRTNlast
+    }
+}
+
+! friant_rain_fld_est.wresl line 15 -- modified (Fix 8b)
+define TF_est_evap {
+    case zeroArea {
+        condition A_MLRTNlast < 0.01
+        value 0.0
+    }
+    case normalOps {
+        condition always
+        value A17last*Friant_est_evap/A_MLRTNlast
+    }
+}
+```
+
+**Fix 9 -- Cycle 3 restoration guard (proactive)** (`SJR_Rest_Req_Cycle3.wresl`, line ~50, SJR_PULSE): `meetSJRR` is a hard equality with April/May case structure (`REST_RCH_P` vs `REST_RCH_NP`). Same low-storage failure pattern as Cycles 1 and 2. Fix: insert `lowStorage` as the first case (highest priority), so it fires before the month-specific cases. Under normal storage, original April/May behavior is preserved.
+
+```
+! line ~50 -- modified (Fix 9)
+goal meetSJRR {
+    lhs D_SJR205_SJR201
+    case lowStorage {
+        condition S_MLRTN(-1) < 130.
+        rhs REST_RCH_NP
+        lhs>rhs penalty 9999999
+        lhs<rhs penalty 9999999
+    }
+    case April {
+        condition month==APR
+        rhs REST_RCH_P
+    }
+    case MayOtherwise {
+        condition always
+        rhs REST_RCH_NP
+    }
+}
+```
+
+**Fix 10 -- Cycle 4 restoration guard (proactive)** (`SJR_Rest_Req_Cycle4.wresl`, lines ~202, ~205, SJR_WQ2): Same pattern as Cycle 2 (Fix 6) -- both `boundC_MLRTNmain` and `meetSJRR` are hard equalities. Fix: apply `lowStorage` guard to both goals. `meetSJRR`'s lowStorage case takes priority over the April/May split.
+
+```
+! line ~202 -- modified (Fix 10)
+goal boundC_MLRTNmain {
+    lhs C_MLRTNM
+    case lowStorage {
+        condition S_MLRTN(-1) < 130.
+        rhs SJRR_rel_new
+        lhs>rhs penalty 9999999
+        lhs<rhs penalty 9999999
+    }
+    case normalOps {
+        condition always
+        rhs SJRR_rel_new
+    }
+}
+
+! line ~205 -- modified (Fix 10)
+goal meetSJRR {
+    lhs D_SJR205_SJR201
+    case lowStorage {
+        condition S_MLRTN(-1) < 130.
+        rhs REST_RCH_NP
+        lhs>rhs penalty 9999999
+        lhs<rhs penalty 9999999
+    }
+    case April {
+        condition month==APR
+        rhs REST_RCH_P
+    }
+    case MayOtherwise {
         condition always
         rhs REST_RCH_NP
     }
