@@ -1,0 +1,1353 @@
+r"""
+Product B stochastic post-processing.
+
+This module is tailored to the 10 x 100-year Product B block structure:
+- one benchmark / baseline scenario
+- ten stochastic block scenarios n01 ... n10
+- each block spans the same 100 water years
+
+Outputs:
+1) heatmap_block_summary.xlsx
+   - % difference vs benchmark for mean annual, P5 annual,
+     worst 5-year rolling average, and worst 10-year rolling average
+
+2) annual_block_summary.xlsx
+   - historical_summary
+   - block_summary
+   - annual_values_long
+
+3) rolling_minima.xlsx
+   - historical_rolling_minima
+   - stochastic_rolling_minima
+
+4) figures/annual_cdf/<metric>.png
+   - annual water-year CDFs, with one line for the benchmark and one line per Product B block
+
+5) figures/block_boxplots/<metric>.png
+   - block-to-block boxplots for annual mean and annual median, with the historical value
+     shown as a black marker
+
+6) figures/worst_window_sequences/<window>yr/<metric>_worst_<window>yr.png
+   - overlays of the historical worst sequence and each block's own worst sequence for
+     a 5-year rolling window, plotted in a fixed 15-year frame with the
+     critical window centered and shaded
+
+
+
+Assumptions:
+- values.pkl metric columns are already in TAF
+- Product B block scenarios are named either n01..n10, or contain those tokens in the scenario name
+- Non-storage metrics are monthly volumes that should be summed to water years
+- Storage metrics are represented by end-of-September carryover values
+
+Typical usage:
+
+    python _productB_postproc.py ^
+        --pickle-dir "data\GENERATED\postprocessing\calsim_runs\product_b\pickle_files" ^
+        --benchmark-name Historical ^
+        --out-dir "data\GENERATED\postprocessing\calsim_runs\product_b\output"
+"""
+
+from __future__ import annotations
+
+import argparse
+from pathlib import Path
+import pickle
+import re
+from typing import Dict, Iterable, List, Sequence, Tuple
+
+import matplotlib.pyplot as plt
+import numpy as np
+import pandas as pd
+from openpyxl import load_workbook
+from openpyxl.styles import Alignment, Font, PatternFill
+
+
+RUN_DIR = Path(__file__).resolve().parent
+REPO_ROOT = RUN_DIR.parents[1]
+
+import sys as _sys; _sys.path.insert(0, str(REPO_ROOT))
+try:
+    from utils.paths import get_generated_dir
+except Exception:
+    def get_generated_dir() -> Path:
+        return RUN_DIR
+
+PICKLE_DIR = get_generated_dir() / "postprocessing" / "calsim_runs" / "product_b" / "pickle_files"
+OUT_DIR = get_generated_dir() / "postprocessing" / "calsim_runs" / "product_b" / "output"
+
+FIXED_COLS = {"Date", "Scenario", "OctSeptYear", "MarFebYear", "Year", "Month", "JanDecYear"}
+_BLOCK_RE = re.compile(r"(?<![A-Za-z0-9])n0*([1-9]|10)(?![A-Za-z0-9])", flags=re.IGNORECASE)
+
+DEFAULT_DROUGHT_PERCENTILE = 5.0
+HEATMAP_ROLLING_WINDOWS: Tuple[int, ...] = (5, 10)
+DEFAULT_SEQUENCE_WINDOWS: Tuple[int, ...] = (5,)
+DEFAULT_SEQUENCE_FRAME_YEARS = 15
+
+
+def load_pickles(pickle_dir: str | Path) -> Tuple[pd.DataFrame, pd.DataFrame, Dict[str, str], Dict[str, str]]:
+    pickle_path = Path(pickle_dir)
+    with open(pickle_path / "values.pkl", "rb") as f:
+        df_values = pickle.load(f)
+    with open(pickle_path / "diffs.pkl", "rb") as f:
+        df_diffs = pickle.load(f)
+    with open(pickle_path / "units.pkl", "rb") as f:
+        units = pickle.load(f)
+    with open(pickle_path / "fields.pkl", "rb") as f:
+        fields = pickle.load(f)
+    return df_values, df_diffs, units, fields
+
+
+def metric_groups_from_fields(fields: Dict[str, str]) -> Dict[str, str]:
+    out: Dict[str, str] = {}
+    for key, label in fields.items():
+        if isinstance(label, str) and ":" in label:
+            out[key] = label.split(":", 1)[0].strip()
+        else:
+            out[key] = ""
+    return out
+
+
+def metric_label_from_fields(metric_key: str, fields: Dict[str, str]) -> str:
+    raw = fields.get(metric_key, metric_key)
+    return raw.split(":", 1)[1].strip() if ":" in raw else raw
+
+
+def extract_block_index(scenario_name: str) -> int | None:
+    match = _BLOCK_RE.search(str(scenario_name))
+    if not match:
+        return None
+    return int(match.group(1))
+
+
+def block_label_from_index(block_index: int | float | None) -> str:
+    if block_index is None or pd.isna(block_index):
+        return ""
+    return f"n{int(block_index):02d}"
+
+
+def sort_block_labels(block_labels: Iterable[str]) -> List[str]:
+    def _key(label: str) -> Tuple[int, str]:
+        digits = re.sub(r"\D", "", str(label))
+        return (int(digits) if digits else 0, str(label))
+
+    return sorted(block_labels, key=_key)
+
+
+def make_safe_filename(text: str) -> str:
+    safe = re.sub(r"[^A-Za-z0-9_.-]+", "_", str(text))
+    safe = safe.strip("_.")
+    return safe or "plot"
+
+
+# ---------------------------------------------------------------------------
+# Annual aggregation and summary tables
+# ---------------------------------------------------------------------------
+
+def water_year_aggregate(df: pd.DataFrame, metric_key: str, group: str) -> pd.DataFrame:
+    """
+    Returns a DataFrame with columns:
+      Scenario, OctSeptYear, WY_Value
+
+    Rule for mixed metric types:
+      - Storage group: end-of-September value (end of water year)
+      - Else: sum monthly values to annual volume
+    """
+
+    needed = {"Scenario", "OctSeptYear", metric_key, "Date"}
+    missing = needed - set(df.columns)
+    if missing:
+        raise ValueError(f"values.pkl missing columns: {sorted(missing)}")
+
+    if group.strip().lower() == "storage":
+        tmp = df[["Scenario", "Date", "OctSeptYear", metric_key]].copy()
+        tmp = tmp.dropna(subset=[metric_key])
+        tmp = tmp[tmp["Date"].dt.month == 9]
+        wy = tmp.groupby(["Scenario", "OctSeptYear"], as_index=False)[metric_key].last()
+    else:
+        tmp = df[["Scenario", "OctSeptYear", metric_key]].copy()
+        tmp = tmp.dropna(subset=[metric_key])
+        wy = tmp.groupby(["Scenario", "OctSeptYear"], as_index=False)[metric_key].sum()
+
+    return wy.rename(columns={metric_key: "WY_Value"})
+
+
+def annualize_all_metrics(
+    df_values: pd.DataFrame,
+    metric_keys: Sequence[str],
+    metric_groups: Dict[str, str],
+    fields: Dict[str, str],
+) -> pd.DataFrame:
+    frames: List[pd.DataFrame] = []
+
+    for metric_key in metric_keys:
+        group = metric_groups.get(metric_key, "")
+        label = metric_label_from_fields(metric_key, fields)
+
+        wy = water_year_aggregate(df=df_values, metric_key=metric_key, group=group)
+        wy = wy.rename(columns={"OctSeptYear": "WY"})
+        wy.insert(0, "Metric_Label", label)
+        wy.insert(0, "Metric", metric_key)
+        wy.insert(0, "Group", group)
+        wy["Block_Index"] = wy["Scenario"].map(extract_block_index)
+        wy["Block"] = wy["Block_Index"].map(block_label_from_index)
+        non_block = wy["Block"] == ""
+        wy.loc[non_block, "Block"] = wy.loc[non_block, "Scenario"]
+        frames.append(wy)
+
+    annual_long = pd.concat(frames, ignore_index=True)
+    annual_long = annual_long.sort_values(["Metric", "Scenario", "WY"]).reset_index(drop=True)
+    return annual_long
+
+
+def benchmark_summary_table(annual_long: pd.DataFrame, benchmark_name: str) -> pd.DataFrame:
+    benchmark = annual_long[annual_long["Scenario"] == benchmark_name].copy()
+    table = (
+        benchmark.groupby(["Group", "Metric", "Metric_Label"], as_index=False)["WY_Value"]
+        .agg(
+            Historical_Years="count",
+            Historical_Mean_WY_TAF="mean",
+            Historical_Median_WY_TAF="median",
+            Historical_Min_WY_TAF="min",
+            Historical_Max_WY_TAF="max",
+            Historical_Std_WY_TAF="std",
+        )
+    )
+    return table.sort_values(["Group", "Metric"]).reset_index(drop=True)
+
+
+def block_summary_table(annual_long: pd.DataFrame, benchmark_name: str) -> pd.DataFrame:
+    benchmark_table = benchmark_summary_table(annual_long=annual_long, benchmark_name=benchmark_name)
+
+    blocks = annual_long[annual_long["Block_Index"].notna()].copy()
+    table = (
+        blocks.groupby(
+            ["Group", "Metric", "Metric_Label", "Scenario", "Block", "Block_Index"],
+            as_index=False,
+        )["WY_Value"]
+        .agg(
+            Block_Years="count",
+            Mean_WY_TAF="mean",
+            Median_WY_TAF="median",
+            Min_WY_TAF="min",
+            Max_WY_TAF="max",
+            Std_WY_TAF="std",
+        )
+    )
+
+    table = table.merge(
+        benchmark_table,
+        on=["Group", "Metric", "Metric_Label"],
+        how="left",
+        validate="many_to_one",
+    )
+    table["Mean_Diff_vs_Historical_TAF"] = table["Mean_WY_TAF"] - table["Historical_Mean_WY_TAF"]
+    table["Mean_Diff_vs_Historical_pct"] = np.where(
+        table["Historical_Mean_WY_TAF"].ne(0),
+        table["Mean_Diff_vs_Historical_TAF"] / table["Historical_Mean_WY_TAF"] * 100.0,
+        np.nan,
+    )
+    hist_cols = [c for c in table.columns if c.startswith("Historical_")]
+    table = table.drop(columns=hist_cols)
+    table = table.sort_values(["Group", "Metric", "Block_Index"]).reset_index(drop=True)
+    table = table.drop(columns=["Scenario", "Block_Index"])
+    return table
+
+
+# ---------------------------------------------------------------------------
+# Rolling-window helpers and tables
+# ---------------------------------------------------------------------------
+
+def _rolling_candidates(metric_block_df: pd.DataFrame, window_years: int) -> pd.DataFrame:
+    metric_block_df = metric_block_df.sort_values("WY").reset_index(drop=True)
+    if metric_block_df.empty or len(metric_block_df) < window_years:
+        return pd.DataFrame(columns=["Window_Years", "RollingAvg_TAF", "WY_Start", "WY_End", "Seq_Start", "Seq_End"])
+
+    rolling = metric_block_df["WY_Value"].rolling(window_years).mean()
+
+    rows: List[dict] = []
+    for idx in range(window_years - 1, len(metric_block_df)):
+        value = rolling.iloc[idx]
+        if pd.isna(value):
+            continue
+        wy_start = int(metric_block_df.loc[idx - window_years + 1, "WY"])
+        wy_end = int(metric_block_df.loc[idx, "WY"])
+        seq_start = int(idx - window_years + 2)  # 1-based within-scenario position
+        seq_end = int(idx + 1)                    # 1-based within-scenario position
+        rows.append(
+            {
+                "Window_Years": int(window_years),
+                "RollingAvg_TAF": float(value),
+                "WY_Start": wy_start,
+                "WY_End": wy_end,
+                "Seq_Start": seq_start,
+                "Seq_End": seq_end,
+            }
+        )
+
+    return pd.DataFrame(rows)
+
+
+def _best_rolling_window(metric_block_df: pd.DataFrame, window_years: int) -> dict | None:
+    candidates = _rolling_candidates(metric_block_df, window_years)
+    if candidates.empty:
+        return None
+
+    best = (
+        candidates.sort_values(["RollingAvg_TAF", "Seq_Start", "Seq_End", "WY_Start", "WY_End"])
+        .iloc[0]
+        .to_dict()
+    )
+    return best
+
+
+def benchmark_rolling_minima_table(
+    annual_long: pd.DataFrame,
+    benchmark_name: str,
+    min_window_years: int = 2,
+    max_window_years: int = 10,
+) -> pd.DataFrame:
+    benchmark = annual_long[annual_long["Scenario"] == benchmark_name].copy()
+    rows: List[dict] = []
+
+    for (group, metric, label), metric_df in benchmark.groupby(["Group", "Metric", "Metric_Label"], sort=False):
+        for window_years in range(min_window_years, max_window_years + 1):
+            best = _best_rolling_window(metric_df, window_years)
+            if best is None:
+                continue
+
+            rows.append(
+                {
+                    "Group": group,
+                    "Metric": metric,
+                    "Metric_Label": label,
+                    "Window_Years": int(best["Window_Years"]),
+                    "Historical_Min_RollingAvg_TAF": float(best["RollingAvg_TAF"]),
+                    "Historical_WY_Start": int(best["WY_Start"]),
+                    "Historical_WY_End": int(best["WY_End"]),
+                    "Historical_Year_Index_Start": int(best["Seq_Start"]),
+                    "Historical_Year_Index_End": int(best["Seq_End"]),
+                    "Historical_Scenario": benchmark_name,
+                }
+            )
+
+    table = pd.DataFrame(rows)
+    if table.empty:
+        return table
+
+    return table.sort_values(["Group", "Metric", "Window_Years"]).reset_index(drop=True)
+
+
+def stochastic_rolling_minima_table(
+    annual_long: pd.DataFrame,
+    min_window_years: int = 2,
+    max_window_years: int = 10,
+) -> pd.DataFrame:
+    blocks = annual_long[annual_long["Block_Index"].notna()].copy()
+    rows: List[dict] = []
+
+    for (group, metric, label), metric_df in blocks.groupby(["Group", "Metric", "Metric_Label"], sort=False):
+        for window_years in range(min_window_years, max_window_years + 1):
+            candidate_rows: List[dict] = []
+
+            for (scenario, block, block_index), block_df in metric_df.groupby(
+                ["Scenario", "Block", "Block_Index"],
+                sort=True,
+            ):
+                best = _best_rolling_window(block_df, window_years)
+                if best is None:
+                    continue
+                best["Scenario"] = scenario
+                best["Block"] = block
+                best["Block_Index"] = int(block_index)
+                candidate_rows.append(best)
+
+            if not candidate_rows:
+                continue
+
+            candidates_all = pd.DataFrame(candidate_rows)
+            best = (
+                candidates_all.sort_values(["RollingAvg_TAF", "Block_Index", "Seq_Start", "Seq_End"])
+                .iloc[0]
+                .to_dict()
+            )
+
+            rows.append(
+                {
+                    "Group": group,
+                    "Metric": metric,
+                    "Metric_Label": label,
+                    "Window_Years": int(best["Window_Years"]),
+                    "Min_RollingAvg_TAF": float(best["RollingAvg_TAF"]),
+                    "Block": best["Block"],
+                    "Year_Index_Start": int(best["Seq_Start"]),
+                    "Year_Index_End": int(best["Seq_End"]),
+                }
+            )
+
+    table = pd.DataFrame(rows)
+    if table.empty:
+        return table
+
+    return table.sort_values(["Group", "Metric", "Window_Years"]).reset_index(drop=True)
+
+
+# ---------------------------------------------------------------------------
+# Heatmap: metric-by-block % diff vs benchmark
+# ---------------------------------------------------------------------------
+
+def _percentile(x: Iterable[float], percentile: float) -> float:
+    values = pd.Series(list(x), dtype=float).dropna().to_numpy(dtype=float)
+    if values.size == 0:
+        return float("nan")
+    return float(np.percentile(values, percentile))
+
+
+def build_heatmap_data(
+    annual_long: pd.DataFrame,
+    benchmark_name: str,
+    min_window_years: int = 2,
+    max_window_years: int = 10,
+    drought_percentile: float = DEFAULT_DROUGHT_PERCENTILE,
+    rolling_window_years: Sequence[int] = HEATMAP_ROLLING_WINDOWS,
+) -> pd.DataFrame:
+    """Build a long-form DataFrame with % diff vs benchmark for key stats.
+
+    Stats:
+    - Mean Annual
+    - P5 Annual (meeting update; configurable with ``drought_percentile``)
+    - Worst 5-year Rolling Avg
+    - Worst 10-year Rolling Avg
+    """
+    benchmark = annual_long[annual_long["Scenario"] == benchmark_name].copy()
+    blocks = annual_long[annual_long["Block_Index"].notna()].copy()
+
+    bm_mean = benchmark.groupby(["Group", "Metric", "Metric_Label"])["WY_Value"].mean()
+    bm_low = benchmark.groupby(["Group", "Metric", "Metric_Label"])["WY_Value"].agg(
+        lambda s: _percentile(s, drought_percentile)
+    )
+
+    blk_mean = blocks.groupby(["Group", "Metric", "Metric_Label", "Block"])["WY_Value"].mean()
+    blk_low = blocks.groupby(["Group", "Metric", "Metric_Label", "Block"])["WY_Value"].agg(
+        lambda s: _percentile(s, drought_percentile)
+    )
+
+    def _pct_diff(block_stat: pd.Series, bm_stat: pd.Series) -> pd.DataFrame:
+        df = block_stat.reset_index().rename(columns={"WY_Value": "Block_Value"})
+        bm = bm_stat.reset_index().rename(columns={"WY_Value": "BM_Value"})
+        df = df.merge(bm, on=["Group", "Metric", "Metric_Label"], how="left", validate="many_to_one")
+        df["Pct_Diff"] = np.where(
+            df["BM_Value"].ne(0),
+            (df["Block_Value"] - df["BM_Value"]) / df["BM_Value"].abs() * 100.0,
+            np.nan,
+        )
+        return df
+
+    mean_diff = _pct_diff(blk_mean, bm_mean)
+    mean_diff["Stat"] = "Mean Annual"
+
+    drought_label = f"P{drought_percentile:g} Annual"
+    drought_diff = _pct_diff(blk_low, bm_low)
+    drought_diff["Stat"] = drought_label
+
+    rolling_frames: List[pd.DataFrame] = []
+    for window_years in sorted({int(w) for w in rolling_window_years if int(w) > 0}):
+        if window_years < min_window_years or window_years > max_window_years:
+            continue
+
+        bm_rolling: Dict[Tuple[str, str, str], float] = {}
+        for (group, metric, label), mdf in benchmark.groupby(["Group", "Metric", "Metric_Label"], sort=False):
+            best = _best_rolling_window(mdf, window_years)
+            bm_rolling[(group, metric, label)] = float(best["RollingAvg_TAF"]) if best is not None else np.nan
+
+        blk_rows: List[dict] = []
+        for (group, metric, label, scenario, block, block_idx), bdf in blocks.groupby(
+            ["Group", "Metric", "Metric_Label", "Scenario", "Block", "Block_Index"],
+            sort=False,
+        ):
+            best = _best_rolling_window(bdf, window_years)
+            blk_min = float(best["RollingAvg_TAF"]) if best is not None else np.nan
+            bm_val = bm_rolling.get((group, metric, label), np.nan)
+            pct = ((blk_min - bm_val) / abs(bm_val) * 100.0) if bm_val != 0 and not np.isnan(bm_val) else np.nan
+            blk_rows.append(
+                {
+                    "Group": group,
+                    "Metric": metric,
+                    "Metric_Label": label,
+                    "Block": block,
+                    "Block_Value": blk_min,
+                    "BM_Value": bm_val,
+                    "Pct_Diff": pct,
+                    "Stat": f"Worst {window_years}-yr Rolling Avg",
+                }
+            )
+
+        if blk_rows:
+            rolling_frames.append(pd.DataFrame(blk_rows))
+
+    all_frames = [mean_diff, drought_diff] + rolling_frames
+    if not all_frames:
+        return pd.DataFrame(columns=["Group", "Metric", "Metric_Label", "Block", "Stat", "Pct_Diff", "Block_Value", "BM_Value"])
+
+    heatmap_long = pd.concat(all_frames, ignore_index=True)
+    heatmap_long = heatmap_long[["Group", "Metric", "Metric_Label", "Block", "Stat", "Pct_Diff", "Block_Value", "BM_Value"]]
+    return heatmap_long.sort_values(["Stat", "Group", "Metric", "Block"]).reset_index(drop=True)
+
+
+def plot_heatmap(
+    heatmap_long: pd.DataFrame,
+    out_dir: str | Path,
+    benchmark_name: str = "Historical",
+) -> Dict[str, str]:
+    """Generate one heatmap PNG per stat.
+
+    Positive values are intentionally mapped to blue, per the meeting discussion.
+    """
+    import matplotlib.colors as mcolors
+
+    out_dir = Path(out_dir)
+    fig_dir = out_dir / "figures" / "heatmap"
+    fig_dir.mkdir(parents=True, exist_ok=True)
+
+    outputs: Dict[str, str] = {}
+
+    if heatmap_long.empty:
+        return outputs
+
+    for stat_name, stat_df in heatmap_long.groupby("Stat", sort=False):
+        pivot = stat_df.pivot_table(
+            index="Metric_Label",
+            columns="Block",
+            values="Pct_Diff",
+            aggfunc="first",
+        )
+        if pivot.empty:
+            continue
+
+        block_cols = sort_block_labels(list(pivot.columns))
+        pivot = pivot[block_cols]
+
+        values = pivot.to_numpy(dtype=float)
+        finite_values = values[np.isfinite(values)]
+        if finite_values.size == 0:
+            continue
+
+        n_rows, n_cols = pivot.shape
+        fig_height = max(4.0, 0.4 * n_rows + 1.5)
+        fig_width = max(6.0, 0.8 * n_cols + 3.0)
+        fig, ax = plt.subplots(figsize=(fig_width, fig_height))
+
+        vmax = max(float(np.max(np.abs(finite_values))), 1.0)
+        norm = mcolors.TwoSlopeNorm(vmin=-vmax, vcenter=0, vmax=vmax)
+        cmap = plt.cm.RdBu  # negative = red, positive = blue
+
+        im = ax.imshow(values, aspect="auto", cmap=cmap, norm=norm)
+
+        ax.set_xticks(range(n_cols))
+        ax.set_xticklabels(block_cols, fontsize=8)
+        ax.set_yticks(range(n_rows))
+        ax.set_yticklabels(pivot.index, fontsize=7)
+
+        for i in range(n_rows):
+            for j in range(n_cols):
+                val = values[i, j]
+                if np.isfinite(val):
+                    color = "white" if abs(val) > vmax * 0.6 else "black"
+                    ax.text(j, i, f"{val:+.1f}%", ha="center", va="center", fontsize=6, color=color)
+
+        ax.set_title(f"{stat_name} — % Diff vs {benchmark_name}", fontsize=10, fontweight="bold")
+        ax.set_xlabel("Product B Block")
+        cbar = fig.colorbar(im, ax=ax, shrink=0.8, pad=0.02)
+        cbar.set_label(f"% Diff vs {benchmark_name}", fontsize=8)
+
+        fig.tight_layout()
+        safe_name = make_safe_filename(str(stat_name).replace("%", "pct").lower())
+        out_png = fig_dir / f"heatmap_{safe_name}.png"
+        fig.savefig(out_png, dpi=300, bbox_inches="tight", facecolor="white")
+        plt.close(fig)
+        outputs[str(stat_name)] = str(out_png)
+
+    return outputs
+
+
+# ---------------------------------------------------------------------------
+# CDF plots
+# ---------------------------------------------------------------------------
+
+def empirical_cdf(x: Iterable[float]) -> Tuple[np.ndarray, np.ndarray]:
+    values = np.asarray(list(x), dtype=float)
+    values = values[np.isfinite(values)]
+    if values.size == 0:
+        return np.array([]), np.array([])
+    xs = np.sort(values)
+    p = np.arange(1, xs.size + 1) / xs.size * 100.0
+    return p, xs
+
+
+def plot_annual_cdf(
+    annual_long: pd.DataFrame,
+    metric_key: str,
+    metric_label: str,
+    benchmark_name: str,
+    out_png: str | Path,
+    unit: str = "TAF",
+) -> None:
+    df_metric = annual_long[annual_long["Metric"] == metric_key].copy()
+
+    fig, ax = plt.subplots(figsize=(6.5, 4.0))
+
+    benchmark = df_metric[df_metric["Scenario"] == benchmark_name]
+    p, xs = empirical_cdf(benchmark["WY_Value"].to_numpy(dtype=float))
+    ax.plot(p, xs, linewidth=2.0, label=benchmark_name, color="black")
+
+    block_order = (
+        df_metric[df_metric["Block_Index"].notna()][["Scenario", "Block", "Block_Index"]]
+        .drop_duplicates()
+        .sort_values("Block_Index")
+    )
+
+    for _, row in block_order.iterrows():
+        scenario = row["Scenario"]
+        block_label = row["Block"]
+        sub = df_metric[df_metric["Scenario"] == scenario]
+        p, xs = empirical_cdf(sub["WY_Value"].to_numpy(dtype=float))
+        ax.plot(p, xs, linewidth=1.1, alpha=0.9, label=block_label)
+
+    ax.set_xlabel("Non-Exceedance Probability (%)")
+    ax.set_ylabel(unit)
+    ax.set_xlim(0, 100)
+    ax.set_title(f"{metric_label} — Annual Water-Year CDF")
+    ax.grid(True, linewidth=0.35, alpha=0.4)
+    ax.legend(ncol=3, fontsize=7, frameon=False, loc="best")
+    fig.tight_layout()
+
+    out_path = Path(out_png)
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+    fig.savefig(out_path, dpi=300, bbox_inches="tight", facecolor="white")
+    plt.close(fig)
+
+
+# ---------------------------------------------------------------------------
+# New meeting-driven plots: summary boxplots and worst-sequence overlays
+# ---------------------------------------------------------------------------
+
+def plot_summary_boxplots(
+    annual_long: pd.DataFrame,
+    fields: Dict[str, str],
+    out_dir: str | Path,
+    benchmark_name: str = "Historical",
+    unit: str = "TAF",
+) -> Dict[str, str]:
+    """Create per-metric boxplots with one box per Product B block (n01-n10).
+
+    Each box contains 100 annual water-year values. The historical benchmark
+    mean and median are shown as horizontal reference lines.
+    """
+    out_dir = Path(out_dir)
+    fig_dir = out_dir / "figures" / "block_boxplots"
+    fig_dir.mkdir(parents=True, exist_ok=True)
+
+    outputs: Dict[str, str] = {}
+    if annual_long.empty:
+        return outputs
+
+    # DWR-style color palette
+    _DWR_BLUE = "#003D6B"
+    _DWR_LIGHT_BLUE = "#B0C4DE"
+    _DWR_MEDIAN_RED = "#8B0000"
+    _DWR_GRAY = "#5A5A5A"
+    _DWR_HIST_MEAN = "#003D6B"
+    _DWR_HIST_MEDIAN = "#5A5A5A"
+
+    for metric_key, mdf in annual_long.groupby("Metric", sort=False):
+        blocks_df = mdf[mdf["Block_Index"].notna()].copy()
+        bench_df = mdf[mdf["Scenario"] == benchmark_name]
+        if blocks_df.empty:
+            continue
+
+        block_labels = sort_block_labels(blocks_df["Block"].unique())
+        data = [blocks_df.loc[blocks_df["Block"] == bl, "WY_Value"].dropna().to_numpy(dtype=float)
+                for bl in block_labels]
+        if all(d.size == 0 for d in data):
+            continue
+
+        metric_label = metric_label_from_fields(metric_key, fields)
+        fig, ax = plt.subplots(figsize=(10, 5))
+
+        positions = list(range(1, len(block_labels) + 1))
+        ax.boxplot(data, positions=positions, widths=0.5, showfliers=True,
+                        patch_artist=True, showmeans=True,
+                        boxprops=dict(facecolor=_DWR_LIGHT_BLUE, edgecolor=_DWR_BLUE, linewidth=1.0),
+                        medianprops=dict(color=_DWR_MEDIAN_RED, linewidth=1.8),
+                        meanprops=dict(marker="D", markerfacecolor=_DWR_BLUE,
+                                       markeredgecolor=_DWR_BLUE, markersize=5),
+                        whiskerprops=dict(color=_DWR_BLUE, linewidth=1.0),
+                        capprops=dict(color=_DWR_BLUE, linewidth=1.0),
+                        flierprops=dict(marker="o", markerfacecolor=_DWR_GRAY,
+                                        markeredgecolor=_DWR_GRAY, markersize=3, alpha=0.5))
+
+        if not bench_df.empty:
+            hist_vals = bench_df["WY_Value"].dropna()
+            hist_mean = hist_vals.mean()
+            hist_median = hist_vals.median()
+            ax.axhline(hist_mean, color=_DWR_HIST_MEAN, linestyle="--", linewidth=1.4,
+                       label=f"{benchmark_name} Mean ({hist_mean:,.0f} {unit})")
+            ax.axhline(hist_median, color=_DWR_HIST_MEDIAN, linestyle="-.", linewidth=1.4,
+                       label=f"{benchmark_name} Median ({hist_median:,.0f} {unit})")
+
+        ax.set_xticks(positions)
+        ax.set_xticklabels(block_labels, fontsize=11, fontweight="medium")
+        ax.set_xlabel("Product B Block", fontsize=12, fontweight="bold", labelpad=8)
+        ax.set_ylabel(f"Annual Value ({unit})", fontsize=12, fontweight="bold", labelpad=8)
+        ax.set_title(f"{metric_label}", fontsize=14, fontweight="bold", pad=12)
+        ax.tick_params(axis="both", labelsize=11)
+        ax.grid(True, axis="y", linewidth=0.3, alpha=0.5, color="#CCCCCC")
+        ax.set_axisbelow(True)
+        ax.spines["top"].set_visible(False)
+        ax.spines["right"].set_visible(False)
+        ax.legend(frameon=True, loc="best", fontsize=10,
+                  edgecolor="#CCCCCC", fancybox=False, framealpha=0.9)
+
+        fig.tight_layout()
+        out_png = fig_dir / f"{make_safe_filename(metric_key)}.png"
+        fig.savefig(out_png, dpi=300, bbox_inches="tight", facecolor="white")
+        plt.close(fig)
+        outputs[str(metric_key)] = str(out_png)
+
+    return outputs
+
+
+def _build_centered_sequence_frame(
+    metric_df: pd.DataFrame,
+    window_years: int,
+    frame_years: int,
+) -> dict | None:
+    if frame_years < window_years:
+        raise ValueError(
+            f"sequence_frame_years ({frame_years}) must be >= window_years ({window_years})."
+        )
+
+    ordered = metric_df.sort_values("WY").reset_index(drop=True)
+    best = _best_rolling_window(ordered, window_years)
+    if best is None:
+        return None
+
+    window_start_pos = (frame_years - window_years) // 2 + 1  # 1-based within display frame
+    before_slots = window_start_pos - 1
+    after_slots = frame_years - window_years - before_slots
+
+    source_start_pos = int(best["Seq_Start"]) - before_slots
+
+    frame_values = np.full(frame_years, np.nan)
+    frame_wy: List[int | None] = [None] * frame_years
+
+    for frame_pos in range(1, frame_years + 1):
+        source_pos = source_start_pos + frame_pos - 1  # still 1-based
+        if 1 <= source_pos <= len(ordered):
+            row = ordered.iloc[source_pos - 1]
+            frame_values[frame_pos - 1] = float(row["WY_Value"])
+            frame_wy[frame_pos - 1] = int(row["WY"])
+
+    return {
+        "frame_x": np.arange(1, frame_years + 1, dtype=int),
+        "frame_values": frame_values,
+        "frame_wy": frame_wy,
+        "window_pos_start": window_start_pos,
+        "window_pos_end": window_start_pos + window_years - 1,
+        "seq_start": int(best["Seq_Start"]),
+        "seq_end": int(best["Seq_End"]),
+        "wy_start": int(best["WY_Start"]),
+        "wy_end": int(best["WY_End"]),
+        "rolling_avg": float(best["RollingAvg_TAF"]),
+    }
+
+
+def _plot_sequence_trace(
+    ax: plt.Axes,
+    sequence_frame: dict,
+    label: str,
+    color: str | tuple | None = None,
+    full_linewidth: float = 1.0,
+    window_linewidth: float = 2.4,
+    full_alpha: float = 0.35,
+    window_alpha: float = 0.95,
+    zorder: float = 2.0,
+    marker: str = "o",
+    markersize: float = 4.0,
+) -> None:
+    x = sequence_frame["frame_x"]
+    y = sequence_frame["frame_values"]
+    ax.plot(x, y, label=label, color=color, linewidth=full_linewidth, alpha=full_alpha, zorder=zorder)
+
+    mask = (
+        (x >= int(sequence_frame["window_pos_start"]))
+        & (x <= int(sequence_frame["window_pos_end"]))
+        & np.isfinite(y)
+    )
+    if np.any(mask):
+        ax.plot(
+            x[mask],
+            y[mask],
+            color=color,
+            linewidth=window_linewidth,
+            alpha=window_alpha,
+            marker=marker,
+            markersize=markersize,
+            zorder=zorder + 0.1,
+        )
+
+
+def plot_worst_window_sequences(
+    annual_long: pd.DataFrame,
+    fields: Dict[str, str],
+    out_dir: str | Path,
+    benchmark_name: str = "Historical",
+    units: Dict[str, str] | None = None,
+    sequence_window_years: Sequence[int] = DEFAULT_SEQUENCE_WINDOWS,
+    sequence_frame_years: int = DEFAULT_SEQUENCE_FRAME_YEARS,
+) -> Dict[str, str]:
+    """Create per-metric overlays of the worst historical and all block drought windows."""
+    units = units or {}
+    out_dir = Path(out_dir)
+    fig_root = out_dir / "figures" / "worst_window_sequences"
+    fig_root.mkdir(parents=True, exist_ok=True)
+
+    outputs: Dict[str, str] = {}
+    window_years_list = sorted({int(w) for w in sequence_window_years if int(w) > 0})
+
+    # DWR-style curated palette for 10 blocks (print-friendly, high contrast)
+    _BLOCK_COLORS = [
+        "#1B7837",  # forest green
+        "#D95F02",  # burnt orange
+        "#7570B3",  # muted purple
+        "#E7298A",  # magenta
+        "#66A61E",  # olive green
+        "#E6AB02",  # gold
+        "#A6761D",  # brown
+        "#377EB8",  # steel blue
+        "#984EA3",  # violet
+        "#FF7F00",  # bright orange
+    ]
+
+    for window_years in window_years_list:
+        window_dir = fig_root / f"{window_years}yr"
+        window_dir.mkdir(parents=True, exist_ok=True)
+
+        for metric_key in annual_long["Metric"].drop_duplicates():
+            df_metric = annual_long[annual_long["Metric"] == metric_key].copy()
+            if df_metric.empty:
+                continue
+
+            benchmark_df = df_metric[df_metric["Scenario"] == benchmark_name].copy()
+            benchmark_frame = _build_centered_sequence_frame(
+                benchmark_df,
+                window_years=window_years,
+                frame_years=sequence_frame_years,
+            )
+
+            block_frames: List[Tuple[str, int, dict]] = []
+            block_order = (
+                df_metric[df_metric["Block_Index"].notna()][["Scenario", "Block", "Block_Index"]]
+                .drop_duplicates()
+                .sort_values("Block_Index")
+            )
+            for _, row in block_order.iterrows():
+                block_df = df_metric[df_metric["Scenario"] == row["Scenario"]].copy()
+                block_frame = _build_centered_sequence_frame(
+                    block_df,
+                    window_years=window_years,
+                    frame_years=sequence_frame_years,
+                )
+                if block_frame is None:
+                    continue
+                block_frames.append((str(row["Block"]), int(row["Block_Index"]), block_frame))
+
+            if benchmark_frame is None and not block_frames:
+                continue
+
+            fig, ax = plt.subplots(figsize=(12, 5.5))
+
+            # Shaded critical window with subtle edge lines
+            window_pos_start = (sequence_frame_years - window_years) // 2 + 1
+            window_pos_end = window_pos_start + window_years - 1
+            ax.axvspan(window_pos_start - 0.5, window_pos_end + 0.5,
+                       color="#E8EDF2", alpha=0.95, zorder=0)
+            ax.axvline(window_pos_start - 0.5, color="#B0B0B0", linewidth=0.6,
+                       linestyle="--", alpha=0.6, zorder=0.5)
+            ax.axvline(window_pos_end + 0.5, color="#B0B0B0", linewidth=0.6,
+                       linestyle="--", alpha=0.6, zorder=0.5)
+
+            # Historical benchmark trace (bold, square markers)
+            if benchmark_frame is not None:
+                hist_label = (
+                    f"{benchmark_name} (WY {benchmark_frame['wy_start']}"
+                    f"\u2013{benchmark_frame['wy_end']}"
+                    f", avg {benchmark_frame['rolling_avg']:,.0f})"
+                )
+                _plot_sequence_trace(
+                    ax,
+                    benchmark_frame,
+                    label=hist_label,
+                    color="black",
+                    full_linewidth=1.6,
+                    window_linewidth=3.0,
+                    full_alpha=0.5,
+                    window_alpha=1.0,
+                    zorder=3.0,
+                    marker="s",
+                    markersize=4.5,
+                )
+
+            # Block traces with curated colors and circle markers
+            for block_label, block_index, block_frame in block_frames:
+                color = _BLOCK_COLORS[(block_index - 1) % len(_BLOCK_COLORS)]
+                label = (
+                    f"{block_label} (WY {block_frame['wy_start']}"
+                    f"\u2013{block_frame['wy_end']}"
+                    f", avg {block_frame['rolling_avg']:,.0f})"
+                )
+                _plot_sequence_trace(
+                    ax,
+                    block_frame,
+                    label=label,
+                    color=color,
+                    full_linewidth=1.0,
+                    window_linewidth=2.2,
+                    full_alpha=0.35,
+                    window_alpha=0.95,
+                    zorder=2.0,
+                    marker="o",
+                    markersize=3.5,
+                )
+
+            metric_label = metric_label_from_fields(metric_key, fields)
+            unit = units.get(metric_key, "TAF")
+            ax.set_title(f"{metric_label} \u2014 Worst {window_years}-yr Sequence Overlay",
+                         fontsize=14, fontweight="bold", pad=12)
+            ax.set_xlabel(f"Year (relative to worst {window_years}-yr window)",
+                          fontsize=12, fontweight="bold", labelpad=8)
+            ax.set_ylabel(f"Annual Value ({unit})", fontsize=12, fontweight="bold", labelpad=8)
+            ax.tick_params(axis="both", labelsize=11)
+            ax.set_xlim(0.5, sequence_frame_years + 0.5)
+            ax.set_xticks(np.arange(1, sequence_frame_years + 1, dtype=int))
+            ax.grid(True, axis="both", linewidth=0.3, alpha=0.4, color="#CCCCCC")
+            ax.set_axisbelow(True)
+            ax.spines["top"].set_visible(False)
+            ax.spines["right"].set_visible(False)
+
+            # Annotation for shaded region
+            ax.text(
+                (window_pos_start + window_pos_end) / 2,
+                ax.get_ylim()[0] + (ax.get_ylim()[1] - ax.get_ylim()[0]) * 0.02,
+                f"{window_years}-yr critical window",
+                ha="center", va="bottom", fontsize=8, fontstyle="italic",
+                color="#666666", zorder=5,
+            )
+
+            # Legend below the plot (avoids covering data)
+            n_entries = 1 + len(block_frames) if benchmark_frame else len(block_frames)
+            legend_cols = min(n_entries, 4)
+            ax.legend(
+                ncol=legend_cols, fontsize=8, frameon=True,
+                edgecolor="#CCCCCC", fancybox=False, framealpha=0.95,
+                loc="upper center", bbox_to_anchor=(0.5, -0.12),
+            )
+
+            fig.tight_layout()
+            fig.subplots_adjust(bottom=0.22)
+            out_png = window_dir / f"{make_safe_filename(metric_key)}_worst_{window_years}yr.png"
+            fig.savefig(out_png, dpi=300, bbox_inches="tight", facecolor="white")
+            plt.close(fig)
+            outputs[f"{metric_key}:{window_years}"] = str(out_png)
+
+    return outputs
+
+
+# ---------------------------------------------------------------------------
+# 1000-year stitched time series
+# ---------------------------------------------------------------------------
+
+def plot_1000yr_timeseries(
+    annual_long: pd.DataFrame,
+    fields: Dict[str, str],
+    out_dir: str | Path,
+    benchmark_name: str = "Historical",
+    unit: str = "TAF",
+) -> Dict[str, str]:
+    """Create a stitched 1000-year time series plot for each metric.
+
+    Blocks n01-n10 are concatenated sequentially, with a continuous
+    sequence index (year 1 through N*block_length).  The historical
+    benchmark mean is shown as a horizontal reference line.
+    """
+    out_dir = Path(out_dir)
+    fig_dir = out_dir / "figures" / "timeseries_1000yr"
+    fig_dir.mkdir(parents=True, exist_ok=True)
+
+    _DWR_BLUE = "#003D6B"
+    _DWR_LIGHT_BLUE = "#4A90C4"
+    _BLOCK_BORDER = "#999999"
+
+    outputs: Dict[str, str] = {}
+    if annual_long.empty:
+        return outputs
+
+    for metric_key, mdf in annual_long.groupby("Metric", sort=False):
+        blocks_df = mdf[mdf["Block_Index"].notna()].copy()
+        bench_df = mdf[mdf["Scenario"] == benchmark_name]
+        if blocks_df.empty:
+            continue
+
+        block_labels = sort_block_labels(blocks_df["Block"].unique())
+
+        # Stitch blocks sequentially
+        seq_x: List[int] = []
+        seq_y: List[float] = []
+        block_boundaries: List[int] = []
+        offset = 0
+
+        for bl in block_labels:
+            bdata = blocks_df[blocks_df["Block"] == bl].sort_values("WY")
+            vals = bdata["WY_Value"].to_numpy(dtype=float)
+            n = len(vals)
+            seq_x.extend(range(offset + 1, offset + n + 1))
+            seq_y.extend(vals)
+            offset += n
+            block_boundaries.append(offset)
+
+        if not seq_x:
+            continue
+
+        seq_x_arr = np.array(seq_x)
+        seq_y_arr = np.array(seq_y)
+        total_years = offset
+
+        metric_label = metric_label_from_fields(metric_key, fields)
+        fig, ax = plt.subplots(figsize=(16, 4.5))
+
+        # Block boundary lines
+        for i, boundary in enumerate(block_boundaries[:-1]):
+            ax.axvline(boundary + 0.5, color=_BLOCK_BORDER, linewidth=0.6,
+                       linestyle=":", alpha=0.7, zorder=1)
+
+        # Annual time series
+        ax.plot(seq_x_arr, seq_y_arr, color=_DWR_LIGHT_BLUE, linewidth=0.6,
+                alpha=0.85, zorder=2)
+
+        # 10-year rolling average
+        if total_years >= 10:
+            rolling = pd.Series(seq_y_arr).rolling(10, min_periods=10).mean().to_numpy()
+            ax.plot(seq_x_arr, rolling, color=_DWR_BLUE, linewidth=1.5,
+                    alpha=0.9, zorder=3, label="10-yr Rolling Avg")
+
+        # Historical benchmark mean
+        if not bench_df.empty:
+            hist_mean = bench_df["WY_Value"].mean()
+            ax.axhline(hist_mean, color="black", linestyle="--", linewidth=1.2,
+                       label=f"{benchmark_name} Mean ({hist_mean:,.0f} {unit})", zorder=4)
+
+        ax.set_xlim(1, total_years)
+        ax.set_xlabel("Stochastic Sequence Year", fontsize=12, fontweight="bold", labelpad=8)
+        ax.set_ylabel(f"Annual Value ({unit})", fontsize=12, fontweight="bold", labelpad=8)
+        ax.set_title(f"{metric_label} — {total_years}-Year Stochastic Time Series",
+                     fontsize=14, fontweight="bold", pad=12)
+        ax.tick_params(axis="both", labelsize=10)
+        ax.grid(True, axis="y", linewidth=0.3, alpha=0.5, color="#CCCCCC")
+        ax.set_axisbelow(True)
+        ax.spines["top"].set_visible(False)
+        ax.spines["right"].set_visible(False)
+        ax.legend(fontsize=10, frameon=True, edgecolor="#CCCCCC", fancybox=False,
+                  framealpha=0.9, loc="best")
+
+        # Block labels at top of each block region
+        prev = 0
+        for bl, boundary in zip(block_labels, block_boundaries):
+            mid = (prev + boundary) / 2
+            y_top = ax.get_ylim()[1]
+            y_range = y_top - ax.get_ylim()[0]
+            ax.text(mid, y_top - y_range * 0.03, bl,
+                    ha="center", va="top", fontsize=7, color="#888888", alpha=0.8)
+            prev = boundary
+
+        fig.tight_layout()
+        out_png = fig_dir / f"{make_safe_filename(metric_key)}.png"
+        fig.savefig(out_png, dpi=300, bbox_inches="tight", facecolor="white")
+        plt.close(fig)
+        outputs[str(metric_key)] = str(out_png)
+
+    return outputs
+
+
+# ---------------------------------------------------------------------------
+# Excel formatting
+# ---------------------------------------------------------------------------
+
+def format_excel_workbook(path: str | Path) -> None:
+    workbook_path = Path(path)
+    wb = load_workbook(workbook_path)
+
+    header_fill = PatternFill(fill_type="solid", fgColor="1F4E78")
+    header_font = Font(color="FFFFFF", bold=True)
+    centered = Alignment(horizontal="center", vertical="center")
+    left_aligned = Alignment(horizontal="left", vertical="center")
+
+    integer_headers = {
+        "wy",
+        "wy_start",
+        "wy_end",
+        "block_index",
+        "window_years",
+        "historical_years",
+        "block_years",
+        "historical_year_index_start",
+        "historical_year_index_end",
+        "year_index",
+        "year_index_start",
+        "year_index_end",
+    }
+
+    for ws in wb.worksheets:
+        ws.freeze_panes = "A2"
+        ws.auto_filter.ref = ws.dimensions
+
+        for cell in ws[1]:
+            cell.fill = header_fill
+            cell.font = header_font
+            cell.alignment = centered
+
+        column_widths: Dict[str, int] = {}
+        for row in ws.iter_rows():
+            for cell in row:
+                text = "" if cell.value is None else str(cell.value)
+                width = min(max(len(text) + 2, 10), 42)
+                column_widths[cell.column_letter] = max(column_widths.get(cell.column_letter, 0), width)
+
+        for letter, width in column_widths.items():
+            ws.column_dimensions[letter].width = width
+
+        for row in ws.iter_rows(min_row=2):
+            for cell in row:
+                header = str(ws.cell(row=1, column=cell.column).value or "").lower()
+                if header in {"group", "metric", "metric_label", "scenario", "block"}:
+                    cell.alignment = left_aligned
+                else:
+                    cell.alignment = centered
+
+                if "pct" in header:
+                    cell.number_format = "0.0"
+                elif header in integer_headers or header.startswith("frame_pos_"):
+                    cell.number_format = "0"
+                elif any(token in header for token in ["taf", "mean", "median", "min", "max", "std", "rollingavg"]):
+                    cell.number_format = "#,##0.0"
+
+    wb.save(workbook_path)
+
+
+# ---------------------------------------------------------------------------
+# Package runner
+# ---------------------------------------------------------------------------
+
+def run_post_processing_package(
+    pickle_dir: str | Path,
+    benchmark_name: str,
+    out_dir: str | Path,
+    min_window_years: int = 2,
+    max_window_years: int = 10,
+    drought_percentile: float = DEFAULT_DROUGHT_PERCENTILE,
+    sequence_window_years: Sequence[int] = DEFAULT_SEQUENCE_WINDOWS,
+    sequence_frame_years: int = DEFAULT_SEQUENCE_FRAME_YEARS,
+) -> Dict[str, str]:
+    df_values, _df_diffs, units, fields = load_pickles(pickle_dir)
+    df_values["Date"] = pd.to_datetime(df_values["Date"])
+
+    metric_groups = metric_groups_from_fields(fields)
+    metric_keys = [col for col in df_values.columns if col not in FIXED_COLS]
+
+    annual_long = annualize_all_metrics(
+        df_values=df_values,
+        metric_keys=metric_keys,
+        metric_groups=metric_groups,
+        fields=fields,
+    )
+
+    benchmark_summary = benchmark_summary_table(annual_long=annual_long, benchmark_name=benchmark_name)
+    block_summary = block_summary_table(annual_long=annual_long, benchmark_name=benchmark_name)
+
+    benchmark_rolling = benchmark_rolling_minima_table(
+        annual_long=annual_long,
+        benchmark_name=benchmark_name,
+        min_window_years=min_window_years,
+        max_window_years=max_window_years,
+    )
+    stochastic_rolling = stochastic_rolling_minima_table(
+        annual_long=annual_long,
+        min_window_years=min_window_years,
+        max_window_years=max_window_years,
+    )
+
+    out_path = Path(out_dir)
+    out_path.mkdir(parents=True, exist_ok=True)
+
+    # -- Heatmap: metric-by-block % diff vs benchmark --
+    heatmap_long = build_heatmap_data(
+        annual_long=annual_long,
+        benchmark_name=benchmark_name,
+        min_window_years=min_window_years,
+        max_window_years=max_window_years,
+        drought_percentile=drought_percentile,
+        rolling_window_years=HEATMAP_ROLLING_WINDOWS,
+    )
+
+    heatmap_xlsx = out_path / "heatmap_block_summary.xlsx"
+    with pd.ExcelWriter(heatmap_xlsx, engine="openpyxl") as writer:
+        for stat_name, stat_df in heatmap_long.groupby("Stat", sort=False):
+            pivot = stat_df.pivot_table(
+                index="Metric_Label",
+                columns="Block",
+                values="Pct_Diff",
+                aggfunc="first",
+            )
+            if pivot.empty:
+                continue
+            block_cols = sort_block_labels(list(pivot.columns))
+            pivot = pivot[block_cols]
+            safe_sheet = f"{stat_name} % Diff"[:31]
+            pivot.to_excel(writer, sheet_name=safe_sheet)
+    format_excel_workbook(heatmap_xlsx)
+
+    heatmap_pngs = plot_heatmap(heatmap_long=heatmap_long, out_dir=out_path, benchmark_name=benchmark_name)
+
+    # -- Annual summary Excel --
+    annual_summary_xlsx = out_path / "annual_block_summary.xlsx"
+    with pd.ExcelWriter(annual_summary_xlsx, engine="openpyxl") as writer:
+        benchmark_summary.to_excel(writer, sheet_name="historical_summary", index=False)
+        block_summary.to_excel(writer, sheet_name="block_summary", index=False)
+        annual_export = annual_long.drop(columns=["Scenario", "Block_Index"]).copy()
+        annual_export["Year_Index"] = (
+            annual_export.groupby(["Metric", "Block"]).cumcount() + 1
+        )
+        col_order = ["Group", "Metric", "Metric_Label", "Block", "Year_Index", "WY_Value"]
+        annual_export = annual_export[[c for c in col_order if c in annual_export.columns]]
+        annual_export.to_excel(writer, sheet_name="annual_values_long", index=False)
+    format_excel_workbook(annual_summary_xlsx)
+
+    # -- Rolling minima Excel --
+    rolling_minima_xlsx = out_path / "rolling_minima.xlsx"
+    with pd.ExcelWriter(rolling_minima_xlsx, engine="openpyxl") as writer:
+        benchmark_rolling.to_excel(writer, sheet_name="historical_rolling_minima", index=False)
+        stochastic_rolling.to_excel(writer, sheet_name="stochastic_rolling_minima", index=False)
+    format_excel_workbook(rolling_minima_xlsx)
+
+    # -- Existing annual CDFs --
+    cdf_dir = out_path / "figures" / "annual_cdf"
+    for metric_key in metric_keys:
+        plot_annual_cdf(
+            annual_long=annual_long,
+            metric_key=metric_key,
+            metric_label=metric_label_from_fields(metric_key, fields),
+            benchmark_name=benchmark_name,
+            out_png=cdf_dir / f"{make_safe_filename(metric_key)}.png",
+            unit=units.get(metric_key, "TAF"),
+        )
+
+    # -- New boxplot summary figures --
+    boxplot_pngs = plot_summary_boxplots(
+        annual_long=annual_long,
+        fields=fields,
+        out_dir=out_path,
+        benchmark_name=benchmark_name,
+        unit="TAF",
+    )
+
+    # -- New worst-window sequence overlays --
+    sequence_pngs = plot_worst_window_sequences(
+        annual_long=annual_long,
+        fields=fields,
+        out_dir=out_path,
+        benchmark_name=benchmark_name,
+        units=units,
+        sequence_window_years=sequence_window_years,
+        sequence_frame_years=sequence_frame_years,
+    )
+
+    # -- 1000-year stitched time series --
+    timeseries_pngs = plot_1000yr_timeseries(
+        annual_long=annual_long,
+        fields=fields,
+        out_dir=out_path,
+        benchmark_name=benchmark_name,
+        unit="TAF",
+    )
+
+    return {
+        "heatmap_xlsx": str(heatmap_xlsx),
+        "heatmap_figures": str(out_path / "figures" / "heatmap"),
+        "annual_summary_xlsx": str(annual_summary_xlsx),
+        "rolling_minima_xlsx": str(rolling_minima_xlsx),
+        "annual_cdf_dir": str(cdf_dir),
+        "block_boxplot_dir": str(out_path / "figures" / "block_boxplots"),
+        "worst_window_sequence_dir": str(out_path / "figures" / "worst_window_sequences"),
+        "timeseries_1000yr_dir": str(out_path / "figures" / "timeseries_1000yr"),
+        "n_heatmap_figures": str(len(heatmap_pngs)),
+        "n_boxplot_figures": str(len(boxplot_pngs)),
+        "n_sequence_figures": str(len(sequence_pngs)),
+        "n_timeseries_figures": str(len(timeseries_pngs)),
+        "n_metrics": str(len(metric_keys)),
+        "n_rows_annual_values": str(len(annual_long)),
+    }
+
+
+def main() -> None:
+    parser = argparse.ArgumentParser(description="Run Product B stochastic post-processing.")
+    parser.add_argument(
+        "--pickle-dir",
+        default=str(PICKLE_DIR),
+        help="Directory containing values.pkl / diffs.pkl / units.pkl / fields.pkl",
+    )
+    parser.add_argument("--benchmark-name", default="Historical", help="Benchmark scenario name in values.pkl")
+    parser.add_argument(
+        "--out-dir",
+        default=str(OUT_DIR),
+        help="Output directory for Product B post-processing",
+    )
+    parser.add_argument("--min-window-years", type=int, default=2, help="Minimum rolling window in years")
+    parser.add_argument("--max-window-years", type=int, default=10, help="Maximum rolling window in years")
+    parser.add_argument(
+        "--drought-percentile",
+        type=float,
+        default=DEFAULT_DROUGHT_PERCENTILE,
+        help="Drought percentile used for the annual low-flow heatmap stat (default: 5)",
+    )
+    parser.add_argument(
+        "--sequence-frame-years",
+        type=int,
+        default=DEFAULT_SEQUENCE_FRAME_YEARS,
+        help="Frame length used for worst-window sequence overlays (default: 15)",
+    )
+    parser.add_argument(
+        "--sequence-window-years",
+        nargs="*",
+        type=int,
+        default=list(DEFAULT_SEQUENCE_WINDOWS),
+        help="Rolling-window lengths to plot for the worst-window sequence overlays (default: 5)",
+    )
+    args = parser.parse_args()
+
+    outputs = run_post_processing_package(
+        pickle_dir=args.pickle_dir,
+        benchmark_name=args.benchmark_name,
+        out_dir=args.out_dir,
+        min_window_years=args.min_window_years,
+        max_window_years=args.max_window_years,
+        drought_percentile=args.drought_percentile,
+        sequence_window_years=args.sequence_window_years,
+        sequence_frame_years=args.sequence_frame_years,
+    )
+
+    print("Created:")
+    for key, value in outputs.items():
+        print(f"  {key}: {value}")
+
+
+if __name__ == "__main__":
+    main()
