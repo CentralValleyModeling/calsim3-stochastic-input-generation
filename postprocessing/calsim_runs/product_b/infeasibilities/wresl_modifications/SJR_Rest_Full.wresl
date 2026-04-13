@@ -1,0 +1,46 @@
+! Fix 7: SJR Restoration Bypass Guard for SJR_Rest_Full (cycle 24, gw_initial)
+! File: Run/SanJoaquin/Friant/SJR_Rest_Full.wresl, line ~133
+!
+! Problem: Cycle 24 (gw_initial) includes SJR_Rest_Full.wresl which has
+!   a hard equality on the main channel restoration release:
+!     - boundC_MLRTNmain: C_MLRTNM = SJRR_rel_new (1698 CFS = 101 TAF)
+!   Unlike Cycle 1 (SJR_Rest_Req_Cycle1) and Cycle 2 (SJR_Rest_Req_Cycle2),
+!   this file does NOT have a meetSJRR equality -- setSJRRflow is an
+!   upper-bound inequality (D_SJR205_SJR201 <= Rest_Rch_Target), so only
+!   boundC_MLRTNmain needs relaxing.
+!   With S_MLRTN(-1) = 85 TAF and near-zero inflow at Apr 1962 (after
+!   Cycles 14-23 have already depleted the reservoir), C_MLRTN cannot
+!   reach 1698 CFS (~101 TAF/month). fix_c_mlrtnf = 0 (from prior cycle
+!   results), so all release must come from C_MLRTNM -- and there is
+!   only ~85 TAF available.
+!   HiGHS confirms genuine infeasibility (zero-objective LP is infeasible).
+!
+! Fix: Apply the same lowStorage guard (S_MLRTN(-1) < 130) to
+!   boundC_MLRTNmain. Under low storage, it becomes a penalized soft
+!   constraint. Under normal operations (S_MLRTN(-1) >= 130), it remains a
+!   hard equality -- identical to the original WRESL.
+!
+! Verified: LP kOptimal, MIP kOptimal.
+!   Solution: C_MLRTN = C_MLRTNM = 1428 CFS (all available water),
+!   deficit = 270 CFS vs 1698 CFS target.
+
+! --- UNCHANGED (line ~4) ---
+goal setMLRTN_rel {C_MLRTN > MLRTN_rel}
+
+! --- ORIGINAL (line ~133) ---
+!goal boundC_MLRTNmain { C_MLRTNM = SJRR_rel_new }
+
+! --- MODIFIED ---
+goal boundC_MLRTNmain {
+    lhs C_MLRTNM
+    case lowStorage {
+        condition S_MLRTN(-1) < 130.
+        rhs SJRR_rel_new
+        lhs>rhs penalty 9999999
+        lhs<rhs penalty 9999999
+    }
+    case normalOps {
+        condition always
+        rhs SJRR_rel_new
+    }
+}

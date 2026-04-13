@@ -1,0 +1,62 @@
+! Fix 6: SJR Restoration Bypass Guard for Cycle 2 (SJR_WQ1)
+! File: Run/SanJoaquin/Friant/SJR_Rest_Req_Cycle2.wresl, lines 109-110
+!
+! Problem: Cycle 19 (sjr_wq1) includes SJR_Rest_Req_Cycle2.wresl which has
+!   two hard equalities that force specific release/bypass volumes from
+!   Millerton. When S_MLRTN(-1) is low (~85 TAF at Apr 1962), the total
+!   available water cannot satisfy both constraints simultaneously:
+!     - meetSJRR: D_SJR205_SJR201 = REST_RCH_NP (2122 CFS = 126 TAF)
+!     - boundC_MLRTNmain: C_MLRTNM = SJRR_rel_new (2068 CFS = 123 TAF)
+!   Even though Fix 4+5 resolved the same issue in Cycle 1
+!   (SJR_Rest_Req_Cycle1.wresl), Cycle 2's separate copy was unmodified.
+!
+! Fix: Apply the same lowStorage guard (S_MLRTN(-1) < 130) to both
+!   meetSJRR and boundC_MLRTNmain in Cycle 2. Under low storage, both
+!   become penalized soft constraints (penalty 9999999 on both sides),
+!   allowing the solver to reduce releases to match available supply.
+!   Under normal operations (S_MLRTN(-1) >= 130), both remain hard
+!   equalities -- identical to the original WRESL.
+!
+! Verified: HiGHS LP+MIP both solve optimally with this fix.
+!   Solution: D_SJR205_SJR201 = 1482 CFS (vs. 2122 target), S_MLRTN ~ 0,
+!   C_MLRTN = 1428 CFS. Deficit ~640 CFS (~38 TAF) = gap between available
+!   water and requirement.
+
+! --- UNCHANGED (line ~9) ---
+goal setMLRTN_rel {C_MLRTN > MLRTN_rel}
+
+! --- ORIGINAL (line ~109) ---
+!goal boundC_MLRTNmain { C_MLRTNM = SJRR_rel_new }
+
+! --- MODIFIED ---
+goal boundC_MLRTNmain {
+    lhs C_MLRTNM
+    case lowStorage {
+        condition S_MLRTN(-1) < 130.
+        rhs SJRR_rel_new
+        lhs>rhs penalty 9999999
+        lhs<rhs penalty 9999999
+    }
+    case normalOps {
+        condition always
+        rhs SJRR_rel_new
+    }
+}
+
+! --- ORIGINAL (line ~110) ---
+!goal meetSJRR {D_SJR205_SJR201 = REST_RCH_NP}
+
+! --- MODIFIED ---
+goal meetSJRR {
+    lhs D_SJR205_SJR201
+    case lowStorage {
+        condition S_MLRTN(-1) < 130.
+        rhs REST_RCH_NP
+        lhs>rhs penalty 9999999
+        lhs<rhs penalty 9999999
+    }
+    case normalOps {
+        condition always
+        rhs REST_RCH_NP
+    }
+}

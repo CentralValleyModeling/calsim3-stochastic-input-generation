@@ -1,0 +1,45 @@
+! Fix 9: SJR Restoration Bypass Guard for Cycle 3 (SJR_PULSE)
+! File: Run/SanJoaquin/Friant/SJR_Rest_Req_Cycle3.wresl, line ~50
+!
+! Problem (proactive): Cycle 3 has a hard equality meetSJRR that forces
+!   D_SJR205_SJR201 = REST_RCH_P (April) or REST_RCH_NP (May+).
+!   When S_MLRTN(-1) is near zero (as at Apr-May 1962 after Fixes 4-7
+!   allow storage depletion), this equality cannot be satisfied.
+!   Same root cause as Cycles 1, 2, and Full -- applied proactively.
+!
+! Fix: Add lowStorage case as first priority (evaluated before month cases).
+!   Under low storage, meetSJRR becomes a penalized soft constraint.
+!   Under normal operations, original behavior is preserved.
+
+! --- UNCHANGED (line ~10) ---
+goal setMLRTN_rel {C_MLRTN > MLRTN_rel}
+
+! --- ORIGINAL (line ~50) ---
+!goal meetSJRR {
+!    lhs D_SJR205_SJR201
+!    case April {
+!        condition month==APR
+!        rhs REST_RCH_P}
+!    case MayOtherwise {
+!        condition always
+!        rhs REST_RCH_NP}
+!}
+
+! --- MODIFIED ---
+goal meetSJRR {
+    lhs D_SJR205_SJR201
+    case lowStorage {
+        condition S_MLRTN(-1) < 130.
+        rhs REST_RCH_NP
+        lhs>rhs penalty 9999999
+        lhs<rhs penalty 9999999
+    }
+    case April {
+        condition month==APR
+        rhs REST_RCH_P
+    }
+    case MayOtherwise {
+        condition always
+        rhs REST_RCH_NP
+    }
+}
