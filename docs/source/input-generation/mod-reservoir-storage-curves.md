@@ -37,13 +37,36 @@ The water control diagram translates wetness index to flood pool requirement, wi
 
 Flood pool adjustments across the wetness index range maintain consistent operational elevations while correcting storage volumes for sedimentation. The minimum and maximum values align well with current results, and interpolation refinement addresses scatter in intermediate values. For synthetic sequences, the wetness index algorithm runs on WGEN precipitation directly, producing daily wetness values that translate through the calibrated relationship to monthly flood pool requirements without requiring intermediate model runs.
 
-### Other Reservoir Levels
+### Other Reservoir Levels (WYT-Driven and Monthly Repeating)
 
-Trinity Levels 2 and 3 track Sacramento Valley index patterns, reconstructed through water year type averaging. These levels represent top-of-conservation and minimum operating constraints that follow consistent operational rules tied to annual water availability classifications. Shasta Level 2 (minimum pool) remains constant at 1,150,000 acre-feet across all conditions, reflecting a fixed physical constraint rather than variable operations.
+The remaining reservoir storage-level curves are reconstructed from schedule tables rather than hydrologic correlation, falling into two categories: WYT-driven (value determined by water year type) and monthly repeating (fixed seasonal pattern).
 
-Folsom Level 2 employs water year type averaging. Don Pedro Level 4 uses quantile mapping with Tuolumne inflow as basis, though one anomalous year in the historical record appears to lack any consistent replicable pattern. Investigation into this anomaly during the December and January progress meetings confirmed it likely represents a unique operational event (possibly maintenance drawdown or emergency release) that should not be reproduced systematically in synthetic sequences. The reconstruction algorithm produces the correct value for all other years while treating the anomaly as an irreducible discrepancy.
+#### WYT-Driven Series
 
-Additional reservoir storage discussions during the January progress meetings addressed whether Folsom and Trinity require deeper analysis beyond simple WYT averaging. For Folsom, the Level 2 minimum pool has shown remarkably consistent behavior, suggesting that WYT averaging captures the essential operational pattern without need for more complex approaches. Trinity Levels 2 and 3 similarly follow Sacramento Valley index patterns with high fidelity, validating the water year type approach for these operational constraints.
+WYT-driven series assign a constant storage target for each Sacramento Valley water year type classification (W, AN, BN, D, C). 
+
+All four WYT-driven series use calendar-year mapping, meaning the storage target changes at the January boundary rather than the October water-year boundary. This reflects how CalSim applies water year type classifications to these operating rules: the Sac Valley 40-30-30 index is determined on a calendar-year basis, so Oct--Dec inherit the prior year's classification while Jan--Sep use the current year's classification. For example, in WY 1924 (a Critical year), Shasta Level 2 remains at 2,000 TAF through Oct--Dec 1923 (still governed by the BN classification of CY 1923), then drops to 650 TAF starting January 1924 when the Critical classification takes effect.
+
+The five WYT-driven series and their target storage values (TAF) are:
+
+| Series | W | AN | BN | D | C | Basin |
+|--------|--:|---:|---:|--:|--:|-------|
+| S_SHSTALEVEL2 | 2,000 | 2,000 | 2,000 | 1,700 | 650 | Sac |
+| S_TRNTYLEVEL2 | 1,100 | 1,100 | 1,100 | 700 | 500 | Sac |
+| S_TRNTYLEVEL3 | 1,600 | 1,600 | 1,500 | 1,300 | 1,000 | Sac |
+| S_FOLSMLEVEL2 | 350 | 350 | 350 | 300 | 300 | Sac |
+
+**Shasta Level 2** target values were verified against the CalSim 3 WRESL operating rules and the historical SV timeseries. Shasta Level 2 is *not* a fixed constant--it varies substantially with water year type, from 2,000 TAF in wet years down to 650 TAF in critical years.
+
+**Trinity Levels 2 and 3** track Sacramento Valley index patterns with high fidelity. **Folsom Level 2** shows remarkably consistent step-function behavior between 300 and 350 TAF, confirming that WYT averaging captures the essential operational pattern.
+
+#### Monthly Repeating Series
+
+Monthly repeating series use a fixed 12-month seasonal pattern that repeats identically every year regardless of water year type. **Don Pedro Level 4** (flood control) uses this pattern, with values ranging from 1,660 TAF (October) to 2,030 TAF (June), reflecting the seasonal flood reservation space cycle.
+
+#### Boundary Gap Fill
+
+Because the reconstruction period begins in October of the year preceding the first labeled WYT year, the first three months of a generated series can lack a matching WYT assignment. The script therefore allows a DSS-based boundary fill only for the initial October--December window.
 
 ## Results
 
