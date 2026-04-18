@@ -58,6 +58,20 @@ def clean_text(value) -> str:
         return ""
     return str(value).strip()
 
+
+def _date_range_me(start, end=None, **kwargs) -> pd.DatetimeIndex:
+    """Return a month-end DatetimeIndex, compatible with old and new pandas.
+
+    pandas >= 2.2 uses ``freq="ME"``; older versions require ``freq="M"``.
+    Catches the ``ValueError`` that older pandas raises for an unknown
+    frequency alias.
+    """
+    try:
+        return pd.date_range(start, end, freq="ME", **kwargs)
+    except ValueError:
+        return pd.date_range(start, end, freq="M", **kwargs)
+
+
 def norm_token(value) -> str:
     return clean_text(value).upper()
 
@@ -193,7 +207,7 @@ def read_calsim_monthly_pairs(
     if not requested:
         return {}
 
-    full_idx = pd.date_range(dss_read_start, dss_read_end, freq="ME")
+    full_idx = _date_range_me(dss_read_start, dss_read_end)
     out: dict[tuple[str, str], pd.Series] = {}
 
     with HecDss.Open(str(dssfile), version=6, catalog_flag=True) as dss:
@@ -272,7 +286,7 @@ def load_product_b_basis_series(
     value_col = detect_product_b_value_col(df)
     vals = pd.to_numeric(df[value_col], errors="coerce").to_numpy(float)
 
-    canonical_idx = pd.date_range(pd.Timestamp(product_b_start), pd.Timestamp(product_b_end), freq="ME")
+    canonical_idx = _date_range_me(pd.Timestamp(product_b_start), pd.Timestamp(product_b_end))
     expected_months = len(canonical_idx)
     if len(vals) != expected_months:
         raise ValueError(

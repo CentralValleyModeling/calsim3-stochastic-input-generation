@@ -67,9 +67,20 @@ def norm_token(value) -> str:
     return clean_text(value).upper()
 
 
-# -- Pair CSV reader ----------------------------------------------------------
+def _date_range_me(start, end=None, **kwargs) -> pd.DatetimeIndex:
+    """Return a month-end DatetimeIndex, compatible with old and new pandas.
 
-def read_qmap_pairs(pair_csv):
+    pandas >= 2.2 uses ``freq="ME"``; older versions require ``freq="M"``.
+    Catches the ``ValueError`` that older pandas raises for an unknown
+    frequency alias.
+    """
+    try:
+        return pd.date_range(start, end, freq="ME", **kwargs)
+    except ValueError:
+        return pd.date_range(start, end, freq="M", **kwargs)
+
+
+# -- Pair CSV reader ----------------------------------------------------------
     """Read and validate qmap_pairs.csv.
 
     Required columns:
@@ -160,7 +171,7 @@ def read_calsim_monthly_pairs(
     if not requested:
         return {}
 
-    full_idx = pd.date_range(dss_read_start, dss_read_end, freq="ME")
+    full_idx = _date_range_me(dss_read_start, dss_read_end)
     out = {}
 
     with HecDss.Open(str(dssfile), version=6, catalog_flag=True) as dss:
