@@ -10,12 +10,8 @@ Generation of synthetic hydroclimate inputs for **CalSim 3.0** to support long-t
 > **Windows prerequisite**: [Visual Studio Build Tools](https://visualstudio.microsoft.com/visual-cpp-build-tools/) with the **C++ workload** is required to compile `pydsstools`.
 
 ```bash
-# Step 1 — create env and install pydsstools via pip
 conda env create -f environment.yml
 conda activate csstochastic
-
-# Step 2 — install pandss from the dwr-cvm channel (requires pydsstools already present)
-conda install pandss -c dwr-cvm
 ```
 
 ---

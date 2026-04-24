@@ -18,6 +18,3 @@ dependencies:
   - pip
   - pip:
     - pydsstools   # requires VS Build Tools with C++ workload on Windows
-# pandss must be installed separately after env creation (needs pydsstools already present):
-#   conda activate csstochastic
-#   conda install pandss -c dwr-cvm
