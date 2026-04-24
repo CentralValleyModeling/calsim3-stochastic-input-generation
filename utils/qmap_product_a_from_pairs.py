@@ -81,6 +81,7 @@ def _date_range_me(start, end=None, **kwargs) -> pd.DatetimeIndex:
 
 
 # -- Pair CSV reader ----------------------------------------------------------
+def read_qmap_pairs(pair_csv: str | Path) -> pd.DataFrame:
     """Read and validate qmap_pairs.csv.
 
     Required columns:
