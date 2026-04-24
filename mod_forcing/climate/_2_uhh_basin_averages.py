@@ -1292,6 +1292,366 @@ def write_product_b_chunks(summaries: list, output_folder):
     print(f"Product B chunks: {output_folder}")
 
 
+###############################################################################
+# Historical vs Product B comparison (annual WY precip boxplots)
+###############################################################################
+
+# Location groupings for aggregate figures
+_SAC_VALLEY_LOCS = ['FO_UHH', 'OR_UHH', 'SH_UHH', 'YU_UHH']  # excludes TR, WH
+_SJ_VALLEY_LOCS = ['ME_UHH', 'SJ_UHH', 'ST_UHH', 'TU_UHH']
+_ALL_LOCS = _SAC_VALLEY_LOCS + _SJ_VALLEY_LOCS               # excludes TR, WH
+
+# PPT file naming: base shorthand -> full name used in PPT_*_UHH.csv
+_PPT_NAME_MAPPING = {'FO': 'FOLS', 'OR': 'OROV', 'SH': 'SHAS', 'YU': 'YUBA'}
+
+
+def _ppt_filename_stem(shorthand: str) -> str:
+    """Return the PPT file stem (without extension) for a given UHH shorthand."""
+    base = shorthand.replace('_UHH', '')
+    full = _PPT_NAME_MAPPING.get(base, base)
+    return f"PPT_{full}_UHH"
+
+
+def _basin_weight_from_gridinfo(grid_info_folder: Path, grid_info_file: str) -> float:
+    """Return total basin area weight (sum of weight1) for a UHH basin."""
+    df = parse_grid_info_file(grid_info_folder / grid_info_file)
+    return float(df['weight1'].sum())
+
+
+def _historical_wy_totals_from_dss(ppt_part_b: str, start_wy: int = 1922, end_wy: int = 2021) -> pd.DataFrame:
+    """Read monthly historical precip (inches) for a UHH Part B from the default
+    CalSim SV DSS (__calsim_sv_default__.dss) and aggregate to WY totals.
+
+    Returns DataFrame with columns: WY, precip_inches.
+    """
+    from pydsstools.heclib.dss import HecDss  # local import
+    dss_file = get_base_dir() / "CalSim3" / "__calsim_sv_default__.dss"
+    if not dss_file.exists():
+        raise FileNotFoundError(f"Default CalSim SV DSS not found: {dss_file}")
+
+    b_target = ppt_part_b.strip().upper()
+    c_target = "PRECIP"
+
+    with HecDss.Open(str(dss_file), version=6, catalog_flag=True) as dss:
+        paths = dss.getPathnameList("/*/*/*/*/1MON/*")
+        matches = []
+        for p in paths:
+            parts = p.strip("/").split("/")
+            if len(parts) != 6:
+                continue
+            if parts[1].strip().upper() == b_target and parts[2].strip().upper() == c_target:
+                matches.append(p)
+        if not matches:
+            raise ValueError(f"No DSS paths found for Part B='{ppt_part_b}', Part C='PRECIP'")
+
+        full_idx = pd.date_range("1900-01-31", "2025-12-31", freq="ME")
+        master = pd.Series(index=full_idx, dtype=float)
+        for path in sorted(matches, key=lambda x: (x.strip("/").split("/")[3], x)):
+            ts = dss.read_ts(path, trim_missing=True)
+            vals = np.asarray(ts.values, dtype=float)
+            vals = np.where(vals <= -900, np.nan, vals)
+            # DSS stores period-end timestamps; shift back one month so index is the data month.
+            idx = (pd.to_datetime(ts.pytimes).to_period("M") - 1).to_timestamp("M")
+            master.update(pd.Series(vals, index=idx))
+
+    s = master.dropna()
+    df = pd.DataFrame({
+        "year": s.index.year,
+        "month": s.index.month,
+        "precip_inches": s.values,
+    })
+    df["WY"] = df["year"] + (df["month"] >= 10).astype(int)
+    df = df[(df["WY"] >= start_wy) & (df["WY"] <= end_wy)]
+    counts = df.groupby("WY").size()
+    complete_wys = counts[counts == 12].index
+    df = df[df["WY"].isin(complete_wys)]
+    wy_tot = df.groupby("WY", as_index=False)["precip_inches"].sum().reset_index(drop=True)
+    return wy_tot
+
+
+def _productB_chunk_wy_totals(chunk_csv: Path) -> dict:
+    """Read a Product B chunk file once and return WY totals for every Part B location.
+
+    Product B chunk format: Part B, Part C, Year, Month, Value
+    Returns dict[location_name -> DataFrame(WY, precip_inches)].
+    """
+    df = pd.read_csv(chunk_csv)
+    df['Value'] = pd.to_numeric(df['Value'], errors='coerce')
+    df = df.dropna(subset=['Value'])
+    df['WY'] = df['Year'] + (df['Month'] >= 10).astype(int)
+    out: dict = {}
+    for loc_name, sub in df.groupby('Part B'):
+        counts = sub.groupby('WY').size()
+        complete_wys = counts[counts == 12].index
+        sub = sub[sub['WY'].isin(complete_wys)]
+        wy_tot = sub.groupby('WY', as_index=False)['Value'].sum()
+        wy_tot = wy_tot.rename(columns={'Value': 'precip_inches'})
+        out[loc_name] = wy_tot.reset_index(drop=True)
+    return out
+
+
+def _area_weighted_mean(per_loc_wy: dict, weights: dict) -> pd.DataFrame:
+    """Compute area-weighted mean WY precip across multiple locations.
+
+    Parameters
+    ----------
+    per_loc_wy : dict[str, pd.DataFrame]
+        Mapping shorthand -> DataFrame with columns WY, precip_inches.
+    weights : dict[str, float]
+        Mapping shorthand -> basin area weight.
+
+    Returns
+    -------
+    pd.DataFrame with columns: WY, precip_inches (area-weighted basin mean).
+    """
+    locs = [s for s in per_loc_wy if not per_loc_wy[s].empty]
+    if not locs:
+        return pd.DataFrame(columns=['WY', 'precip_inches'])
+    merged = None
+    for s in locs:
+        sub = per_loc_wy[s].rename(columns={'precip_inches': s})
+        merged = sub if merged is None else merged.merge(sub, on='WY', how='inner')
+    total_w = sum(weights[s] for s in locs)
+    weighted = sum(merged[s] * weights[s] for s in locs) / total_w
+    return pd.DataFrame({'WY': merged['WY'], 'precip_inches': weighted})
+
+
+def _plot_hist_vs_productB_box(
+    hist_wy: pd.DataFrame,
+    block_wy_list: list,
+    title: str,
+    out_png: Path,
+    unit: str = "inches",
+):
+    """Create boxplot: historical + n01..n10 annual WY precip totals.
+
+    Styled to match _productB_postproc.plot_summary_boxplots.
+    """
+    # Match _productB_postproc.plot_summary_boxplots palette exactly
+    _DWR_BLUE = "#003D6B"
+    _DWR_LIGHT_BLUE = "#B0C4DE"
+    _DWR_GRAY = "#5A5A5A"
+    _DWR_HIST_FACE = "#F0F0F0"  # pale grey to mirror productB_postproc historical style
+    _DWR_HIST_EDGE = _DWR_GRAY
+
+    hist_vals = hist_wy['precip_inches'].dropna().to_numpy(dtype=float)
+    block_data = [bw['precip_inches'].dropna().to_numpy(dtype=float) for bw in block_wy_list]
+    labels = ['Hist'] + [f'n{i:02d}' for i in range(1, len(block_wy_list) + 1)]
+    data = [hist_vals] + block_data
+
+    fig, ax = plt.subplots(figsize=(11, 5))
+    positions = list(range(1, len(labels) + 1))
+
+    # Historical box (pale grey) with grey median line
+    ax.boxplot(
+        [data[0]], positions=[1], widths=0.5, showfliers=True,
+        patch_artist=True, showmeans=True,
+        boxprops=dict(facecolor=_DWR_HIST_FACE, edgecolor=_DWR_HIST_EDGE, linewidth=1.0),
+        medianprops=dict(color=_DWR_GRAY, linewidth=1.8),
+        meanprops=dict(marker="D", markerfacecolor=_DWR_BLUE,
+                       markeredgecolor=_DWR_BLUE, markersize=5),
+        whiskerprops=dict(color=_DWR_HIST_EDGE, linewidth=1.0),
+        capprops=dict(color=_DWR_HIST_EDGE, linewidth=1.0),
+        flierprops=dict(marker="o", markerfacecolor=_DWR_GRAY,
+                        markeredgecolor=_DWR_GRAY, markersize=3, alpha=0.5),
+    )
+
+    # Product B block boxes with grey median line
+    ax.boxplot(
+        data[1:], positions=positions[1:], widths=0.5, showfliers=True,
+        patch_artist=True, showmeans=True,
+        boxprops=dict(facecolor=_DWR_LIGHT_BLUE, edgecolor=_DWR_BLUE, linewidth=1.0),
+        medianprops=dict(color=_DWR_GRAY, linewidth=1.8),
+        meanprops=dict(marker="D", markerfacecolor=_DWR_BLUE,
+                       markeredgecolor=_DWR_BLUE, markersize=5),
+        whiskerprops=dict(color=_DWR_BLUE, linewidth=1.0),
+        capprops=dict(color=_DWR_BLUE, linewidth=1.0),
+        flierprops=dict(marker="o", markerfacecolor=_DWR_GRAY,
+                        markeredgecolor=_DWR_GRAY, markersize=3, alpha=0.5),
+    )
+
+    if hist_vals.size:
+        hist_mean = float(np.mean(hist_vals))
+        ax.axhline(hist_mean, color=_DWR_GRAY, linestyle="--", linewidth=1.4,
+                   label=f"Historical Mean ({hist_mean:,.1f} {unit})")
+
+    ax.set_xticks(positions)
+    ax.set_xticklabels(labels, fontsize=11, fontweight="medium")
+    ax.set_xlabel("Historical / Product B Block", fontsize=12, fontweight="bold", labelpad=8)
+    ax.set_ylabel(f"Annual WY Precipitation ({unit})", fontsize=12, fontweight="bold", labelpad=8)
+    ax.set_title(title, fontsize=14, fontweight="bold", pad=12)
+    ax.tick_params(axis="both", labelsize=11)
+    ax.grid(True, axis="y", linewidth=0.3, alpha=0.5, color="#CCCCCC")
+    ax.set_axisbelow(True)
+    ax.spines["top"].set_visible(False)
+    ax.spines["right"].set_visible(False)
+    ax.legend(frameon=True, loc="best", fontsize=10,
+              edgecolor="#CCCCCC", fancybox=False, framealpha=0.9)
+
+    fig.tight_layout()
+    out_png.parent.mkdir(parents=True, exist_ok=True)
+    fig.savefig(out_png, dpi=300, bbox_inches="tight", facecolor="white")
+    plt.close(fig)
+
+
+def run_compare_historical_productB(args):
+    """Compare historical annual WY precip vs Product B (n01-n10) boxplots.
+
+    Produces:
+      - one figure per UHH location
+      - Sac Valley aggregate (area-weighted; excludes TR, WH)
+      - SJ Valley aggregate (area-weighted)
+      - All aggregate (area-weighted; excludes TR, WH)
+    """
+    script_dir = Path(__file__).parent.resolve()
+    gen_dir = get_module_generated_dir("mod_forcing/climate")
+    repo_root = Path(__file__).resolve().parents[2]
+    grid_info_folder = repo_root / "mod_forcing" / "vic" / "reference" / "GridInfo"
+
+    productB_dir = gen_dir / "output" / "_product_b_final"
+    if not productB_dir.exists():
+        raise FileNotFoundError(f"Product B folder not found: {productB_dir}")
+
+    out_dir = gen_dir / "output" / "_2_uhh_basin_averages" / "product_b" / "_compare_historical_productB"
+    out_dir.mkdir(parents=True, exist_ok=True)
+
+    # Read UHH locations table
+    locations_df = read_uhh_locations(script_dir / args.locations)
+
+    # Load historical WY totals (from __calsim_sv_default__.dss) and area weights per location
+    hist_wy_by_loc: dict = {}
+    weights_by_loc: dict = {}
+    ppt_name_by_loc: dict = {}
+    print("\nLoading historical WY precip totals from __calsim_sv_default__.dss ...")
+    for _, row in locations_df.iterrows():
+        shorthand = row['location']
+        stem = _ppt_filename_stem(shorthand)
+        try:
+            hist_wy_by_loc[shorthand] = _historical_wy_totals_from_dss(stem)
+        except Exception as e:
+            print(f"  WARNING: could not read DSS historical for {shorthand} ({stem}): {e}")
+            continue
+        weights_by_loc[shorthand] = _basin_weight_from_gridinfo(grid_info_folder, row['grid_info_file'])
+        ppt_name_by_loc[shorthand] = stem
+        print(f"  {shorthand}: {len(hist_wy_by_loc[shorthand])} WYs, weight={weights_by_loc[shorthand]:.2f}")
+
+    # Load Product B WY totals per chunk per location
+    chunk_files = sorted(productB_dir.glob("_uhh_precip_productB_n*.csv"))
+    if not chunk_files:
+        raise FileNotFoundError(f"No Product B precip chunk files found in {productB_dir}")
+
+    # per_loc_chunks[shorthand] = list of DataFrames (one per chunk, in order)
+    per_loc_chunks: dict = {s: [] for s in hist_wy_by_loc}
+    for chunk_csv in chunk_files:
+        print(f"  Reading {chunk_csv.name}...")
+        chunk_totals = _productB_chunk_wy_totals(chunk_csv)
+        empty = pd.DataFrame(columns=['WY', 'precip_inches'])
+        for shorthand in hist_wy_by_loc:
+            loc_name = ppt_name_by_loc[shorthand]
+            per_loc_chunks[shorthand].append(chunk_totals.get(loc_name, empty))
+
+    # --- Per-location figures ---
+    print("\nGenerating per-location comparison figures...")
+    for shorthand in hist_wy_by_loc:
+        hist_wy = hist_wy_by_loc[shorthand]
+        block_list = per_loc_chunks[shorthand]
+        title = f"Annual WY Precipitation - {shorthand}"
+        out_png = out_dir / f"boxplot_precip_hist_vs_productB_{shorthand}.png"
+        _plot_hist_vs_productB_box(hist_wy, block_list, title, out_png)
+        print(f"  {out_png.name}")
+
+    # --- Aggregate figures (area-weighted) ---
+    aggregate_groups = [
+        ("SacValley", "Sacramento Valley UHH Locations", _SAC_VALLEY_LOCS),
+        ("SJValley", "San Joaquin Valley UHH Locations", _SJ_VALLEY_LOCS),
+        ("All", "All UHH Locations", _ALL_LOCS),
+    ]
+
+    print("\nGenerating aggregate comparison figures...")
+    for tag, label, locs in aggregate_groups:
+        available = [s for s in locs if s in hist_wy_by_loc]
+        if not available:
+            print(f"  Skipping {tag}: no data for any of {locs}")
+            continue
+        w = {s: weights_by_loc[s] for s in available}
+
+        # Aggregate historical: area-weighted mean of basin WY totals
+        hist_per_loc = {s: hist_wy_by_loc[s] for s in available}
+        hist_agg = _area_weighted_mean(hist_per_loc, w)
+
+        # Aggregate Product B per chunk
+        n_chunks = len(chunk_files)
+        block_agg_list = []
+        for i in range(n_chunks):
+            chunk_per_loc = {s: per_loc_chunks[s][i] for s in available}
+            block_agg_list.append(_area_weighted_mean(chunk_per_loc, w))
+
+        title = f"Annual WY Precipitation - {label}"
+        out_png = out_dir / f"boxplot_precip_hist_vs_productB_{tag}.png"
+        _plot_hist_vs_productB_box(hist_agg, block_agg_list, title, out_png)
+        print(f"  {out_png.name}")
+
+    # Build stats table: rows = location (+ aggregates), columns = scenario stats
+    # -------------------------------------------------------------------
+    # Helper to compute stats for a single WY series
+    def _stats(v: pd.Series) -> dict:
+        if len(v) == 0:
+            return {'mean': np.nan, 'min': np.nan, 'max': np.nan, 'n': 0}
+        return {'mean': float(v.mean()), 'min': float(v.min()),
+                'max': float(v.max()), 'n': int(len(v))}
+
+    # All locations from the per-location loop, then the three aggregates
+    stat_sections: list[tuple[str, pd.Series, list[pd.Series]]] = []
+    for shorthand in hist_wy_by_loc:
+        stat_sections.append((
+            shorthand,
+            hist_wy_by_loc[shorthand]['precip_inches'],
+            [bw['precip_inches'] for bw in per_loc_chunks[shorthand]],
+        ))
+    # Aggregates (same computation used for figures)
+    for tag, _label, locs in aggregate_groups:
+        available = [s for s in locs if s in hist_wy_by_loc]
+        if not available:
+            continue
+        w = {s: weights_by_loc[s] for s in available}
+        hist_agg_s = _area_weighted_mean({s: hist_wy_by_loc[s] for s in available}, w)
+        block_agg_s = []
+        for i in range(len(chunk_files)):
+            block_agg_s.append(_area_weighted_mean({s: per_loc_chunks[s][i] for s in available}, w))
+        stat_sections.append((
+            f"[{tag}]",
+            hist_agg_s['precip_inches'],
+            [b['precip_inches'] for b in block_agg_s],
+        ))
+
+    # Build tidy stats rows
+    stats_rows = []
+    n_chunks = len(chunk_files)
+    for loc_label, hist_series, block_series_list in stat_sections:
+        h = _stats(hist_series)
+        row = {
+            'location': loc_label,
+            'Historical_mean_in': h['mean'],
+            'Historical_min_in': h['min'],
+            'Historical_max_in': h['max'],
+            'Historical_n_WYs': h['n'],
+        }
+        for i, bv in enumerate(block_series_list, start=1):
+            s = _stats(bv)
+            tag = f'n{i:02d}'
+            row[f'{tag}_mean_in'] = s['mean']
+            row[f'{tag}_min_in'] = s['min']
+            row[f'{tag}_max_in'] = s['max']
+        stats_rows.append(row)
+
+    if stats_rows:
+        stats_csv = out_dir / "_annual_precip_stats.csv"
+        pd.DataFrame(stats_rows).to_csv(stats_csv, index=False)
+        print(f"\nStats table: {stats_csv}")
+
+    print(f"\nFigures saved to: {out_dir}")
+
+
 def parse_arguments():
     """
     Parse command-line arguments.
@@ -1323,6 +1683,14 @@ def parse_arguments():
         help='Validate Product_A outputs against reference data in calsim_climate_sv.xlsx'
     )
     parser.add_argument(
+        '--compare-historical-productB',
+        action='store_true',
+        dest='compare_historical_productB',
+        help='Compare historical annual WY precipitation against Product B (n01-n10) boxplots. '
+             'Generates one figure per UHH location plus area-weighted aggregates for the '
+             'Sacramento Valley, San Joaquin Valley, and all UHH locations (TR and WH excluded).'
+    )
+    parser.add_argument(
         '--locations',
         type=str,
         default='reference/uhh_locations.csv',
@@ -1343,9 +1711,10 @@ def parse_arguments():
     
     args = parser.parse_args()
     
-    # --source is required unless --validate-outputs is used
-    if not args.validate_outputs and not args.source:
-        parser.error("--source is required (or use --validate-outputs)")
+    # --source is required unless a standalone action is used
+    standalone = args.validate_outputs or args.compare_historical_productB
+    if not standalone and not args.source:
+        parser.error("--source is required (or use --validate-outputs / --compare-historical-productB)")
     
     # Validate scenario requirement
     if args.source in ['Product_A', 'Product_B']:
@@ -1366,6 +1735,11 @@ def main():
     if args.validate_outputs:
         scenario = args.scenario if args.scenario else '1'
         run_validate_outputs(scenario)
+        return
+
+    # Handle --compare-historical-productB mode
+    if args.compare_historical_productB:
+        run_compare_historical_productB(args)
         return
     
     # Set up paths
