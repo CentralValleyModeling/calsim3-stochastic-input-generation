@@ -57,6 +57,7 @@ import re
 from typing import Dict, Iterable, List, Sequence, Tuple
 
 import matplotlib.pyplot as plt
+import matplotlib.ticker as mticker
 import numpy as np
 import pandas as pd
 from openpyxl import load_workbook
@@ -614,7 +615,11 @@ def plot_heatmap(
                     color = "white" if abs(val) > vmax * 0.6 else "black"
                     ax.text(j, i, f"{val:+.1f}%", ha="center", va="center", fontsize=6, color=color)
 
-        ax.set_title(f"{stat_name} — % Diff vs {benchmark_name}", fontsize=10, fontweight="bold")
+        ax.set_title(
+            f"{stat_name} - Percent Difference from {benchmark_name}",
+            fontsize=10,
+            fontweight="bold",
+        )
         ax.set_xlabel("Product B Block")
         cbar = fig.colorbar(im, ax=ax, shrink=0.8, pad=0.02)
         cbar.set_label(f"% Diff vs {benchmark_name}", fontsize=8)
@@ -675,7 +680,7 @@ def plot_annual_cdf(
     ax.set_xlabel("Non-Exceedance Probability (%)")
     ax.set_ylabel(unit)
     ax.set_xlim(0, 100)
-    ax.set_title(f"{metric_label} — Annual Water-Year CDF")
+    ax.set_title(f"{metric_label} - Annual Water-Year Distribution")
     ax.grid(True, linewidth=0.35, alpha=0.4)
     ax.legend(ncol=3, fontsize=7, frameon=False, loc="best")
     fig.tight_layout()
@@ -710,13 +715,13 @@ def plot_summary_boxplots(
     if annual_long.empty:
         return outputs
 
-    # DWR-style color palette
-    _DWR_BLUE = "#003D6B"
-    _DWR_LIGHT_BLUE = "#B0C4DE"
-    _DWR_MEDIAN_RED = "#8B0000"
-    _DWR_GRAY = "#5A5A5A"
-    _DWR_HIST_MEAN = "#003D6B"
-    _DWR_HIST_MEDIAN = "#5A5A5A"
+    # Plot color palette
+    _BLUE = "#003D6B"
+    _LIGHT_BLUE = "#B0C4DE"
+    _MEDIAN_RED = "#8B0000"
+    _GRAY = "#5A5A5A"
+    _HIST_MEAN = "#003D6B"
+    _HIST_MEDIAN = "#5A5A5A"
 
     for metric_key, mdf in annual_long.groupby("Metric", sort=False):
         blocks_df = mdf[mdf["Block_Index"].notna()].copy()
@@ -736,29 +741,34 @@ def plot_summary_boxplots(
         positions = list(range(1, len(block_labels) + 1))
         ax.boxplot(data, positions=positions, widths=0.5, showfliers=True,
                         patch_artist=True, showmeans=True,
-                        boxprops=dict(facecolor=_DWR_LIGHT_BLUE, edgecolor=_DWR_BLUE, linewidth=1.0),
-                        medianprops=dict(color=_DWR_MEDIAN_RED, linewidth=1.8),
-                        meanprops=dict(marker="D", markerfacecolor=_DWR_BLUE,
-                                       markeredgecolor=_DWR_BLUE, markersize=5),
-                        whiskerprops=dict(color=_DWR_BLUE, linewidth=1.0),
-                        capprops=dict(color=_DWR_BLUE, linewidth=1.0),
-                        flierprops=dict(marker="o", markerfacecolor=_DWR_GRAY,
-                                        markeredgecolor=_DWR_GRAY, markersize=3, alpha=0.5))
+                        boxprops=dict(facecolor=_LIGHT_BLUE, edgecolor=_BLUE, linewidth=1.0),
+                        medianprops=dict(color=_MEDIAN_RED, linewidth=1.8),
+                        meanprops=dict(marker="D", markerfacecolor=_BLUE,
+                                       markeredgecolor=_BLUE, markersize=5),
+                        whiskerprops=dict(color=_BLUE, linewidth=1.0),
+                        capprops=dict(color=_BLUE, linewidth=1.0),
+                        flierprops=dict(marker="o", markerfacecolor=_GRAY,
+                                        markeredgecolor=_GRAY, markersize=3, alpha=0.5))
 
         if not bench_df.empty:
             hist_vals = bench_df["WY_Value"].dropna()
             hist_mean = hist_vals.mean()
             hist_median = hist_vals.median()
-            ax.axhline(hist_mean, color=_DWR_HIST_MEAN, linestyle="--", linewidth=1.4,
+            ax.axhline(hist_mean, color=_HIST_MEAN, linestyle="--", linewidth=1.4,
                        label=f"{benchmark_name} Mean ({hist_mean:,.0f} {unit})")
-            ax.axhline(hist_median, color=_DWR_HIST_MEDIAN, linestyle="-.", linewidth=1.4,
+            ax.axhline(hist_median, color=_HIST_MEDIAN, linestyle="-.", linewidth=1.4,
                        label=f"{benchmark_name} Median ({hist_median:,.0f} {unit})")
 
         ax.set_xticks(positions)
         ax.set_xticklabels(block_labels, fontsize=11, fontweight="medium")
         ax.set_xlabel("Product B Block", fontsize=12, fontweight="bold", labelpad=8)
         ax.set_ylabel(f"Annual Value ({unit})", fontsize=12, fontweight="bold", labelpad=8)
-        ax.set_title(f"{metric_label}", fontsize=14, fontweight="bold", pad=12)
+        ax.set_title(
+            f"{metric_label} - Product B Block Distribution",
+            fontsize=14,
+            fontweight="bold",
+            pad=12,
+        )
         ax.tick_params(axis="both", labelsize=11)
         ax.grid(True, axis="y", linewidth=0.3, alpha=0.5, color="#CCCCCC")
         ax.set_axisbelow(True)
@@ -874,7 +884,7 @@ def plot_worst_window_sequences(
     outputs: Dict[str, str] = {}
     window_years_list = sorted({int(w) for w in sequence_window_years if int(w) > 0})
 
-    # DWR-style curated palette for 10 blocks (print-friendly, high contrast)
+    # Curated palette for 10 blocks (print-friendly, high contrast)
     _BLOCK_COLORS = [
         "#1B7837",  # forest green
         "#D95F02",  # burnt orange
@@ -981,8 +991,12 @@ def plot_worst_window_sequences(
 
             metric_label = metric_label_from_fields(metric_key, fields)
             unit = units.get(metric_key, "TAF")
-            ax.set_title(f"{metric_label} \u2014 Worst {window_years}-yr Sequence Overlay",
-                         fontsize=14, fontweight="bold", pad=12)
+            ax.set_title(
+                f"{metric_label} - Worst {window_years}-Year Sequence Comparison",
+                fontsize=14,
+                fontweight="bold",
+                pad=12,
+            )
             ax.set_xlabel(f"Year (relative to worst {window_years}-yr window)",
                           fontsize=12, fontweight="bold", labelpad=8)
             ax.set_ylabel(f"Annual Value ({unit})", fontsize=12, fontweight="bold", labelpad=8)
@@ -1035,17 +1049,20 @@ def plot_1000yr_timeseries(
 ) -> Dict[str, str]:
     """Create a stitched 1000-year time series plot for each metric.
 
-    Blocks n01-n10 are concatenated sequentially, with a continuous
-    sequence index (year 1 through N*block_length).  The historical
-    benchmark mean is shown as a horizontal reference line.
+    The historical benchmark trace is plotted first, then blocks n01-n10
+    are concatenated sequentially with a continuous sequence index.
+    The historical benchmark mean is shown as a horizontal reference line.
     """
     out_dir = Path(out_dir)
     fig_dir = out_dir / "figures" / "timeseries_1000yr"
     fig_dir.mkdir(parents=True, exist_ok=True)
 
-    _DWR_BLUE = "#003D6B"
-    _DWR_LIGHT_BLUE = "#4A90C4"
-    _BLOCK_BORDER = "#999999"
+    _BLUE = "#003D6B"
+    _PRODUCT_B_TRACE = "#8FBAD6"
+    _HIST_LINE = "#3F3F3F"
+    _HIST_TRACE = "#B8B8B8"
+    _BLOCK_BORDER = "#B3B3B3"
+    _HIST_BAND = "#F3F3F3"
 
     outputs: Dict[str, str] = {}
     if annual_long.empty:
@@ -1059,11 +1076,17 @@ def plot_1000yr_timeseries(
 
         block_labels = sort_block_labels(blocks_df["Block"].unique())
 
+        hist_df = bench_df.sort_values("WY").dropna(subset=["WY_Value"])
+        hist_vals = hist_df["WY_Value"].to_numpy(dtype=float)
+        hist_wys = hist_df["WY"].astype(int).to_numpy()
+        hist_years = len(hist_vals)
+        hist_x_arr = np.arange(1, hist_years + 1, dtype=int)
+
         # Stitch blocks sequentially
         seq_x: List[int] = []
         seq_y: List[float] = []
         block_boundaries: List[int] = []
-        offset = 0
+        offset = hist_years
 
         for bl in block_labels:
             bdata = blocks_df[blocks_df["Block"] == bl].sort_values("WY")
@@ -1079,56 +1102,117 @@ def plot_1000yr_timeseries(
 
         seq_x_arr = np.array(seq_x)
         seq_y_arr = np.array(seq_y)
-        total_years = offset
+        stochastic_years = len(seq_y_arr)
+        total_years = hist_years + stochastic_years
 
         metric_label = metric_label_from_fields(metric_key, fields)
-        fig, ax = plt.subplots(figsize=(16, 4.5))
+        fig, ax = plt.subplots(figsize=(16, 5.2))
+
+        if hist_years:
+            ax.axvspan(0.5, hist_years + 0.5, color=_HIST_BAND,
+                       alpha=1.0, linewidth=0, zorder=0)
+
+        if hist_years:
+            ax.plot(hist_x_arr, hist_vals, color=_HIST_TRACE, linewidth=0.8,
+                    alpha=0.75, zorder=3, label=f"{benchmark_name} annual")
+
+            if hist_years >= 10:
+                hist_rolling = pd.Series(hist_vals).rolling(10, min_periods=10).mean().to_numpy()
+                ax.plot(hist_x_arr, hist_rolling, color=_HIST_LINE, linewidth=1.5,
+                        alpha=0.9, zorder=4, label=f"{benchmark_name} 10-yr rolling")
+
+            ax.axvline(hist_years + 0.5, color=_HIST_LINE, linewidth=1.0,
+                       linestyle="--", alpha=0.55, zorder=1)
 
         # Block boundary lines
         for i, boundary in enumerate(block_boundaries[:-1]):
             ax.axvline(boundary + 0.5, color=_BLOCK_BORDER, linewidth=0.6,
-                       linestyle=":", alpha=0.7, zorder=1)
+                       linestyle=":", alpha=0.6, zorder=1)
 
         # Annual time series
-        ax.plot(seq_x_arr, seq_y_arr, color=_DWR_LIGHT_BLUE, linewidth=0.6,
-                alpha=0.85, zorder=2)
+        ax.plot(seq_x_arr, seq_y_arr, color=_PRODUCT_B_TRACE, linewidth=0.55,
+                alpha=0.78, zorder=2, label="Product B annual")
 
         # 10-year rolling average
-        if total_years >= 10:
+        if stochastic_years >= 10:
             rolling = pd.Series(seq_y_arr).rolling(10, min_periods=10).mean().to_numpy()
-            ax.plot(seq_x_arr, rolling, color=_DWR_BLUE, linewidth=1.5,
-                    alpha=0.9, zorder=3, label="10-yr Rolling Avg")
+            ax.plot(seq_x_arr, rolling, color=_BLUE, linewidth=1.5,
+                    alpha=0.95, zorder=3, label="Product B 10-yr rolling")
+
+        if stochastic_years:
+            product_b_mean = float(np.nanmean(seq_y_arr))
+            ax.hlines(product_b_mean, xmin=1, xmax=total_years,
+                      color=_BLUE, linestyle="--", linewidth=1.2,
+                      alpha=0.9, label=f"Product B mean ({product_b_mean:,.0f} {unit})", zorder=4)
 
         # Historical benchmark mean
         if not bench_df.empty:
             hist_mean = bench_df["WY_Value"].mean()
-            ax.axhline(hist_mean, color="black", linestyle="--", linewidth=1.2,
-                       label=f"{benchmark_name} Mean ({hist_mean:,.0f} {unit})", zorder=4)
+            ax.hlines(hist_mean, xmin=1, xmax=total_years,
+                      color=_HIST_LINE, linestyle=":", linewidth=1.3,
+                      alpha=0.9, label=f"{benchmark_name} mean ({hist_mean:,.0f} {unit})", zorder=4)
 
-        ax.set_xlim(1, total_years)
-        ax.set_xlabel("Stochastic Sequence Year", fontsize=12, fontweight="bold", labelpad=8)
-        ax.set_ylabel(f"Annual Value ({unit})", fontsize=12, fontweight="bold", labelpad=8)
-        ax.set_title(f"{metric_label} — {total_years}-Year Stochastic Time Series",
-                     fontsize=14, fontweight="bold", pad=12)
-        ax.tick_params(axis="both", labelsize=10)
-        ax.grid(True, axis="y", linewidth=0.3, alpha=0.5, color="#CCCCCC")
+        ax.set_xlim(0.5, total_years + 0.5)
+        ax.set_xlabel("Historical water year / Product B sequence index", fontsize=11, fontweight="bold", labelpad=8)
+        ax.set_ylabel(f"Annual value ({unit})", fontsize=11, fontweight="bold", labelpad=8)
+        ax.set_title(metric_label, fontsize=14, fontweight="bold", loc="center", pad=26)
+        ax.text(0.5, 1.015,
+            f"Historical water years followed by {stochastic_years}-year Product B stochastic sequence",
+                transform=ax.transAxes, ha="center", va="bottom",
+                fontsize=9, color="#555555")
+
+        tick_positions: List[int] = []
+        tick_labels: List[str] = []
+        if hist_years:
+            tick_positions.append(1)
+            tick_labels.append(str(hist_wys[0]))
+            if hist_years > 1:
+                tick_positions.append(hist_years)
+                tick_labels.append(str(hist_wys[-1]))
+        for product_b_index in range(100, stochastic_years + 1, 100):
+            tick_positions.append(hist_years + product_b_index)
+            tick_labels.append(str(product_b_index))
+        ax.set_xticks(tick_positions)
+        ax.set_xticklabels(tick_labels)
+
+        minor_positions = [
+            hist_years + product_b_index
+            for product_b_index in range(50, stochastic_years + 1, 50)
+            if product_b_index % 100 != 0
+        ]
+        ax.xaxis.set_minor_locator(mticker.FixedLocator(minor_positions))
+        ax.tick_params(axis="both", labelsize=9, color="#555555", labelcolor="#333333")
+        ax.yaxis.set_major_formatter(mticker.StrMethodFormatter("{x:,.0f}"))
+        ax.grid(True, axis="y", linewidth=0.35, alpha=0.45, color="#D0D0D0")
         ax.set_axisbelow(True)
         ax.spines["top"].set_visible(False)
         ax.spines["right"].set_visible(False)
-        ax.legend(fontsize=10, frameon=True, edgecolor="#CCCCCC", fancybox=False,
-                  framealpha=0.9, loc="best")
+        ax.spines["left"].set_color("#777777")
+        ax.spines["bottom"].set_color("#777777")
+        ax.margins(y=0.08)
+        ax.legend(fontsize=7.5, frameon=True, loc="upper right",
+                ncol=1, handlelength=2.0, columnspacing=0.9,
+                handletextpad=0.45, borderpad=0.35,
+                edgecolor="#D0D0D0", fancybox=False, framealpha=0.92)
 
         # Block labels at top of each block region
-        prev = 0
+        if hist_years:
+            y_top = ax.get_ylim()[1]
+            y_range = y_top - ax.get_ylim()[0]
+            ax.text((1 + hist_years) / 2, y_top - y_range * 0.03, benchmark_name,
+                    ha="center", va="top", fontsize=7, color="#555555", alpha=0.95,
+                    fontweight="bold")
+
+        prev = hist_years
         for bl, boundary in zip(block_labels, block_boundaries):
             mid = (prev + boundary) / 2
             y_top = ax.get_ylim()[1]
             y_range = y_top - ax.get_ylim()[0]
             ax.text(mid, y_top - y_range * 0.03, bl,
-                    ha="center", va="top", fontsize=7, color="#888888", alpha=0.8)
+                    ha="center", va="top", fontsize=7, color="#777777", alpha=0.85)
             prev = boundary
 
-        fig.tight_layout()
+        fig.tight_layout(rect=[0, 0, 1, 0.96])
         out_png = fig_dir / f"{make_safe_filename(metric_key)}.png"
         fig.savefig(out_png, dpi=300, bbox_inches="tight", facecolor="white")
         plt.close(fig)
