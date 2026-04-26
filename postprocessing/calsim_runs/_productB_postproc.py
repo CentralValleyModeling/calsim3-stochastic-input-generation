@@ -237,7 +237,8 @@ def load_product_a_annual(
     (the Product A scenario itself).
     """
     pickle_path = Path(pickle_dir)
-    if not (pickle_path / "values.pkl").exists():
+    _required = ("values.pkl", "diffs.pkl", "units.pkl", "fields.pkl")
+    if any(not (pickle_path / f).exists() for f in _required):
         return pd.DataFrame(columns=["Metric", "WY", "WY_Value"])
 
     df_values, _df_diffs, _units, _fields = load_pickles(pickle_path)
@@ -868,8 +869,6 @@ def plot_monthly_cdf(
     out_path.parent.mkdir(parents=True, exist_ok=True)
     fig.savefig(out_path, dpi=300, bbox_inches="tight", facecolor="white")
     plt.close(fig)
-
-
 
 
 def plot_summary_boxplots(
