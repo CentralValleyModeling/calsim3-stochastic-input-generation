@@ -79,6 +79,13 @@ except Exception:
 
 PICKLE_DIR = get_generated_dir() / "postprocessing" / "calsim_runs" / "product_b" / "pickle_files"
 OUT_DIR = get_generated_dir() / "postprocessing" / "calsim_runs" / "product_b" / "output"
+PRODUCT_A_PICKLE_DIR = (
+    get_generated_dir()
+    / "postprocessing"
+    / "calsim_runs"
+    / "product_a_modified"
+    / "pickle_files"
+)
 
 FIXED_COLS = {"Date", "Scenario", "OctSeptYear", "MarFebYear", "Year", "Month", "JanDecYear"}
 _BLOCK_RE = re.compile(r"(?<![A-Za-z0-9])n0*([1-9]|10)(?![A-Za-z0-9])", flags=re.IGNORECASE)
@@ -208,6 +215,44 @@ def annualize_all_metrics(
     annual_long = pd.concat(frames, ignore_index=True)
     annual_long = annual_long.sort_values(["Metric", "Scenario", "WY"]).reset_index(drop=True)
     return annual_long
+
+
+def load_product_a_annual(
+    pickle_dir: str | Path,
+    metric_keys: Sequence[str],
+    metric_groups: Dict[str, str],
+    fields: Dict[str, str],
+    exclude_scenarios: Sequence[str] = ("Historical",),
+) -> pd.DataFrame:
+    """Load a Product A pickle cache and return a per-metric water-year DataFrame.
+
+    The result has columns: Metric, WY, WY_Value. Only metrics that exist in
+    metric_keys are returned, and only the non-benchmark scenario rows
+    (the Product A scenario itself).
+    """
+    pickle_path = Path(pickle_dir)
+    if not (pickle_path / "values.pkl").exists():
+        return pd.DataFrame(columns=["Metric", "WY", "WY_Value"])
+
+    df_values, _df_diffs, _units, _fields = load_pickles(pickle_path)
+    df_values["Date"] = pd.to_datetime(df_values["Date"])
+
+    available = [m for m in metric_keys if m in df_values.columns]
+    if not available:
+        return pd.DataFrame(columns=["Metric", "WY", "WY_Value"])
+
+    pa_long = annualize_all_metrics(
+        df_values=df_values,
+        metric_keys=available,
+        metric_groups=metric_groups,
+        fields=fields,
+    )
+    excl = set(exclude_scenarios)
+    pa_long = pa_long[~pa_long["Scenario"].isin(excl)].copy()
+    if pa_long.empty:
+        return pd.DataFrame(columns=["Metric", "WY", "WY_Value"])
+
+    return pa_long[["Metric", "WY", "WY_Value"]].reset_index(drop=True)
 
 
 def benchmark_summary_table(annual_long: pd.DataFrame, benchmark_name: str) -> pd.DataFrame:
@@ -425,8 +470,8 @@ def build_compact_summary_table(
     N1_10_Pct_Range               -- abs range / |hist mean| * 100
     N1_10_Annual_Avg_Pct_Diff_Min -- min block mean pct diff vs historical mean
     N1_10_Annual_Avg_Pct_Diff_Max -- max block mean pct diff vs historical mean
-    N1_10_Annual_Avg_Bracket      -- display string: min block mean – max block mean
-    N1_10_Annual_Avg_Pct_Diff_Bracket -- display string: min pct diff – max pct diff
+    N1_10_Annual_Avg_Bracket      -- display string: min block mean - max block mean
+    N1_10_Annual_Avg_Pct_Diff_Bracket -- display string: min pct diff - max pct diff
     Hist_{w}yr_Min                -- historical worst w-yr rolling avg
     N1_10_{w}yr_Min               -- stochastic worst w-yr rolling avg (single worst across all blocks)
     """
@@ -464,14 +509,14 @@ def build_compact_summary_table(
         vmax = row.get("N1_10_Annual_Avg_Max")
         if pd.isna(vmin) or pd.isna(vmax):
             return ""
-        return f"{vmin:,.1f} – {vmax:,.1f}"
+        return f"{vmin:,.1f} - {vmax:,.1f}"
 
     def _pct_bracket(row: pd.Series) -> str:
         pmin = row.get("N1_10_Annual_Avg_Pct_Diff_Min")
         pmax = row.get("N1_10_Annual_Avg_Pct_Diff_Max")
         if pd.isna(pmin) or pd.isna(pmax):
             return ""
-        return f"{pmin:+.1f}% – {pmax:+.1f}%"
+        return f"{pmin:+.1f}% - {pmax:+.1f}%"
 
     table["N1_10_Annual_Avg_Bracket"] = table.apply(_value_bracket, axis=1)
     table["N1_10_Annual_Avg_Pct_Diff_Bracket"] = table.apply(_pct_bracket, axis=1)
@@ -516,7 +561,7 @@ def build_heatmap_data(
 
     Stats:
     - Mean Annual
-    - P5 Annual (meeting update; configurable with ``drought_percentile``)
+    - P5 Annual
     - Worst 5-year Rolling Avg
     - Worst 10-year Rolling Avg
     """
@@ -751,7 +796,7 @@ def plot_annual_cdf(
     ax.set_xlabel("Non-Exceedance Probability (%)")
     ax.set_ylabel(unit)
     ax.set_xlim(0, 100)
-    ax.set_title(f"{metric_label} - Annual Water-Year Distribution")
+    ax.set_title(f"{metric_label} - Annual CDF")
     ax.grid(True, linewidth=0.35, alpha=0.4)
     ax.legend(ncol=3, fontsize=7, frameon=False, loc="best")
     fig.tight_layout()
@@ -840,11 +885,11 @@ def plot_summary_boxplots(
     if annual_long.empty:
         return outputs
 
-    # DWR-style color palette
-    _DWR_BLUE = "#003D6B"
-    _DWR_LIGHT_BLUE = "#B0C4DE"
-    _DWR_GRAY = "#5A5A5A"
-    _DWR_HIST_FILL = "#F2F2F2"
+    # Plot color palette
+    _BLUE = "#003D6B"
+    _LIGHT_BLUE = "#B0C4DE"
+    _GRAY = "#5A5A5A"
+    _HIST_FILL = "#F2F2F2"
 
     for metric_key, mdf in annual_long.groupby("Metric", sort=False):
         blocks_df = mdf[mdf["Block_Index"].notna()].copy()
@@ -883,19 +928,19 @@ def plot_summary_boxplots(
             showfliers=True,
             patch_artist=True,
             showmeans=True,
-            medianprops=dict(color=_DWR_GRAY, linewidth=1.8),
+            medianprops=dict(color=_GRAY, linewidth=1.8),
             meanprops=dict(
                 marker="D",
-                markerfacecolor=_DWR_BLUE,
-                markeredgecolor=_DWR_BLUE,
+                markerfacecolor=_BLUE,
+                markeredgecolor=_BLUE,
                 markersize=5,
             ),
-            whiskerprops=dict(color=_DWR_BLUE, linewidth=1.0),
-            capprops=dict(color=_DWR_BLUE, linewidth=1.0),
+            whiskerprops=dict(color=_BLUE, linewidth=1.0),
+            capprops=dict(color=_BLUE, linewidth=1.0),
             flierprops=dict(
                 marker="o",
-                markerfacecolor=_DWR_GRAY,
-                markeredgecolor=_DWR_GRAY,
+                markerfacecolor=_GRAY,
+                markeredgecolor=_GRAY,
                 markersize=3,
                 alpha=0.5,
             ),
@@ -903,15 +948,15 @@ def plot_summary_boxplots(
 
         for i, box in enumerate(bp["boxes"]):
             if hist_included and i == 0:
-                box.set(facecolor=_DWR_HIST_FILL, edgecolor=_DWR_GRAY, linewidth=1.3)
+                box.set(facecolor=_HIST_FILL, edgecolor=_GRAY, linewidth=1.3)
             else:
-                box.set(facecolor=_DWR_LIGHT_BLUE, edgecolor=_DWR_BLUE, linewidth=1.0)
+                box.set(facecolor=_LIGHT_BLUE, edgecolor=_BLUE, linewidth=1.0)
 
         if hist_included:
             hist_mean = float(np.nanmean(hist_vals))
             ax.axhline(
                 hist_mean,
-                color=_DWR_GRAY,
+                color=_GRAY,
                 linestyle="--",
                 linewidth=1.4,
                 label=f"{benchmark_name} Mean ({hist_mean:,.0f} {unit})",
@@ -1065,7 +1110,6 @@ def plot_worst_window_sequences(
     def _frame_years_for_window(window_years: int) -> int:
         return TWO_YEAR_SEQUENCE_FRAME_YEARS if window_years == 2 else sequence_frame_years
 
-    # DWR-style curated palette for 10 blocks (print-friendly, high contrast)
     _BLOCK_COLORS = [
         "#1B7837",  # forest green
         "#D95F02",  # burnt orange
@@ -1139,7 +1183,7 @@ def plot_worst_window_sequences(
                 hist_name = "Hist" if benchmark_name.lower().startswith("hist") else benchmark_name
                 hist_label = (
                     f"{hist_name} (WY {benchmark_frame['wy_start']}"
-                    f"–{benchmark_frame['wy_end']}"
+                    f"-{benchmark_frame['wy_end']}"
                     f", avg {benchmark_frame['rolling_avg']:,.0f})"
                 )
                 _plot_sequence_trace(
@@ -1161,7 +1205,7 @@ def plot_worst_window_sequences(
                 color = _BLOCK_COLORS[(block_index - 1) % len(_BLOCK_COLORS)]
                 label = (
                     f"{block_label} (Yr {block_frame['seq_start']}"
-                    f"–{block_frame['seq_end']}"
+                    f"-{block_frame['seq_end']}"
                     f", avg {block_frame['rolling_avg']:,.0f})"
                 )
                 _plot_sequence_trace(
@@ -1240,12 +1284,20 @@ def plot_1000yr_timeseries(
     out_dir: str | Path,
     benchmark_name: str = "Historical",
     unit: str = "TAF",
+    product_a_annual: pd.DataFrame | None = None,
+    product_a_label: str = "Product A",
+    product_a_start_wy: int | None = None,
 ) -> Dict[str, str]:
     """Create a stitched 1000-year time series plot for each metric.
 
     The historical benchmark trace is plotted first, then blocks n01-n10
     are concatenated sequentially with a continuous sequence index.
     The historical benchmark mean is shown as a horizontal reference line.
+
+    If ``product_a_annual`` is provided (columns: Metric, WY, WY_Value), an
+    additional trace is overlaid in the historical region. Each Product A WY
+    is aligned to the historical x-axis by water year (so a 50-year Product A
+    sequence appears at the same x-position as the matching historical years).
     """
     out_dir = Path(out_dir)
     fig_dir = out_dir / "figures" / "timeseries_1000yr"
@@ -1257,6 +1309,13 @@ def plot_1000yr_timeseries(
     _HIST_TRACE = "#B8B8B8"
     _BLOCK_BORDER = "#B3B3B3"
     _HIST_BAND = "#F3F3F3"
+    _PRODUCT_A_TRACE = "#C0392B"
+
+    has_product_a = (
+        product_a_annual is not None
+        and not product_a_annual.empty
+        and {"Metric", "WY", "WY_Value"}.issubset(product_a_annual.columns)
+    )
 
     outputs: Dict[str, str] = {}
     if annual_long.empty:
@@ -1317,6 +1376,28 @@ def plot_1000yr_timeseries(
 
             ax.axvline(hist_years + 0.5, color=_HIST_LINE, linewidth=1.0,
                        linestyle="--", alpha=0.55, zorder=1)
+
+        # Product A overlay (aligned to historical water years)
+        if has_product_a and hist_years:
+            pa_metric = product_a_annual[product_a_annual["Metric"] == metric_key]
+            pa_metric = pa_metric.dropna(subset=["WY", "WY_Value"]).sort_values("WY")
+            if not pa_metric.empty:
+                pa_wys = pa_metric["WY"].astype(int).to_numpy()
+                pa_vals = pa_metric["WY_Value"].to_numpy(dtype=float)
+                if product_a_start_wy is not None:
+                    keep = pa_wys >= int(product_a_start_wy)
+                    pa_wys = pa_wys[keep]
+                    pa_vals = pa_vals[keep]
+                hist_wy_start = int(hist_wys[0])
+                pa_x = pa_wys - hist_wy_start + 1
+                in_range = (pa_x >= 1) & (pa_x <= hist_years)
+                pa_x = pa_x[in_range]
+                pa_vals = pa_vals[in_range]
+                if pa_x.size >= 10:
+                    pa_rolling = pd.Series(pa_vals).rolling(10, min_periods=10).mean().to_numpy()
+                    ax.plot(pa_x, pa_rolling, color=_PRODUCT_A_TRACE, linewidth=1.5,
+                            alpha=0.95, zorder=5,
+                            label=f"{product_a_label} 10-yr rolling ({pa_x.size}-yr)")
 
         # Block boundary lines
         for i, boundary in enumerate(block_boundaries[:-1]):
@@ -1493,6 +1574,9 @@ def run_post_processing_package(
     drought_percentile: float = DEFAULT_DROUGHT_PERCENTILE,
     sequence_window_years: Sequence[int] = DEFAULT_SEQUENCE_WINDOWS,
     sequence_frame_years: int = DEFAULT_SEQUENCE_FRAME_YEARS,
+    product_a_pickle_dir: str | Path | None = None,
+    product_a_label: str = "Product A",
+    product_a_start_wy: int | None = 1972,
 ) -> Dict[str, str]:
     df_values, _df_diffs, units, fields = load_pickles(pickle_dir)
     df_values["Date"] = pd.to_datetime(df_values["Date"])
@@ -1594,7 +1678,7 @@ def run_post_processing_package(
         stochastic_rolling.to_excel(writer, sheet_name="stochastic_rolling_minima", index=False)
     format_excel_workbook(rolling_minima_xlsx)
 
-    # -- Existing annual CDFs --
+    # -- Annual CDFs --
     cdf_dir = out_path / "figures" / "annual_cdf"
     for metric_key in metric_keys:
         plot_annual_cdf(
@@ -1618,7 +1702,7 @@ def run_post_processing_package(
             unit=units.get(metric_key, "TAF"),
         )
 
-    # -- New boxplot summary figures --
+    # -- Boxplot summary figures --
     boxplot_pngs = plot_summary_boxplots(
         annual_long=annual_long,
         fields=fields,
@@ -1627,7 +1711,7 @@ def run_post_processing_package(
         unit="TAF",
     )
 
-    # -- New worst-window sequence overlays --
+    # -- Worst-window sequence overlays --
     sequence_pngs = plot_worst_window_sequences(
         annual_long=annual_long,
         fields=fields,
@@ -1639,12 +1723,29 @@ def run_post_processing_package(
     )
 
     # -- 1000-year stitched time series --
+    product_a_annual = None
+    if product_a_pickle_dir:
+        pa_dir = Path(product_a_pickle_dir)
+        if (pa_dir / "values.pkl").exists():
+            product_a_annual = load_product_a_annual(
+                pickle_dir=pa_dir,
+                metric_keys=metric_keys,
+                metric_groups=metric_groups,
+                fields=fields,
+                exclude_scenarios=(benchmark_name,),
+            )
+        else:
+            print(f"[plot_1000yr_timeseries] Product A pickles not found at {pa_dir}; skipping overlay.")
+
     timeseries_pngs = plot_1000yr_timeseries(
         annual_long=annual_long,
         fields=fields,
         out_dir=out_path,
         benchmark_name=benchmark_name,
         unit="TAF",
+        product_a_annual=product_a_annual,
+        product_a_label=product_a_label,
+        product_a_start_wy=product_a_start_wy,
     )
 
     return {
@@ -1702,6 +1803,29 @@ def main() -> None:
         default=list(DEFAULT_SEQUENCE_WINDOWS),
         help="Rolling-window lengths to plot for the worst-window sequence overlays (default: 2 5)",
     )
+    parser.add_argument(
+        "--product-a-pickle-dir",
+        default=str(PRODUCT_A_PICKLE_DIR),
+        help=(
+            "Directory containing Product A pickles (values.pkl, fields.pkl, units.pkl). "
+            "Used to overlay the Product A trace on the 1000-yr timeseries figure. "
+            "Pass an empty string to disable the overlay."
+        ),
+    )
+    parser.add_argument(
+        "--product-a-label",
+        default="Product A",
+        help="Legend label for the Product A overlay trace.",
+    )
+    parser.add_argument(
+        "--product-a-start-wy",
+        type=int,
+        default=1972,
+        help=(
+            "Earliest water year to include from the Product A series when overlaying "
+            "on the 1000-yr timeseries (default: 1972). Use 0 to disable filtering."
+        ),
+    )
     args = parser.parse_args()
 
     outputs = run_post_processing_package(
@@ -1713,6 +1837,9 @@ def main() -> None:
         drought_percentile=args.drought_percentile,
         sequence_window_years=args.sequence_window_years,
         sequence_frame_years=args.sequence_frame_years,
+        product_a_pickle_dir=args.product_a_pickle_dir or None,
+        product_a_label=args.product_a_label,
+        product_a_start_wy=(args.product_a_start_wy if args.product_a_start_wy and args.product_a_start_wy > 0 else None),
     )
 
     print("Created:")
