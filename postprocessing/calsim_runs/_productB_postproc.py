@@ -35,6 +35,12 @@ Outputs:
      2-year and 5-year rolling windows. The 2-year plot uses a 6-year frame;
      the 5-year plot uses the default fixed 15-year frame.
 
+8) compact_summary.xlsx
+   - one-row-per-metric summary: historical annual avg, N1-10 block range, rolling minima
+
+9) figures/timeseries_1000yr/<metric>.png
+   - historical trace followed by stitched 1000-year stochastic sequence; optional
+     Product A 10-yr rolling overlay in the historical region
 
 
 Assumptions:
@@ -1085,6 +1091,7 @@ def _plot_sequence_trace(
             zorder=zorder + 0.1,
         )
 
+
 def plot_worst_window_sequences(
     annual_long: pd.DataFrame,
     fields: Dict[str, str],
@@ -1416,7 +1423,7 @@ def plot_1000yr_timeseries(
 
         if stochastic_years:
             product_b_mean = float(np.nanmean(seq_y_arr))
-            ax.hlines(product_b_mean, xmin=1, xmax=total_years,
+            ax.hlines(product_b_mean, xmin=hist_years + 0.5, xmax=total_years + 0.5,
                       color=_BLUE, linestyle="--", linewidth=1.2,
                       alpha=0.9, label=f"Product B mean ({product_b_mean:,.0f} {unit})", zorder=4)
 
