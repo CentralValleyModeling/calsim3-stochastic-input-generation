@@ -1395,11 +1395,18 @@ def plot_1000yr_timeseries(
                     keep = pa_wys >= int(product_a_start_wy)
                     pa_wys = pa_wys[keep]
                     pa_vals = pa_vals[keep]
-                hist_wy_start = int(hist_wys[0])
-                pa_x = pa_wys - hist_wy_start + 1
-                in_range = (pa_x >= 1) & (pa_x <= hist_years)
-                pa_x = pa_x[in_range]
-                pa_vals = pa_vals[in_range]
+                # Map each PA water year to its x position via the explicit
+                # hist_wys -> hist_x_arr index. This is robust to gaps in the
+                # benchmark series (hist_df drops null annual values, so WYs
+                # are not necessarily contiguous).
+                wy_to_x = {int(wy): int(x) for wy, x in zip(hist_wys, hist_x_arr)}
+                pa_pairs = [(wy_to_x[w], v) for w, v in zip(pa_wys, pa_vals) if int(w) in wy_to_x]
+                if pa_pairs:
+                    pa_x = np.array([p[0] for p in pa_pairs], dtype=int)
+                    pa_vals = np.array([p[1] for p in pa_pairs], dtype=float)
+                else:
+                    pa_x = np.empty(0, dtype=int)
+                    pa_vals = np.empty(0, dtype=float)
                 if pa_x.size >= 10:
                     pa_rolling = pd.Series(pa_vals).rolling(10, min_periods=10).mean().to_numpy()
                     ax.plot(pa_x, pa_rolling, color=_PRODUCT_A_TRACE, linewidth=1.5,
