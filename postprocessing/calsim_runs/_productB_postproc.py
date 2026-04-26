@@ -1733,7 +1733,14 @@ def run_post_processing_package(
     product_a_annual = None
     if product_a_pickle_dir:
         pa_dir = Path(product_a_pickle_dir)
-        if (pa_dir / "values.pkl").exists():
+        _required = ("values.pkl", "diffs.pkl", "units.pkl", "fields.pkl")
+        _missing = [f for f in _required if not (pa_dir / f).exists()]
+        if _missing:
+            print(
+                f"[plot_1000yr_timeseries] Product A pickle(s) not found at {pa_dir} "
+                f"({', '.join(_missing)}); skipping overlay."
+            )
+        else:
             product_a_annual = load_product_a_annual(
                 pickle_dir=pa_dir,
                 metric_keys=metric_keys,
@@ -1741,8 +1748,6 @@ def run_post_processing_package(
                 fields=fields,
                 exclude_scenarios=(benchmark_name,),
             )
-        else:
-            print(f"[plot_1000yr_timeseries] Product A pickles not found at {pa_dir}; skipping overlay.")
 
     timeseries_pngs = plot_1000yr_timeseries(
         annual_long=annual_long,
@@ -1814,7 +1819,8 @@ def main() -> None:
         "--product-a-pickle-dir",
         default=str(PRODUCT_A_PICKLE_DIR),
         help=(
-            "Directory containing Product A pickles (values.pkl, fields.pkl, units.pkl). "
+            "Directory containing Product A pickles "
+            "(values.pkl, diffs.pkl, units.pkl, fields.pkl). "
             "Used to overlay the Product A trace on the 1000-yr timeseries figure. "
             "Pass an empty string to disable the overlay."
         ),
