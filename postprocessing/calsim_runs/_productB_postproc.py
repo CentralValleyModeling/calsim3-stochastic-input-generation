@@ -1416,7 +1416,8 @@ def plot_1000yr_timeseries(
 
         if stochastic_years:
             product_b_mean = float(np.nanmean(seq_y_arr))
-            ax.hlines(product_b_mean, xmin=1, xmax=total_years,
+            product_b_xmin = hist_years + 1
+            ax.hlines(product_b_mean, xmin=product_b_xmin, xmax=total_years,
                       color=_BLUE, linestyle="--", linewidth=1.2,
                       alpha=0.9, label=f"Product B mean ({product_b_mean:,.0f} {unit})", zorder=4)
 
