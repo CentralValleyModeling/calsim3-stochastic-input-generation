@@ -42,6 +42,18 @@ Outputs:
    - historical trace followed by stitched 1000-year stochastic sequence; optional
      Product A 10-yr rolling overlay in the historical region
 
+10) rolling_minima_vs_historical_counts.xlsx
+    - counts_by_block: per-block count of metrics whose worst rolling average is
+      strictly worse than the historical worst rolling average
+    - details: per-metric breakdown
+
+11) figures/rolling_minima_vs_historical_counts/block_rolling_minima_below_historical_counts*.png
+    - grouped bar charts of below-historical rolling-minimum counts per block
+
+12) figures/annual_block_range/range_100yr_block_means_vs_historical.png / .svg
+    - lollipop/range chart of 100-year block means vs the historical mean
+      for key Delta, Delivery, and Storage metrics
+
 
 Dependencies:
 - Python 3.10+ (uses PEP 604 union syntax, e.g. ``int | None``)
