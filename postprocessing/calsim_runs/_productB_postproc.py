@@ -43,6 +43,16 @@ Outputs:
      Product A 10-yr rolling overlay in the historical region
 
 
+Dependencies:
+- Python 3.10+ (uses PEP 604 union syntax, e.g. ``int | None``)
+- pandas, numpy, matplotlib, and openpyxl
+- Repository utility ``utils.paths.get_generated_dir`` for default path resolution
+- Product B pickle cache containing ``values.pkl``, ``diffs.pkl``, ``units.pkl``,
+    and ``fields.pkl``
+- Optional Product A pickle cache with the same four files when using the
+    10-year rolling overlay on the stitched 1000-year time series
+
+
 Assumptions:
 - values.pkl metric columns are already in TAF
 - Product B block scenarios are named either n01..n10, or contain those tokens in the scenario name
@@ -67,6 +77,7 @@ from typing import Dict, Iterable, List, Sequence, Tuple
 
 import matplotlib.pyplot as plt
 import matplotlib.ticker as mticker
+from matplotlib.lines import Line2D
 import numpy as np
 import pandas as pd
 from openpyxl import load_workbook
@@ -76,10 +87,12 @@ from openpyxl.styles import Alignment, Font, PatternFill
 RUN_DIR = Path(__file__).resolve().parent
 REPO_ROOT = RUN_DIR.parents[1]
 
-import sys as _sys; _sys.path.insert(0, str(REPO_ROOT))
+import sys as _sys
+
+_sys.path.insert(0, str(REPO_ROOT))
 try:
     from utils.paths import get_generated_dir
-except Exception:
+except ImportError:
     def get_generated_dir() -> Path:
         return RUN_DIR
 
@@ -102,6 +115,14 @@ HEATMAP_ROLLING_WINDOWS: Tuple[int, ...] = (5, 10)
 # Keep other Cache-related metrics (for example Cache Creek) in the heatmap.
 HEATMAP_EXCLUDED_METRIC_KEYS: Tuple[str, ...] = ("C_CSL004A",)
 HEATMAP_EXCLUDED_LABELS: Tuple[str, ...] = ("Cache Slough", "Delta: Cache Slough")
+# Additional metrics excluded only from the block rolling-minima below-historical
+# counts. The CVP and San Luis totals are already represented by their N/S and
+# CVP/SWP component metrics, so counting them would double-count.
+BLOCK_ROLLING_COUNT_EXCLUDED_METRIC_KEYS: Tuple[str, ...] = (
+    "C_CSL004A",
+    "DEL_CVP_TOTAL",
+    "S_SLUIS_TOTAL",
+)
 COMPACT_SUMMARY_WINDOWS: Tuple[int, ...] = (2, 5, 10)
 DEFAULT_SEQUENCE_WINDOWS: Tuple[int, ...] = (2, 5)
 DEFAULT_SEQUENCE_FRAME_YEARS = 15
@@ -122,6 +143,7 @@ def load_pickles(pickle_dir: str | Path) -> Tuple[pd.DataFrame, pd.DataFrame, Di
 
 
 def metric_groups_from_fields(fields: Dict[str, str]) -> Dict[str, str]:
+    """Extract the group portion (text before ``:``) of each metric label."""
     out: Dict[str, str] = {}
     for key, label in fields.items():
         if isinstance(label, str) and ":" in label:
@@ -132,11 +154,13 @@ def metric_groups_from_fields(fields: Dict[str, str]) -> Dict[str, str]:
 
 
 def metric_label_from_fields(metric_key: str, fields: Dict[str, str]) -> str:
+    """Return the display label (text after ``:``) for ``metric_key``."""
     raw = fields.get(metric_key, metric_key)
     return raw.split(":", 1)[1].strip() if ":" in raw else raw
 
 
 def extract_block_index(scenario_name: str) -> int | None:
+    """Return the 1-based block index parsed from a scenario name (e.g. ``n03`` -> 3)."""
     match = _BLOCK_RE.search(str(scenario_name))
     if not match:
         return None
@@ -144,12 +168,14 @@ def extract_block_index(scenario_name: str) -> int | None:
 
 
 def block_label_from_index(block_index: int | float | None) -> str:
+    """Format a block index as a zero-padded label (e.g. 3 -> ``"n03"``)."""
     if block_index is None or pd.isna(block_index):
         return ""
     return f"n{int(block_index):02d}"
 
 
 def sort_block_labels(block_labels: Iterable[str]) -> List[str]:
+    """Sort block labels by their embedded numeric index (``n01`` before ``n10``)."""
     def _key(label: str) -> Tuple[int, str]:
         digits = re.sub(r"\D", "", str(label))
         return (int(digits) if digits else 0, str(label))
@@ -158,6 +184,7 @@ def sort_block_labels(block_labels: Iterable[str]) -> List[str]:
 
 
 def make_safe_filename(text: str) -> str:
+    """Sanitize ``text`` into a filesystem-safe filename stem."""
     safe = re.sub(r"[^A-Za-z0-9_.-]+", "_", str(text))
     safe = safe.strip("_.")
     return safe or "plot"
@@ -454,6 +481,305 @@ def stochastic_rolling_minima_table(
     return table.sort_values(["Group", "Metric", "Window_Years"]).reset_index(drop=True)
 
 
+def build_block_rolling_below_historical_counts(
+    annual_long: pd.DataFrame,
+    benchmark_name: str,
+    window_years: Sequence[int] = (2, 5, 10),
+    exclude_metric_keys: Sequence[str] = HEATMAP_EXCLUDED_METRIC_KEYS,
+    exclude_labels: Sequence[str] = HEATMAP_EXCLUDED_LABELS,
+) -> Tuple[pd.DataFrame, pd.DataFrame]:
+    """Per-block rolling minima vs historical rolling minimum.
+
+    For each metric and each window in ``window_years``, compute the worst
+    rolling-mean window for the benchmark scenario and for every Product B
+    block (n01..n10), then flag blocks where the block's worst rolling
+    average is strictly less than the historical worst rolling average.
+
+    Excludes lower-priority metrics using the same policy as the heatmaps
+    (exact metric keys and label matches).
+
+    Returns
+    -------
+    (details, counts)
+        details: one row per (Metric, Block, Window_Years) with both the
+            block and historical rolling minima and the below-historical
+            flag.
+        counts: one row per (Block, Window_Years) with
+            Count_Below_Historical, Total_Metrics, Pct_Below_Historical.
+    """
+    detail_cols = [
+        "Group",
+        "Metric",
+        "Metric_Label",
+        "Block",
+        "Window_Years",
+        "Block_Min_RollingAvg_TAF",
+        "Historical_Min_RollingAvg_TAF",
+        "Below_Historical",
+    ]
+    count_cols = [
+        "Block",
+        "Window_Years",
+        "Count_Below_Historical",
+        "Total_Metrics",
+        "Pct_Below_Historical",
+    ]
+
+    if annual_long.empty:
+        return (
+            pd.DataFrame(columns=detail_cols),
+            pd.DataFrame(columns=count_cols),
+        )
+
+    metric_key_set = {str(k).strip().upper() for k in exclude_metric_keys}
+    label_set = {str(l).strip().casefold() for l in exclude_labels}
+
+    df = annual_long.copy()
+    if metric_key_set:
+        df = df[~df["Metric"].astype(str).str.strip().str.upper().isin(metric_key_set)]
+    if label_set:
+        df = df[~df["Metric_Label"].astype(str).str.strip().str.casefold().isin(label_set)]
+
+    if df.empty:
+        return (
+            pd.DataFrame(columns=detail_cols),
+            pd.DataFrame(columns=count_cols),
+        )
+
+    benchmark_df = df[df["Scenario"] == benchmark_name]
+    blocks_df = df[df["Block_Index"].notna()]
+
+    # Historical worst rolling average per (Metric, Window_Years)
+    hist_lookup: Dict[Tuple[str, int], float] = {}
+    for metric, m_df in benchmark_df.groupby("Metric", sort=False):
+        for w in window_years:
+            best = _best_rolling_window(m_df, int(w))
+            if best is not None:
+                hist_lookup[(metric, int(w))] = float(best["RollingAvg_TAF"])
+
+    detail_rows: List[dict] = []
+    for (group, metric, label), m_df in blocks_df.groupby(
+        ["Group", "Metric", "Metric_Label"], sort=False
+    ):
+        for block, b_df in m_df.groupby("Block", sort=True):
+            for w in window_years:
+                w_int = int(w)
+                hist_val = hist_lookup.get((metric, w_int))
+                best = _best_rolling_window(b_df, w_int)
+                if best is None:
+                    continue
+                block_val = float(best["RollingAvg_TAF"])
+                below = (
+                    hist_val is not None
+                    and not pd.isna(block_val)
+                    and not pd.isna(hist_val)
+                    and block_val < hist_val
+                )
+                detail_rows.append(
+                    {
+                        "Group": group,
+                        "Metric": metric,
+                        "Metric_Label": label,
+                        "Block": block,
+                        "Window_Years": w_int,
+                        "Block_Min_RollingAvg_TAF": block_val,
+                        "Historical_Min_RollingAvg_TAF": (
+                            float(hist_val) if hist_val is not None else float("nan")
+                        ),
+                        "Below_Historical": bool(below),
+                    }
+                )
+
+    details = pd.DataFrame(detail_rows, columns=detail_cols)
+    if details.empty:
+        return details, pd.DataFrame(columns=count_cols)
+
+    grouped = details.groupby(["Block", "Window_Years"], sort=False)
+    counts = grouped.agg(
+        Count_Below_Historical=("Below_Historical", "sum"),
+        Total_Metrics=("Below_Historical", "size"),
+    ).reset_index()
+    counts["Count_Below_Historical"] = counts["Count_Below_Historical"].astype(int)
+    counts["Total_Metrics"] = counts["Total_Metrics"].astype(int)
+    counts["Pct_Below_Historical"] = np.where(
+        counts["Total_Metrics"] > 0,
+        100.0 * counts["Count_Below_Historical"] / counts["Total_Metrics"],
+        0.0,
+    )
+
+    block_order = sort_block_labels(counts["Block"].unique())
+    block_rank = {b: i for i, b in enumerate(block_order)}
+    counts["_block_rank"] = counts["Block"].map(block_rank)
+    counts = counts.sort_values(["_block_rank", "Window_Years"]).drop(columns="_block_rank")
+    counts = counts[count_cols].reset_index(drop=True)
+
+    details["_block_rank"] = details["Block"].map(block_rank)
+    details = details.sort_values(
+        ["Group", "Metric", "_block_rank", "Window_Years"]
+    ).drop(columns="_block_rank").reset_index(drop=True)
+
+    return details, counts
+
+
+def plot_block_rolling_below_historical_counts(
+    counts: pd.DataFrame,
+    out_png: str | Path,
+    window_years: Sequence[int] = (2, 5, 10),
+) -> Path | None:
+    """Grouped bar chart of below-historical counts per block per window."""
+    if counts.empty:
+        return None
+
+    block_order = sort_block_labels(counts["Block"].unique())
+    if not block_order:
+        return None
+
+    pivot = counts.pivot_table(
+        index="Block",
+        columns="Window_Years",
+        values="Count_Below_Historical",
+        aggfunc="sum",
+        fill_value=0,
+    ).reindex(block_order)
+
+    windows = [int(w) for w in window_years if int(w) in pivot.columns]
+    if not windows:
+        return None
+    pivot = pivot[windows]
+
+    n_blocks = len(block_order)
+    n_windows = len(windows)
+    x = np.arange(n_blocks)
+    bar_width = 0.8 / max(n_windows, 1)
+
+    style_colors = {
+        "background": "#FFFFFF",
+        "horizontal_gridlines": "#D9E2EA",
+        "left_bottom_axis": "#888888",
+        "top_right_border": "#F5F8FA",
+        "axis_numbers": "#222222",
+    }
+    bar_colors = {
+        2: "#D27E2A",
+        5: "#8C8C8C",
+        10: "#0B3D59",
+    }
+    fallback = ["#4C72B0", "#DD8452", "#55A467"]
+    colors = {
+        w: bar_colors.get(w, fallback[i % len(fallback)])
+        for i, w in enumerate(windows)
+    }
+
+    fig, ax = plt.subplots(figsize=(8.0, 6.5), dpi=200)
+    fig.patch.set_facecolor(style_colors["background"])
+    ax.set_facecolor(style_colors["background"])
+    for i, w in enumerate(windows):
+        offsets = x - 0.4 + bar_width * (i + 0.5)
+        values = pivot[w].to_numpy(dtype=float)
+        bars = ax.bar(
+            offsets,
+            values,
+            width=bar_width,
+            color=colors[w],
+            edgecolor=style_colors["top_right_border"],
+            linewidth=0.5,
+            label=f"{w}-year",
+        )
+        for bar, val in zip(bars, values):
+            if val <= 0:
+                continue
+            ax.text(
+                bar.get_x() + bar.get_width() / 2.0,
+                bar.get_height(),
+                f"{int(round(val))}",
+                ha="center",
+                va="bottom",
+                fontsize=8,
+                color=style_colors["axis_numbers"],
+            )
+
+    ax.set_xticks(x)
+    ax.set_xticklabels(block_order)
+    ax.set_xlabel("")
+    ax.set_ylabel("")
+    total_metrics_vals = (
+        pd.to_numeric(counts["Total_Metrics"], errors="coerce").dropna().unique()
+        if "Total_Metrics" in counts.columns
+        else np.array([])
+    )
+    if total_metrics_vals.size == 1:
+        title_suffix = f" (out of {int(total_metrics_vals[0])} metrics)"
+    elif total_metrics_vals.size > 1:
+        title_suffix = (
+            f" (out of {int(total_metrics_vals.min())}-"
+            f"{int(total_metrics_vals.max())} metrics)"
+        )
+    else:
+        title_suffix = ""
+    ax.set_title(
+        "Count of Metrics with Block Rolling Minimum Below Historical"
+        + title_suffix,
+        color=bar_colors[10],
+        fontweight="bold",
+    )
+    ax.tick_params(
+        axis="both",
+        colors=style_colors["axis_numbers"],
+        labelcolor=style_colors["axis_numbers"],
+        width=1.2,
+        length=4,
+    )
+    ax.spines["left"].set_color(style_colors["left_bottom_axis"])
+    ax.spines["left"].set_linewidth(1.5)
+    ax.spines["bottom"].set_color(style_colors["left_bottom_axis"])
+    ax.spines["bottom"].set_linewidth(1.5)
+    ax.spines["top"].set_visible(False)
+    ax.spines["right"].set_visible(False)
+    ax.yaxis.set_major_locator(mticker.MaxNLocator(integer=True))
+    ax.grid(
+        axis="y",
+        color=style_colors["horizontal_gridlines"],
+        linestyle="-",
+        linewidth=1.2,
+        alpha=1.0,
+    )
+    ax.set_axisbelow(True)
+    legend_handles = [
+        Line2D(
+            [0],
+            [0],
+            marker="s",
+            linestyle="None",
+            markersize=8,
+            markerfacecolor=colors[w],
+            markeredgecolor=colors[w],
+            label=f"{w}-year",
+        )
+        for w in windows
+    ]
+    legend = ax.legend(
+        handles=legend_handles,
+        loc="upper center",
+        bbox_to_anchor=(0.5, -0.12),
+        ncol=3,
+        frameon=False,
+    )
+    if legend is not None:
+        plt.setp(legend.get_texts(), color=style_colors["axis_numbers"])
+
+    fig.tight_layout()
+    out_path = Path(out_png)
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+    fig.savefig(
+        out_path,
+        dpi=300,
+        bbox_inches="tight",
+        facecolor=style_colors["background"],
+    )
+    plt.close(fig)
+    return out_path
+
+
 # ---------------------------------------------------------------------------
 # Compact summary table (one row per metric)
 # ---------------------------------------------------------------------------
@@ -543,6 +869,326 @@ def build_compact_summary_table(
         table = table.merge(stoch_w, on=["Group", "Metric", "Metric_Label"], how="left")
 
     return table.sort_values(["Group", "Metric"]).reset_index(drop=True)
+
+
+# ---------------------------------------------------------------------------
+# 100-year block mean range vs historical
+# ---------------------------------------------------------------------------
+
+# Display label and canonical Metric_Label used for lookup. Labels are
+# case/punctuation/space normalized at match time.
+RANGE_FIGURE_GROUPS: Tuple[Tuple[str, Tuple[Tuple[str, Tuple[str, ...]], ...]], ...] = (
+    (
+        "DELTA",
+        (
+            ("Delta Inflow", ("Delta Inflow",)),
+            ("Delta Outflow", ("Delta Outflow",)),
+            ("Total Jones Exports", ("Total Jones Exports",)),
+            ("Total Banks Exports", ("Total Banks Exports",)),
+            ("San Joaquin River at Vernalis", ("San Joaquin River at Vernalis",)),
+        ),
+    ),
+    (
+        "DELIVERY",
+        (
+            ("SWP Total Delivery", ("SWP Total Delivery",)),
+            ("CVP Total Delivery (North)", ("CVP North of Delta Delivery",)),
+            ("CVP Total Delivery (South)", ("CVP South of Delta Delivery",)),
+        ),
+    ),
+    (
+        "STORAGE",
+        (
+            ("Oroville", ("Oroville Storage",)),
+            ("Shasta", ("Shasta Storage",)),
+            ("San Luis - SWP", ("San Luis Storage SWP",)),
+            ("San Luis - CVP", ("San Luis Storage CVP",)),
+        ),
+    ),
+)
+
+_RANGE_NORMALIZE_RE = re.compile(r"[^a-z0-9]+")
+
+
+def _normalize_label(label: object) -> str:
+    """Lowercase, strip punctuation, and compress whitespace for matching."""
+    if label is None:
+        return ""
+    text = str(label).strip().lower()
+    text = _RANGE_NORMALIZE_RE.sub(" ", text)
+    return " ".join(text.split())
+
+
+def _resolve_range_metric_rows(
+    compact_summary: pd.DataFrame,
+) -> List[Tuple[str, str, pd.Series]]:
+    """Map requested display labels to rows in compact_summary in canonical order."""
+    if "Metric_Label" not in compact_summary.columns:
+        raise ValueError(
+            "compact_summary is missing the 'Metric_Label' column required for the range figure."
+        )
+
+    norm_to_index: Dict[str, int] = {}
+    for idx, raw in compact_summary["Metric_Label"].items():
+        key = _normalize_label(raw)
+        if key and key not in norm_to_index:
+            norm_to_index[key] = idx
+
+    resolved: List[Tuple[str, str, pd.Series]] = []
+    missing: List[str] = []
+    for group_display, metrics in RANGE_FIGURE_GROUPS:
+        for display_label, aliases in metrics:
+            row_idx = None
+            for alias in aliases:
+                key = _normalize_label(alias)
+                if key in norm_to_index:
+                    row_idx = norm_to_index[key]
+                    break
+            if row_idx is None:
+                missing.append(display_label)
+                continue
+            resolved.append(
+                (group_display, display_label, compact_summary.loc[row_idx])
+            )
+
+    if missing:
+        available = sorted(
+            {str(v) for v in compact_summary["Metric_Label"].dropna().unique()}
+        )
+        raise ValueError(
+            "Could not resolve the following metrics for the 100-year block mean "
+            "range figure: "
+            + ", ".join(missing)
+            + ". Available Metric_Label values: "
+            + ", ".join(available)
+        )
+    return resolved
+
+
+def _ensure_range_pct_diffs(row: pd.Series) -> Tuple[float, float]:
+    """Return (pct_min, pct_max) from existing columns or compute from raw values."""
+    pmin = row.get("N1_10_Annual_Avg_Pct_Diff_Min", np.nan)
+    pmax = row.get("N1_10_Annual_Avg_Pct_Diff_Max", np.nan)
+    if pd.isna(pmin) or pd.isna(pmax):
+        hist = row.get("Hist_Annual_Avg", np.nan)
+        vmin = row.get("N1_10_Annual_Avg_Min", np.nan)
+        vmax = row.get("N1_10_Annual_Avg_Max", np.nan)
+        if (
+            not pd.isna(hist)
+            and float(hist) != 0.0
+            and not pd.isna(vmin)
+            and not pd.isna(vmax)
+        ):
+            denom = abs(float(hist))
+            pmin = (float(vmin) - float(hist)) / denom * 100.0
+            pmax = (float(vmax) - float(hist)) / denom * 100.0
+    return float(pmin), float(pmax)
+
+
+def plot_100yr_block_mean_range_vs_historical(
+    compact_summary: pd.DataFrame,
+    out_dir: str | Path,
+) -> Dict[str, str]:
+    """Presentation-quality range/lollipop plot of 100-year block means vs historical.
+
+    Each row spans the min-to-max percent difference of the ten Product B
+    100-year block means relative to the historical mean. Rows where the
+    range crosses below zero are colored amber/orange; rows entirely above
+    zero are blue.
+
+    Returns a dict with keys 'png' and 'svg' mapping to saved file paths.
+    Files are written under ``<out_dir>/figures/annual_block_range/``.
+    """
+    if compact_summary is None or compact_summary.empty:
+        raise ValueError("compact_summary is empty; cannot build range figure.")
+
+    resolved = _resolve_range_metric_rows(compact_summary)
+
+    records: List[dict] = []
+    for group_display, display_label, row in resolved:
+        pmin, pmax = _ensure_range_pct_diffs(row)
+        records.append(
+            {
+                "group": group_display,
+                "label": display_label,
+                "pmin": pmin,
+                "pmax": pmax,
+            }
+        )
+
+    n = len(records)
+    # First record at the top of the chart -> highest y value.
+    y_positions = list(range(n, 0, -1))
+
+    # Visual palette.
+    color_blue = "#1F77B4"
+    color_orange = "#D27E2A"
+    text_color = "#222222"
+    muted_text = "#5A6B7A"
+    grid_color = "#D9E2EA"
+    band_color = "#EEF3F7"
+    fig = plt.figure(figsize=(15.5, 7.0), dpi=200)
+    fig.patch.set_facecolor("white")
+    ax = fig.add_axes([0.28, 0.10, 0.60, 0.80])
+    ax.set_facecolor("white")
+
+    # Determine x range from the data, with padding and tidy 5% rounding.
+    pmins = [r["pmin"] for r in records if not pd.isna(r["pmin"])]
+    pmaxs = [r["pmax"] for r in records if not pd.isna(r["pmax"])]
+    if pmins and pmaxs:
+        data_min = min(pmins)
+        data_max = max(pmaxs)
+    else:
+        data_min, data_max = -10.0, 40.0
+    span = max(data_max - data_min, 1.0)
+    pad = max(span * 0.08, 2.0)
+    x_lo = float(np.floor(min(data_min - pad, -5.0) / 5.0) * 5.0)
+
+    right_pad = max(span * 0.22, 8.0)
+    x_hi = float(np.ceil((data_max + right_pad) / 5.0) * 5.0)
+    ax.set_xlim(x_lo, x_hi)
+    ax.set_ylim(0.4, n + 0.6)
+
+    # Group bands (light fill behind each category) + group labels.
+    group_bounds: Dict[str, Tuple[int, int]] = {}
+    for rec, y in zip(records, y_positions):
+        g = rec["group"]
+        if g not in group_bounds:
+            group_bounds[g] = (y, y)
+        else:
+            lo, hi = group_bounds[g]
+            group_bounds[g] = (min(lo, y), max(hi, y))
+
+    band_x = x_lo - (x_hi - x_lo) * 0.40
+    label_x = x_lo - (x_hi - x_lo) * 0.36
+    for g, (lo_y, hi_y) in group_bounds.items():
+        ax.add_patch(
+            plt.Rectangle(
+                (band_x, lo_y - 0.5),
+                (x_hi - band_x),
+                (hi_y - lo_y) + 1.0,
+                facecolor=band_color,
+                edgecolor="none",
+                zorder=0,
+                clip_on=False,
+            )
+        )
+        center_y = (lo_y + hi_y) / 2.0
+        ax.text(
+            label_x,
+            center_y,
+            g,
+            ha="center",
+            va="center",
+            rotation=90,
+            fontsize=14,
+            fontweight="bold",
+            color=text_color,
+            clip_on=False,
+        )
+
+    # Subtle horizontal separators between groups.
+    seen: List[str] = []
+    for rec in records:
+        if rec["group"] not in seen:
+            seen.append(rec["group"])
+    for i in range(1, len(seen)):
+        prev_group = seen[i - 1]
+        boundary = group_bounds[prev_group][0] - 0.5
+        ax.axhline(boundary, color="#C7D2DC", linewidth=0.8, zorder=1)
+
+    # Vertical reference at 0% (historical mean).
+    ax.axvline(0.0, color="#3C4A57", linewidth=1.0, zorder=2)
+
+    # X-axis grid + ticks formatted as percentages.
+    ax.xaxis.set_major_locator(mticker.MultipleLocator(10))
+    ax.xaxis.set_major_formatter(
+        mticker.FuncFormatter(lambda v, _p: f"{int(round(v))}%")
+    )
+    ax.grid(axis="x", color=grid_color, linewidth=0.8, alpha=1.0, zorder=1)
+    ax.set_axisbelow(True)
+
+    # Range segments + endpoint markers + annotations.
+    for rec, y in zip(records, y_positions):
+        pmin = rec["pmin"]
+        pmax = rec["pmax"]
+        if pd.isna(pmin) or pd.isna(pmax):
+            continue
+        c = color_orange if pmin < 0.0 else color_blue
+        ax.plot(
+            [pmin, pmax],
+            [y, y],
+            color=c,
+            linewidth=3.0,
+            solid_capstyle="round",
+            zorder=4,
+        )
+        ax.scatter(
+            [pmin, pmax],
+            [y, y],
+            s=70,
+            color=c,
+            edgecolors="white",
+            linewidths=1.2,
+            zorder=5,
+        )
+        ax.text(
+            pmax + (x_hi - x_lo) * 0.012,
+            y,
+            f"{pmin:+.0f}% to {pmax:+.0f}%",
+            ha="left",
+            va="center",
+            fontsize=12,
+            color=text_color,
+        )
+
+    # Y tick labels = metric display labels.
+    ax.set_yticks(y_positions)
+    ax.set_yticklabels(
+        [r["label"] for r in records], fontsize=13, color=text_color
+    )
+    ax.tick_params(axis="y", length=0, pad=6, labelsize=13)
+    ax.tick_params(axis="x", colors=text_color, labelcolor=text_color, labelsize=12)
+    for side in ("top", "right", "left"):
+        ax.spines[side].set_visible(False)
+    ax.spines["bottom"].set_color("#9AA7B3")
+    ax.spines["bottom"].set_linewidth(1.0)
+
+    ax.set_xlabel(
+        "Range of 100-year block means relative to historical mean (%)",
+        fontsize=13,
+        color=muted_text,
+        labelpad=8,
+    )
+
+    # Figure-level title.
+    fig.text(
+        0.04,
+        0.955,
+        "Range of 100-Year Block Means vs Historical",
+        fontsize=22,
+        fontweight="bold",
+        color="#0B3D59",
+        ha="left",
+        va="center",
+    )
+
+    # Outputs.
+    out_root = Path(out_dir)
+    fig_dir = out_root / "figures" / "annual_block_range"
+    fig_dir.mkdir(parents=True, exist_ok=True)
+    png_path = fig_dir / "range_100yr_block_means_vs_historical.png"
+    svg_path = fig_dir / "range_100yr_block_means_vs_historical.svg"
+    fig.savefig(png_path, dpi=200, facecolor="white", bbox_inches="tight", pad_inches=0.15)
+    try:
+        fig.savefig(svg_path, facecolor="white", bbox_inches="tight", pad_inches=0.15)
+        svg_out = str(svg_path)
+    except Exception:
+        # SVG export is optional; PNG is the primary output. Swallow any
+        # backend-specific failure and report an empty SVG path instead.
+        svg_out = ""
+    plt.close(fig)
+    return {"png": str(png_path), "svg": svg_out}
 
 
 # ---------------------------------------------------------------------------
@@ -880,7 +1526,7 @@ def plot_summary_boxplots(
 ) -> Dict[str, str]:
     """Create per-metric boxplots with one historical box and one box per Product B block.
 
-    Each box contains annual water-year values.  
+    Each box contains annual water-year values.
     """
     out_dir = Path(out_dir)
     fig_dir = out_dir / "figures" / "block_boxplots"
@@ -1634,6 +2280,16 @@ def run_post_processing_package(
         compact_summary.to_excel(writer, sheet_name="summary", index=False)
     format_excel_workbook(compact_summary_xlsx)
 
+    # -- 100-year block mean range vs historical (presentation figure) --
+    try:
+        range_figure_paths = plot_100yr_block_mean_range_vs_historical(
+            compact_summary=compact_summary,
+            out_dir=out_path,
+        )
+    except ValueError as exc:
+        print(f"[range_100yr_block_means] skipped: {exc}")
+        range_figure_paths = {"png": "", "svg": ""}
+
     # -- Heatmap: metric-by-block % diff vs benchmark --
     heatmap_long = build_heatmap_data(
         annual_long=annual_long,
@@ -1690,6 +2346,66 @@ def run_post_processing_package(
         benchmark_rolling.to_excel(writer, sheet_name="historical_rolling_minima", index=False)
         stochastic_rolling.to_excel(writer, sheet_name="stochastic_rolling_minima", index=False)
     format_excel_workbook(rolling_minima_xlsx)
+
+    # -- Block rolling minima below historical: counts and grouped bar chart --
+    issue_windows: Tuple[int, ...] = (2, 5, 10)
+    issue_details, issue_counts = build_block_rolling_below_historical_counts(
+        annual_long=annual_long,
+        benchmark_name=benchmark_name,
+        window_years=issue_windows,
+        exclude_metric_keys=BLOCK_ROLLING_COUNT_EXCLUDED_METRIC_KEYS,
+    )
+    block_rolling_issue_counts_xlsx = out_path / "rolling_minima_vs_historical_counts.xlsx"
+    if not issue_details.empty:
+        metrics_included = (
+            issue_details[["Group", "Metric", "Metric_Label"]]
+            .drop_duplicates()
+            .sort_values(["Group", "Metric"])
+            .reset_index(drop=True)
+        )
+    else:
+        metrics_included = pd.DataFrame(columns=["Group", "Metric", "Metric_Label"])
+    excluded_metric_keys_df = pd.DataFrame(
+        {"Excluded_Metric_Key": list(BLOCK_ROLLING_COUNT_EXCLUDED_METRIC_KEYS)}
+    )
+    excluded_labels_df = pd.DataFrame(
+        {"Excluded_Label": list(HEATMAP_EXCLUDED_LABELS)}
+    )
+    with pd.ExcelWriter(block_rolling_issue_counts_xlsx, engine="openpyxl") as writer:
+        issue_counts.to_excel(writer, sheet_name="counts_by_block", index=False)
+        issue_details.to_excel(writer, sheet_name="details", index=False)
+        metrics_included.to_excel(writer, sheet_name="metrics_included", index=False)
+        excluded_metric_keys_df.to_excel(
+            writer, sheet_name="excluded_metric_keys", index=False
+        )
+        excluded_labels_df.to_excel(
+            writer, sheet_name="excluded_labels", index=False
+        )
+    format_excel_workbook(block_rolling_issue_counts_xlsx)
+
+    block_rolling_issue_counts_figure_dir = (
+        out_path / "figures" / "rolling_minima_vs_historical_counts"
+    )
+    # Bar chart variants: user-selectable window subsets.
+    # Default: one with all three windows (2, 5, 10), one without the 5-year window.
+    issue_count_chart_variants: Sequence[Tuple[str, Tuple[int, ...]]] = (
+        ("block_rolling_minima_below_historical_counts.png", (2, 5, 10)),
+        ("block_rolling_minima_below_historical_counts_no5yr.png", (2, 10)),
+    )
+    block_rolling_issue_counts_figures: List[str] = []
+    for fname, windows_subset in issue_count_chart_variants:
+        fig_path = block_rolling_issue_counts_figure_dir / fname
+        plot_block_rolling_below_historical_counts(
+            counts=issue_counts,
+            out_png=fig_path,
+            window_years=windows_subset,
+        )
+        block_rolling_issue_counts_figures.append(str(fig_path))
+    # Keep primary (all-windows) figure path for backward compatibility.
+    block_rolling_issue_counts_figure = (
+        block_rolling_issue_counts_figure_dir
+        / issue_count_chart_variants[0][0]
+    )
 
     # -- Annual CDFs --
     cdf_dir = out_path / "figures" / "annual_cdf"
@@ -1768,10 +2484,15 @@ def run_post_processing_package(
 
     return {
         "compact_summary_xlsx": str(compact_summary_xlsx),
+        "annual_block_range_figure": range_figure_paths.get("png", ""),
+        "annual_block_range_figure_svg": range_figure_paths.get("svg", ""),
         "heatmap_xlsx": str(heatmap_xlsx),
         "heatmap_figures": str(out_path / "figures" / "heatmap"),
         "annual_summary_xlsx": str(annual_summary_xlsx),
         "rolling_minima_xlsx": str(rolling_minima_xlsx),
+        "block_rolling_issue_counts_xlsx": str(block_rolling_issue_counts_xlsx),
+        "block_rolling_issue_counts_figure": str(block_rolling_issue_counts_figure),
+        "block_rolling_issue_counts_figures": block_rolling_issue_counts_figures,
         "annual_cdf_dir": str(cdf_dir),
         "monthly_cdf_dir": str(monthly_cdf_dir),
         "block_boxplot_dir": str(out_path / "figures" / "block_boxplots"),
