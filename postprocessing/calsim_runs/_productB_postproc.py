@@ -911,6 +911,7 @@ RANGE_FIGURE_GROUPS: Tuple[Tuple[str, Tuple[Tuple[str, Tuple[str, ...]], ...]], 
         (
             ("Delta Inflow", ("Delta Inflow",)),
             ("Delta Outflow", ("Delta Outflow",)),
+            ("SAC River at Freeport", ("SAC River at Freeport",)),
             ("Total Jones Exports", ("Total Jones Exports",)),
             ("Total Banks Exports", ("Total Banks Exports",)),
             ("San Joaquin River at Vernalis", ("San Joaquin River at Vernalis",)),
