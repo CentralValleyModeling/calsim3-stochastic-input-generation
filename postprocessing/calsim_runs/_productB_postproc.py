@@ -936,6 +936,13 @@ RANGE_FIGURE_GROUPS: Tuple[Tuple[str, Tuple[Tuple[str, Tuple[str, ...]], ...]], 
     ),
 )
 
+# Groups of metric labels whose CDF y-axes should share the same scale and start at zero.
+# Each inner tuple lists the canonical Metric_Label strings (as they appear in fields.pkl)
+# for all metrics in the comparable group.
+COMPARABLE_CDF_GROUPS: Tuple[Tuple[str, ...], ...] = (
+    ("SWP Total Delivery", "CVP North of Delta Delivery", "CVP South of Delta Delivery","CVP Total Delivery"),
+)
+
 _RANGE_NORMALIZE_RE = re.compile(r"[^a-z0-9]+")
 
 
@@ -1453,6 +1460,7 @@ def plot_annual_cdf(
     benchmark_name: str,
     out_png: str | Path,
     unit: str = "TAF",
+    y_lim: tuple[float, float] | None = None,
 ) -> None:
     df_metric = annual_long[annual_long["Metric"] == metric_key].copy()
 
@@ -1478,9 +1486,11 @@ def plot_annual_cdf(
     ax.set_xlabel("Non-Exceedance Probability (%)")
     ax.set_ylabel(unit)
     ax.set_xlim(0, 100)
+    if y_lim is not None:
+        ax.set_ylim(y_lim)
     ax.set_title(f"{metric_label} - Annual CDF")
     ax.grid(True, linewidth=0.35, alpha=0.4)
-    ax.legend(ncol=3, fontsize=7, frameon=False, loc="best")
+    ax.legend(ncol=3, fontsize=7, frameon=False, loc="lower right")
     fig.tight_layout()
 
     out_path = Path(out_png)
@@ -1496,6 +1506,7 @@ def plot_monthly_cdf(
     benchmark_name: str,
     out_png: str | Path,
     unit: str = "TAF",
+    y_lim: tuple[float, float] | None = None,
 ) -> None:
     """Plot a monthly CDF using all monthly values for each scenario.
 
@@ -1535,9 +1546,11 @@ def plot_monthly_cdf(
     ax.set_xlabel("Non-Exceedance Probability (%)")
     ax.set_ylabel(unit)
     ax.set_xlim(0, 100)
+    if y_lim is not None:
+        ax.set_ylim(y_lim)
     ax.set_title(f"{metric_label} - Monthly CDF")
     ax.grid(True, linewidth=0.35, alpha=0.4)
-    ax.legend(ncol=3, fontsize=7, frameon=False, loc="best")
+    ax.legend(ncol=3, fontsize=7, frameon=False, loc="lower right")
     fig.tight_layout()
 
     out_path = Path(out_png)
@@ -1791,19 +1804,6 @@ def plot_worst_window_sequences(
     def _frame_years_for_window(window_years: int) -> int:
         return TWO_YEAR_SEQUENCE_FRAME_YEARS if window_years == 2 else sequence_frame_years
 
-    _BLOCK_COLORS = [
-        "#1B7837",  # forest green
-        "#D95F02",  # burnt orange
-        "#7570B3",  # muted purple
-        "#E7298A",  # magenta
-        "#66A61E",  # olive green
-        "#E6AB02",  # gold
-        "#A6761D",  # brown
-        "#377EB8",  # steel blue
-        "#984EA3",  # violet
-        "#FF7F00",  # bright orange
-    ]
-
     for window_years in window_years_list:
         frame_years = _frame_years_for_window(window_years)
         if frame_years < window_years:
@@ -1881,26 +1881,44 @@ def plot_worst_window_sequences(
                     markersize=4.5,
                 )
 
-            # Block traces with curated colors and circle markers
+            # Identify the driest block as the one with the lowest rolling_avg
+            # over its worst window. All other blocks are drawn in gray.
+            worst_block_index = None
+            if block_frames:
+                worst_block_index = min(
+                    block_frames,
+                    key=lambda bf: bf[2]["rolling_avg"],
+                )[1]
+
+            # Block traces: gray for non-highlight, crimson for the driest block.
+            # Only the driest block is added to the legend; non-highlight gray
+            # blocks are collapsed into a single proxy entry below.
             for block_label, block_index, block_frame in block_frames:
-                color = _BLOCK_COLORS[(block_index - 1) % len(_BLOCK_COLORS)]
-                label = (
-                    f"{block_label} (Yr {block_frame['seq_start']}"
-                    f"-{block_frame['seq_end']}"
-                    f", avg {block_frame['rolling_avg']:,.0f})"
-                )
+                is_worst = block_index == worst_block_index
+                color = "crimson" if is_worst else "0.65"
+                if is_worst:
+                    label = (
+                        f"{block_label} (driest, Yr {block_frame['seq_start']}"
+                        f"-{block_frame['seq_end']}"
+                        f", avg {block_frame['rolling_avg']:,.0f})"
+                    )
+                else:
+                    # "_nolegend_" prefix prevents this trace from appearing
+                    # in get_legend_handles_labels(); the proxy handle below
+                    # represents all gray blocks.
+                    label = "_nolegend_"
                 _plot_sequence_trace(
                     ax,
                     block_frame,
                     label=label,
                     color=color,
-                    full_linewidth=1.0,
-                    window_linewidth=2.2,
-                    full_alpha=0.35,
-                    window_alpha=0.95,
-                    zorder=2.0,
+                    full_linewidth=1.4 if is_worst else 0.9,
+                    window_linewidth=2.6 if is_worst else 1.6,
+                    full_alpha=0.6 if is_worst else 0.25,
+                    window_alpha=1.0 if is_worst else 0.6,
+                    zorder=2.5 if is_worst else 1.5,
                     marker="o",
-                    markersize=3.5,
+                    markersize=4.0 if is_worst else 3.0,
                 )
 
             metric_label = metric_label_from_fields(metric_key, fields)
@@ -1922,23 +1940,40 @@ def plot_worst_window_sequences(
             ax.spines["top"].set_visible(False)
             ax.spines["right"].set_visible(False)
 
-            # Annotation for shaded region
-            ax.text(
-                (window_pos_start + window_pos_end) / 2,
-                ax.get_ylim()[0] + (ax.get_ylim()[1] - ax.get_ylim()[0]) * 0.02,
-                f"{window_years}-yr critical window",
-                ha="center", va="bottom", fontsize=8, fontstyle="italic",
-                color="#666666", zorder=5,
-            )
+            # Annotation for shaded region is now represented by a legend patch.
 
-            # Legend in the upper-right, using the bold highlighted-window line style.
+            # Build a compact custom legend:
+            #   - Historical (black square trace, label includes WY range/avg)
+            #   - Driest block (crimson, label includes Yr range/avg)
+            #   - Other blocks (n=N) (gray proxy line)
+            #   - Critical window (light gray patch)
+            from matplotlib.lines import Line2D
+            from matplotlib.patches import Patch
+
             handles, labels = ax.get_legend_handles_labels()
+            n_other_blocks = sum(
+                1 for _, idx, _ in block_frames if idx != worst_block_index
+            )
+            if n_other_blocks > 0:
+                handles.append(
+                    Line2D(
+                        [0], [0],
+                        color="0.65", linewidth=1.6, alpha=0.6,
+                        marker="o", markersize=3.0,
+                    )
+                )
+                labels.append("Other blocks")
+            handles.append(
+                Patch(facecolor="#E8EDF2", edgecolor="#B0B0B0", linewidth=0.6)
+            )
+            labels.append(f"{window_years}-yr critical window")
+
             if handles:
                 ax.legend(
                     handles,
                     labels,
                     ncol=1,
-                    fontsize=8,
+                    fontsize=9,
                     frameon=True,
                     edgecolor="#CCCCCC",
                     fancybox=False,
@@ -2437,6 +2472,32 @@ def run_post_processing_package(
     )
 
     # -- Annual CDFs --
+    # Build per-metric y_lim overrides for comparable delivery groups.
+    # fields values look like "GROUP: Display Label"; match on the display label
+    # (text after the first colon) so COMPARABLE_CDF_GROUPS entries align.
+    _label_to_key: Dict[str, str] = {
+        metric_label_from_fields(k, fields): k for k in fields
+    }
+    _annual_y_lims: Dict[str, tuple[float, float]] = {}
+    _monthly_y_lims: Dict[str, tuple[float, float]] = {}
+    for _group_labels in COMPARABLE_CDF_GROUPS:
+        _group_keys = [_label_to_key[lbl] for lbl in _group_labels if lbl in _label_to_key]
+        if len(_group_keys) < 2:
+            continue
+        # Annual: find max WY_Value across all scenarios and all metrics in the group.
+        _ann_vals = annual_long[annual_long["Metric"].isin(_group_keys)]["WY_Value"].dropna()
+        _ann_ymax = float(_ann_vals.max()) if not _ann_vals.empty else None
+        if _ann_ymax is not None and _ann_ymax > 0:
+            for _k in _group_keys:
+                _annual_y_lims[_k] = (0.0, _ann_ymax)
+        # Monthly: find max raw monthly value across all scenarios and all metrics in the group.
+        _mon_cols = [k for k in _group_keys if k in df_values.columns]
+        if _mon_cols:
+            _mon_ymax = float(df_values[_mon_cols].max().max())
+            if _mon_ymax > 0:
+                for _k in _group_keys:
+                    _monthly_y_lims[_k] = (0.0, _mon_ymax)
+
     cdf_dir = out_path / "figures" / "annual_cdf"
     for metric_key in metric_keys:
         plot_annual_cdf(
@@ -2446,6 +2507,7 @@ def run_post_processing_package(
             benchmark_name=benchmark_name,
             out_png=cdf_dir / f"{make_safe_filename(metric_key)}.png",
             unit=units.get(metric_key, "TAF"),
+            y_lim=_annual_y_lims.get(metric_key),
         )
 
     # -- Monthly CDFs: all monthly values on one CDF per metric --
@@ -2458,6 +2520,7 @@ def run_post_processing_package(
             benchmark_name=benchmark_name,
             out_png=monthly_cdf_dir / f"{make_safe_filename(metric_key)}.png",
             unit=units.get(metric_key, "TAF"),
+            y_lim=_monthly_y_lims.get(metric_key),
         )
 
     # -- Boxplot summary figures --
