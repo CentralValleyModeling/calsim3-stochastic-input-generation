@@ -817,6 +817,8 @@ def build_compact_summary_table(
     N1_10_Annual_Avg_Pct_Diff_Max -- max block mean pct diff vs historical mean
     N1_10_Annual_Avg_Bracket      -- display string: min block mean - max block mean
     N1_10_Annual_Avg_Pct_Diff_Bracket -- display string: min pct diff - max pct diff
+    Hist_Min                      -- historical worst single-year value (from benchmark_summary)
+    N1_10_Min                     -- stochastic worst single-year value (worst across all blocks)
     Hist_{w}yr_Min                -- historical worst w-yr rolling avg
     N1_10_{w}yr_Min               -- stochastic worst w-yr rolling avg (single worst across all blocks)
     """
@@ -865,6 +867,20 @@ def build_compact_summary_table(
 
     table["N1_10_Annual_Avg_Bracket"] = table.apply(_value_bracket, axis=1)
     table["N1_10_Annual_Avg_Pct_Diff_Bracket"] = table.apply(_pct_bracket, axis=1)
+
+    # Single-year minimum: pull directly from summary tables (not rolling)
+    hist_min_1yr = benchmark_summary[["Group", "Metric", "Metric_Label", "Historical_Min_WY_TAF"]].rename(
+        columns={"Historical_Min_WY_TAF": "Hist_Min"}
+    )
+    table = table.merge(hist_min_1yr, on=["Group", "Metric", "Metric_Label"], how="left")
+
+    stoch_min_1yr = (
+        block_summary.groupby(["Group", "Metric", "Metric_Label"])["Min_WY_TAF"]
+        .min()
+        .reset_index()
+        .rename(columns={"Min_WY_TAF": "N1_10_Min"})
+    )
+    table = table.merge(stoch_min_1yr, on=["Group", "Metric", "Metric_Label"], how="left")
 
     # Rolling minima columns
     for w in sorted(rolling_windows):
