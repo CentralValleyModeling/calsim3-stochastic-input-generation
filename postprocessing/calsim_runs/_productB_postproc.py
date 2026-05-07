@@ -171,6 +171,29 @@ def metric_label_from_fields(metric_key: str, fields: Dict[str, str]) -> str:
     return raw.split(":", 1)[1].strip() if ":" in raw else raw
 
 
+def _is_storage_metric(metric_key: str, fields: Dict[str, str]) -> bool:
+    """Return True if the metric belongs to the Storage group.
+
+    Storage metrics are represented by end-of-September carryover (not an annual
+    sum), so y-axis labels for those plots should reflect end-of-September values.
+    """
+    raw = fields.get(metric_key, "")
+    if not isinstance(raw, str) or ":" not in raw:
+        return False
+    return raw.split(":", 1)[0].strip().lower() == "storage"
+
+
+def y_axis_value_label(metric_key: str, fields: Dict[str, str], unit: str) -> str:
+    """Return the appropriate per-water-year y-axis label for a metric.
+
+    Storage metrics use end-of-September carryover values; all other metrics
+    are summed to an annual volume.
+    """
+    if _is_storage_metric(metric_key, fields):
+        return f"End-of-September ({unit})"
+    return f"Annual ({unit})"
+
+
 def extract_block_index(scenario_name: str) -> int | None:
     """Return the 1-based block index parsed from a scenario name (e.g. ``n03`` -> 3)."""
     match = _BLOCK_RE.search(str(scenario_name))
@@ -1658,7 +1681,7 @@ def plot_summary_boxplots(
         ax.set_xticks(positions)
         ax.set_xticklabels(plot_labels, fontsize=11, fontweight="medium")
         ax.set_xlabel("Historical / Product B Block", fontsize=12, fontweight="bold", labelpad=8)
-        ax.set_ylabel(f"Annual Value ({unit})", fontsize=12, fontweight="bold", labelpad=8)
+        ax.set_ylabel(y_axis_value_label(metric_key, fields, unit), fontsize=12, fontweight="bold", labelpad=8)
         ax.set_title(
             f"{metric_label} - Product B Block Distribution",
             fontsize=14,
@@ -1931,7 +1954,7 @@ def plot_worst_window_sequences(
             )
             ax.set_xlabel(f"Year (relative to worst {window_years}-yr window)",
                           fontsize=12, fontweight="bold", labelpad=8)
-            ax.set_ylabel(f"Annual Value ({unit})", fontsize=12, fontweight="bold", labelpad=8)
+            ax.set_ylabel(y_axis_value_label(metric_key, fields, unit), fontsize=12, fontweight="bold", labelpad=8)
             ax.tick_params(axis="both", labelsize=11)
             ax.set_xlim(0.5, frame_years + 0.5)
             ax.set_xticks(np.arange(1, frame_years + 1, dtype=int))
@@ -2152,7 +2175,7 @@ def plot_1000yr_timeseries(
 
         ax.set_xlim(0.5, total_years + 0.5)
         ax.set_xlabel("Historical water year / Product B sequence index", fontsize=11, fontweight="bold", labelpad=8)
-        ax.set_ylabel(f"Annual value ({unit})", fontsize=11, fontweight="bold", labelpad=8)
+        ax.set_ylabel(y_axis_value_label(metric_key, fields, unit), fontsize=11, fontweight="bold", labelpad=8)
         ax.set_title(metric_label, fontsize=14, fontweight="bold", loc="center", pad=26)
         ax.text(0.5, 1.015,
             f"Historical water years followed by {stochastic_years}-year Product B stochastic sequence",
