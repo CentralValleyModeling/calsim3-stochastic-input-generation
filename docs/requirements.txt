@@ -1,8 +1,8 @@
 # Sphinx documentation dependencies
-sphinx>=7.0
+sphinx>=9.0
 myst-parser>=3.0
 sphinx-book-theme
 sphinx-copybutton
-sphinx-autobuild
-sphinxcontrib-mermaid
-sphinx-design
+sphinx-autobuild>=2025.8.25
+sphinxcontrib-mermaid>=2.0.1
+sphinx-design>=0.7.0
