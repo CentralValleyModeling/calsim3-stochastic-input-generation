@@ -32,11 +32,11 @@ The precipitation-driven simulation showed that 8% lower WGEN precipitation (rel
 Monthly analysis across all WBAs confirmed these patterns at seasonal resolution. The combined effects of both ET and precipitation changes were tested in a third simulation, showing that ET changes appear more dominant than precipitation changes in driving overall CalSimHydro output differences. The approximately 300,000 acre-feet annual change across all WBAs represents a meaningful but not disabling shift in the valley-wide water budget.
 
 ::::{tab-set}
-:::{tab-item} ET Response
+:::{tab-item} CS-Hydro ET Response
 ![CalSimHydro QM-ET Response](figures/s3-inputs_calsimhydro-qm-et-response.png)
 *CalSimHydro annual average difference from historical (TAF) for the QM-ET scenario, stacked by land type (Urban, Rangeland, Refuge, AG Rice, AG Others). Deep percolation (DP) shows the largest change at +12% (~600 TAF), dominated by rangeland where lower ET leaves more water for percolation. Applied water (AW) increases +2% as irrigation compensates for higher potential ET. Total ET decreases -2%.*
 :::
-:::{tab-item} Precipitation Response
+:::{tab-item} CS-Hydro Precip Response
 ![CalSimHydro Precipitation Response](figures/s3-inputs_calsimhydro-precipitation-response.png)
 *CalSimHydro annual average difference from historical (TAF) for the WGEN precipitation scenario, stacked by land type. Surface runoff (SR) shows the largest response at -9% (~-350 TAF), followed by precipitation (PR) at -3% and deep percolation (DP) at -2%. Applied water, ET, and ETAW are effectively unchanged, confirming that precipitation changes propagate primarily through the runoff and percolation pathways.*
 :::
@@ -57,11 +57,11 @@ Monthly analysis across all WBAs confirmed these patterns at seasonal resolution
 The San Joaquin River (SJR) Rebalance processing was completed with a maximum difference of +4% deep percolation for the quantile-mapped ET scenario. The rebalance generates 97 additional variables required for CalSim 3 State Variable composition, covering Contract Conservation Yield, Water Use Factor adjustments, and related accounting terms on a March-through-February contract year basis.
 
 ::::{tab-set}
-:::{tab-item} SJR Rebalance
+:::{tab-item} SJR Rebalance ET Response
 ![SJR Rebalance Annual Response](figures/s3-inputs_sjr-rebalance-annual.png)
 *SJR Rebalance percent difference from historical for the QM-ET scenario, by Water Budget Area (WBAs 50, 64, 71, 72, 73, 90, 91). Stacked by component: tailwater (TW), deep percolation (DP), applied water for wetlands/rice/other (AWW, AWR, AWO). Deep percolation (brown) dominates the positive differences, with WBA 71 showing the largest total change at approximately +7%. Applied water for rice (AWR) contributes small negative offsets in WBAs 50 and 73.*
 :::
-:::{tab-item} SJR Rebalance Detail
+:::{tab-item} SJR Rebalance Precip Response
 ![SJR Rebalance Decomposition](figures/s3-inputs_sjr-rebalance-decomposition.png)
 *SJR Rebalance percent difference from historical for the WGEN precipitation scenario, by Water Budget Area. All WBAs show net negative differences driven by lower WGEN precipitation. WBA 91 is most affected at approximately -3.5%, with deep percolation (DP) and applied water for rice (AWR) as the primary contributors. WBA 50 shows a small positive AWR offset partially compensating the DP decrease.*
 :::
