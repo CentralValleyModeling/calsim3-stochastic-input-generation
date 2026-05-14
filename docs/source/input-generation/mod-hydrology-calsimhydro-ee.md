@@ -25,23 +25,23 @@ The analysis showed maximum differences of approximately +100% for some exterior
 The ET-driven and precipitation-driven effects mirror CalSimHydro's patterns at smaller magnitudes. Quantile-mapped ET produces the maximum +100% deep percolation difference, while slightly lower WGEN precipitation leads to correspondingly lower deep percolation. The dominant signal in EE output is the ET change rather than precipitation, consistent with CalSimHydro findings where ET changes proved more influential than precipitation changes.
 
 ::::{tab-set}
-:::{tab-item} Overview
+:::{tab-item} Monthly Differences
 ![CalSimHydroEE Overview](figures/s3-inputs_calsimhydroee-overview.png)
 *Monthly deep percolation (TAF/month) summed across all External Areas, with annual totals as box plots (right). QM-ET (blue) approximately doubles the winter peak relative to Historical (black), reaching approximately 13 TAF/month in March vs approximately 7.5 for Historical. Deep percolation drops to zero from June through September across all scenarios. Precip (red) tracks slightly below Historical. Annual box plots show QM-ET median approximately 40 TAF/yr with high-year outliers exceeding 300 TAF.*
 :::
-:::{tab-item} Absolute Differences
+:::{tab-item} ET Response (Absolute Differences)
 ![CalSimHydroEE Differences](figures/s3-inputs_calsimhydroee-differences.png)
 *Annual average deep percolation difference from historical (TAF) for the WGEN precipitation scenario across all 17 External Areas. All differences are less than 1 TAF in magnitude. DP_EA_06 shows the largest negative difference at -0.65 TAF; DP_EA_63 (+0.23) and DP_EA_73 (+0.22) are the largest positive differences. Several areas (DP_EA_15S, DP_EA_50) show effectively zero change.*
 :::
-:::{tab-item} Absolute Differences (Detail)
+:::{tab-item} Precip Response (Absolute Differences)
 ![CalSimHydroEE Differences Detail](figures/s3-inputs_calsimhydroee-differences-detail.png)
 *Annual average deep percolation difference from historical (TAF) for the QM-ET scenario across all 17 External Areas. All differences are positive, reflecting increased percolation from reduced ET. DP_EA_02 (+3.78 TAF), DP_EA_06 (+3.70), and DP_EA_NBAY (+3.64) show the largest increases. QM-ET differences are an order of magnitude larger than the Precip scenario, confirming ET as the dominant driver of EE output changes.*
 :::
-:::{tab-item} Percent Differences
+:::{tab-item} ET Response (% Differences)
 ![CalSimHydroEE Percent Differences](figures/s3-inputs_calsimhydroee-pct-differences.png)
 *Percent difference from historical for the QM-ET scenario across all 17 External Areas. DP_EA_NBAY shows the largest percent change at +710%, followed by DP_EA_90 (+309%) and DP_EA_15S (+212%). Most areas fall in the +47% to +95% range. The extreme percentages at NBAY and EA_90 reflect very small historical baseline values (fractions of a TAF/yr) where even modest absolute increases produce outsized relative differences.*
 :::
-:::{tab-item} Percent Differences (Detail)
+:::{tab-item} Precip Response (% Differences)
 ![CalSimHydroEE Percent Differences Detail](figures/s3-inputs_calsimhydroee-pct-differences-detail.png)
 *Percent difference from historical for the WGEN precipitation scenario across all 17 External Areas. Most areas fall within -13% to +18%. DP_EA_15S is a positive outlier at +96% (reflecting a near-zero historical baseline of 0.01 TAF); DP_EA_NBAY is the largest negative at -45%. The mixed positive and negative signs contrast with the uniformly positive QM-ET scenario, reflecting the spatially variable influence of WGEN precipitation bias across the domain.*
 :::
