@@ -48,7 +48,7 @@ Based on the findings from Phase I, the project team offers the following recomm
 
 ### Update ET Methodology
 
-The current VIC-based ET quantile mapping approach should continue for Phase I completion. MSO is developing an alternative evapotranspiration calculation method that coudld allow the stochastic input generation to bypass VIC entirely. This new methodology is expected to accompany the DCR 2025 release and may offer improvements in bias characteristics inherent in the current approach. The alternative ET methodology should be incorporated as a Phase II enhancement. 
+The current VIC-based ET quantile mapping approach should continue for Phase I completion. MSO is developing an alternative evapotranspiration calculation method that coudld allow the stochastic input generation to bypass VIC entirely. The alternative ET methodology should be incorporated as a Phase II enhancement. 
 
 ### Address WGEN Bias
 
@@ -60,7 +60,7 @@ Preliminary scoping for Phase II should begin based on emerging findings from Ph
 
 Documentation of these issues during Phase I provides the foundation for Phase II planning. The Phase I report should clearly identify areas where model modifications may be beneficial, even if those modifications are beyond the current scope.
 
-### DCR 2025 Transition
+### DCR 2025/27 Transition
 
 DCR 2025 includes several retired closure terms, which will simplify processing for those variables. The retirement of closure terms reduces the complexity of the stochastic generation framework and eliminates the need to maintain the weighted-average methodology for variables that no longer exist in the model. Additionally, DCR 2025 may incorporate updated reservoir sedimentation data, revised operational rules, and potentially the new ET methodology—each of which could affect stochastic input generation requirements.
 

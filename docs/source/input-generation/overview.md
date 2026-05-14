@@ -67,41 +67,46 @@ The diagram below illustrates the end-to-end processing pipeline from WGEN clima
 
 ```{mermaid}
 flowchart TD
-    WGEN["WGEN<br/>Synthetic Climate<br/>(Temp + Precip)"]
+    classDef wgen fill:#F9E79F,stroke:#B7950B,color:#000
+    classDef forcing fill:#AED6F1,stroke:#1A5276,color:#000
+    classDef hydrology fill:#A9DFBF,stroke:#1E8449,color:#000
+    classDef wyt fill:#D5F5E3,stroke:#1E8449,color:#000
+    classDef reservoir fill:#FAD7A0,stroke:#A04000,color:#000
+    classDef other fill:#D7BDE2,stroke:#6C3483,color:#000
+    classDef postproc fill:#D5D8DC,stroke:#424949,color:#000
 
-    subgraph Tier1["Tier 1: Forcing"]
-        VIC["VIC Hydrologic Model<br/>(mod_forcing/vic)"]
+    WGEN["WGEN<br/>Synthetic Climate<br/>(Temp + Precip)"]:::wgen
+
+    subgraph Tier1["Tier 1: Forcing (mod_forcing)"]
+        VIC["VIC Hydrologic Model"]:::forcing
+        CLIMATE["Climate<br/>56 vars"]:::forcing
     end
 
-    subgraph Tier2["Tier 2: Climate Extraction"]
-        CLIMATE["Climate<br/>56 vars<br/>(mod_forcing/climate)"]
+    subgraph Tier2["Tier 2: Core Hydrology (mod_hydrology)"]
+        CSHYDRO["CalSimHydro<br/>746 vars"]:::hydrology
+        CSHYDRO_EE["CalSimHydroEE<br/>17 vars"]:::hydrology
+        RIM["Rim Inflow<br/>227 vars"]:::hydrology
+        SWS["Small Watersheds<br/>210 vars"]:::hydrology
+        DCD["Delta Channel<br/>Depletion<br/>28 vars"]:::hydrology
     end
 
-    subgraph Tier3["Tier 3: Core Hydrology"]
-        CSHYDRO["CalSimHydro<br/>746 vars"]
-        CSHYDRO_EE["CalSimHydroEE<br/>17 vars"]
-        RIM["Rim Inflow<br/>227 vars"]
-        SWS["Small Watersheds<br/>210 vars"]
-        DCD["Delta Channel<br/>Depletion<br/>28 vars"]
+    subgraph Tier3["Tier 3: Water Year Types (mod_hydrology)"]
+        WYT["Water Year Types<br/>Sac 40-30-30 / SJ 60-20-20"]:::wyt
     end
 
-    subgraph Tier4["Tier 4: Water Year Types"]
-        WYT["Sac 40-30-30<br/>SJ 60-20-20<br/>(water_year_types)"]
+    subgraph Tier4["Tier 4: Dependent Modules"]
+        EVAP["Reservoir Evap<br/>95 vars"]:::reservoir
+        STORAGE["Storage Curves<br/>7 vars"]:::reservoir
+        TULARE["Tulare GW<br/>14 vars"]:::hydrology
+        INSTREAM["Instream Flows<br/>3 vars"]:::other
+        UPPER["Upper Watershed<br/>12 vars"]:::other
+        DVF["Day Volume<br/>Fractions<br/>31 vars"]:::other
+        CLOSURE["Closure Terms<br/>13 vars"]:::other
+        OTHER["Other / Misc<br/>6 vars"]:::other
     end
 
-    subgraph Tier5["Tier 5: Dependent Modules"]
-        EVAP["Reservoir Evap<br/>95 vars"]
-        STORAGE["Storage Curves<br/>7 vars"]
-        TULARE["Tulare GW<br/>14 vars"]
-        INSTREAM["Instream Flows<br/>3 vars"]
-        UPPER["Upper Watershed<br/>12 vars"]
-        DVF["Day Volume<br/>Fractions<br/>31 vars"]
-        CLOSURE["Closure Terms<br/>13 vars"]
-        OTHER["Other / Misc<br/>6 vars"]
-    end
-
-    subgraph Tier6["Tier 6: Final Compilation"]
-        COMPILE["sv_compile<br/>(postprocessing)<br/>Product A / Product B DSS"]
+    subgraph Tier5["Tier 5: Final Compilation (postprocessing)"]
+        COMPILE["sv_compile<br/>Product A / Product B DSS"]:::postproc
     end
 
     WGEN --> VIC
@@ -111,21 +116,34 @@ flowchart TD
     WGEN --> SWS
     WGEN --> DCD
     WGEN --> EVAP
-    WGEN --> CLOSURE
-    VIC --> RIM
-    VIC --> CSHYDRO
+    WGEN -->|"Dates"| CLOSURE
+    VIC -->|"QMap (Flow)"| RIM
+    VIC -->|"QMap (ET)"| CSHYDRO
     RIM --> WYT
     WYT --> TULARE
     WYT --> UPPER
     WYT --> OTHER
+    WYT --> STORAGE
     RIM --> INSTREAM
     RIM --> UPPER
     RIM --> DVF
     RIM --> STORAGE
+    CLIMATE --> COMPILE
+    Tier2 --> COMPILE
     Tier3 --> COMPILE
     Tier4 --> COMPILE
-    Tier5 --> COMPILE
-    Tier2 --> COMPILE
+
+    %% Arrow colors by source (linkStyle indices are 0-based, in order of appearance above)
+    %% WGEN arrows: 0-7 (gold)
+    linkStyle 0,1,2,3,4,5,6,7 stroke:#B7950B,stroke-width:1.5px
+    %% VIC arrows: 8-9 (blue)
+    linkStyle 8,9 stroke:#1A5276,stroke-width:1.5px
+    %% RIM arrows: 10,15,16,17,18 (green)
+    linkStyle 10,15,16,17,18 stroke:#1E8449,stroke-width:1.5px
+    %% WYT arrows: 11-14 (light green)
+    linkStyle 11,12,13,14 stroke:#52BE80,stroke-width:1.5px
+    %% compile arrows: 19-22 (gray)
+    linkStyle 19,20,21,22 stroke:#717D7E,stroke-width:1.5px
 ```
 
 _Data flow from WGEN through processing tiers to final DSS compilation. Arrows indicate data dependencies between modules._

@@ -185,7 +185,7 @@ Upper watershed terms show the most methodological diversity, spanning quantile 
 
 1. **The overall framework performs well.** Median $R^2$ of 0.98 and mean $R^2$ of 0.90 across 1,223 variables demonstrates that the WGEN-VIC-QM pipeline captures the dominant variability in CalSim inputs. The synthetic input generation methodology successfully translates stochastic climate sequences into physically consistent model inputs.
 
-2. **ET quantile mapping is the dominant source of bias.** The +12% deep percolation increase in CalSimHydro (approximately 600 TAF/yr shift in the valley-wide water budget) is driven by lower rangeland ET under VIC quantile-mapped inputs rather than precipitation differences. MSO is developing an alternative ET methodology for DCR 2025 that could reduce this bias.
+2. **ET quantile mapping is the dominant source of bias.** The +12% deep percolation increase in CalSimHydro (approximately 600 TAF/yr shift in the valley-wide water budget) is driven by lower rangeland ET under VIC quantile-mapped inputs rather than precipitation differences. MSO is developing an alternative ET methodology that could reduce this bias.
 
 3. **WGEN precipitation drives a consistent drying signal.** Surface runoff (-6%), small watershed recharge (-3%), delta channel depletion terms (-1.5% to -4.7%), and NDOI accretion (-6.1%) all show slight negative bias consistent with the WGEN historical period (1948--2018) producing mildly different precipitation patterns than the full CalSim baseline period.
 

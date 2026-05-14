@@ -12,19 +12,19 @@ The project uses a **10 × 100-year run** structure:
 
 This chunked structure was selected over a single continuous 1,000-year run for both practical and analytical reasons. Analytically, the 10-trace structure enables presentation as 10 cumulative distribution functions (CDFs) rather than a single seamless 1,000-year time series. This CDF framing is more appropriate for stochastic planning: decision-makers examine the range and distribution of outcomes across traces rather than treating the synthetic sequence as a literal prediction of future chronological conditions.
 
-From a practical standpoint, the reinitialization between traces ensures that each 100-year segment begins from a common reference state rather than inheriting potentially unrealistic conditions from the end of the previous trace. This prevents artifact propagation where an extreme drought ending one trace could bias operations at the start of the next. The starting conditions match the DCR 2025 benchmark initialization, providing a consistent baseline for comparison.
+From a practical standpoint, the reinitialization between traces ensures that each 100-year segment begins from a common reference state rather than inheriting potentially unrealistic conditions from the end of the previous trace. This prevents artifact propagation where an extreme drought ending one trace could bias operations at the start of the next. The starting conditions match the DCR 2023 benchmark initialization, providing a consistent baseline for comparison.
 
 Product B file chunking aligns with this structure: each input category produces 10 CSV files (`*_n01.csv` through `*_n10.csv`), with the first 9 months of each chunk skipped to align with October water year start. This water year alignment ensures that CalSim operational rules referencing annual or seasonal totals operate correctly from the first complete water year of each trace.
 
 ## Evaluation Metrics
 
-Outputs will be compared against DCR 2025 benchmark run across multiple performance dimensions:
+Outputs are compared against DCR 2023 benchmark run across multiple performance dimensions:
 
 - **Delta flows and exports**: Net Delta Outflow Index, export limits, salinity compliance
 - **Water deliveries**: State Water Project and Central Valley Project contractor allocations, shortage frequency and magnitude
 - **Reservoir storage patterns**: Seasonal drawdown-refill cycles, end-of-September carryover storage distributions, drought storage trajectories
 
-The evaluation framework emphasizes distributional comparison rather than year-by-year matching. Since the stochastic sequence represents plausible alternative hydrology rather than a prediction, success is measured by whether the 10-trace ensemble produces reasonable distributions of key performance metrics. The 10 CDFs should bracket the DCR 2025 benchmark and extend into more extreme conditions (longer droughts, larger floods) that the historical record cannot sample.
+The evaluation framework emphasizes distributional comparison rather than year-by-year matching. Since the stochastic sequence represents plausible alternative hydrology rather than a prediction, success is measured by whether the 10-trace ensemble produces reasonable distributions of key performance metrics. The 10 CDFs should bracket the DCR CalSim Historical benchmark and extend into more extreme conditions (longer droughts, larger floods) that the historical record cannot sample.
 
 ## Model Infeasibilities
 
