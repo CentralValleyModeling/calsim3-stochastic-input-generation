@@ -8,13 +8,11 @@ Delta consumptive use and seepage (DCD/DETAW)
 ```
 
 
-Delta Channel Depletion (DCD) represents consumptive use and seepage in the Sacramento-San Joaquin Delta. The model operates on a "planning study" configuration (as opposed to "historical study") to align with CalSim 3 DCR 2023. Each DCD run requires approximately 3 hours of processing time.
+Delta Channel Depletion (DCD) represents consumptive use and seepage in the Sacramento-San Joaquin Delta. The model operates on a "planning study" configuration (as opposed to "historical study") to align with CalSim 3 DCR 2023. The distinction between "planning study" and "historical study" configurations is important: the planning study configuration assumes equilibrium groundwater and land use conditions appropriate for long-term planning, matching the DCR 2023 baseline. Using the historical configuration would inject year-specific calibration adjustments that are not reproducible from synthetic climate alone. Each DCD run requires approximately 3 hours of processing time.
 
 ## Methodology
 
 Temperature and precipitation data come directly from WGEN without additional processing. The DETAW component computes crop water demands from temperature and precipitation, which then feed into the DCD model to simulate agricultural water use, seepage, and return flows across Delta islands. The DCD version 2.1 was downloaded for this project, with key inputs including groundwater contribution rate (held constant at 0.4 for the planning study configuration), irrigation efficiency parameters, and land use classifications.
-
-The distinction between "planning study" and "historical study" configurations is important: the planning study configuration assumes equilibrium groundwater and land use conditions appropriate for long-term planning, matching the DCR 2023 baseline. Using the historical configuration would inject year-specific calibration adjustments that are not reproducible from synthetic climate alone.
 
 The master inventory requires 28 DCD variables, but direct model output contains only 24. Four additional aggregated variables--Delta_DP, Delta_GW, DPWA_50, and DPWA_60--are generated through post-processing that combines island-level outputs into larger spatial units. Mohammad Hasan at MSO provided the weighted aggregation scheme: a two-column weight matrix where columns sum to 1.0, enabling proper spatial averaging from island-scale DCD results to the aggregated zones CalSim expects. The aggregation produces 2 groundwater flow variables and 2 deep percolation variables, completing the 28-variable inventory.
 
