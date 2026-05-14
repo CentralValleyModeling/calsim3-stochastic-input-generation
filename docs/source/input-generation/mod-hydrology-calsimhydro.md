@@ -34,10 +34,12 @@ Monthly analysis across all WBAs confirmed these patterns at seasonal resolution
 ::::{tab-set}
 :::{tab-item} CS-Hydro ET Response
 ![CalSimHydro QM-ET Response](figures/s3-inputs_calsimhydro-qm-et-response.png)
+
 *CalSimHydro annual average difference from historical (TAF) for the QM-ET scenario, stacked by land type (Urban, Rangeland, Refuge, AG Rice, AG Others). Deep percolation (DP) shows the largest change at +12% (~600 TAF), dominated by rangeland where lower ET leaves more water for percolation. Applied water (AW) increases +2% as irrigation compensates for higher potential ET. Total ET decreases -2%.*
 :::
 :::{tab-item} CS-Hydro Precip Response
 ![CalSimHydro Precipitation Response](figures/s3-inputs_calsimhydro-precipitation-response.png)
+
 *CalSimHydro annual average difference from historical (TAF) for the WGEN precipitation scenario, stacked by land type. Surface runoff (SR) shows the largest response at -9% (~-350 TAF), followed by precipitation (PR) at -3% and deep percolation (DP) at -2%. Applied water, ET, and ETAW are effectively unchanged, confirming that precipitation changes propagate primarily through the runoff and percolation pathways.*
 :::
 :::{tab-item} Monthly Applied Water
