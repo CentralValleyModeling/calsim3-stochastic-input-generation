@@ -18,7 +18,6 @@ The distinction between "planning study" and "historical study" configurations i
 
 The master inventory requires 28 DCD variables, but direct model output contains only 24. Four additional aggregated variables--Delta_DP, Delta_GW, DPWA_50, and DPWA_60--are generated through post-processing that combines island-level outputs into larger spatial units. Mohammad Hasan at MSO provided the weighted aggregation scheme: a two-column weight matrix where columns sum to 1.0, enabling proper spatial averaging from island-scale DCD results to the aggregated zones CalSim expects. The aggregation produces 2 groundwater flow variables and 2 deep percolation variables, completing the 28-variable inventory.
 
-Input labeling follows an important naming convention: files are labeled "WGen precip" rather than "VIC precip" to accurately reflect the data lineage, since DCD receives WGEN climate directly without VIC intermediation.
 
 ## Results
 
