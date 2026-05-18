@@ -26,8 +26,8 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 import seaborn as sns
-from pydsstools.heclib.dss import HecDss
 
+from utils import csv_io, dss_io
 from utils.quantile_mapping import qmap_single
 
 _REQUIRED_COLS = ["target_part_b", "target_part_c",
@@ -67,19 +67,6 @@ def norm_token(value) -> str:
     return clean_text(value).upper()
 
 
-def _date_range_me(start, end=None, **kwargs) -> pd.DatetimeIndex:
-    """Return a month-end DatetimeIndex, compatible with old and new pandas.
-
-    pandas >= 2.2 uses ``freq="ME"``; older versions require ``freq="M"``.
-    Catches the ``ValueError`` that older pandas raises for an unknown
-    frequency alias.
-    """
-    try:
-        return pd.date_range(start, end, freq="ME", **kwargs)
-    except ValueError:
-        return pd.date_range(start, end, freq="M", **kwargs)
-
-
 # -- Pair CSV reader ----------------------------------------------------------
 def read_qmap_pairs(pair_csv: str | Path) -> pd.DataFrame:
     """Read and validate qmap_pairs.csv.
@@ -91,8 +78,7 @@ def read_qmap_pairs(pair_csv: str | Path) -> pd.DataFrame:
       lower_bound, upper_bound, allow_negative (True/False, default False)
     """
     pair_csv = Path(pair_csv)
-    df = pd.read_csv(pair_csv, skipinitialspace=True)
-    df.columns = [str(c).strip() for c in df.columns]
+    df = csv_io.read_sv_csv(pair_csv)
 
     missing = [c for c in _REQUIRED_COLS if c not in df.columns]
     if missing:
@@ -163,6 +149,9 @@ def read_calsim_monthly_pairs(
     """Read multiple CalSim monthly DSS series keyed by (B-part, C-part).
 
     Returns ``dict[(B_upper, C_upper)] -> pd.Series`` with month-end index.
+    Thin wrapper over ``utils.dss_io``; opens the DSS file directly (no
+    junction, ``catalog_flag=True``) to preserve this engine's historical
+    behavior of reading the long-path-prefixed file directly.
     """
     requested = {
         (norm_token(b), norm_token(c))
@@ -172,37 +161,11 @@ def read_calsim_monthly_pairs(
     if not requested:
         return {}
 
-    full_idx = _date_range_me(dss_read_start, dss_read_end)
-    out = {}
-
-    with HecDss.Open(str(dssfile), version=6, catalog_flag=True) as dss:
-        paths = dss.getPathnameList("/*/*/*/*/1MON/*")
-        bucket = {}
-
-        for path in paths:
-            parts = path.strip("/").split("/")
-            if len(parts) != 6:
-                continue
-            key = (parts[1].strip().upper(), parts[2].strip().upper())
-            if key in requested:
-                bucket.setdefault(key, []).append(path)
-
-        for key in sorted(requested):
-            if key not in bucket:
-                continue
-            master = pd.Series(index=full_idx, dtype=float)
-            for path in sorted(bucket[key],
-                               key=lambda x: (x.strip("/").split("/")[3], x)):
-                ts = dss.read_ts(path, trim_missing=True)
-                vals = np.asarray(ts.values, dtype=float)
-                vals = np.where(vals <= -900, np.nan, vals)
-                idx = (pd.to_datetime(ts.pytimes).to_period("M") - 1
-                       ).to_timestamp("M")
-                master.update(pd.Series(vals, index=idx))
-            if master.notna().any():
-                out[key] = master
-
-    return out
+    with dss_io.open_dss(str(dssfile), version=6, catalog_flag=True,
+                         use_junction=False) as dss:
+        return dss_io.read_monthly_series(
+            dss, requested, dss_read_start, dss_read_end,
+        )
 
 
 # -- Series helpers -----------------------------------------------------------
@@ -219,16 +182,8 @@ def ser_to_df(series):
 # -- Filesystem helpers -------------------------------------------------------
 
 def _safe_makedirs(path):
-    """Create directories, stripping the \\\\?\\ long-path prefix first.
-
-    On Python 3.8 + Windows, ``os.makedirs`` cannot resolve the root of a
-    ``\\\\?\\X:\\`` path, causing infinite recursion.  Stripping the prefix
-    before the call avoids the issue without modifying ``utils/paths.py``.
-    """
-    s = str(path)
-    if s.startswith("\\\\?\\"):
-        s = s[4:]
-    os.makedirs(s, exist_ok=True)
+    """Delegates to ``utils.dss_io.safe_makedirs`` (faithful copy)."""
+    dss_io.safe_makedirs(path)
 
 
 def nse(sim, obs):
@@ -264,19 +219,9 @@ def load_product_a_rim_series(csv_path, part_b, part_c):
     """Load a specific Part B + Part C series from the Product A rim inflow CSV.
 
     Returns a monthly ``pd.Series`` with month-end ``DatetimeIndex``.
+    Delegates to ``utils.csv_io.load_sv_series`` (faithful copy).
     """
-    csv_path = Path(csv_path)
-    df = pd.read_csv(csv_path)
-    mask_b = df["Part B"].str.upper().str.strip() == part_b.upper().strip()
-    mask_c = df["Part C"].str.upper().str.strip() == part_c.upper().strip()
-    sub = df.loc[mask_b & mask_c].copy()
-    if sub.empty:
-        return pd.Series(dtype=float)
-    dates = pd.to_datetime(
-        sub["Year"].astype(str) + "-" + sub["Month"].astype(str) + "-01"
-    )
-    dates = dates + pd.offsets.MonthEnd(0)
-    return pd.Series(sub["Value"].values.astype(float), index=dates).sort_index()
+    return csv_io.load_sv_series(csv_path, part_b, part_c)
 
 
 # -- Plot styling -------------------------------------------------------------
