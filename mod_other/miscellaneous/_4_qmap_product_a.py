@@ -41,7 +41,6 @@ column in qmap_pairs.csv (True/False).  If the column is absent, the
 ``ALLOW_NEGATIVE`` flag below is used as the fallback default for all pairs.
 """
 
-# %% -- IMPORTS ---------------------------------------------------------------
 import sys
 from pathlib import Path
 
@@ -49,23 +48,27 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 from utils.paths import get_base_dir, get_module_generated_dir
 from utils.qmap_product_a_from_pairs import run_product_a_qmap_from_pairs
 
-# %% -- CONFIG ----------------------------------------------------------------
-ALLOW_NEGATIVE = False  # Fallback when CSV has no allow_negative column
+# Fallback when qmap_pairs.csv has no allow_negative column
+ALLOW_NEGATIVE = False
 
-# %% -- PATHS -----------------------------------------------------------------
-_SCRIPT_DIR = Path(__file__).resolve().parent
-_gen = get_module_generated_dir("mod_other/miscellaneous")
-_rim_gen = get_module_generated_dir("mod_hydrology/rim_inflow")
 
-# %% -- RUN -------------------------------------------------------------------
-run_product_a_qmap_from_pairs(
-    pair_csv=_SCRIPT_DIR / "reference" / "qmap_pairs.csv",
-    dss_file=get_base_dir() / "CalSim3" / "__calsim_sv_default__.dss",
-    product_a_rim_csv=(
-        _rim_gen / "output" / "_2_qmap_historical_validation"
-        / "_product_a_validation" / "_riminflow_productA_1972_2018.csv"
-    ),
-    output_dir=_gen / "output" / "_4_qmap_product_a",
-    validation_dir=_gen / "output" / "_product_a_validation",
-    allow_negative=ALLOW_NEGATIVE,
-)
+def main():
+    script_dir = Path(__file__).resolve().parent
+    gen = get_module_generated_dir("mod_other/miscellaneous")
+    rim_gen = get_module_generated_dir("mod_hydrology/rim_inflow")
+
+    run_product_a_qmap_from_pairs(
+        pair_csv=script_dir / "reference" / "qmap_pairs.csv",
+        dss_file=get_base_dir() / "CalSim3" / "__calsim_sv_default__.dss",
+        product_a_rim_csv=(
+            rim_gen / "output" / "_2_qmap_historical_validation"
+            / "_product_a_validation" / "_riminflow_productA_1972_2018.csv"
+        ),
+        output_dir=gen / "output" / "_4_qmap_product_a",
+        validation_dir=gen / "output" / "_product_a_validation",
+        allow_negative=ALLOW_NEGATIVE,
+    )
+
+
+if __name__ == "__main__":
+    main()
