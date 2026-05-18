@@ -97,4 +97,8 @@ python _2_run_reservoir_evap.py --Product_B  # Product B
 
 ### 5. Documentation
 
-TODO
+Sphinx site: `cd docs && make html` (output `docs/_build/html`).
+
+**Execution runbooks** (standalone, not part of the Sphinx build):
+
+- [Product A Validation Runbook](docs/manifests/Product_A_Validation_Manifest.md)
