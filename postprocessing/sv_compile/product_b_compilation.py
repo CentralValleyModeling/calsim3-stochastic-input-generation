@@ -34,8 +34,18 @@ Diagnostic outputs  (all written to ``product_b_compilation/``)
 - ``product_b_vs_a_comparison.csv``
 - ``product_b_vs_calsim_base_comparison.csv``
 - ``compilation_summary.txt``
+- ``figures/vs_product_a/weighted_annual_pctdiff_by_category.png``
+- ``figures/vs_product_a/weighted_annual_pctdiff_by_category_clipped.png``
+- ``figures/vs_product_a/unweighted_annual_pctdiff_by_category.png``
+- ``figures/vs_product_a/unweighted_annual_pctdiff_by_category_clipped.png``
+- ``figures/vs_product_a/wy_exceedance_rank_shift_concept.png``
 - ``figures/vs_product_a/chunk_spread_by_category/*.png``
 - ``figures/vs_product_a/monthly_climatology/<category>/*.png``
+- ``figures/vs_calsim_base/weighted_annual_pctdiff_by_category.png``
+- ``figures/vs_calsim_base/weighted_annual_pctdiff_by_category_clipped.png``
+- ``figures/vs_calsim_base/unweighted_annual_pctdiff_by_category.png``
+- ``figures/vs_calsim_base/unweighted_annual_pctdiff_by_category_clipped.png``
+- ``figures/vs_calsim_base/wy_exceedance_rank_shift_concept.png``
 - ``figures/vs_calsim_base/chunk_spread_by_category/*.png``
 - ``figures/vs_calsim_base/monthly_climatology/<category>/*.png``
 
@@ -44,6 +54,7 @@ CLI flags
 - ``--skip-comparison``  Skip the Product A vs B comparison step.
 - ``--skip-dss``         Skip DSS file generation.
 - ``--chunks 1 2 3``     Process only specific chunks (default: all 10).
+- ``--summary-figures``  Regenerate only the summary figures from a previous comparison CSV.
 """
 
 import os
@@ -550,6 +561,50 @@ def read_product_a_monthly_means(product_a_dss: Path, baseline_bucket: dict,
     return result
 
 
+def read_product_a_monthly_series(product_a_dss: Path,
+                                  keys_to_read: set) -> dict:
+    """Read Product A compiled DSS monthly series per (Part B, Part C)."""
+    from pydsstools.heclib.dss import HecDss
+
+    use_junction = len(str(product_a_dss)) > _PATH_LIMIT
+    if use_junction:
+        _create_junction(product_a_dss.parent)
+        atexit.register(_remove_junction)
+        dss_path = str(_DSS_LINK / product_a_dss.name)
+    else:
+        dss_path = str(product_a_dss)
+
+    result = {}
+    with HecDss.Open(dss_path, version=6, catalog_flag=True) as dss:
+        pa_paths = dss.getPathnameList(DSS_PATTERN)
+        pa_bucket = {}
+        for p in pa_paths:
+            k = path_key(p)
+            pa_bucket.setdefault(k, []).append(p)
+
+        for pk in sorted(keys_to_read):
+            if pk not in pa_bucket:
+                continue
+            merged = {}
+            for pathname in pa_bucket[pk]:
+                try:
+                    ts = dss.read_ts(pathname, trim_missing=False)
+                except Exception:
+                    continue
+                eom = dss_eom(ts.pytimes)
+                vals = np.array(ts.values, dtype=float)
+                for i, dt in enumerate(eom):
+                    if vals[i] > -900 and PA_START <= dt <= PA_END:
+                        merged[pd.Timestamp(dt)] = vals[i]
+            if merged:
+                result[pk] = pd.Series(merged).sort_index()
+
+    if use_junction:
+        _remove_junction()
+
+    return result
+
+
 def read_calsim_base_monthly_means(baseline_bucket: dict,
                                    keys_to_read: set,
                                    start: pd.Timestamp,
@@ -586,6 +641,58 @@ def read_calsim_base_monthly_means(baseline_bucket: dict,
                     monthly_means[m] = mm.mean()
             result[pk] = monthly_means
     return result
+
+
+def read_calsim_base_monthly_series(baseline_bucket: dict,
+                                    keys_to_read: set,
+                                    start: pd.Timestamp,
+                                    end: pd.Timestamp) -> dict:
+    """Read CalSim baseline DSS monthly series per (Part B, Part C)."""
+    from pydsstools.heclib.dss import HecDss
+
+    result = {}
+    with HecDss.Open(str(BASELINE_DSS), version=6) as dss:
+        for pk in sorted(keys_to_read):
+            if pk not in baseline_bucket:
+                continue
+            merged = {}
+            for pathname in baseline_bucket[pk]:
+                try:
+                    ts = dss.read_ts(pathname, trim_missing=False)
+                except Exception:
+                    continue
+                eom = dss_eom(ts.pytimes)
+                vals = np.array(ts.values, dtype=float)
+                for i, dt in enumerate(eom):
+                    if vals[i] > -900 and start <= dt <= end:
+                        merged[pd.Timestamp(dt)] = vals[i]
+            if merged:
+                result[pk] = pd.Series(merged).sort_index()
+    return result
+
+
+def _load_compiled_chunks_from_csv(active_tags):
+    """Reload compiled Product B chunk CSVs for --summary-figures mode."""
+    compiled_chunks = {}
+    required = {"Part B", "Part C", "Year", "Month", "Value"}
+    for tag in active_tags:
+        csv_path = COMPILED_DIR / f"ProductB_SV_{tag}.csv"
+        if not csv_path.exists():
+            continue
+        df = pd.read_csv(csv_path)
+        df.columns = [c.strip() for c in df.columns]
+        if not required.issubset(df.columns):
+            continue
+        df["Part B"] = df["Part B"].apply(excel_to_part)
+        df["Part C"] = df["Part C"].apply(excel_to_part)
+        df["Year"] = pd.to_numeric(df["Year"], errors="coerce").astype("Int64")
+        df["Month"] = pd.to_numeric(df["Month"], errors="coerce").astype("Int64")
+        df["Value"] = pd.to_numeric(df["Value"], errors="coerce")
+        df = df.dropna(subset=["Year", "Month", "Value"]).copy()
+        df["Year"] = df["Year"].astype(int)
+        df["Month"] = df["Month"].astype(int)
+        compiled_chunks[tag] = df[["Part B", "Part C", "Year", "Month", "Value"]]
+    return compiled_chunks
 
 
 def _compute_pb_chunk_means(compiled_chunks, active_tags, start_ym=None, end_ym=None):
@@ -667,8 +774,10 @@ def _build_comparison_df(ref_means, pb_chunk_means, all_compiled_svs, active_tag
 
 
 def _generate_comparison_figures(cmp_df, fig_dir, ref_label, active_tags,
-                                units_map, skip_climatology=False):
-    """Generate chunk_spread and monthly_climatology figures for a comparison."""
+                                units_map, skip_climatology=False,
+                                ref_series_by_pk=None,
+                                compiled_chunks=None):
+    """Generate summary, chunk_spread, and monthly_climatology figures."""
     import matplotlib
     matplotlib.use("Agg")
     import matplotlib.pyplot as plt
@@ -686,9 +795,142 @@ def _generate_comparison_figures(cmp_df, fig_dir, ref_label, active_tags,
     _MONTH_LABELS = ["Oct", "Nov", "Dec", "Jan", "Feb", "Mar",
                      "Apr", "May", "Jun", "Jul", "Aug", "Sep"]
     _SUM_UNITS = {"TAF", "IN", "INCHES"}
+    _CATS_GROUPED_BY_MODULE = [
+        "CalSimHydro", "CalSimHydroEE", "Rim Inflow",
+        "Delta Channel Depletion", "Small Watersheds",
+        "Tulare Groundwater Terms",
+        "Reservoir Evaporation", "Reservoir Storage Curves",
+        "Climate",
+        "Closure Terms", "Day-Volume Fraction", "Salinity",
+        "Instream Flows", "Other", "Upper Watershed Modules",
+    ]
+    _CAT_TO_MODULE_GROUP = {
+        "CalSimHydro":              "mod_hydrology",
+        "CalSimHydroEE":            "mod_hydrology",
+        "Rim Inflow":               "mod_hydrology",
+        "Delta Channel Depletion":  "mod_hydrology",
+        "Small Watersheds":         "mod_hydrology",
+        "Tulare Groundwater Terms": "mod_hydrology",
+        "Reservoir Evaporation":    "mod_reservoir",
+        "Reservoir Storage Curves": "mod_reservoir",
+        "Climate":                  "mod_forcing",
+        "Closure Terms":            "mod_other",
+        "Day-Volume Fraction":      "mod_other",
+        "Salinity":                 "mod_other",
+        "Instream Flows":           "mod_other",
+        "Other":                    "mod_other",
+        "Upper Watershed Modules":  "mod_other",
+    }
+    _LABEL_BREAKS = {
+        "Delta Channel Depletion":  "Delta Channel\nDepletion",
+        "Tulare Groundwater Terms": "Tulare Groundwater\nTerms",
+        "Reservoir Evaporation":    "Reservoir\nEvaporation",
+        "Reservoir Storage Curves": "Reservoir\nStorage Curves",
+        "Upper Watershed Modules":  "Upper Watershed\nModules",
+        "Instream Flows":           "Instream\nFlows",
+        "Small Watersheds":         "Small\nWatersheds",
+    }
+
+    def _ordered_categories(categories):
+        present = set(categories)
+        ordered = [c for c in _CATS_GROUPED_BY_MODULE if c in present]
+        ordered += sorted(present - set(ordered))
+        return ordered
+
+    def _add_module_group_brackets(ax, fig, categories):
+        groups = []
+        prev_group = None
+        for i, cat in enumerate(categories):
+            group_name = _CAT_TO_MODULE_GROUP.get(cat, "")
+            if group_name == prev_group and groups:
+                groups[-1]["end"] = i
+            else:
+                groups.append({"name": group_name, "start": i, "end": i})
+                prev_group = group_name
+
+        fig.canvas.draw()
+        trans = ax.get_xaxis_transform()
+        bracket_y = -0.48
+        tick_y = -0.44
+        label_y = -0.54
+
+        for group in groups:
+            if not group["name"]:
+                continue
+            x_start = group["start"] + 1
+            x_end = group["end"] + 1
+            x_mid = (x_start + x_end) / 2.0
+            ax.plot([x_start - 0.3, x_end + 0.3], [bracket_y, bracket_y],
+                    transform=trans, color="0.3", lw=0.8, clip_on=False)
+            ax.plot([x_start - 0.3, x_start - 0.3], [tick_y, bracket_y],
+                    transform=trans, color="0.3", lw=0.8, clip_on=False)
+            ax.plot([x_end + 0.3, x_end + 0.3], [tick_y, bracket_y],
+                    transform=trans, color="0.3", lw=0.8, clip_on=False)
+            ax.text(x_mid, label_y, group["name"],
+                    transform=trans, ha="center", va="top",
+                    fontsize=6, fontstyle="italic", color="0.3",
+                    clip_on=False)
+
+    def _weighted_quantile(values, weights, quantiles):
+        values = np.asarray(values, dtype=float)
+        weights = np.asarray(weights, dtype=float)
+        quantiles = np.asarray(quantiles, dtype=float)
+        mask = np.isfinite(values) & np.isfinite(weights) & (weights > 0)
+        values = values[mask]
+        weights = weights[mask]
+        if len(values) == 0:
+            return np.full(len(quantiles), np.nan)
+        sorter = np.argsort(values)
+        values = values[sorter]
+        weights = weights[sorter]
+        cumulative = np.cumsum(weights) - 0.5 * weights
+        cumulative /= np.sum(weights)
+        return np.interp(quantiles, cumulative, values,
+                         left=values[0], right=values[-1])
+
+    def _weighted_box_stats(values, weights, label):
+        values = np.asarray(values, dtype=float)
+        weights = np.asarray(weights, dtype=float)
+        mask = np.isfinite(values) & np.isfinite(weights) & (weights > 0)
+        values = values[mask]
+        weights = weights[mask]
+        if len(values) == 0:
+            return None
+        q1, med, q3 = _weighted_quantile(values, weights, [0.25, 0.50, 0.75])
+        iqr = q3 - q1
+        if np.isfinite(iqr) and iqr > 0:
+            lower_fence = q1 - 1.5 * iqr
+            upper_fence = q3 + 1.5 * iqr
+            inside = values[(values >= lower_fence) & (values <= upper_fence)]
+            outside = values[(values < lower_fence) | (values > upper_fence)]
+            if len(inside) > 0:
+                whislo = float(np.nanmin(inside))
+                whishi = float(np.nanmax(inside))
+            else:
+                whislo = float(q1)
+                whishi = float(q3)
+        else:
+            outside = np.array([])
+            whislo = float(q1)
+            whishi = float(q3)
+        return {
+            "label": label,
+            "whislo": whislo,
+            "q1": float(q1),
+            "med": float(med),
+            "q3": float(q3),
+            "whishi": whishi,
+            "fliers": outside.tolist(),
+        }
 
     fig_dir.mkdir(parents=True, exist_ok=True)
     cats_present = sorted(cmp_df["Input_Category"].dropna().unique())
+
+    inv = read_master_inventory()
+    const_rept_map = {
+        (r["Part_B"], r["Part_C"]): bool(r["Constant_Rept"])
+        for _, r in inv.iterrows()
+    }
 
     # -- Aggregate to mean-annual values --
     annual_rows = []
@@ -700,7 +942,8 @@ def _generate_comparison_figures(cmp_df, fig_dir, ref_label, active_tags,
         ref_ann = float(np.nansum(ref_vals) if use_sum
                         else np.nanmean(ref_vals))
         row = {"Part_B": b, "Part_C": c, "Units": unit,
-               "Input_Category": cat, "Ref_annual": ref_ann}
+               "Input_Category": cat, "Ref_annual": ref_ann,
+               "Constant_Rept": const_rept_map.get((b, c), False)}
         for tag in active_tags:
             col = f"{tag}_mean"
             if col not in grp.columns:
@@ -721,6 +964,732 @@ def _generate_comparison_figures(cmp_df, fig_dir, ref_label, active_tags,
         annual_rows.append(row)
 
     annual_df = pd.DataFrame(annual_rows)
+
+    # Exclude CalSimHydro terms that are identical in historical and
+    # stochastic (constant repeating or water-demand/wastewater policy
+    # inputs that are unchanged by design).
+    _CALSIMHYDRO_PARTC_EXCL = {"URBAN-DEMAND", "WASTEWATER"}
+    _excl_mask = (
+        (annual_df["Input_Category"] == "CalSimHydro")
+        & (annual_df["Part_C"].isin(_CALSIMHYDRO_PARTC_EXCL))
+    )
+    annual_df = annual_df[~_excl_mask].copy()
+
+    # -- Weighted all-category summary ---------------------------------
+    summary_df = annual_df[~annual_df["Constant_Rept"]].copy()
+    summary_rows = []
+    if not summary_df.empty:
+        for cat, cat_df in summary_df.groupby("Input_Category"):
+            ref_abs = cat_df["Ref_annual"].abs().replace([np.inf, -np.inf], np.nan)
+            valid_ref = ref_abs.notna() & (ref_abs > 1e-9)
+            if valid_ref.any():
+                base_weights = ref_abs.where(valid_ref, np.nan)
+            else:
+                base_weights = pd.Series(1.0, index=cat_df.index)
+
+            for idx, row in cat_df.iterrows():
+                pct_cols = [f"{tag}_pct_diff" for tag in active_tags
+                            if f"{tag}_pct_diff" in cat_df.columns
+                            and np.isfinite(row.get(f"{tag}_pct_diff", np.nan))]
+                if not pct_cols:
+                    continue
+                term_weight = base_weights.loc[idx]
+                if not np.isfinite(term_weight) or term_weight <= 0:
+                    term_weight = 0.0
+                obs_weight = term_weight / len(pct_cols) if pct_cols else np.nan
+                for tag in active_tags:
+                    pct_col = f"{tag}_pct_diff"
+                    ann_col = f"{tag}_annual"
+                    abs_col = f"{tag}_abs_diff"
+                    pct_val = row.get(pct_col, np.nan)
+                    if not np.isfinite(pct_val):
+                        continue
+                    summary_rows.append({
+                        "Input_Category": cat,
+                        "Part_B": row["Part_B"],
+                        "Part_C": row["Part_C"],
+                        "Units": row["Units"],
+                        "Chunk": tag,
+                        "Ref_annual": row["Ref_annual"],
+                        "Chunk_annual": row.get(ann_col, np.nan),
+                        "Pct_Diff": pct_val,
+                        "Abs_Diff": row.get(abs_col, np.nan),
+                        "Weight_Base": term_weight,
+                        "Observation_Weight": obs_weight,
+                    })
+
+    weighted_summary_df = pd.DataFrame(summary_rows)
+    if not weighted_summary_df.empty:
+        totals = weighted_summary_df.groupby("Input_Category")["Observation_Weight"].transform("sum")
+        weighted_summary_df["Weight_Share"] = np.where(
+            totals > 0,
+            weighted_summary_df["Observation_Weight"] / totals,
+            np.nan,
+        )
+        weighted_summary_df.to_csv(
+            fig_dir / "weighted_annual_pctdiff_by_category.csv", index=False
+        )
+
+        plot_categories = _ordered_categories(weighted_summary_df["Input_Category"].unique())
+        term_counts = weighted_summary_df.groupby("Input_Category")[["Part_B", "Part_C"]].apply(
+            lambda x: len(set(zip(x["Part_B"], x["Part_C"])))
+        )
+        stats = []
+        box_labels = []
+        plot_categories_used = []
+        for cat in plot_categories:
+            sub = weighted_summary_df[weighted_summary_df["Input_Category"] == cat]
+            stat = _weighted_box_stats(
+                sub["Pct_Diff"].values,
+                sub["Observation_Weight"].values,
+                cat,
+            )
+            if stat is None:
+                continue
+            stats.append(stat)
+            box_labels.append(
+                f"{_LABEL_BREAKS.get(cat, cat)}\n(n={int(term_counts.get(cat, 0))})"
+            )
+            plot_categories_used.append(cat)
+
+        def _save_category_boxplot(bx_stats, bx_labels, bx_cats, fname, title,
+                                   ylim=None, showfliers=False, symlog=False,
+                                   linthresh=5):
+            fig, ax = plt.subplots(
+                figsize=(min(7, 0.65 * len(bx_cats) + 2), 5.0)
+            )
+            bp = ax.bxp(bx_stats, patch_artist=True, widths=0.6,
+                        showfliers=showfliers)
+            for patch in bp["boxes"]:
+                patch.set_facecolor("#5B9BD5")
+                patch.set_alpha(0.7)
+            for cap in bp["caps"]:
+                cap.set_visible(False)
+            if showfliers:
+                for flier in bp["fliers"]:
+                    flier.set(marker="o", markersize=1,
+                              markerfacecolor="k", markeredgecolor="none")
+            ax.set_xticklabels(bx_labels, rotation=90, ha="center")
+            ax.axhline(0.0, color="red", ls="--", lw=0.6, alpha=0.5)
+            if symlog:
+                ax.set_yscale("symlog", linthresh=linthresh)
+                ax.yaxis.set_major_formatter(
+                    plt.FuncFormatter(lambda v, _: f"{v:g}")
+                )
+                ax.yaxis.set_minor_locator(
+                    plt.matplotlib.ticker.AutoMinorLocator()
+                )
+                ax.grid(which="minor", axis="y", color="#cccccc",
+                        linestyle="--", linewidth=0.4, alpha=0.7)
+            if ylim is not None:
+                ax.set_ylim(ylim)
+            ax.set_ylabel(f"Average Annual % Diff (vs {ref_label})")
+            ax.set_title(title)
+            _add_module_group_brackets(ax, fig, bx_cats)
+            fig.subplots_adjust(bottom=0.40)
+            fig.savefig(fig_dir / fname, bbox_inches="tight")
+            plt.close(fig)
+            print(f"    Figure: {fig_dir.name}/{fname}")
+
+        if stats:
+            _base_title = (
+                f"Product B Chunk Average Annual % Difference by Input Category\n"
+                f"weighted by abs({ref_label} annual average), excl. Constant/Rept"
+            )
+            _save_category_boxplot(
+                stats, box_labels, plot_categories_used,
+                "weighted_annual_pctdiff_by_category.png",
+                _base_title,
+            )
+            _save_category_boxplot(
+                stats, box_labels, plot_categories_used,
+                "weighted_annual_pctdiff_by_category_clipped.png",
+                _base_title + "  [y: \u221240 to +40%]",
+                ylim=(-40, 40), showfliers=False,
+            )
+
+        # -- Unweighted version (uniform weights) ----------------------
+        unweighted_stats = []
+        unweighted_labels = []
+        unweighted_cats_used = []
+        for cat in plot_categories:
+            sub = weighted_summary_df[weighted_summary_df["Input_Category"] == cat]
+            uw_stat = _weighted_box_stats(
+                sub["Pct_Diff"].values,
+                np.ones(len(sub)),
+                cat,
+            )
+            if uw_stat is None:
+                continue
+            unweighted_stats.append(uw_stat)
+            unweighted_labels.append(
+                f"{_LABEL_BREAKS.get(cat, cat)}\n(n={int(term_counts.get(cat, 0))})"
+            )
+            unweighted_cats_used.append(cat)
+
+        if unweighted_stats:
+            _uw_title = (
+                f"Product B Chunk Average Annual % Difference by Input Category\n"
+                f"unweighted, excl. Constant/Rept"
+            )
+            _save_category_boxplot(
+                unweighted_stats, unweighted_labels, unweighted_cats_used,
+                "unweighted_annual_pctdiff_by_category.png",
+                _uw_title,
+            )
+            _save_category_boxplot(
+                unweighted_stats, unweighted_labels, unweighted_cats_used,
+                "unweighted_annual_pctdiff_by_category_clipped.png",
+                _uw_title + "  [y: \u221240 to +40%]",
+                ylim=(-40, 40), showfliers=False,
+            )
+            _save_category_boxplot(
+                unweighted_stats, unweighted_labels, unweighted_cats_used,
+                "unweighted_annual_pctdiff_by_category_symlog.png",
+                _uw_title + "  [symlog scale]",
+                showfliers=False, symlog=True,
+            )
+
+    # -- Per-category WY exceedance distribution diagnostics -----------
+    def _safe_fig_name(name):
+        safe = "".join(ch.lower() if ch.isalnum() else "_" for ch in str(name))
+        while "__" in safe:
+            safe = safe.replace("__", "_")
+        return safe.strip("_") or "category"
+
+    def _annual_values_from_monthly_df(df_monthly, unit):
+        if df_monthly.empty:
+            return np.array([], dtype=float)
+        work = df_monthly[["Year", "Month", "Value"]].copy()
+        work = work[np.isfinite(work["Value"])]
+        if work.empty:
+            return np.array([], dtype=float)
+        work["WY"] = work["Year"] + (work["Month"] >= 10).astype(int)
+        grouped = work.groupby("WY")["Value"]
+        counts = grouped.count()
+        if str(unit).upper() in _SUM_UNITS:
+            annual = grouped.sum()
+        else:
+            annual = grouped.mean()
+        annual = annual[counts == 12]
+        return annual.replace([np.inf, -np.inf], np.nan).dropna().values
+
+    def _annual_values_from_series(ser, unit):
+        if ser is None or len(ser) == 0:
+            return np.array([], dtype=float)
+        idx = pd.DatetimeIndex(ser.index)
+        df_monthly = pd.DataFrame({
+            "Year": idx.year,
+            "Month": idx.month,
+            "Value": pd.to_numeric(ser.values, errors="coerce"),
+        })
+        return _annual_values_from_monthly_df(df_monthly, unit)
+
+    def _build_pb_annual_lookup():
+        """Returns {pk: np.array} -- pooled 1000-year annual values (all chunks)."""
+        lookup = {}
+        if not compiled_chunks:
+            return lookup
+        for tag in active_tags:
+            df_chunk = compiled_chunks.get(tag)
+            if df_chunk is None or df_chunk.empty:
+                continue
+            for pk, grp in df_chunk.groupby(["Part B", "Part C"]):
+                unit = units_map.get(pk, "UNKNOWN")
+                vals = _annual_values_from_monthly_df(grp, unit)
+                if len(vals) == 0:
+                    continue
+                lookup.setdefault(pk, []).append(vals)
+        return {
+            pk: np.concatenate(parts)
+            for pk, parts in lookup.items()
+            if parts
+        }
+
+    def _save_rank_shift_concept_figure():
+        rng = np.random.default_rng(42)
+        hist_vals = rng.gamma(shape=4.2, scale=15.0, size=5000)
+        pb_vals = rng.gamma(shape=4.2, scale=17.0, size=5000) + 4.0
+        ex_grid = np.linspace(99, 1, 250)
+        q_grid = 1.0 - ex_grid / 100.0
+        hist_curve = np.quantile(hist_vals, q_grid)
+        pb_curve = np.quantile(pb_vals, q_grid)
+        hist_sorted = np.sort(hist_vals)
+        hist_scale = float(np.nanmedian(np.abs(hist_vals)))
+        pct_curve = []
+        for q_prob, hq, pbq in zip(q_grid, hist_curve, pb_curve):
+            denom = abs(hq) if abs(hq) > 1e-6 else hist_scale
+            pct_curve.append((pbq - hq) / denom * 100.0)
+        pct_curve = np.asarray(pct_curve)
+
+        target_ex = 10.0
+        target_q = 1.0 - target_ex / 100.0
+        pb_target = float(np.quantile(pb_vals, target_q))
+        hist_same_rank = float(np.quantile(hist_vals, target_q))
+        pct_diff = (pb_target - hist_same_rank) / abs(hist_same_rank) * 100.0
+        target_idx = int(np.argmin(np.abs(ex_grid - target_ex)))
+
+        fig, axes = plt.subplots(1, 2, figsize=(8.6, 3.8))
+        ax0, ax1 = axes
+        ax0.plot(ex_grid, hist_curve, color="#4d4d4d", lw=1.6,
+                 label="Historical reference")
+        ax0.plot(ex_grid, pb_curve, color="#1f77b4", lw=1.8,
+                 label="Product B")
+        ax0.scatter([target_ex], [pb_target], color="#1f77b4", s=24, zorder=5)
+        ax0.scatter([target_ex], [hist_same_rank], color="#4d4d4d", s=24, zorder=5)
+        ax0.plot([target_ex, target_ex], [hist_same_rank, pb_target],
+                 color="red", lw=1.2, ls="--")
+        ax0.annotate(
+            f"pct diff = {pct_diff:+.1f}%",
+            xy=(target_ex, (hist_same_rank + pb_target) / 2.0),
+            xytext=(-60, 0), textcoords="offset points",
+            fontsize=7, color="red", ha="right", va="center",
+            arrowprops={"arrowstyle": "-", "color": "red", "lw": 0.8},
+        )
+        ax0.set_xlim(100, 0)
+        ax0.set_xlabel("Exceedance probability (%)")
+        ax0.set_ylabel("WY annual value")
+        ax0.set_title("Values at the same exceedance probability")
+        ax0.grid(color="#dddddd", linestyle="--", linewidth=0.45)
+        ax0.legend(frameon=False, loc="upper left")
+
+        ax1.plot(ex_grid, pct_curve, color="#1f4e79", lw=1.8)
+        ax1.scatter([ex_grid[target_idx]], [pct_curve[target_idx]],
+                    color="red", s=24, zorder=5)
+        ax1.axhline(0.0, color="red", ls="--", lw=0.7, alpha=0.55)
+        ax1.set_xlim(100, 0)
+        ax1.set_xlabel("Exceedance probability (%)")
+        ax1.set_ylabel("% difference (Product B vs reference)")
+        ax1.set_title("Percent difference across the distribution")
+        ax1.grid(color="#dddddd", linestyle="--", linewidth=0.45)
+        ax1.text(
+            0.02, 0.03,
+            "Positive means Product B value exceeds historical at the same exceedance probability.",
+            transform=ax1.transAxes, fontsize=6, color="0.25",
+            va="bottom", ha="left",
+        )
+        fig.suptitle(
+            f"WY exceedance distribution concept (vs {ref_label})",
+            y=1.02, fontsize=8,
+        )
+        fig.tight_layout()
+        out_path = fig_dir / "wy_exceedance_rank_shift_concept.png"
+        fig.savefig(out_path, bbox_inches="tight")
+        plt.close(fig)
+        print(f"    Figure: {fig_dir.name}/{out_path.name}")
+
+    _EXCEEDANCE_PROBS = np.array(
+        [99, 95, 90, 80, 70, 60, 50, 40, 30, 20, 10, 5, 1],
+        dtype=float,
+    )
+    _QUANTILE_PROBS = 1.0 - (_EXCEEDANCE_PROBS / 100.0)
+    _NEAR_COPY_RTOL = 0.005
+    _NEAR_COPY_ATOL_FRAC = 0.01
+
+    def _generate_summary_exceedance_figures():
+        """Per-section exceedance figures using summary-level aggregation.
+
+        Mirrors generate_summary_tables() grouping (Part-C groups, UNIMP flows,
+        Rim Total, individual Part-B terms).  For each summary term plots 10
+        individual chunk curves (n01-n10) plus a median; one figure per section
+        per metric (rank-shift and pct-diff).
+        """
+        import math
+
+        if not ref_series_by_pk or not compiled_chunks:
+            return
+
+        _inv = read_master_inventory()
+        _const_keys = set(zip(
+            _inv.loc[_inv["Constant_Rept"] == True, "Part_B"],
+            _inv.loc[_inv["Constant_Rept"] == True, "Part_C"],
+        ))
+        _cat_lk = {(r["Part_B"], r["Part_C"]): r["Input_Category"]
+                   for _, r in _inv.iterrows()}
+
+        _MEAN_CAT = {"Climate", "Reservoir Evaporation"}
+        _PARTC_SECTS = [
+            ("CalSimHydro",              "CalSimHydro"),
+            ("CalSimHydroEE",            "CalSimHydroEE"),
+            ("Reservoir Evaporation",    "ResEvap"),
+            ("Delta Channel Depletion",  "DCD"),
+            ("Small Watersheds",         "SWS"),
+            ("Tulare Groundwater Terms", "TulareGW"),
+            ("Climate",                  "Climate"),
+        ]
+        _UNIMP_TERMS = [
+            "UNIMP_FOLS", "UNIMP_ME", "UNIMP_OROV",
+            "UNIMP_SJ", "UNIMP_SRBB", "UNIMP_ST", "UNIMP_TRIN",
+            "UNIMP_TU", "UNIMP_YUBA",
+        ]
+        _UNIMP_SET = set(_UNIMP_TERMS)
+        _RIM_EXCL = (
+            _UNIMP_SET
+            | {"UNIMP_SHAS", "UNIMP_WH", "FOLSM_INFLOW", "FOLSOM_INFLOW",
+               "I_MELON_FCST", "I_MLRTN_IMP"}
+        )
+        _PARTB_SECTS = [
+            ("Reservoir Storage Curves",  "ResCurves"),
+            ("Instream Flows",            "InstreamFlows"),
+            ("Other",                     "Miscellaneous"),
+            ("Upper Watershed Modules",   "UpperWatershed"),
+        ]
+
+        out_dir = fig_dir / "summary_term_exceedance"
+        out_dir.mkdir(exist_ok=True)
+
+        _n_ch = len(active_tags)
+        _clrs = [plt.cm.tab10(i % 10) for i in range(_n_ch)]
+
+        # ── Monthly aggregation helpers ──────────────────────────────────────
+        def _agg_ref(pk_set, agg):
+            from collections import defaultdict
+            monthly = defaultdict(list)
+            for pk in pk_set:
+                ser = ref_series_by_pk.get(pk)
+                if ser is None:
+                    continue
+                for dt, val in zip(ser.index, ser.values):
+                    if np.isfinite(val):
+                        monthly[dt].append(val)
+            if not monthly:
+                return None
+            fn = sum if agg == "sum" else (lambda v: float(np.mean(v)))
+            return pd.Series({dt: fn(vals)
+                               for dt, vals in monthly.items()}).sort_index()
+
+        def _agg_chunk(tag, pk_set, agg):
+            df_ch = compiled_chunks.get(tag)
+            if df_ch is None or df_ch.empty:
+                return None
+            pk_df = pd.DataFrame(list(pk_set), columns=["Part B", "Part C"])
+            sub = df_ch.merge(pk_df, on=["Part B", "Part C"])
+            if sub.empty:
+                return None
+            grp = sub.groupby(["Year", "Month"])["Value"]
+            agg_vals = grp.sum() if agg == "sum" else grp.mean()
+            idx = [
+                pd.Timestamp(int(y), int(m), 1).to_period("M").to_timestamp("M")
+                for y, m in agg_vals.index
+            ]
+            return pd.Series(agg_vals.values,
+                             index=pd.DatetimeIndex(idx)).sort_index()
+
+        def _to_annual(ser, unit):
+            if ser is None or ser.empty:
+                return np.array([], dtype=float)
+            df_m = pd.DataFrame({
+                "Year": ser.index.year,
+                "Month": ser.index.month,
+                "Value": pd.to_numeric(ser.values, errors="coerce"),
+            })
+            return _annual_values_from_monthly_df(df_m, unit)
+
+        # ── Exceedance metric computation ────────────────────────────────────
+        def _compute_curves(ref_ann, chunk_ann_by_tag):
+            if len(ref_ann) < 5:
+                return {}, {}
+            s_ref = np.sort(ref_ann)
+            scale = float(np.nanmedian(np.abs(ref_ann)))
+            if not np.isfinite(scale) or scale <= 1e-6:
+                scale = max(abs(float(np.nanmean(ref_ann))), 1.0)
+            rank_d, pct_d = {}, {}
+            for tag, pb_ann in chunk_ann_by_tag.items():
+                if len(pb_ann) < 5:
+                    continue
+                rc, pc = [], []
+                for ex_prob, q_prob in zip(_EXCEEDANCE_PROBS, _QUANTILE_PROBS):
+                    rq = float(np.nanquantile(ref_ann, q_prob))
+                    pq = float(np.nanquantile(pb_ann, q_prob))
+                    cdf = np.searchsorted(s_ref, pq, side="right") / len(s_ref)
+                    rc.append(float((cdf - q_prob) * 100.0))
+                    denom = abs(rq) if abs(rq) > 1e-6 else scale
+                    pc.append(float((pq - rq) / denom * 100.0))
+                rank_d[tag] = np.array(rc)
+                pct_d[tag] = np.array(pc)
+            return rank_d, pct_d
+
+        def _run_section(term_pk_sets, agg_by_term, unit_by_term):
+            term_rank, term_pct, valid = {}, {}, []
+            for term, pk_set in term_pk_sets.items():
+                agg = agg_by_term.get(term, "sum")
+                unit = unit_by_term.get(term, "UNKNOWN")
+                ref_ann = _to_annual(_agg_ref(pk_set, agg), unit)
+                ch_ann = {}
+                for tag in active_tags:
+                    ann = _to_annual(_agg_chunk(tag, pk_set, agg), unit)
+                    if len(ann) >= 5:
+                        ch_ann[tag] = ann
+                rank_d, pct_d = _compute_curves(ref_ann, ch_ann)
+                if rank_d:
+                    term_rank[term] = rank_d
+                    term_pct[term] = pct_d
+                    valid.append(term)
+            return term_rank, term_pct, valid
+
+        # ── Figure generation ────────────────────────────────────────────────
+        def _plot_section(s_safe, s_label, term_rank, term_pct, term_names):
+            if not term_names:
+                return
+            n = len(term_names)
+            nc = min(3, n)
+            nr = math.ceil(n / nc)
+            fw = max(4.5, 3.6 * nc)
+            fh = max(3.2, 3.0 * nr)
+
+            for curves_d, ylabel, fsuffix in [
+                (term_rank, "Rank shift (ppt)",       "rank_shift"),
+                (term_pct,  f"% diff vs {ref_label}", "pct_diff"),
+            ]:
+                if not any(curves_d.get(t) for t in term_names):
+                    continue
+                fig, axes = plt.subplots(nr, nc, figsize=(fw, fh),
+                                         squeeze=False)
+                afl = axes.flatten()
+                for i, term in enumerate(term_names):
+                    ax = afl[i]
+                    tc = curves_d.get(term, {})
+                    for j, tag in enumerate(active_tags):
+                        v = tc.get(tag)
+                        if v is None:
+                            continue
+                        ax.plot(_EXCEEDANCE_PROBS, v,
+                                color=_clrs[j], lw=0.9, alpha=0.65, zorder=2)
+                    all_c = [tc[t] for t in active_tags if t in tc]
+                    if all_c:
+                        med = np.nanmedian(np.stack(all_c), axis=0)
+                        ax.plot(_EXCEEDANCE_PROBS, med,
+                                color="black", lw=2.0, zorder=4)
+                    ax.axhline(0.0, color="red", ls="--", lw=0.7, alpha=0.55)
+                    ax.set_xlim(100, 0)
+                    ax.set_xticks([99, 90, 70, 50, 30, 10, 1])
+                    ax.tick_params(labelsize=_FS - 1)
+                    ax.set_title(term, fontsize=_FS)
+                    ax.set_ylabel(ylabel, fontsize=_FS - 1)
+                    ax.set_xlabel("Exceedance prob. (%)", fontsize=_FS - 1)
+                    ax.grid(color="#dddddd", linestyle="--",
+                            linewidth=0.4, alpha=0.7)
+                    avals = (np.concatenate(list(tc.values()))
+                             if tc else np.array([0.0]))
+                    max_abs = float(np.nanmax(np.abs(avals)))
+                    lim = max(10.0, np.ceil(max_abs / 10) * 10)
+                    ax.set_ylim(-lim, lim)
+                for k in range(n, len(afl)):
+                    afl[k].set_visible(False)
+                leg_h = [
+                    plt.Line2D([0], [0], color=_clrs[j], lw=0.9, label=tag)
+                    for j, tag in enumerate(active_tags)
+                ] + [plt.Line2D([0], [0], color="black", lw=2.0, label="Median")]
+                leg_ncol = min(6, _n_ch + 1)
+                fig.suptitle(
+                    f"{s_label}: Product B vs {ref_label}  |  {ylabel}",
+                    fontsize=_FS + 1,
+                )
+                fig.tight_layout()
+                fig.legend(handles=leg_h, loc="upper center",
+                           ncol=leg_ncol, fontsize=_FS - 1,
+                           frameon=False,
+                           bbox_to_anchor=(0.5, 0.0),
+                           bbox_transform=fig.transFigure)
+                op = out_dir / f"{s_safe}_{fsuffix}.png"
+                fig.savefig(op, bbox_inches="tight")
+                plt.close(fig)
+                print(f"    Figure: {out_dir.name}/{op.name}")
+
+        # ── Part-C-grouped sections ──────────────────────────────────────────
+        # Part C terms to exclude from CalSimHydro (unchanged by design).
+        _CALSIMHYDRO_PC_EXCL = {"URBAN-DEMAND", "WASTEWATER"}
+
+        for cat_name, s_safe in _PARTC_SECTS:
+            agg = "mean" if cat_name in _MEAN_CAT else "sum"
+            pks_by_pc = {}
+            for (pb, pc), cat in _cat_lk.items():
+                if cat == cat_name:
+                    if cat_name == "CalSimHydro" and pc in _CALSIMHYDRO_PC_EXCL:
+                        continue
+                    pks_by_pc.setdefault(pc, set()).add((pb, pc))
+            if not pks_by_pc:
+                continue
+            unit_by_term = {
+                pc: units_map.get(next(iter(pks)), "UNKNOWN")
+                for pc, pks in pks_by_pc.items()
+            }
+            tr, tp, valid = _run_section(
+                pks_by_pc,
+                {pc: agg for pc in pks_by_pc},
+                unit_by_term,
+            )
+            _plot_section(s_safe, cat_name, tr, tp,
+                          [t for t in sorted(pks_by_pc) if t in tr])
+
+        # ── Rim Inflow — Unimpaired ──────────────────────────────────────────
+        rim_pks = {(pb, pc) for (pb, pc), cat in _cat_lk.items()
+                   if cat == "Rim Inflow"}
+        u_pks = {u: {pk for pk in rim_pks if pk[0] == u}
+                 for u in _UNIMP_TERMS}
+        u_pks = {u: s for u, s in u_pks.items() if s}
+        if u_pks:
+            unit_u = {u: units_map.get(next(iter(s)), "TAF")
+                      for u, s in u_pks.items()}
+            tr, tp, valid = _run_section(u_pks,
+                                         {u: "sum" for u in u_pks},
+                                         unit_u)
+            _plot_section("RimUNIMP", "Rim Inflow - Unimpaired",
+                          tr, tp, valid)
+
+        # ── Rim Inflow — Total ───────────────────────────────────────────────
+        rim_tot = {pk for pk in rim_pks
+                   if pk[0] not in _RIM_EXCL and "_UHH" not in pk[0]}
+        if rim_tot:
+            unit_tot = units_map.get(next(iter(rim_tot)), "TAF")
+            tr, tp, valid = _run_section(
+                {"Total": rim_tot}, {"Total": "sum"}, {"Total": unit_tot}
+            )
+            _plot_section("RimTotal", "Rim Inflow - Total", tr, tp, valid)
+
+        # ── Part-B sections ──────────────────────────────────────────────────
+        for cat_name, s_safe in _PARTB_SECTS:
+            pks_by_pb = {}
+            for (pb, pc), cat in _cat_lk.items():
+                if cat == cat_name and (pb, pc) not in _const_keys:
+                    pks_by_pb.setdefault(pb, set()).add((pb, pc))
+            if not pks_by_pb:
+                continue
+            unit_by_term = {
+                pb: units_map.get(next(iter(pks)), "UNKNOWN")
+                for pb, pks in pks_by_pb.items()
+            }
+            tr, tp, valid = _run_section(
+                pks_by_pb,
+                {pb: "sum" for pb in pks_by_pb},
+                unit_by_term,
+            )
+            _plot_section(s_safe, cat_name, tr, tp,
+                          [t for t in sorted(pks_by_pb) if t in tr])
+
+        print(f"    Figures: {out_dir.name}/")
+
+    if ref_series_by_pk and compiled_chunks:
+        dist_df = annual_df[~annual_df["Constant_Rept"]].copy()
+        pb_annual_lookup = _build_pb_annual_lookup()
+        ref_annual_lookup = {}
+        for pk, ser in ref_series_by_pk.items():
+            unit = units_map.get(pk, "UNKNOWN")
+            vals = _annual_values_from_series(ser, unit)
+            if len(vals) > 0:
+                ref_annual_lookup[pk] = vals
+
+        metric_rows = []
+        for _, row in dist_df.iterrows():
+            pk = (row["Part_B"], row["Part_C"])
+            ref_vals = ref_annual_lookup.get(pk)
+            pb_vals = pb_annual_lookup.get(pk)
+            if ref_vals is None or pb_vals is None:
+                continue
+            ref_vals = np.asarray(ref_vals, dtype=float)
+            pb_vals = np.asarray(pb_vals, dtype=float)
+            ref_vals = ref_vals[np.isfinite(ref_vals)]
+            pb_vals = pb_vals[np.isfinite(pb_vals)]
+            if len(ref_vals) < 10 or len(pb_vals) < 10:
+                continue
+
+            sorted_ref = np.sort(ref_vals)
+            ref_mean_annual = float(np.nanmean(ref_vals))
+            pb_mean_annual = float(np.nanmean(pb_vals))
+            ref_scale = float(np.nanmedian(np.abs(ref_vals)))
+            if not np.isfinite(ref_scale) or ref_scale <= 1e-6:
+                ref_scale = abs(ref_mean_annual)
+            if not np.isfinite(ref_scale) or ref_scale <= 1e-6:
+                ref_scale = 1.0
+
+            rank_values = []
+            pct_values = []
+            ref_quantiles = []
+            pb_quantiles = []
+            term_metric_rows = []
+            for ex_prob, q_prob in zip(_EXCEEDANCE_PROBS, _QUANTILE_PROBS):
+                ref_q = float(np.nanquantile(ref_vals, q_prob))
+                pb_q = float(np.nanquantile(pb_vals, q_prob))
+                hist_cdf = np.searchsorted(sorted_ref, pb_q, side="right") / len(sorted_ref)
+                rank_shift = float((hist_cdf - q_prob) * 100.0)
+                denom = abs(ref_q) if abs(ref_q) > 1e-6 else ref_scale
+                pct_diff = float((pb_q - ref_q) / denom * 100.0)
+                rank_values.append(rank_shift)
+                pct_values.append(pct_diff)
+                ref_quantiles.append(ref_q)
+                pb_quantiles.append(pb_q)
+                term_metric_rows.append({
+                    "Input_Category": row["Input_Category"],
+                    "Part_B": row["Part_B"],
+                    "Part_C": row["Part_C"],
+                    "Units": row["Units"],
+                    "Exceedance_Probability": ex_prob,
+                    "Quantile_Probability": q_prob,
+                    "Ref_Quantile": ref_q,
+                    "ProductB_Quantile": pb_q,
+                    "Rank_Shift_Ppt": rank_shift,
+                    "Pct_Diff": pct_diff,
+                    "Pct_Diff_Denominator": denom,
+                    "Ref_WY_Count": len(ref_vals),
+                    "ProductB_WY_Count": len(pb_vals),
+                    "Ref_Mean_Annual": ref_mean_annual,
+                    "ProductB_Mean_Annual": pb_mean_annual,
+                })
+
+            ref_quantiles = np.asarray(ref_quantiles, dtype=float)
+            pb_quantiles = np.asarray(pb_quantiles, dtype=float)
+            quantile_abs_diff = np.abs(pb_quantiles - ref_quantiles)
+            max_abs_quantile_diff = float(np.nanmax(quantile_abs_diff))
+            max_abs_pct_diff = float(np.nanmax(np.abs(pct_values)))
+            near_copy_atol = max(1e-8, _NEAR_COPY_ATOL_FRAC * ref_scale)
+            near_reference_copy = bool(np.allclose(
+                pb_quantiles, ref_quantiles,
+                rtol=_NEAR_COPY_RTOL, atol=near_copy_atol,
+                equal_nan=False,
+            ))
+
+            for metric_row in term_metric_rows:
+                metric_row["Near_Reference_Copy"] = near_reference_copy
+                metric_row["Near_Copy_Rtol"] = _NEAR_COPY_RTOL
+                metric_row["Near_Copy_Atol"] = near_copy_atol
+                metric_row["Max_Abs_Quantile_Diff"] = max_abs_quantile_diff
+                metric_row["Max_Abs_Pct_Diff_Across_Quantiles"] = max_abs_pct_diff
+            metric_rows.extend(term_metric_rows)
+
+        if metric_rows:
+            metrics_df = pd.DataFrame(metric_rows)
+            metrics_path = fig_dir / "wy_exceedance_distribution_metrics.csv"
+            metrics_df.to_csv(metrics_path, index=False)
+
+            summary = metrics_df.groupby(
+                ["Input_Category", "Part_B", "Part_C", "Units"],
+                as_index=False,
+            ).agg(
+                Mean_Rank_Shift_Ppt=("Rank_Shift_Ppt", "mean"),
+                Mean_Abs_Rank_Shift_Ppt=("Rank_Shift_Ppt", lambda x: np.nanmean(np.abs(x))),
+                Median_Pct_Diff=("Pct_Diff", "median"),
+                Max_Abs_Pct_Diff=("Pct_Diff", lambda x: np.nanmax(np.abs(x))),
+                Ref_WY_Count=("Ref_WY_Count", "first"),
+                ProductB_WY_Count=("ProductB_WY_Count", "first"),
+                Ref_Mean_Annual=("Ref_Mean_Annual", "first"),
+                ProductB_Mean_Annual=("ProductB_Mean_Annual", "first"),
+                Near_Reference_Copy=("Near_Reference_Copy", "first"),
+                Max_Abs_Quantile_Diff=("Max_Abs_Quantile_Diff", "first"),
+                Max_Abs_Pct_Diff_Across_Quantiles=("Max_Abs_Pct_Diff_Across_Quantiles", "first"),
+            )
+            summary_path = fig_dir / "wy_exceedance_distribution_summary.csv"
+            summary.to_csv(summary_path, index=False)
+            print(f"    CSV: {metrics_path.name}")
+            print(f"    CSV: {summary_path.name}")
+            n_near_copy = int(summary["Near_Reference_Copy"].sum())
+            if n_near_copy:
+                print(f"    Near-reference-copy terms: {n_near_copy}")
+
+            _save_rank_shift_concept_figure()
+
+        _generate_summary_exceedance_figures()
+    elif ref_series_by_pk is not None or compiled_chunks is not None:
+        print("    WARNING: WY exceedance plots skipped; missing reference or Product B series.")
 
     # -- Per-category chunk spread (one figure per category) --
     spread_dir = fig_dir / "chunk_spread_by_category"
@@ -945,6 +1914,13 @@ if CLI_ARGS.summary_figures:
     fig_root = OUTPUT_DIR / "figures"
     fig_root.mkdir(exist_ok=True)
 
+    print("  Loading compiled Product B CSVs for WY exceedance figures ...")
+    _summary_compiled_chunks = _load_compiled_chunks_from_csv(ACTIVE_TAGS)
+    if _summary_compiled_chunks:
+        print(f"  Loaded {len(_summary_compiled_chunks):,} compiled chunk CSVs")
+    else:
+        print("  WARNING: No compiled chunk CSVs found; WY exceedance figures will be skipped.")
+
     for _csv_path, _ref_col, _ref_label, _fig_subdir in _comparisons_to_plot:
         cmp_df = pd.read_csv(_csv_path)
         print(f"  Loaded {_csv_path.name} ({len(cmp_df):,} rows)")
@@ -953,11 +1929,24 @@ if CLI_ARGS.summary_figures:
         if _ref_col in cmp_df.columns:
             cmp_df = cmp_df.rename(columns={_ref_col: "Ref_mean"})
 
+        if _ref_label == "Product A" and PRODUCT_A_DSS.exists():
+            ref_series = read_product_a_monthly_series(
+                PRODUCT_A_DSS, all_compiled_svs
+            )
+        elif _ref_label == "CalSim Base":
+            ref_series = read_calsim_base_monthly_series(
+                baseline_bucket, all_compiled_svs, CB_START, CB_END
+            )
+        else:
+            ref_series = {}
+
         print(f"  Generating {_ref_label} figures ...")
         try:
             _generate_comparison_figures(
                 cmp_df, fig_root / _fig_subdir, _ref_label,
                 ACTIVE_TAGS, units_map, skip_climatology=True,
+                ref_series_by_pk=ref_series,
+                compiled_chunks=_summary_compiled_chunks,
             )
         except ImportError:
             print("  WARNING: matplotlib not available, skipping figures.")
@@ -1534,6 +2523,9 @@ if not CLI_ARGS.skip_comparison:
             PRODUCT_A_DSS, baseline_bucket, all_compiled_svs
         )
         print(f"    Product A: {len(pa_means):,} (B,C) with data in comparison window")
+        pa_series = read_product_a_monthly_series(
+            PRODUCT_A_DSS, all_compiled_svs
+        )
 
         pb_means_pa = _compute_pb_chunk_means(
             compiled_chunks, ACTIVE_TAGS,
@@ -1556,6 +2548,8 @@ if not CLI_ARGS.skip_comparison:
             _generate_comparison_figures(
                 cmp_a, fig_root / "vs_product_a", "Product A",
                 ACTIVE_TAGS, units_map, skip_climatology=False,
+                ref_series_by_pk=pa_series,
+                compiled_chunks=compiled_chunks,
             )
         except ImportError:
             print("    WARNING: matplotlib not available, skipping figures.")
@@ -1567,6 +2561,9 @@ if not CLI_ARGS.skip_comparison:
         baseline_bucket, all_compiled_svs, CB_START, CB_END
     )
     print(f"    CalSim Base: {len(cb_means):,} (B,C) with data in comparison window")
+    cb_series = read_calsim_base_monthly_series(
+        baseline_bucket, all_compiled_svs, CB_START, CB_END
+    )
 
     pb_means_cb = _compute_pb_chunk_means(
         compiled_chunks, ACTIVE_TAGS,
@@ -1589,6 +2586,8 @@ if not CLI_ARGS.skip_comparison:
         _generate_comparison_figures(
             cmp_b, fig_root / "vs_calsim_base", "CalSim Base",
             ACTIVE_TAGS, units_map, skip_climatology=False,
+            ref_series_by_pk=cb_series,
+            compiled_chunks=compiled_chunks,
         )
     except ImportError:
         print("    WARNING: matplotlib not available, skipping figures.")

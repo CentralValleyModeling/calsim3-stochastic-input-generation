@@ -29,6 +29,8 @@ build/
 venv/
 env/
 config.json
+CLAUDE.md
+.claude/
 
 # ── Jupyter ───────────────────────────────────────────────────────────────────
 .ipynb_checkpoints/
