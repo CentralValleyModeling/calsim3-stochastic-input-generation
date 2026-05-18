@@ -47,6 +47,7 @@ from matplotlib.patches import Patch
 
 # Add repo root to path for utils imports
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
+from utils import dss_io
 from utils.paths import get_base_dir, get_module_generated_dir
 from utils.quantile_mapping import qmap_single
 
@@ -1324,7 +1325,6 @@ def _historical_wy_totals_from_dss(ppt_part_b: str, start_wy: int = 1922, end_wy
 
     Returns DataFrame with columns: WY, precip_inches.
     """
-    from pydsstools.heclib.dss import HecDss  # local import
     dss_file = get_base_dir() / "CalSim3" / "__calsim_sv_default__.dss"
     if not dss_file.exists():
         raise FileNotFoundError(f"Default CalSim SV DSS not found: {dss_file}")
@@ -1332,7 +1332,12 @@ def _historical_wy_totals_from_dss(ppt_part_b: str, start_wy: int = 1922, end_wy
     b_target = ppt_part_b.strip().upper()
     c_target = "PRECIP"
 
-    with HecDss.Open(str(dss_file), version=6, catalog_flag=True) as dss:
+    # Direct open (no junction, catalog_flag=True) matches this function's
+    # historical HecDss.Open call.  The bespoke single-pair match, ValueError,
+    # and full_idx are kept verbatim -- dss_io.read_monthly_series's notna()
+    # gate would change the "paths exist but all-NaN" edge case.
+    with dss_io.open_dss(str(dss_file), version=6, catalog_flag=True,
+                         use_junction=False) as dss:
         paths = dss.getPathnameList("/*/*/*/*/1MON/*")
         matches = []
         for p in paths:
@@ -1348,10 +1353,9 @@ def _historical_wy_totals_from_dss(ppt_part_b: str, start_wy: int = 1922, end_wy
         master = pd.Series(index=full_idx, dtype=float)
         for path in sorted(matches, key=lambda x: (x.strip("/").split("/")[3], x)):
             ts = dss.read_ts(path, trim_missing=True)
-            vals = np.asarray(ts.values, dtype=float)
-            vals = np.where(vals <= -900, np.nan, vals)
+            vals = dss_io.apply_sentinel(ts.values)
             # DSS stores period-end timestamps; shift back one month so index is the data month.
-            idx = (pd.to_datetime(ts.pytimes).to_period("M") - 1).to_timestamp("M")
+            idx = dss_io.eom_index(ts.pytimes)
             master.update(pd.Series(vals, index=idx))
 
     s = master.dropna()
