@@ -17,4 +17,4 @@ dependencies:
   - pyhecdss
   - pip
   - pip:
-    - pydsstools   # requires VS Build Tools with C++ workload on Windows
+    - pydsstools<3   # pin to 2.x; 3.0 made HecDss.Open(...) strict (rejects catalog_flag=True) and removed getPathnameList. Requires VS Build Tools with C++ workload on Windows.
