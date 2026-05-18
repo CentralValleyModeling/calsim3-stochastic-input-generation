@@ -72,7 +72,6 @@ import time
 import shutil
 import glob
 import argparse
-import subprocess
 import atexit
 import warnings
 import numpy as np
@@ -81,6 +80,7 @@ from pathlib import Path
 from collections import OrderedDict
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
+from utils import dss_io
 from utils.paths import get_base_dir, get_generated_dir, get_module_generated_dir, get_inventory_dir
 
 # Suppress noisy warnings from empty slices (e.g. all-NaN columns in stats)
@@ -120,28 +120,16 @@ _REPO_ROOT = Path(__file__).resolve().parents[2]
 _DSS_LINK = _REPO_ROOT / "_dss_link"
 _PATH_LIMIT = 200  # conservative limit vs Fortran's 256-char CNAME
 
-
-def _create_junction(target_dir):
-    """Create (or re-create) a directory junction at _DSS_LINK -> target_dir."""
-    if _DSS_LINK.exists():
-        subprocess.run(["cmd", "/c", "rmdir", str(_DSS_LINK)], capture_output=True)
-    subprocess.run(
-        ["cmd", "/c", "mklink", "/J", str(_DSS_LINK), str(target_dir)],
-        check=True, capture_output=True,
-    )
-
-
-def _remove_junction():
-    """Remove the _DSS_LINK junction (does not affect target directory)."""
-    if _DSS_LINK.exists():
-        subprocess.run(["cmd", "/c", "rmdir", str(_DSS_LINK)], capture_output=True)
-
+# The junction primitives now come from utils.dss_io (identical
+# implementation; deduplicated).  dss_io._DSS_LINK resolves to the same
+# <repo_root>/_dss_link path, so _DSS_LINK / _PATH_LIMIT above remain valid
+# for _dss_str and _USE_JUNCTION.
 
 _USE_JUNCTION = len(str(OUTPUT_DSS)) > _PATH_LIMIT
 if _USE_JUNCTION:
     OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
-    _create_junction(OUTPUT_DIR)
-    atexit.register(_remove_junction)
+    dss_io.create_junction(OUTPUT_DIR)
+    atexit.register(dss_io.remove_junction)
 
 
 def _dss_str(path):

@@ -73,7 +73,7 @@ def create_junction(target_dir):
 
 
 def remove_junction():
-    """Remove the _DSS_LINK junction (does not affect the target directory)."""
+    """Remove the _DSS_LINK junction (does not affect target directory)."""
     if _DSS_LINK.exists():
         subprocess.run(["cmd", "/c", "rmdir", str(_DSS_LINK)], capture_output=True)
 
