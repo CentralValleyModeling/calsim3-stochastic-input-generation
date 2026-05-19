@@ -488,7 +488,7 @@ tulare_gw_terms -> 10 climate -> 11 miscellaneous -> 12 upper_watershed.
 | Outputs | `output/_product_a_validation/*.csv` (incl. `TULE_WET_INDX_productA_1972_2018.csv`); `output/_4_qmap_product_a/` detail + figures |
 | Consumed by | final compiler (`miscellaneous`) |
 | Depends on | `miscellaneous/_0_extract_others`, `water_year_types/_1`, `rim_inflow/_2` |
-| Notes | `_4_qmap_product_a.py` spot-run on local data: R2=0.703, NSE=0.520, PBIAS=5.0% (TULE_WET_INDX from I_PEDRO/INFLOW). `_3`/`_4` are thin CLI drivers over the WYT framework / `utils/qmap_product_a_from_pairs`. |
+| Notes | `_4_qmap_product_a.py` spot-run on local data: R2=0.703, NSE=0.520, PBIAS=-5.0% (TULE_WET_INDX from I_PEDRO/INFLOW; standard PBIAS = 100*sum(obs-sim)/sum(obs)). `_3`/`_4` are thin CLI drivers over the WYT framework / `utils/qmap_product_a_from_pairs`. |
 
 ### upper_watershed: _1_wyt_monthlyavg -> _2_qmap_product_a -> _3_hybrid_product_a -> _4_pge_wy_allocation -> _5_dnp_evaporation
 | Field | Value |

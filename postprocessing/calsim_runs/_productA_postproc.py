@@ -209,16 +209,16 @@ def nse_score(obs: np.ndarray, sim: np.ndarray) -> float:
 
 def pbias(obs: np.ndarray, sim: np.ndarray) -> float:
     """
-    Percent bias (positive means overestimation, negative underestimation),
-    common hydrology definition:
-      PBIAS = 100 * sum(sim - obs) / sum(obs)
+    Percent bias (positive means model underestimation, negative
+    overestimation), common hydrology definition:
+      PBIAS = 100 * sum(obs - sim) / sum(obs)
     """
     if len(obs) == 0:
         return np.nan
     denom = np.sum(obs)
     if denom == 0:
         return np.nan
-    return float(100.0 * np.sum(sim - obs) / denom)
+    return float(100.0 * np.sum(obs - sim) / denom)
 
 
 def compute_metrics(obs_series: pd.Series, sim_series: pd.Series) -> Dict[str, float]:
