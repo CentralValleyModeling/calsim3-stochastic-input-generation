@@ -1,6 +1,15 @@
+import os
+
 import numpy as np
 from scipy.stats import gamma
 from scipy.interpolate import interp1d
+
+# Global seed for reproducible quantile mapping. The only stochastic step in
+# qmap_single is tie-breaking among equal historical basis values (the
+# rng.choice call below). Seeding a dedicated Generator makes all QM output
+# deterministic and reproducible run-to-run. Override with the
+# CSSTOCHASTIC_QMAP_SEED environment variable if a different seed is needed.
+QMAP_SEED = int(os.environ.get("CSSTOCHASTIC_QMAP_SEED", "42"))
 
 def std(x):
     # Sample standard deviation (ddof=1 to match R's sd)
@@ -19,6 +28,12 @@ def qmap_single(basis_sim, basis_hist, target, allow_negative=False):
     """
     # Prepare output
     quantile_mapped = np.zeros(len(basis_sim))
+
+    # Dedicated, seeded RNG for deterministic tie-breaking. Seeded per call
+    # from the global QMAP_SEED so a pair's result is independent of how many
+    # pairs/timesteps were processed before it (order-independent
+    # reproducibility), and isolated from the global numpy RNG state.
+    rng = np.random.default_rng(QMAP_SEED)
 
     # Precompute monthly distributions and parameters
     parhat_basis = np.full((12, 2), np.nan)
@@ -97,7 +112,7 @@ def qmap_single(basis_sim, basis_hist, target, allow_negative=False):
                 sortdata = np.sort(basis_mondata_selmon)
                 mvalind = np.where(sortdata == selval)[0]
                 if len(mvalind) > 1:
-                    randind = np.random.choice(mvalind)
+                    randind = rng.choice(mvalind)
                     nonexprob_basis = eprob_basis_selmon[randind]
                 else:
                     try:
