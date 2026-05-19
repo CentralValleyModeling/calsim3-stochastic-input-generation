@@ -97,9 +97,29 @@ from utils.paths import get_base_dir, get_module_generated_dir
 
 **Water year**: `df['WY'] = df['date'].dt.year + (df['date'].dt.month >= 10).astype(int)`
 
-**DSS I/O**: `from pydsstools.heclib.dss import HecDss` with path format `/BASIN/LOCATION//PARAM/01JAN1921/1MONTH/RUN/`.
+**DSS I/O**: open every DSS file through `utils/dss_io.py` (`open_dss`,
+`read_monthly_series`, `read_monthly_frame`) instead of importing `HecDss`
+directly -- it centralizes the long-path / Windows-junction handling and the
+`catalog_flag` convention. DSS path format:
+`/BASIN/LOCATION//PARAM/01JAN1921/1MONTH/RUN/`.
 
-Many scripts use `# %%` cell markers for interactive VS Code execution.
+---
+
+## Script Convention
+
+Numbered pipeline scripts (`_0_*.py`, `_1_*.py`, ...) run in numeric order and
+follow a uniform shape, enforced by `tools/check_scripts.py` (run locally and
+in CI on push/PR -- see `.github/workflows/lint.yml`):
+
+- **Header docstring**: a `Title` line, a `===` underline, then
+  `Inputs` / `Outputs` / `Dependencies` / `Usage` sections.
+- **ASCII only** -- no non-ASCII characters anywhere in code or output
+  (CLAUDE.md hard rule).
+- **Grouped imports**: stdlib, then third-party, then local
+  (`from utils ...` after the `sys.path` bootstrap).
+- **CLI, not notebooks**: a `main()` plus an `if __name__ == "__main__":`
+  guard; no `# %%` Jupyter cell markers.
+- **Paths via `utils/paths.py`** -- never hard-code `../../data/`.
 
 ---
 
