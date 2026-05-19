@@ -1,10 +1,24 @@
 """
-Postprocess Small Watersheds DSS runs.
-
-Extracts time series from historical and VIC-precip Small Watersheds DSS outputs,
-merges scenarios into a single CSV, computes summary statistics, generates
-boxplots comparing scenario distributions, and creates a CalSim validation CSV
+Postprocess Small Watersheds DSS Runs
+=====================================
+Extracts time series from historical and VIC-precip Small Watersheds DSS
+outputs, merges scenarios into a single CSV, computes summary statistics,
+generates scenario-comparison boxplots, and creates a CalSim validation CSV
 from the VIC_Precip (Product A) scenario.
+
+Inputs
+------
+- Small Watersheds DSS outputs (historical, VIC-precip scenarios)
+- Master inventory xlsx
+
+Outputs
+-------
+- <generated>/output/_2_postprocess_product_a/  (merged + summary CSVs, boxplots)
+- <generated>/output/_2_postprocess_product_a/_product_a_validation/  (CalSim-format CSV)
+
+Dependencies
+------------
+- utils/paths.py  (data-dir resolution)
 
 Usage
 -----
@@ -14,19 +28,18 @@ Default (runs postprocess + validation for WY 1972-2018):
 Custom validation period (SWS product A output is 1921-2018):
     python _2_postprocess_product_a.py 1922 2018
 """
-#%%
 
 import os
 import sys
 import subprocess
+from functools import reduce
 from pathlib import Path
+
 import numpy as np
 import pandas as pd
-from pydsstools.heclib.dss import HecDss
-from functools import reduce
-
 import seaborn as sns
 import matplotlib.pyplot as plt
+from pydsstools.heclib.dss import HecDss
 
 # Add repo root to path for utils imports
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
@@ -231,7 +244,7 @@ def run_postprocess():
         partc_df = plot_df_melted[plot_df_melted['PartC'] == partc]
 
         plt.figure(figsize=(6, 6))
-        ax = sns.boxplot(
+        sns.boxplot(
             x='Scenario', y='Value', data=partc_df,
             width=0.6, showfliers=False,
             boxprops=dict(facecolor='skyblue', edgecolor='black'),

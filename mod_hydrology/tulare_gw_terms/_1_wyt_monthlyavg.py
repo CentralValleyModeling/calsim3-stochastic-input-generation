@@ -1,12 +1,30 @@
-"""Runner script: defines inputs, calls the framework, and writes outputs.
+"""
+Tulare Groundwater Terms - WYT Monthly-Average Reconstruction
+=============================================================
+Runner that defines the Tulare GW term specs, calls the shared WYT
+monthly-average framework, and writes the Product A / Product B outputs.
 
-Outputs are written under:
-  <generated>/output/_1_wyt_monthlyavg/monthly_avg_historical/
-  <generated>/output/_1_wyt_monthlyavg/_product_a_validation/
-  <generated>/output/_1_wyt_monthlyavg/_product_b_final/
+Inputs
+------
+- CalSim baseline DSS (historical term series)
+- reference/wyt_avg_terms.csv (term specs + WYT basin per term)
+- water_year_types WYT indices (Product A / Product B)
 
-Framework module:
-  utils/wyt_monthlyavg_framework.py
+Outputs
+-------
+- <generated>/output/_1_wyt_monthlyavg/monthly_avg_historical/
+- <generated>/output/_1_wyt_monthlyavg/_product_a_validation/
+- <generated>/output/_1_wyt_monthlyavg/_product_b_final/
+
+Dependencies
+------------
+- utils/wyt_monthlyavg_framework.py  (WYT reconstruction engine)
+- utils/paths.py                     (data-dir resolution)
+
+Usage
+-----
+    cd mod_hydrology/tulare_gw_terms
+    python _1_wyt_monthlyavg.py
 """
 
 from __future__ import annotations
@@ -27,7 +45,7 @@ _REPO_DIR = Path(__file__).resolve().parents[2]
 _gen = get_module_generated_dir("mod_hydrology/tulare_gw_terms")
 _wyt_gen = get_module_generated_dir("mod_hydrology/water_year_types")
 
-# %% ── CONFIG ───────────────────────────────────────────────────────────
+# -- CONFIG -----------------------------------------------------------
 dss_file = str(get_base_dir() / "CalSim3" / "__calsim_sv_default__.dss")
 terms_csv = str(_SCRIPT_DIR / "reference" / "wyt_avg_terms.csv")
 
@@ -46,8 +64,8 @@ OUTPUT_PREFIX = "tulare_gw_terms"
 
 # Choose target WGEN product(s):
 #    "both" -> run Product A then Product B (default)
-#    "A"    -> one WYT series (1972–2018)
-#    "B"    -> ALWAYS n01..n10; WY 1922–2021
+#    "A"    -> one WYT series (1972-2018)
+#    "B"    -> ALWAYS n01..n10; WY 1922-2021
 TARGET_PRODUCT = "Both"
 
 _WYT_INPUT_DIRS = {"A": "Product_A", "B": "Product_B"}
@@ -55,7 +73,7 @@ _WYT_INPUT_DIRS = {"A": "Product_A", "B": "Product_B"}
 # Where the historical WYT CSVs live
 wyt_hist_dir = str(_REPO_DIR / "mod_hydrology" / "water_year_types" / "reference")
 
-# %% ── RESULTS ROOT ─────────────────────────────────────────────────────
+# -- RESULTS ROOT -----------------------------------------------------
 BASE_RESULTS_DIR = _gen / "output"/"_1_wyt_monthlyavg"
 
 
@@ -132,7 +150,7 @@ def main() -> None:
     hist_cmp_path = hist_dir / f"{prefix}_actual_vs_reconstructed.csv"
     hist_cmp_df.to_csv(hist_cmp_path, index=False)
 
-    print(f"\nHistorical outputs:")
+    print("\nHistorical outputs:")
     print(f"  - {pattern_path}")
     print(f"  - {hist_cmp_path}")
 

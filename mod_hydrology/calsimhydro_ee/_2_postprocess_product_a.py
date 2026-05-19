@@ -279,7 +279,7 @@ def main():
         partc_df = plot_df_melted[plot_df_melted['PartC'] == partc]
 
         plt.figure(figsize=(6, 6))
-        ax = sns.boxplot(
+        sns.boxplot(
             x='Scenario',
             y='Value',
             data=partc_df,

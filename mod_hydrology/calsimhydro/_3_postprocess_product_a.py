@@ -227,7 +227,7 @@ def run_comparison(source_key, src):
     print(f"  Summary CSV saved: {summary_csv}")
 
     # -- Boxplots (one per PartC, comparing scenarios) -------------------------
-    print(f"  Generating boxplots...")
+    print("  Generating boxplots...")
     plot_df = merged_df[['PartC'] + value_cols].copy()
     plot_df_melted = plot_df.melt(
         id_vars='PartC', value_vars=value_cols,
