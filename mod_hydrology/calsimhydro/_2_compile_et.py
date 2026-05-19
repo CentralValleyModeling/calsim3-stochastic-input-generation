@@ -1,30 +1,49 @@
 """
-Compile area-weighted VIC ET per WBA and quantile-map to CS3 monthly ET.
+Compile Area-Weighted VIC ET per WBA, Quantile-Mapped to CS3 Monthly ET
+=======================================================================
+Computes area-weighted VIC ET per Water Balance Area and quantile-maps it to
+the CalSim3 monthly ET baseline, writing the CalSimHydro ET inputs for
+Product A (1921-2018) or Product B (chunked).
+
+Inputs
+------
+- VIC flux files; WBA grid info
+- CS3 RefETo / CropET / PanEvap DSS (quantile-mapping target)
+
+Outputs
+-------
+- <generated>/output/_2_compile_et/Product_A/  (monthly QM'd ET CSVs; optional DSS)
+- <generated>/output/_2_compile_et/Product_B/  (with --Product_B)
+
+Dependencies
+------------
+- utils/paths.py  (data-dir resolution)
 
 Usage
 -----
-Product A — single type:
+Product A - single type:
     python _2_compile_et.py --et_type RefET --vic_col_index 7 --write_dss --n_workers 8
 
-Product A — all types at once:
+Product A - all types at once:
     python _2_compile_et.py --et_type all --vic_col_index 7 --write_dss --n_workers 8
 
-Product B — all types at once:
+Product B - all types at once:
     python _2_compile_et.py --et_type all --vic_col_index 7 --write_dss --Product_B --n_workers 16
 """
+
+import argparse
 import os
 import sys
-import argparse
-import numpy as np
-import pandas as pd
-from pathlib import Path
 from concurrent.futures import ProcessPoolExecutor, as_completed
+from pathlib import Path
 from typing import Dict, List, Optional
 
+import numpy as np
+import pandas as pd
 from pydsstools.heclib.dss import HecDss
 from pydsstools.core import TimeSeriesContainer
 
-# %% add repo root to path for utils imports
+# Add repo root to path for utils imports
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 from utils.paths import get_module_generated_dir
 

@@ -1,9 +1,38 @@
+"""
+Compile Daily WBA Precipitation for CalSimHydro
+===============================================
+Reads WBA grid info and daily WGEN meteorology, computes area-weighted daily
+precipitation per Water Balance Area, and writes the CalSimHydro precip
+inputs (CSV, optional DSS) for Product A (1921-2018) or Product B (chunked).
+
+Inputs
+------
+- WBA grid-info file (grid weights per WBA)
+- WGEN met files (Product_A / Product_B)
+
+Outputs
+-------
+- <generated>/output/_1_compile_precip/Product_A/  (daily WBA precip; optional DSS)
+- <generated>/output/_1_compile_precip/Product_B/  (with --Product_B)
+
+Dependencies
+------------
+- utils/paths.py  (data-dir resolution)
+
+Usage
+-----
+    cd mod_hydrology/calsimhydro
+    python _1_compile_precip.py --clip_period 1920-10-01 2018-09-30
+    python _1_compile_precip.py --Product_B
+"""
+
+import argparse
 import os
 import sys
-import argparse
+from pathlib import Path
+
 import numpy as np
 import pandas as pd
-from pathlib import Path
 from pydsstools.heclib.dss import HecDss
 from pydsstools.core import TimeSeriesContainer
 

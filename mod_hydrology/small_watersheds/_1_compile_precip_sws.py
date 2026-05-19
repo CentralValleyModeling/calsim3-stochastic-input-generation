@@ -1,8 +1,23 @@
 """
-Compile monthly (area-weighted) precipitation for small watersheds from WGEN met files.
+Compile Monthly Area-Weighted Precipitation for Small Watersheds
+================================================================
+Reads grid info and daily WGEN meteorology, computes area-weighted monthly
+precip (inches/month) per small watershed, and writes the result into a
+CVprecip .dat template for Product A (historical) or Product B (10 chunks).
 
-Reads grid info and daily WGEN meteorology, computes area-weighted monthly precip
-(inches/month) per watershed, and writes the result into a CVprecip .dat template.
+Inputs
+------
+- Small-watershed grid-info file
+- WGEN met files (Product_A / Product_B)
+
+Outputs
+-------
+- CVprecip .dat  (Product A)
+- 10 chunk .dat files  (Product B)
+
+Dependencies
+------------
+- utils/paths.py  (data-dir resolution)
 
 Usage
 -----
@@ -13,13 +28,13 @@ Product B (stochastic, writes 10 chunk .dat files):
     python _1_compile_precip_sws.py --Product_B
 """
 
+import argparse
 import os
 import sys
-import argparse
-import pandas as pd
-import numpy as np
-from typing import List, Optional
 from pathlib import Path
+from typing import List, Optional
+
+import pandas as pd
 
 # Add repo root to path for utils imports
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))

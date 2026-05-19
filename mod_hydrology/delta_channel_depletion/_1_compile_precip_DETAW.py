@@ -1,5 +1,23 @@
 """
-Compile daily precipitation (mm) for DCD stations from WGEN met files.
+Compile Daily Precipitation (mm) for DCD Stations from WGEN Met Files
+====================================================================
+Averages WGEN daily precipitation across the grids nearest each DCD station
+(and the Lodi point) and writes the DETAW precipitation inputs for
+Product A (historical) or Product B (10 stochastic chunks).
+
+Inputs
+------
+- DCD station coordinate CSV (Lat, Lon, Station)
+- WGEN met files (Product_A / Product_B)
+
+Outputs
+-------
+- mm_pcp4.csv, LODI_PT4.csv  (Product A)
+- 10 chunk files for stations + Lodi  (Product B)
+
+Dependencies
+------------
+- utils/paths.py  (data-dir resolution)
 
 Usage
 -----
@@ -9,11 +27,13 @@ Product A (historical, writes mm_pcp4.csv and LODI_PT4.csv):
 Product B (stochastic, writes 10 chunk files for stations + Lodi):
     python _1_compile_precip_DETAW.py --Product_B
 """
+
+import argparse
 import os
 import sys
-import argparse
-import pandas as pd
 from pathlib import Path
+
+import pandas as pd
 
 # Add repo root to path for utils imports
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
@@ -188,7 +208,7 @@ class CompileStationsPrecipMM:
         if self.product_b:
             result_vals = {stn: s.values for stn, s in results.items()}
             self._write_product_b_chunks(result_vals)
-            print(f"Done.")
+            print("Done.")
             return pd.DataFrame(result_vals)
 
         # Product A: combine, clip, add calendar columns, write single CSV

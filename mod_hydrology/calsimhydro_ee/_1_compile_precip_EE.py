@@ -35,12 +35,13 @@ Usage
     cd mod_hydrology/calsimhydro_ee && python _1_compile_precip_EE.py --no_dss
 """
 
+import argparse
 import os
 import sys
-import argparse
+from pathlib import Path
+
 import numpy as np
 import pandas as pd
-from pathlib import Path
 from pydsstools.heclib.dss import HecDss
 from pydsstools.core import TimeSeriesContainer
 
