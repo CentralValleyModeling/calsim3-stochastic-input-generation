@@ -1,6 +1,6 @@
 """
 Reservoir Parameter Database Extractor
-
+======================================
 Extracts evaporation calculation parameters (location, Ra values, calibration
 factors) from the CalSim 3.0 reservoir Excel spreadsheets and writes them to
 reference/reservoir_parameters.json, which is tracked in the repository and
@@ -9,7 +9,20 @@ used by all downstream evaporation scripts.
 Run --extract whenever the Excel spreadsheets are updated. The default mode
 (no flag) reads the existing reference JSON and prints a summary.
 
-Usage:
+Inputs
+------
+- CalSim3/ReservoirEvaporationSpreadsheets/ (reservoir Excel workbooks)
+
+Outputs
+-------
+- mod_reservoir/evaporation/reference/reservoir_parameters.json
+
+Dependencies
+------------
+- utils/paths.py  (data-dir resolution)
+
+Usage
+-----
     # Re-extract from Excel spreadsheets -> overwrites reference/reservoir_parameters.json
     python _0_extract_reservoir_database.py --extract
 
@@ -17,14 +30,14 @@ Usage:
     python _0_extract_reservoir_database.py
 """
 
+import argparse
 import json
 import sys
 from pathlib import Path
 from typing import Dict, List, Optional
+
 import numpy as np
-import pandas as pd
 import openpyxl
-import argparse
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 from utils.paths import get_module_generated_dir, get_base_dir
