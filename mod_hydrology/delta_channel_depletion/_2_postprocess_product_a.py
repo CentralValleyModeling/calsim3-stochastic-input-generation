@@ -14,7 +14,6 @@ Output:
     - output/_2_postprocess_product_a/Boxplot_{PartC}_with_mean.png
     - output/_2_postprocess_product_a/_product_a_validation/_dcd_productA_1972_2018.csv
 """
-#%%
 
 import os
 import sys
@@ -36,11 +35,11 @@ from utils.paths import get_module_generated_dir, get_inventory_dir
 _GEN_DIR = get_module_generated_dir("mod_hydrology/delta_channel_depletion")
 
 
-# %% ── RESULTS ROOT ─────────────────────────────────────────────────────
+# RESULTS ROOT
 OUTPUT_DIR = str(_GEN_DIR / "output" / "_2_postprocess_product_a")
 os.makedirs(OUTPUT_DIR, exist_ok=True)
 
-# %% ── Load Excel Master File ───────────────────────────────────────────
+# Load Excel Master File
 excel_path = str(get_inventory_dir() / "_MASTER_INVENTORY_FOR_STOCHASTIC_INPUT_GENERATION_.xlsx")
 sheet_name = "MASTER"
 df_master = pd.read_excel(excel_path, sheet_name=sheet_name)
@@ -49,14 +48,14 @@ df_master = pd.read_excel(excel_path, sheet_name=sheet_name)
 SmallWatersheds_rows = df_master[(df_master.iloc[:, 8] == 'Delta Channel Depletion') & (df_master.iloc[:, 9] == 'DCD_island_month.dss')]
 SmallWatersheds_SVnames = [str(name).strip().upper() for name in SmallWatersheds_rows.iloc[:, 7].tolist()]
 
-# Create mapping: formatted PartB/PartC → original SV name
+# Create mapping: formatted PartB/PartC -> original SV name
 excel_to_part_BC = lambda n: n.upper().replace(" ", "_")
 excel_partcs = {excel_to_part_BC(n): n for n in SmallWatersheds_SVnames}
 
 # Get desired sort order based on master file (column 7)
 desired_order = [excel_to_part_BC(name) for name in SmallWatersheds_rows.iloc[:, 7].tolist()]
 
-# %% ── Junction helper for long DSS paths ────────────────────────────────
+# Junction helper for long DSS paths
 # The Fortran HEC-DSS library inside pydsstools limits path names to 256 chars.
 # The data directory may live on OneDrive with a very long path, so we create a
 # temporary Windows directory junction under the repo root to shorten it.
@@ -86,14 +85,15 @@ def _remove_junction():
         subprocess.run(["cmd", "/c", "rmdir", str(_DSS_LINK)], capture_output=True)
 
 
-# %% ── DSS File Paths ───────────────────────────────────────────────────
+# DSS File Paths
 _dcd_runs = _GEN_DIR / "DeltaChannelDepletion_Runs"
 dss_paths = [
     str(_dcd_runs / "DCD_Calsim3_PlanningStudy_1921-2018" / "DCD" / "Output" / "CALSIM3" / "CS3sv_DCD_PRISM_Dtrnd.dss"),      # Value 1
     str(_dcd_runs / "DCD_Calsim3_PlanningStudy_ProductA_1921-2018" / "DCD" / "Output" / "CALSIM3" / "CS3sv_DCD_PRISM_Dtrnd.dss"),       # Value 2
 ]
 
-# %% ── Function to Extract DSS Time Series ──────────────────────────────
+
+# Function to Extract DSS Time Series
 def extract_dss_data(dss_path):
     dss_path = Path(dss_path).resolve()
     print(f"    Reading DSS: {dss_path.name}")
@@ -141,43 +141,6 @@ def _read_dss(dss_path):
 
     return pd.DataFrame(data_dict).sort_index()
 
-# %% ── Read All DSS Files ───────────────────────────────────────────────
-dss_data_by_file = [extract_dss_data(path) for path in dss_paths]
-
-# %% ── Convert to Long Format ───────────────────────────────────────────
-
-# Define meaningful scenario names matching DSS file order
-scenario_labels = ['PlanningStudy', 'ProductA']
-
-long_dfs = []
-for df, label in zip(dss_data_by_file, scenario_labels):
-    long_df = df.stack().reset_index()
-    long_df.columns = ['Date', 'SV_Name_PartBC', label]
-    long_df[['PartB', 'PartC']] = long_df['SV_Name_PartBC'].str.split('/', expand=True)
-    long_df = long_df.drop(columns='SV_Name_PartBC')
-    long_df = long_df[['Date', 'PartB', 'PartC', label]]
-    long_dfs.append(long_df)
-
-# %% ── Merge All DataFrames on Date + PartB + PartC ─────────────────────
-merged_df = reduce(
-    lambda left, right: pd.merge(left, right, on=['Date', 'PartB', 'PartC'], how='outer'),
-    long_dfs
-)
-
-# %% ── Sort by SV Order from Master Excel ───────────────────────────────
-# Create a sort key: PartB/PartC as one string
-merged_df['PartBC'] = merged_df['PartB'].str.upper() + '/' + merged_df['PartC']
-sort_order_map = {val: idx for idx, val in enumerate(desired_order)}
-merged_df['SortOrder'] = merged_df['PartBC'].map(sort_order_map)
-merged_df = merged_df.sort_values(by=['SortOrder', 'Date'])
-merged_df = merged_df.drop(columns=['PartBC', 'SortOrder'])
-
-# %% ── Save Final Merged Time Series ─────────────────────────────────────
-merged_csv_path = os.path.join(OUTPUT_DIR, "DeltaChannelDepletion_DSS.csv")
-merged_df.to_csv(merged_csv_path, index=False)
-print(f"Final CSV saved to: {merged_csv_path}")
-
-# %% ── Product A Validation CSV ──────────────────────────────────────────
 
 def to_validation_csv(df, start_wy=1972, end_wy=2018):
     """Convert wide DataFrame to validation format (Part B, Part C, Year, Month, Value).
@@ -216,108 +179,146 @@ def to_validation_csv(df, start_wy=1972, end_wy=2018):
     return long
 
 
-VALIDATION_DIR = str(_GEN_DIR / "output" / "_2_postprocess_product_a" / "_product_a_validation")
-os.makedirs(VALIDATION_DIR, exist_ok=True)
+def main():
+    # Read All DSS Files
+    dss_data_by_file = [extract_dss_data(path) for path in dss_paths]
 
-# Use the already-extracted ProductA data (second DSS file)
-val_df = to_validation_csv(dss_data_by_file[1])
+    # Convert to Long Format
 
-if not val_df.empty:
-    val_csv_path = os.path.join(VALIDATION_DIR, "_dcd_productA_1972_2018.csv")
-    val_df.to_csv(val_csv_path, index=False)
-    n_vars = val_df.groupby(['Part B', 'Part C']).ngroups
-    print(f"Validation CSV saved: {val_csv_path}")
-    print(f"  Variables: {n_vars}  |  Rows: {len(val_df):,}")
+    # Define meaningful scenario names matching DSS file order
+    scenario_labels = ['PlanningStudy', 'ProductA']
 
-# %% ── Summary Statistics by PartC ───────────────────────────────────────
+    long_dfs = []
+    for df, label in zip(dss_data_by_file, scenario_labels):
+        long_df = df.stack().reset_index()
+        long_df.columns = ['Date', 'SV_Name_PartBC', label]
+        long_df[['PartB', 'PartC']] = long_df['SV_Name_PartBC'].str.split('/', expand=True)
+        long_df = long_df.drop(columns='SV_Name_PartBC')
+        long_df = long_df[['Date', 'PartB', 'PartC', label]]
+        long_dfs.append(long_df)
 
-# Ensure Date column is datetime
-merged_df['Date'] = pd.to_datetime(merged_df['Date'])
-
-# Add time units for grouping
-merged_df['Year'] = merged_df['Date'].dt.year
-merged_df['Month'] = merged_df['Date'].dt.month
-merged_df['Quarter'] = merged_df['Date'].dt.to_period("Q")
-
-value_cols = ['PlanningStudy', 'ProductA']
-
-def compute_summary(df, time_unit, agg_func, label):
-    grouped = df.groupby(['PartC', time_unit])[value_cols].agg(agg_func).reset_index()
-    grouped['Summary_Type'] = f'{label}_{agg_func.__name__}'
-    return grouped
-
-# Compute all summaries
-monthly_avg    = compute_summary(merged_df, 'Month', np.mean, 'Monthly')
-monthly_median = compute_summary(merged_df, 'Month', np.median, 'Monthly')
-quarterly_avg  = compute_summary(merged_df, 'Quarter', np.mean, 'Quarterly')
-quarterly_med  = compute_summary(merged_df, 'Quarter', np.median, 'Quarterly')
-annual_avg     = compute_summary(merged_df, 'Year', np.mean, 'Annual')
-annual_med     = compute_summary(merged_df, 'Year', np.median, 'Annual')
-
-# Combine all summaries
-summary_df = pd.concat([
-    monthly_avg,
-    monthly_median,
-    quarterly_avg,
-    quarterly_med,
-    annual_avg,
-    annual_med
-], ignore_index=True)
-
-# Save summary statistics to CSV
-summary_output_path = os.path.join(OUTPUT_DIR, "DeltaChannelDepletion_summary_statistics_by_PartC.csv")
-summary_df.to_csv(summary_output_path, index=False)
-print(f"Summary statistics saved to: {summary_output_path}")
-
-
-#%% BOX PLOT
-
-
-# --- Prepare Data ---
-plot_df = merged_df[['PartC', 'PlanningStudy', 'ProductA']].copy()
-plot_df_melted = plot_df.melt(id_vars='PartC',
-                              value_vars=['PlanningStudy', 'ProductA'],
-                              var_name='Scenario', value_name='Value')
-plot_df_melted = plot_df_melted.dropna()
-
-# Get unique PartC values
-unique_partcs = plot_df_melted['PartC'].unique()
-
-# --- Plot Loop ---
-for partc in unique_partcs:
-    partc_df = plot_df_melted[plot_df_melted['PartC'] == partc]
-
-    plt.figure(figsize=(6, 6))
-    ax = sns.boxplot(
-        x='Scenario',
-        y='Value',
-        data=partc_df,
-        width=0.6,
-        showfliers=False,  # Hide outliers
-        boxprops=dict(facecolor='skyblue', edgecolor='black'),
-        medianprops=dict(color='red'),
-        whiskerprops=dict(color='black'),
-        capprops=dict(color='black')
+    # Merge All DataFrames on Date + PartB + PartC
+    merged_df = reduce(
+        lambda left, right: pd.merge(left, right, on=['Date', 'PartB', 'PartC'], how='outer'),
+        long_dfs
     )
 
-    # --- Add Mean as Black Dot ---
-    for i, scenario in enumerate(partc_df['Scenario'].unique()):
-        scenario_values = partc_df[partc_df['Scenario'] == scenario]['Value']
-        mean_val = scenario_values.mean()
-        plt.scatter(i, mean_val, color='black', s=50, zorder=5, label='Mean' if i == 0 else "")
+    # Sort by SV Order from Master Excel
+    # Create a sort key: PartB/PartC as one string
+    merged_df['PartBC'] = merged_df['PartB'].str.upper() + '/' + merged_df['PartC']
+    sort_order_map = {val: idx for idx, val in enumerate(desired_order)}
+    merged_df['SortOrder'] = merged_df['PartBC'].map(sort_order_map)
+    merged_df = merged_df.sort_values(by=['SortOrder', 'Date'])
+    merged_df = merged_df.drop(columns=['PartBC', 'SortOrder'])
 
-    # --- Final Touches ---
-    plt.title(f"Boxplot for PartC: {partc}", fontsize=14)
-    plt.xlabel("Scenario")
-    plt.ylabel("Value")
-    if len(partc_df['Scenario'].unique()) > 1:
-        plt.legend(loc='upper right')
-    plt.tight_layout()
-    
-    # Optional save
-    plt.savefig(os.path.join(OUTPUT_DIR, f"Boxplot_{partc}_with_mean.png"), dpi=300)
-    
+    # Save Final Merged Time Series
+    merged_csv_path = os.path.join(OUTPUT_DIR, "DeltaChannelDepletion_DSS.csv")
+    merged_df.to_csv(merged_csv_path, index=False)
+    print(f"Final CSV saved to: {merged_csv_path}")
 
+    # Product A Validation CSV
+    VALIDATION_DIR = str(_GEN_DIR / "output" / "_2_postprocess_product_a" / "_product_a_validation")
+    os.makedirs(VALIDATION_DIR, exist_ok=True)
+
+    # Use the already-extracted ProductA data (second DSS file)
+    val_df = to_validation_csv(dss_data_by_file[1])
+
+    if not val_df.empty:
+        val_csv_path = os.path.join(VALIDATION_DIR, "_dcd_productA_1972_2018.csv")
+        val_df.to_csv(val_csv_path, index=False)
+        n_vars = val_df.groupby(['Part B', 'Part C']).ngroups
+        print(f"Validation CSV saved: {val_csv_path}")
+        print(f"  Variables: {n_vars}  |  Rows: {len(val_df):,}")
+
+    # Summary Statistics by PartC
+
+    # Ensure Date column is datetime
+    merged_df['Date'] = pd.to_datetime(merged_df['Date'])
+
+    # Add time units for grouping
+    merged_df['Year'] = merged_df['Date'].dt.year
+    merged_df['Month'] = merged_df['Date'].dt.month
+    merged_df['Quarter'] = merged_df['Date'].dt.to_period("Q")
+
+    value_cols = ['PlanningStudy', 'ProductA']
+
+    def compute_summary(df, time_unit, agg_func, label):
+        grouped = df.groupby(['PartC', time_unit])[value_cols].agg(agg_func).reset_index()
+        grouped['Summary_Type'] = f'{label}_{agg_func.__name__}'
+        return grouped
+
+    # Compute all summaries
+    monthly_avg    = compute_summary(merged_df, 'Month', np.mean, 'Monthly')
+    monthly_median = compute_summary(merged_df, 'Month', np.median, 'Monthly')
+    quarterly_avg  = compute_summary(merged_df, 'Quarter', np.mean, 'Quarterly')
+    quarterly_med  = compute_summary(merged_df, 'Quarter', np.median, 'Quarterly')
+    annual_avg     = compute_summary(merged_df, 'Year', np.mean, 'Annual')
+    annual_med     = compute_summary(merged_df, 'Year', np.median, 'Annual')
+
+    # Combine all summaries
+    summary_df = pd.concat([
+        monthly_avg,
+        monthly_median,
+        quarterly_avg,
+        quarterly_med,
+        annual_avg,
+        annual_med
+    ], ignore_index=True)
+
+    # Save summary statistics to CSV
+    summary_output_path = os.path.join(OUTPUT_DIR, "DeltaChannelDepletion_summary_statistics_by_PartC.csv")
+    summary_df.to_csv(summary_output_path, index=False)
+    print(f"Summary statistics saved to: {summary_output_path}")
+
+    # BOX PLOT
+
+    # --- Prepare Data ---
+    plot_df = merged_df[['PartC', 'PlanningStudy', 'ProductA']].copy()
+    plot_df_melted = plot_df.melt(id_vars='PartC',
+                                  value_vars=['PlanningStudy', 'ProductA'],
+                                  var_name='Scenario', value_name='Value')
+    plot_df_melted = plot_df_melted.dropna()
+
+    # Get unique PartC values
+    unique_partcs = plot_df_melted['PartC'].unique()
+
+    # --- Plot Loop ---
+    for partc in unique_partcs:
+        partc_df = plot_df_melted[plot_df_melted['PartC'] == partc]
+
+        plt.figure(figsize=(6, 6))
+        ax = sns.boxplot(
+            x='Scenario',
+            y='Value',
+            data=partc_df,
+            width=0.6,
+            showfliers=False,  # Hide outliers
+            boxprops=dict(facecolor='skyblue', edgecolor='black'),
+            medianprops=dict(color='red'),
+            whiskerprops=dict(color='black'),
+            capprops=dict(color='black')
+        )
+
+        # --- Add Mean as Black Dot ---
+        for i, scenario in enumerate(partc_df['Scenario'].unique()):
+            scenario_values = partc_df[partc_df['Scenario'] == scenario]['Value']
+            mean_val = scenario_values.mean()
+            plt.scatter(i, mean_val, color='black', s=50, zorder=5, label='Mean' if i == 0 else "")
+
+        # --- Final Touches ---
+        plt.title(f"Boxplot for PartC: {partc}", fontsize=14)
+        plt.xlabel("Scenario")
+        plt.ylabel("Value")
+        if len(partc_df['Scenario'].unique()) > 1:
+            plt.legend(loc='upper right')
+        plt.tight_layout()
+
+        # Optional save
+        plt.savefig(os.path.join(OUTPUT_DIR, f"Boxplot_{partc}_with_mean.png"), dpi=300)
+
+
+if __name__ == "__main__":
+    main()
 
 
 ################################################################################################################
@@ -354,11 +355,5 @@ for partc in unique_partcs:
 
 #     # Optional: Save each plot
 #     plt.savefig(os.path.join(OUTPUT_DIR, f"Boxplot_{partc}.png"), dpi=300)
-    
+
 #     plt.show()  # Opens each plot in a new window
-    
-
-############################################################################################################
-###############################################################################################################
-
-
