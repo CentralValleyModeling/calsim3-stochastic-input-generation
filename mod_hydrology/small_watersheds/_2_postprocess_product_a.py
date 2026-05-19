@@ -48,7 +48,7 @@ from utils.paths import get_module_generated_dir, get_inventory_dir
 _GEN_DIR = get_module_generated_dir("mod_hydrology/small_watersheds")
 
 
-# %% ── CONSTANTS ────────────────────────────────────────────────────────
+# %% -- CONSTANTS --------------------------------------------------------
 OUTPUT_DIR = str(_GEN_DIR / "output" / "_2_postprocess_product_a")
 VALIDATION_DIR = str(_GEN_DIR / "output" / "_2_postprocess_product_a" / "_product_a_validation")
 
@@ -64,7 +64,7 @@ DSS_PATHS = [
 SCENARIO_LABELS = ['Historical_1921', 'ProductA']
 
 
-# %% ── HELPER FUNCTIONS ────────────────────────────────────────────────
+# %% -- HELPER FUNCTIONS ------------------------------------------------
 
 def load_master_inventory():
     """Load and filter SmallWatersheds entries from the master inventory."""
@@ -170,7 +170,7 @@ def compute_summary(df, time_unit, agg_func, label, value_cols):
     return grouped
 
 
-# %% ── POSTPROCESS ──────────────────────────────────────────────────────
+# %% -- POSTPROCESS ------------------------------------------------------
 
 def run_postprocess():
     """Extract DSS data, merge scenarios, generate summary statistics and boxplots."""
@@ -211,7 +211,7 @@ def run_postprocess():
     merged_df.to_csv(merged_csv_path, index=False)
     print(f"Final CSV saved to: {merged_csv_path}")
 
-    # ── Summary Statistics by PartC ──────────────────────────────────────
+    # -- Summary Statistics by PartC --------------------------------------
     merged_df['Date'] = pd.to_datetime(merged_df['Date'])
     merged_df['Year'] = merged_df['Date'].dt.year
     merged_df['Month'] = merged_df['Date'].dt.month
@@ -232,7 +232,7 @@ def run_postprocess():
     summary_df.to_csv(summary_output_path, index=False)
     print(f"Summary statistics saved to: {summary_output_path}")
 
-    # ── Boxplots ─────────────────────────────────────────────────────────
+    # -- Boxplots ---------------------------------------------------------
     plot_df = merged_df[['PartC'] + value_cols].copy()
     plot_df_melted = plot_df.melt(
         id_vars='PartC', value_vars=value_cols,
@@ -273,7 +273,7 @@ def run_postprocess():
     return merged_df
 
 
-# %% ── VALIDATION CSV ───────────────────────────────────────────────────
+# %% -- VALIDATION CSV ---------------------------------------------------
 
 def create_validation_csv(merged_df=None, output_dir=None, start_wy=1972, end_wy=2018):
     """
@@ -359,7 +359,7 @@ def create_validation_csv(merged_df=None, output_dir=None, start_wy=1972, end_wy
     print("=" * 80)
 
 
-# %% ── CLI ENTRY POINT ─────────────────────────────────────────────────
+# %% -- CLI ENTRY POINT -------------------------------------------------
 
 def main():
     """Main entry point."""

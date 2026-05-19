@@ -4,19 +4,19 @@ _1_min_flow_feather.py
 Computes MINFLOWFEATHER (Feather River minimum instream flow, cfs) by
 replicating the logic in MIF_FEATHER_Logic_Reconstruction.xlsx.
 
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+--------------------------------------------------------------------------
 LOGIC SUMMARY
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+--------------------------------------------------------------------------
 The schedule is assigned on an APRIL-to-MARCH cycle ("CY" = calendar year of
-April). For each CY N the schedule covers Apr(N)–Sep(N) and Oct(N)–Mar(N+1).
+April). For each CY N the schedule covers Apr(N)-Sep(N) and Oct(N)-Mar(N+1).
 
 Three schedule inputs are evaluated each CY:
 
-  1. Apr–Jul runoff (CY N)  — sum of Apr+May+Jun+Jul UNIMP_OROV (TAF)
+  1. Apr-Jul runoff (CY N)  - sum of Apr+May+Jun+Jul UNIMP_OROV (TAF)
         Dry  if  Apr_Jul < APR_JUL_THRESH  (1068.1 TAF)
         Wet  otherwise
 
-  2. Annual WY (N) unimpaired Oroville inflow  (TAF, Oct–Sep water year)
+  2. Annual WY (N) unimpaired Oroville inflow  (TAF, Oct-Sep water year)
         Deficiency  if  Annual_WY < ANN_THRESH  (1245.99 TAF)
         Normal      otherwise
 
@@ -26,8 +26,8 @@ Three schedule inputs are evaluated each CY:
 
   Schedule selection:
         driest  if  Annual Deficiency  OR  2Y Deficiency
-        wet     elif  Apr–Jul Wet
-        dry     else  (Apr–Jul Dry, no Deficiency)
+        wet     elif  Apr-Jul Wet
+        dry     else  (Apr-Jul Dry, no Deficiency)
 
   Monthly flow schedules (cfs):
         Month:    Apr  May  Jun  Jul  Aug  Sep  Oct  Nov  Dec  Jan  Feb  Mar
@@ -36,50 +36,50 @@ Three schedule inputs are evaluated each CY:
         driest:   750  750  750  750  750  750   900  900  900  900  900  750
 
   Schedule-to-date assignment:
-        For a date (Year=Y, Month=M):  CY = Y  if  M >= 4  else  Y − 1
+        For a date (Year=Y, Month=M):  CY = Y  if  M >= 4  else  Y - 1
 
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-THRESHOLDS  (calibrated on 1921–2021 historical record, fixed constants)
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-  APR_JUL_THRESH = 0.55 × 1942           =  1068.10  TAF  (hardcoded in xlsx)
-  ANN_THRESH     = 0.28492 × 4373.11     =  1245.99  TAF
-  TWOY_THRESH    = 0.72503 × 4373.11     =  3170.64  TAF
-  Mean annual UNIMP_OROV (1921–2021)     =  4373.11  TAF
+--------------------------------------------------------------------------
+THRESHOLDS  (calibrated on 1921-2021 historical record, fixed constants)
+--------------------------------------------------------------------------
+  APR_JUL_THRESH = 0.55 x 1942           =  1068.10  TAF  (hardcoded in xlsx)
+  ANN_THRESH     = 0.28492 x 4373.11     =  1245.99  TAF
+  TWOY_THRESH    = 0.72503 x 4373.11     =  3170.64  TAF
+  Mean annual UNIMP_OROV (1921-2021)     =  4373.11  TAF
 
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+--------------------------------------------------------------------------
 INPUTS / OUTPUTS
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+--------------------------------------------------------------------------
   Two separate UNIMP_OROV datasets are used:
 
-  Historical CS3  ←  MIF_FEATHER_Logic_Reconstruction.xlsx  Main sheet, col B
-    Monthly UNIMP_OROV (TAF) as entered in the spreadsheet (WY 1921–2021).
-    This is the authoritative source used for validation — it extends through
+  Historical CS3  <-  MIF_FEATHER_Logic_Reconstruction.xlsx  Main sheet, col B
+    Monthly UNIMP_OROV (TAF) as entered in the spreadsheet (WY 1921-2021).
+    This is the authoritative source used for validation - it extends through
     Sep 2021, beyond the _10_RimInflow CSV (which stops Dec 2018).
     The _10_RimInflow CSV is still used for the Product B WY-1921 seed.
 
-  Product A  ←  _10_RimInflow/.../Product_A/calsim_all_inflows.csv
-    Quantile-mapped synthetic monthly inflow (WY 1921–2018).  Used for
+  Product A  <-  _10_RimInflow/.../Product_A/calsim_all_inflows.csv
+    Quantile-mapped synthetic monthly inflow (WY 1921-2018).  Used for
     both classification and date assignment in the Product A run.
 
-  Output 1 – Validation (WY 1922–2021)
-    Classifies with historical CS3 data; dates from Oct 1921 – Sep 2021.
+  Output 1 - Validation (WY 1922-2021)
+    Classifies with historical CS3 data; dates from Oct 1921 - Sep 2021.
     Compares Python output against:
       - CalSim3 reference CSV (Value_CS3)
-      - Spreadsheet Main_WA cols G–S, rows 4–104 (CY 1921–2021) (Value_Spreadsheet)
+      - Spreadsheet Main_WA cols G-S, rows 4-104 (CY 1921-2021) (Value_Spreadsheet)
     Wide format: Year, Month, Value_CS3 (CalSim3 reference),
                  Value_Spreadsheet (original xlsx computation),
                  Value_Python (this script).
     Written to:
       output/_1_min_flow_feather/_minflowfeather_validation_1922_2021.csv
     Primary comparison: Value_Spreadsheet (MIF_FEATHER_Logic_Reconstruction.xlsx
-      Main_WA cols G–S, rows 4–104, CY 1921–2021)
+      Main_WA cols G-S, rows 4-104, CY 1921-2021)
 
-  Output 2 – Product A (WY 1922–2018)
-    Classifies with Product A data; dates from Oct 1921 – Sep 2018.
+  Output 2 - Product A (WY 1922-2018)
+    Classifies with Product A data; dates from Oct 1921 - Sep 2018.
     Written to:
       output/_product_a_validation/_minflowfeather_productA_1922_2018.csv
 
-  Output 3 – Product B (10 chunks, WY 1922–2021 each)
+  Output 3 - Product B (10 chunks, WY 1922-2021 each)
     Classifies with each chunk's own qmap_postAdj data plus CS3 WY 1921 seed
     for 2-year rolling average priming.
     Written to:
@@ -88,7 +88,7 @@ INPUTS / OUTPUTS
       ... through n10.csv
 
 Reference:
-  Feather River Levee Repair Project, Draft EIR — DWR / TRLIA
+  Feather River Levee Repair Project, Draft EIR - DWR / TRLIA
   https://cms9files1.revize.com/trlia/Environmental%20Docs/5.4%20Fisheries.pdf
 
 Usage
@@ -110,18 +110,18 @@ import numpy as np
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 from utils.paths import get_module_generated_dir
 
-# ─────────────────────────────────────────────────────────────────────────────
+# -----------------------------------------------------------------------------
 # Paths
-# ─────────────────────────────────────────────────────────────────────────────
+# -----------------------------------------------------------------------------
 _SCRIPT_DIR = Path(__file__).resolve().parent
 _rim_gen    = get_module_generated_dir("mod_hydrology/rim_inflow")
 _gen        = get_module_generated_dir("mod_other/instream_flows")
 
-# Input 1: Historical CS3 unimpaired Oroville inflow — used for validation
+# Input 1: Historical CS3 unimpaired Oroville inflow - used for validation
 #          (matches Main column B in the spreadsheet)
 PATH_UNIMP_OROV_HIST = _rim_gen / "output" / "_2_qmap_historical_validation" / "calsim_all_inflows.csv"
 
-# Input 2: Product A synthetic unimpaired Oroville inflow — used for Product A
+# Input 2: Product A synthetic unimpaired Oroville inflow - used for Product A
 PATH_UNIMP_OROV_PA = _rim_gen / "output" / "_2_qmap_historical_validation" / "calsim_all_inflows.csv"
 
 # Input 3: Product B directory (10 chunk CSVs)
@@ -133,34 +133,34 @@ PATH_XLSX = _gen / "term_development" / "MINFLOWFEATHER" / "MIF_FEATHER_Logic_Re
 # All outputs go to a single folder
 OUT_DIR = _gen / "output" / "_1_min_flow_feather"
 
-# Output 1: wide-format validation (WY 1922–2021, capped by available historical data)
+# Output 1: wide-format validation (WY 1922-2021, capped by available historical data)
 OUT_VALIDATION = OUT_DIR / "_minflowfeather_validation_1922_2021.csv"
 
-# Output 2: Product A full period (WY 1922–2018)
+# Output 2: Product A full period (WY 1922-2018)
 OUT_PRODUCT_A_DIR = _gen / "output" / "_product_a_validation"
 OUT_PRODUCT_A = OUT_PRODUCT_A_DIR / "_minflowfeather_productA_1922_2018.csv"
 
-# Output 3: Product B — one file per chunk (n01 … n10)
+# Output 3: Product B - one file per chunk (n01 ... n10)
 OUT_PRODUCT_B_DIR = _gen / "output" / "_product_b_final"
 OUT_PRODUCT_B_PATTERN = str(OUT_PRODUCT_B_DIR / "_minflowfeather_productB_qmo_n{:02d}.csv")
 
-# ─────────────────────────────────────────────────────────────────────────────
+# -----------------------------------------------------------------------------
 # Thresholds  (fixed calibrated constants from spreadsheet)
-# ─────────────────────────────────────────────────────────────────────────────
-# Apr–Jul Wet/Dry threshold: formula in xlsx cell = IF(D > 0.55*1942, "Wet", "Dry")
+# -----------------------------------------------------------------------------
+# Apr-Jul Wet/Dry threshold: formula in xlsx cell = IF(D > 0.55*1942, "Wet", "Dry")
 APR_JUL_THRESH = 0.55 * 1942          # 1068.10 TAF
 
-# Annual and 2-year deficiency thresholds (fraction × mean annual)
+# Annual and 2-year deficiency thresholds (fraction x mean annual)
 _ANN_FACTOR   = 0.28492126771039866
 _TWOY_FACTOR  = 0.725030663907629
-_MEAN_ANNUAL  = 4373.108910891089      # TAF  (AVERAGE of Annual Unimp_Orov WY 1921–2021)
+_MEAN_ANNUAL  = 4373.108910891089      # TAF  (AVERAGE of Annual Unimp_Orov WY 1921-2021)
 
 ANN_THRESH  = _ANN_FACTOR  * _MEAN_ANNUAL  # 1245.99 TAF
 TWOY_THRESH = _TWOY_FACTOR * _MEAN_ANNUAL  # 3170.64 TAF
 
-# ─────────────────────────────────────────────────────────────────────────────
-# Flow schedules  (cfs),  keyed by calendar month 1–12
-# ─────────────────────────────────────────────────────────────────────────────
+# -----------------------------------------------------------------------------
+# Flow schedules  (cfs),  keyed by calendar month 1-12
+# -----------------------------------------------------------------------------
 SCHEDULES = {
     'wet': {
         4: 1000, 5: 1000, 6: 1000, 7: 1000, 8: 1000, 9: 1000,
@@ -180,12 +180,12 @@ SCHEDULES = {
 _WY_MONTH_ORDER = {m: i for i, m in enumerate([10, 11, 12, 1, 2, 3, 4, 5, 6, 7, 8, 9])}
 
 
-# ─────────────────────────────────────────────────────────────────────────────
+# -----------------------------------------------------------------------------
 # Core functions
-# ─────────────────────────────────────────────────────────────────────────────
+# -----------------------------------------------------------------------------
 
 def _water_year(dates: pd.DatetimeIndex) -> pd.Index:
-    """Return integer water year (Oct–Dec of Y → WY Y+1; Jan–Sep of Y → WY Y)."""
+    """Return integer water year (Oct-Dec of Y -> WY Y+1; Jan-Sep of Y -> WY Y)."""
     return pd.Index(dates.year.where(dates.month < 10, dates.year + 1))
 
 
@@ -227,21 +227,21 @@ def compute_min_flow_feather(
 
     data = unimp_orov.dropna().copy()
 
-    # ── Annual WY totals (Oct–Sep) ────────────────────────────────────────
+    # -- Annual WY totals (Oct-Sep) ----------------------------------------
     wy_index = _water_year(data.index)
     annual_wy: pd.Series = data.groupby(wy_index).sum()  # indexed by integer WY
 
-    # ── 2-year rolling average (WY-based) ────────────────────────────────
+    # -- 2-year rolling average (WY-based) --------------------------------
     # twoy_avg[WY] = (Annual[WY] + Annual[WY-1]) / 2; NaN for first WY
     twoy_avg: pd.Series = (annual_wy + annual_wy.shift(1)) / 2
 
-    # ── Apr–Jul sums by calendar year ────────────────────────────────────
+    # -- Apr-Jul sums by calendar year ------------------------------------
     apjul_mask = data.index.month.isin([4, 5, 6, 7])
     apjul_cy: pd.Series = (
         data[apjul_mask].groupby(data[apjul_mask].index.year).sum()
     )  # indexed by integer calendar year
 
-    # ── Determine schedule for each CY ───────────────────────────────────
+    # -- Determine schedule for each CY -----------------------------------
     first_cy = int(annual_wy.index[0])
     last_cy  = int(annual_wy.index[-1])
 
@@ -251,7 +251,7 @@ def compute_min_flow_feather(
         twoy  = twoy_avg.get(cy,    np.nan)
         apjul = apjul_cy.get(cy,    np.nan)
 
-        # Cannot determine schedule without Annual or Apr–Jul data
+        # Cannot determine schedule without Annual or Apr-Jul data
         if np.isnan(ann) or np.isnan(apjul):
             continue
 
@@ -261,8 +261,8 @@ def compute_min_flow_feather(
 
         schedule_by_cy[cy] = _select_schedule(ann_def, twoy_def, apjul_dry)
 
-    # ── Assign monthly flow values ────────────────────────────────────────
-    # For date (Y, M):  CY = Y if M >= 4 else Y − 1
+    # -- Assign monthly flow values ----------------------------------------
+    # For date (Y, M):  CY = Y if M >= 4 else Y - 1
     flows = {}  # dict[pd.Timestamp, int]
     for dt in data.index:
         y, m = dt.year, dt.month
@@ -274,9 +274,9 @@ def compute_min_flow_feather(
     return pd.Series(flows, name='Value', dtype=int).rename_axis('date')
 
 
-# ─────────────────────────────────────────────────────────────────────────────
+# -----------------------------------------------------------------------------
 # Output helpers
-# ─────────────────────────────────────────────────────────────────────────────
+# -----------------------------------------------------------------------------
 
 def to_calsim_csv(series: pd.Series, part_b: str, part_c: str) -> pd.DataFrame:
     """
@@ -325,7 +325,7 @@ def _load_xlsx_thresholds() -> dict:
     return {
         'ann_thresh':   float(rows[0][2]),
         'twoy_thresh':  float(rows[1][2]),
-        'apjul_thresh': APR_JUL_THRESH,   # unchanged — hardcoded in spreadsheet
+        'apjul_thresh': APR_JUL_THRESH,   # unchanged - hardcoded in spreadsheet
     }
 
 
@@ -364,8 +364,8 @@ def _load_spreadsheet_values() -> pd.Series:
 
     Main_WA layout (0-indexed columns, data begins at row index 3):
       Col 0  : CY (calendar year N)
-      Cols 7–12 : Apr(N), May(N), Jun(N), Jul(N), Aug(N), Sep(N)
-      Cols 13–18: Oct(N), Nov(N), Dec(N), Jan(N+1), Feb(N+1), Mar(N+1)
+      Cols 7-12 : Apr(N), May(N), Jun(N), Jul(N), Aug(N), Sep(N)
+      Cols 13-18: Oct(N), Nov(N), Dec(N), Jan(N+1), Feb(N+1), Mar(N+1)
 
     Returns end-of-month DatetimeIndex Series of integer cfs values.
     """
@@ -374,7 +374,7 @@ def _load_spreadsheet_values() -> pd.Series:
     ws = wb['Main_WA']
     rows = list(ws.iter_rows(values_only=True))
     # Data rows start at index 3 (row 4 in Excel)
-    month_order = [4, 5, 6, 7, 8, 9, 10, 11, 12, 1, 2, 3]  # cols 7–18
+    month_order = [4, 5, 6, 7, 8, 9, 10, 11, 12, 1, 2, 3]  # cols 7-18
     flows = {}
     for row in rows[3:]:
         cy = row[0]
@@ -393,9 +393,9 @@ def _load_spreadsheet_values() -> pd.Series:
     return s.sort_index()
 
 
-# ─────────────────────────────────────────────────────────────────────────────
+# -----------------------------------------------------------------------------
 # Main
-# ─────────────────────────────────────────────────────────────────────────────
+# -----------------------------------------------------------------------------
 
 def _schedule_summary_from_series(unimp_orov: pd.Series) -> dict:
     """Return {cy: schedule_name} dict for a given UNIMP_OROV series."""
@@ -423,7 +423,7 @@ def _schedule_summary_from_series(unimp_orov: pd.Series) -> dict:
 def _load_product_b_chunk(chunk_num: int) -> pd.Series:
     """
     Load a single Product B UNIMP_OROV chunk (qmap_postAdj column, TAF).
-    Files now carry historical-epoch dates (Oct 1921 – Sep 2021, 1200 rows).
+    Files now carry historical-epoch dates (Oct 1921 - Sep 2021, 1200 rows).
     """
     path = os.path.join(
         PATH_UNIMP_OROV_PB_DIR,
@@ -444,7 +444,7 @@ def _load_unimp_orov(path: str, label: str) -> pd.Series:
         path, parse_dates=['date'], index_col='date',
         usecols=['date', 'UNIMP_OROV'],
     )['UNIMP_OROV'].dropna()
-    print(f"  Range : {s.index.min().date()} – {s.index.max().date()}  "
+    print(f"  Range : {s.index.min().date()} - {s.index.max().date()}  "
           f"({len(s):,} months)")
     return s
 
@@ -480,10 +480,10 @@ def _load_xlsx_unimp_orov() -> pd.Series:
 def run_validation():
     """Output 1: validation wide-format vs spreadsheet (WY 1922-2021)."""
     os.makedirs(OUT_DIR, exist_ok=True)
-    print("\n" + "─" * 65)
-    print("OUTPUT 1 — Validation  (WY 1922-2021, historical data from xlsx)")
+    print("\n" + "-" * 65)
+    print("OUTPUT 1 - Validation  (WY 1922-2021, historical data from xlsx)")
     print("  Spreadsheet reference: Main_WA cols G-S, rows 4-104 (CY 1921-2021)")
-    print("─" * 65)
+    print("-" * 65)
 
     unimp_hist = _load_xlsx_unimp_orov()
 
@@ -515,7 +515,7 @@ def run_validation():
         })
         df_val_wide = df_val_wide.merge(ss_df, on=['Year', 'Month'], how='left')
     else:
-        print("  (Spreadsheet not found — Value_Spreadsheet will be NaN)")
+        print("  (Spreadsheet not found - Value_Spreadsheet will be NaN)")
         df_val_wide['Value_Spreadsheet'] = pd.NA
 
     df_val_wide = df_val_wide[
@@ -533,7 +533,7 @@ def run_validation():
             return
         diffs = (df_val_wide.loc[mask, col_a] != df_val_wide.loc[mask, col_b]).sum()
         pct   = 100.0 * (n - diffs) / n
-        note  = f"  ({diffs} diffs)" if diffs else "  ✓ exact match"
+        note  = f"  ({diffs} diffs)" if diffs else "  OK exact match"
         print(f"  {label}: {n - diffs:,}/{n:,} ({pct:.1f}%){note}")
 
     _match_summary('Value_Python',      'Value_CS3',         'Python  vs CS3        ')
@@ -544,9 +544,9 @@ def run_validation():
 def run_product_a():
     """Output 2: Product A (WY 1922-2018, synthetic UNIMP_OROV classification)."""
     os.makedirs(OUT_PRODUCT_A_DIR, exist_ok=True)
-    print("\n" + "─" * 65)
-    print("OUTPUT 2 — Product A  (WY 1922-2018, Product A input)")
-    print("─" * 65)
+    print("\n" + "-" * 65)
+    print("OUTPUT 2 - Product A  (WY 1922-2018, Product A input)")
+    print("-" * 65)
 
     unimp_pa = _load_unimp_orov(PATH_UNIMP_OROV_PA, 'Product A')
     mf_pa    = compute_min_flow_feather(unimp_pa)
@@ -556,19 +556,19 @@ def run_product_a():
     print(f"  Written : {OUT_PRODUCT_A}")
     wy_first = int(df_pa.loc[df_pa['Month'] == 10, 'Year'].min()) + 1
     wy_last  = int(df_pa.loc[df_pa['Month'] == 9,  'Year'].max())
-    print(f"  Rows    : {len(df_pa):,}  (WY {wy_first} – WY {wy_last})")
+    print(f"  Rows    : {len(df_pa):,}  (WY {wy_first} - WY {wy_last})")
     print("  Product A schedule distribution:")
     _print_schedule_summary(_schedule_summary_from_series(unimp_pa))
 
 
 def run_product_b():
-    """Output 3: Product B — 10 chunks, WY 1922-2021 each."""
+    """Output 3: Product B - 10 chunks, WY 1922-2021 each."""
     os.makedirs(OUT_PRODUCT_B_DIR, exist_ok=True)
-    print("\n" + "─" * 65)
-    print("OUTPUT 3 — Product B  (10 chunks, WY 1922-2021)")
-    print("─" * 65)
+    print("\n" + "-" * 65)
+    print("OUTPUT 3 - Product B  (10 chunks, WY 1922-2021)")
+    print("-" * 65)
 
-    # CS3 WY 1921 seed (Oct 1920 – Sep 1921) for 2-year rolling avg priming.
+    # CS3 WY 1921 seed (Oct 1920 - Sep 1921) for 2-year rolling avg priming.
     unimp_hist = _load_unimp_orov(PATH_UNIMP_OROV_HIST, 'Historical CS3')
     _cs3_seed  = unimp_hist.loc['1920-10-31':'1921-09-30'].copy()
 
@@ -578,7 +578,7 @@ def run_product_b():
             f'UNIMP_OROV_8RI_OROVI_qmo_n{n:02d}.csv'
         )
         if not os.path.exists(pb_path):
-            print(f"  [n{n:02d}] Skipped — file not found: {pb_path}")
+            print(f"  [n{n:02d}] Skipped - file not found: {pb_path}")
             continue
 
         unimp_pb       = _load_product_b_chunk(n)
@@ -592,13 +592,13 @@ def run_product_b():
 
         wy_first_pb = int(df_pb.loc[df_pb['Month'] == 10, 'Year'].min()) + 1
         wy_last_pb  = int(df_pb.loc[df_pb['Month'] == 9,  'Year'].max())
-        print(f"  [n{n:02d}] {len(df_pb):,} rows  WY {wy_first_pb}–{wy_last_pb}  → {os.path.basename(out_path)}")
+        print(f"  [n{n:02d}] {len(df_pb):,} rows  WY {wy_first_pb}-{wy_last_pb}  -> {os.path.basename(out_path)}")
 
 
 def main(product: str = 'all'):
     """Run one or all outputs.  product in {'validation', 'A', 'B', 'all'}."""
     print("=" * 65)
-    print("MINFLOWFEATHER — Feather River Minimum Instream Flow")
+    print("MINFLOWFEATHER - Feather River Minimum Instream Flow")
     print("=" * 65)
     if product in ('validation', 'all'):
         run_validation()
@@ -606,7 +606,7 @@ def main(product: str = 'all'):
         run_product_a()
     if product in ('B', 'all'):
         run_product_b()
-    print("\n✓  Done.\n")
+    print("\nOK  Done.\n")
 
 
 if __name__ == '__main__':

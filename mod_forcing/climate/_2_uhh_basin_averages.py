@@ -7,7 +7,7 @@ Grid cell weights are read from mod_forcing/vic/reference/GridInfo/ files.
 VPD is derived via quantile mapping from temperature using CalSim historical VPD.
 
 Product A / Historical: one CSV per variable per location.
-Product B: 10 long-format chunk CSVs per variable (100 WY each, Oct 1921 – Sep 2021).
+Product B: 10 long-format chunk CSVs per variable (100 WY each, Oct 1921 - Sep 2021).
 
 Inputs
 ------
@@ -584,7 +584,7 @@ def create_validation_csv(
     end_date = pd.Timestamp(end_wy, 9, 30)
 
     print("=" * 80)
-    print("Creating Validation CSVs — UHH Basin Averages")
+    print("Creating Validation CSVs - UHH Basin Averages")
     print("=" * 80)
     print(f"Period: WY {start_wy}-{end_wy} ({start_date.strftime('%b %Y')} - {end_date.strftime('%b %Y')})")
     print(f"Source: {source_path}")
@@ -874,7 +874,7 @@ def validate_location(location_shorthand, data_folder, excel_file, name_mapping)
     
     variables = [
         (ppt_name, ppt_name, 'precip', 'inches'),
-        (temp_name, temp_name, 'temp', '°F'),
+        (temp_name, temp_name, 'temp', 'degF'),
         (vpd_name, vpd_name, 'vpd', 'kPa')
     ]
     
@@ -922,7 +922,7 @@ def create_monthly_boxplots(all_monthly_data, output_folder, scenario):
     
     var_configs = {
         'precip': {'title': 'Precipitation', 'ylabel': 'Precipitation (inches)'},
-        'temp': {'title': 'Temperature', 'ylabel': 'Temperature (°F)'},
+        'temp': {'title': 'Temperature', 'ylabel': 'Temperature (degF)'},
         'vpd': {'title': 'Vapor Pressure Deficit', 'ylabel': 'VPD (kPa)'}
     }
     
@@ -978,7 +978,7 @@ def create_annual_comparison_plots(all_results, output_folder, locations, scenar
     """
     var_configs = {
         'precip': {'title': 'Precipitation', 'ylabel': 'Annual Average (inches)'},
-        'temp': {'title': 'Temperature', 'ylabel': 'Annual Average (°F)'},
+        'temp': {'title': 'Temperature', 'ylabel': 'Annual Average (degF)'},
         'vpd': {'title': 'Vapor Pressure Deficit', 'ylabel': 'Annual Average (kPa)'}
     }
     
@@ -1054,7 +1054,7 @@ def print_validation_report(location, results):
         
         print(f"\n  Monthly Averages:")
         print(f"    Month    CalSim    Output       Diff        % Diff")
-        print(f"    {'─'*60}")
+        print(f"    {'-'*60}")
         for month in range(1, 13):
             ref_val = res['ref_monthly_avg'].get(month, np.nan)
             out_val = res['output_monthly_avg'].get(month, np.nan)
@@ -1225,14 +1225,14 @@ def write_product_b_chunks(summaries: list, output_folder):
     """
     Compile all locations into 10 long-format chunk CSVs (100 WYs each).
     Skips first 9 months (Jan-Sep synthetic year 1) for WY alignment.
-    Template dates: Oct 1921 – Sep 2021 (WY1922–2021).
+    Template dates: Oct 1921 - Sep 2021 (WY1922-2021).
     Writes three file sets: _uhh_precip_productB_n01..n10.csv,
                             _uhh_temperature_productB_n01..n10.csv,
                             _uhh_vpd_productB_n01..n10.csv
     Format: Part B, Part C, Year, Month, Value
     """
     skip_months     = 9     # Jan-Sep of synthetic year 1
-    months_per_chunk = 1200 # 100 WYs × 12 months
+    months_per_chunk = 1200 # 100 WYs x 12 months
     total_chunks    = 10
     total_needed    = skip_months + months_per_chunk * total_chunks
 
@@ -1246,7 +1246,7 @@ def write_product_b_chunks(summaries: list, output_folder):
         {'col': 'vpd_kpa',       'part_c': 'VPD',          'name_key': 'vpd_location_name',  'file_stem': '_uhh_vpd_productB'},
     ]
 
-    print(f"\nWriting Product B chunk files ({total_chunks} chunks × {months_per_chunk} months)...")
+    print(f"\nWriting Product B chunk files ({total_chunks} chunks x {months_per_chunk} months)...")
 
     for vc in var_configs:
         col = vc['col']
@@ -1265,7 +1265,7 @@ def write_product_b_chunks(summaries: list, output_folder):
             loc_data[loc_name] = vals
 
         if not loc_data:
-            print(f"  Skipping {vc['file_stem']} — no valid locations")
+            print(f"  Skipping {vc['file_stem']} - no valid locations")
             continue
 
         for i in range(total_chunks):
@@ -1851,7 +1851,7 @@ def main():
         print(f"\nSummary Statistics:")
         print(f"  Average number of grid cells per basin: {summary_df['num_grid_cells'].mean():.1f}")
         print(f"  Average monthly precip (across all basins): {summary_df['mean_monthly_precip_inches'].mean():.2f} inches")
-        print(f"  Average monthly tavg (across all basins): {summary_df['mean_monthly_tavg_f'].mean():.2f} °F")
+        print(f"  Average monthly tavg (across all basins): {summary_df['mean_monthly_tavg_f'].mean():.2f} degF")
     else:
         print("\nNo locations were successfully processed.")
 

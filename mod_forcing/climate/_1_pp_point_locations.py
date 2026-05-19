@@ -3,10 +3,10 @@ Extract Monthly Precipitation for PP Point Locations
 ====================================================
 Extracts monthly precipitation time series from WGEN weather data for all
 PP point locations specified in reference/pp_point_locations.csv.
-Finds the nearest VIC grid cell for each lat/lon and aggregates daily → monthly.
+Finds the nearest VIC grid cell for each lat/lon and aggregates daily -> monthly.
 
 Product A: one CSV per location.
-Product B: 10 long-format chunk CSVs (100 WY each, Oct 1921 – Sep 2021).
+Product B: 10 long-format chunk CSVs (100 WY each, Oct 1921 - Sep 2021).
 
 Inputs
 ------
@@ -212,15 +212,15 @@ def process_location(location_name, target_lat, target_lon, data_folder, output_
     dict : Summary information about the processing
     """
     print(f"\nProcessing {location_name}...")
-    print(f"  Target location: {target_lat}°N, {target_lon}°E")
+    print(f"  Target location: {target_lat}degN, {target_lon}degE")
     
     # Find nearest grid cell
     nearest_file, nearest_lat, nearest_lon, distance = find_nearest_grid_cell(
         target_lat, target_lon, data_folder
     )
     
-    print(f"  Nearest grid cell: {nearest_lat}°N, {nearest_lon}°E")
-    print(f"  Distance: {distance:.4f}° (~{distance * 111:.2f} km)")
+    print(f"  Nearest grid cell: {nearest_lat}degN, {nearest_lon}degE")
+    print(f"  Distance: {distance:.4f}deg (~{distance * 111:.2f} km)")
     
     # Read the meteo file
     daily_data = read_meteo_file(nearest_file, product_b=product_b)
@@ -291,12 +291,12 @@ def write_product_b_chunks(summaries: list, output_folder):
     """
     Compile all locations into 10 long-format chunk CSVs (100 WYs each).
     Skips first 9 months (Jan-Sep synthetic year 1) for WY alignment.
-    Template dates: Oct 1921 – Sep 2021 (WY1922–2021).
+    Template dates: Oct 1921 - Sep 2021 (WY1922-2021).
     Output: _pp_precip_productB_n01.csv ... _pp_precip_productB_n10.csv
     Format: Part B, Part C, Year, Month, Value
     """
     skip_months      = 9     # Jan-Sep of synthetic year 1
-    months_per_chunk = 1200  # 100 WYs × 12 months
+    months_per_chunk = 1200  # 100 WYs x 12 months
     total_chunks     = 10
     total_needed     = skip_months + months_per_chunk * total_chunks
 
@@ -320,7 +320,7 @@ def write_product_b_chunks(summaries: list, output_folder):
         print("  No valid locations for Product B chunk output.")
         return
 
-    print(f"\nWriting Product B chunk files ({total_chunks} chunks × {months_per_chunk} months)...")
+    print(f"\nWriting Product B chunk files ({total_chunks} chunks x {months_per_chunk} months)...")
     for i in range(total_chunks):
         rows = []
         for loc_name, vals in loc_data.items():

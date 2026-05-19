@@ -43,7 +43,7 @@ from utils.paths import get_base_dir, get_module_generated_dir
 
 class CompileSmallWatershedPrecip:
     """
-    Compile monthly (sum of daily) precipitation for each small watershed from VIC met files (area‑weighted).
+    Compile monthly (sum of daily) precipitation for each small watershed from VIC met files (area-weighted).
     Grid info file columns assumed:
         watershed_id  Lat  Lon  pct_area  f1  f2
     Weight used = f2 / f1 (see WBA documentation for details).
@@ -139,7 +139,7 @@ class CompileSmallWatershedPrecip:
         return in_series
 
     def _aggregate_watershed_monthly_product_b(self, grid_subset: pd.DataFrame) -> pd.Series:
-        """Area-weighted daily precip (mm) → monthly inches for Product B (PeriodIndex, no real dates)."""
+        """Area-weighted daily precip (mm) -> monthly inches for Product B (PeriodIndex, no real dates)."""
         weighted_sum = None
         weight_total = 0.0
         for _, row in grid_subset.iterrows():
@@ -173,7 +173,7 @@ class CompileSmallWatershedPrecip:
         monthly_df = pd.concat(series_list, axis=1)
         if not self.product_b and self.clip_period:
             monthly_df = monthly_df.loc[self.clip_period[0]: self.clip_period[1]]
-            print(f"Clipped to {self.clip_period[0]} – {self.clip_period[1]}: {len(monthly_df)} months")
+            print(f"Clipped to {self.clip_period[0]} - {self.clip_period[1]}: {len(monthly_df)} months")
         else:
             print(f"Total months: {len(monthly_df)}")
         return monthly_df

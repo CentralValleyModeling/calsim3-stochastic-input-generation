@@ -52,7 +52,7 @@ from utils.quantile_mapping import qmap_single
 
 
 def year_to_wy(date: pd.Timestamp) -> int:
-	"""Convert a date to water year (Oct–Sep)."""
+	"""Convert a date to water year (Oct-Sep)."""
 	return date.year + 1 if date.month >= 10 else date.year
 
 def wba_to_space(name: str) -> str:
@@ -61,7 +61,7 @@ def wba_to_space(name: str) -> str:
 
 class CompileWBAET:
 	"""
-	Compile area-weighted VIC reference ET per WBA, then quantile-map to CS3 for WY 1972–2018.
+	Compile area-weighted VIC reference ET per WBA, then quantile-map to CS3 for WY 1972-2018.
 
 	Inputs
 	- grid_info_file: tab-separated file with columns for WBA id, lat, lon, and percent-area
@@ -72,7 +72,7 @@ class CompileWBAET:
 	- output_path: where CSV (and optional DSS) will be written
 
 	Output
-	- For each WBA, writes CSV with monthly quantile-mapped ET (inches/month) for WY 1972–2018
+	- For each WBA, writes CSV with monthly quantile-mapped ET (inches/month) for WY 1972-2018
 	- Optional: write a DSS time series with 1MON interval
 	"""
 
@@ -103,7 +103,7 @@ class CompileWBAET:
 		self.product_b = product_b
 		self.hist_vic_path = hist_vic_path
 		self.n_workers = n_workers
-		# Product B VIC fluxes span ~1000 years — use PeriodIndex to exceed pandas Timestamp max (~2262)
+		# Product B VIC fluxes span ~1000 years - use PeriodIndex to exceed pandas Timestamp max (~2262)
 		if self.product_b:
 			self.dates_daily = pd.period_range(start='2025-01-01', end='3033-01-08', freq='D')
 		else:
@@ -202,7 +202,7 @@ class CompileWBAET:
 		return daily_mm.resample("ME").sum() / 25.4  # mm -> inches
 
 	def _quantile_map(self, monthly_df: pd.DataFrame) -> pd.Series:
-		"""Apply quantile mapping using hist: WY 1921–1971, sim: WY 1972–2018. Returns a Series for sim period."""
+		"""Apply quantile mapping using hist: WY 1921-1971, sim: WY 1972-2018. Returns a Series for sim period."""
 		df = monthly_df.copy()
 		df["month"] = df.index.month
 		df["wy"] = df.index.map(year_to_wy)
@@ -426,7 +426,7 @@ class CompileWBAET:
 		grids: pd.DataFrame,
 		cs3_cache: Dict[str, pd.DataFrame],
 	) -> Dict[str, pd.Series]:
-		"""All processing for a single WBA — VIC reading, monthly aggregation, QM.
+		"""All processing for a single WBA - VIC reading, monthly aggregation, QM.
 		Safe to run in a thread pool (no DSS I/O; uses pre-cached CS3 data).
 		"""
 		print(f"Processing {wba}")
@@ -559,7 +559,7 @@ class CompileWBAET:
 def main():
 	parser = argparse.ArgumentParser(
 		description=(
-			"Compile VIC reference ET by WBA and quantile-map to CS3 monthly ET for WY 1972–2021."
+			"Compile VIC reference ET by WBA and quantile-map to CS3 monthly ET for WY 1972-2021."
 		)
 	)
 	parser.add_argument(
@@ -654,7 +654,7 @@ def main():
 		"--n_workers",
 		type=int,
 		default=1,
-		help="Number of parallel workers for WBA processing (default: 1). Works with both Product A and B. Set to e.g. 8–16 to speed up CropET.",
+		help="Number of parallel workers for WBA processing (default: 1). Works with both Product A and B. Set to e.g. 8-16 to speed up CropET.",
 	)
 	args = parser.parse_args()
 
@@ -723,11 +723,11 @@ def main():
 
 
 if __name__ == "__main__":
-	# Product A — single type:
+	# Product A - single type:
 	# python _2_compile_et.py --et_type RefET --vic_col_index 7 --write_dss --n_workers 8
-	# Product A — all types at once:
+	# Product A - all types at once:
 	# python _2_compile_et.py --et_type all --vic_col_index 7 --write_dss --n_workers 8
-	# Product B — all types at once:
+	# Product B - all types at once:
 	# python _2_compile_et.py --et_type all --vic_col_index 7 --write_dss --Product_B --n_workers 16
 	main()
 

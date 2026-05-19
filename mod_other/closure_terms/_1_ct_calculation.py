@@ -863,7 +863,7 @@ def main():
     # -----------------------------------------------------------------
     dfd_valid = dfd.dropna(subset=["hist_year","hist_month","wgen_ym"]).copy()
 
-    # Count days per (calendar WGEN month from wgen_date) × (hist_year, hist_month)
+    # Count days per (calendar WGEN month from wgen_date) x (hist_year, hist_month)
     counts_by_label = (
         dfd_valid.groupby(["wgen_ym","hist_year","hist_month"], dropna=False)
                  .size().reset_index(name="n_days_from_hist_pair")

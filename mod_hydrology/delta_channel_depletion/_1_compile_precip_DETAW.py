@@ -47,7 +47,7 @@ class CompileStationsPrecipMM:
     Inputs:
   - coord_file: CSV with columns Lat, Lon (or Long), Station
   - met files: one per grid, named {met_prefix}_{Lat}_{Lon}
-               with columns (no header): Year Month Day precip tmax tmin  (precip in mm, tmax/tmin in °C)
+               with columns (no header): Year Month Day precip tmax tmin  (precip in mm, tmax/tmin in degC)
 
     Output:
     - Single CSV with columns:
@@ -148,7 +148,7 @@ class CompileStationsPrecipMM:
 
     def _compute_station_df_allvars(self, station_df):
         """
-        Compute average precip (mm), tmax (°C), tmin (°C) across grids for the station.
+        Compute average precip (mm), tmax (degC), tmin (degC) across grids for the station.
         Returns a DataFrame with index=self.dates and columns ['precip','tmax','tmin'].
         """
         cols = ['Lat', 'Lon'] if 'Lon' in station_df.columns else ['Lat', 'Long']

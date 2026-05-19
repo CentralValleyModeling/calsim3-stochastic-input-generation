@@ -27,7 +27,7 @@ _REPO_DIR = Path(__file__).resolve().parents[2]
 _gen = get_module_generated_dir("mod_other/miscellaneous")
 _wyt_gen = get_module_generated_dir("mod_hydrology/water_year_types")
 
-# %% ── CONFIG ───────────────────────────────────────────────────────────
+# %% -- CONFIG -----------------------------------------------------------
 dss_file = str(get_base_dir() / "CalSim3" / "__calsim_sv_default__.dss")
 terms_csv = str(_SCRIPT_DIR / "reference" / "wyt_avg_terms.csv")
 
@@ -46,8 +46,8 @@ OUTPUT_PREFIX = "miscellaneous"
 
 # Choose target WGEN product(s):
 #    "both" -> run Product A then Product B (default)
-#    "A"    -> one WYT series (1972–2018)
-#    "B"    -> ALWAYS n01..n10; WY 1922–2021
+#    "A"    -> one WYT series (1972-2018)
+#    "B"    -> ALWAYS n01..n10; WY 1922-2021
 TARGET_PRODUCT = "Both"
 
 _WYT_INPUT_DIRS = {"A": "Product_A", "B": "Product_B"}

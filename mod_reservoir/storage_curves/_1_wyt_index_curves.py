@@ -580,7 +580,7 @@ def main():
         )
 
         # Allow DSS fills only in the first few months of each Part B/C series
-        boundary_months = 3  # corresponds to first Oct–Dec when using WY alignment
+        boundary_months = 3  # corresponds to first Oct-Dec when using WY alignment
 
         df["Value"].isna()
 

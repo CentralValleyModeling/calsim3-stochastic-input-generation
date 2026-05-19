@@ -312,12 +312,12 @@ def linear_interp(x: float, x0: float, y0: float, x1: float, y1: float) -> float
 
 def annual_release_from_runoff(runoff_taf: float) -> float:
     """
-    < 400 TAF → 116.9 (Critical-Low)
-    400–670 → 187.8 (Critical-High) — flat, a discontinuity
-    670–930 → interpolate between Dry (272.3) and Normal-Dry (330.3)
-    930–1450 → interpolate between Normal-Dry and Normal-Wet (400.3)
-    1450–2500 → interpolate between Normal-Wet and N-Wet+ (547.4)
-    ≥ 2500 → 673.5 (Wet) — another flat discontinuity
+    < 400 TAF -> 116.9 (Critical-Low)
+    400-670 -> 187.8 (Critical-High) - flat, a discontinuity
+    670-930 -> interpolate between Dry (272.3) and Normal-Dry (330.3)
+    930-1450 -> interpolate between Normal-Dry and Normal-Wet (400.3)
+    1450-2500 -> interpolate between Normal-Wet and N-Wet+ (547.4)
+    >= 2500 -> 673.5 (Wet) - another flat discontinuity
     """
     r = float(runoff_taf)
     if r < 400.0:
@@ -491,8 +491,8 @@ def get_default_calsim_rest_req(
 ) -> dict[str, pd.Series]:
     """Read default CalSim REST_REQ_NP and REST_REQ_P from DSS.
 
-    Used for leading-edge months (e.g. Oct 1971–Feb 1972 for Product A,
-    Oct 1921–Feb 1922 for Product B) where the input UNIMP_SJ data does
+    Used for leading-edge months (e.g. Oct 1971-Feb 1972 for Product A,
+    Oct 1921-Feb 1922 for Product B) where the input UNIMP_SJ data does
     not cover a complete water year needed for reconstruction.
     """
     series_map = read_calsim_monthly_pairs(
@@ -647,8 +647,8 @@ def run_product_b(
 if __name__ == "__main__":
     written: list[Path] = []
 
-    # Read default CalSim REST_REQ values once — used for leading-edge months
-    # (e.g. Oct 1971–Feb 1972, Oct 1921–Feb 1922) that lack complete WY data
+    # Read default CalSim REST_REQ values once - used for leading-edge months
+    # (e.g. Oct 1971-Feb 1972, Oct 1921-Feb 1922) that lack complete WY data
     # for reconstruction.
     default_rest_req = get_default_calsim_rest_req(dssfile=DSS_FILE)
 

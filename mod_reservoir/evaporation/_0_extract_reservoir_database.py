@@ -511,8 +511,8 @@ def main():
 
     loc = db.get_location('FOLSM')
     print(f"\nLocation:")
-    print(f"  Latitude:  {loc['latitude']:.4f}°")
-    print(f"  Longitude: {loc['longitude']:.4f}°")
+    print(f"  Latitude:  {loc['latitude']:.4f}deg")
+    print(f"  Longitude: {loc['longitude']:.4f}deg")
     print(f"  Elevation: {loc['elevation_ft']:.0f} ft")
 
     ra = db.get_ra_monthly('FOLSM')

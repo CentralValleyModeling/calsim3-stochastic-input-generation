@@ -192,7 +192,7 @@ def run_comparison(source_key, src):
     merged_df = merged_df.sort_values(by=['SortOrder', 'Date'])
     merged_df = merged_df.drop(columns=['PartBC', 'SortOrder'])
 
-    # -- Save merged CSV -------------------------------------------------------────
+    # -- Save merged CSV -----------------------------------------------------------
     out_dir = os.path.join(COMPARE_DIR, source_key)
     os.makedirs(out_dir, exist_ok=True)
 

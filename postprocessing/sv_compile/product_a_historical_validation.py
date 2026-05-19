@@ -1,4 +1,4 @@
-# %% ── Compile Product A Historical Validation DSS ───────────────────────────
+# %% -- Compile Product A Historical Validation DSS ---------------------------
 """
 Consolidated Product A historical-validation compiler.
 
@@ -16,39 +16,39 @@ Workflow
 
 Inventory flags
 ---------------
-- **Missing = T** → SV does not exist in the baseline; skip entirely
-- **Used in DCR = F** → SV not used in the DCR study; skip entirely
-- **Constant/Rept = T** → repeat the last 12 WY months of the baseline across
+- **Missing = T** -> SV does not exist in the baseline; skip entirely
+- **Used in DCR = F** -> SV not used in the DCR study; skip entirely
+- **Constant/Rept = T** -> repeat the last 12 WY months of the baseline across
   the full overwrite window (auto-generated, no CSV needed)
 
 Diagnostic outputs  (all written to ``_product_a_validation/``)
 ------------------------------------------------------------------------
-- ``compiled_input_files/<module>/*.csv``  — local copies of source CSVs
-- ``<module>__productA.dss``               — per-module intermediate DSS
-- ``_constant_rept__productA.dss``         — auto-filled Constant/Rept DSS
-- ``ProductA_Historical_Validation_SV.dss``           — final compiled DSS
-- ``paths_modified.csv``                   — every (Part B/C, module) modified
-- ``paths_unchanged.csv``                  — baseline paths untouched by any module
-- ``paths_not_in_baseline.csv``            — module paths absent from the baseline
-- ``inventory_expected_modified.csv``      — inventory SVs successfully modified
-- ``inventory_expected_missing.csv``       — inventory SVs that should have been
+- ``compiled_input_files/<module>/*.csv``  - local copies of source CSVs
+- ``<module>__productA.dss``               - per-module intermediate DSS
+- ``_constant_rept__productA.dss``         - auto-filled Constant/Rept DSS
+- ``ProductA_Historical_Validation_SV.dss``           - final compiled DSS
+- ``paths_modified.csv``                   - every (Part B/C, module) modified
+- ``paths_unchanged.csv``                  - baseline paths untouched by any module
+- ``paths_not_in_baseline.csv``            - module paths absent from the baseline
+- ``inventory_expected_modified.csv``      - inventory SVs successfully modified
+- ``inventory_expected_missing.csv``       - inventory SVs that should have been
                                              modified but were not
-- ``inventory_constant_rept.csv``          — auto-filled Constant/Rept SVs
-- ``inventory_skipped_missing.csv``        — SVs skipped (Missing = T)
-- ``inventory_skipped_not_in_dcr.csv``     — SVs skipped (Used in DCR = F)
-- ``inventory_unexpected.csv``             — modifications not in the inventory
-- ``modification_statistics.csv``          — per-path monthly & annual comparison
+- ``inventory_constant_rept.csv``          - auto-filled Constant/Rept SVs
+- ``inventory_skipped_missing.csv``        - SVs skipped (Missing = T)
+- ``inventory_skipped_not_in_dcr.csv``     - SVs skipped (Used in DCR = F)
+- ``inventory_unexpected.csv``             - modifications not in the inventory
+- ``modification_statistics.csv``          - per-path monthly & annual comparison
                                              stats (base vs modified) when enabled
-- ``modification_statistics_report.txt``   — summary report by input category
-- ``figures/r2_nse_by_category.png``       — R²/NSE box plots by category
-- ``figures/pctchange_monthly_by_category.png`` — monthly % change heatmap
-- ``figures/abschange_annual_by_category.png``  — annual abs-change box plots
-- ``figures/r2_nse_scatter.png``           — R² vs NSE scatter by category
-- ``figures/all-terms/``                   — per-variable plots (regular terms)
-- ``figures/all-terms-constant-rept/``     — per-variable plots (12-month repeat)
-- ``figures/all-terms-constant/``          — per-variable plots (constant value)
-- ``compilation_summary.txt``              — full statistics
-- ``summary_tables.csv``                   — per-category summary table
+- ``modification_statistics_report.txt``   - summary report by input category
+- ``figures/r2_nse_by_category.png``       - R2/NSE box plots by category
+- ``figures/pctchange_monthly_by_category.png`` - monthly % change heatmap
+- ``figures/abschange_annual_by_category.png``  - annual abs-change box plots
+- ``figures/r2_nse_scatter.png``           - R2 vs NSE scatter by category
+- ``figures/all-terms/``                   - per-variable plots (regular terms)
+- ``figures/all-terms-constant-rept/``     - per-variable plots (12-month repeat)
+- ``figures/all-terms-constant/``          - per-variable plots (constant value)
+- ``compilation_summary.txt``              - full statistics
+- ``summary_tables.csv``                   - per-category summary table
                                              (R2, NSE, annual averages)
 
 CLI flags
@@ -90,9 +90,9 @@ from pydsstools.heclib.dss import HecDss
 from pydsstools.core import TimeSeriesContainer
 
 
-# ══════════════════════════════════════════════════════════════════════════════
+# ------------------------------------------------------------------------------
 # Configuration
-# ══════════════════════════════════════════════════════════════════════════════
+# ------------------------------------------------------------------------------
 _base = get_base_dir()
 _gen  = get_module_generated_dir("postprocessing/sv_compile")
 
@@ -143,9 +143,9 @@ def _dss_str(path):
     except ValueError:
         return s
 
-# ── CLI arguments ────────────────────────────────────────────────────────────
+# -- CLI arguments ------------------------------------------------------------
 _parser = argparse.ArgumentParser(
-    description="Product A Historical Validation — DSS Compilation",
+    description="Product A Historical Validation - DSS Compilation",
 )
 _parser.add_argument(
     "--compute-stats", action="store_true", default=False,
@@ -165,12 +165,12 @@ _parser.add_argument(
 _parser.add_argument(
     "--summary-tables", action="store_true", default=False,
     help="Generate per-category summary Excel workbook from "
-         "modification_statistics.csv.  Standalone mode — exits after writing.",
+         "modification_statistics.csv.  Standalone mode - exits after writing.",
 )
 CLI_ARGS = _parser.parse_args()
 
-# ── Module definitions ───────────────────────────────────────────────────────
-# label → (absolute path to validation dir, inventory Input_Category name)
+# -- Module definitions -------------------------------------------------------
+# label -> (absolute path to validation dir, inventory Input_Category name)
 _gen_dir = get_generated_dir()
 MODULE_CONFIG = OrderedDict([
     ("calsimhydro",              (_gen_dir / "mod_hydrology/calsimhydro/output/_3_postprocess_product_a/_product_a_validation", 
@@ -203,16 +203,16 @@ MODULE_CONFIG = OrderedDict([
 CATEGORIES_WITHOUT_VALIDATION = {"Closure Terms", "Day-Volume Fraction", "Salinity"}
 
 
-# ══════════════════════════════════════════════════════════════════════════════
+# ------------------------------------------------------------------------------
 # Helpers
-# ══════════════════════════════════════════════════════════════════════════════
+# ------------------------------------------------------------------------------
 def excel_to_part(name: str) -> str:
-    """Normalise a Part B/C value to upper-case, spaces → underscores."""
+    """Normalise a Part B/C value to upper-case, spaces -> underscores."""
     return str(name).upper().replace(" ", "_")
 
 
 def ym_to_eom(year: int, month: int) -> pd.Timestamp:
-    """Year + Month → end-of-month timestamp."""
+    """Year + Month -> end-of-month timestamp."""
     return pd.Timestamp(year=int(year), month=int(month), day=1).to_period("M").to_timestamp("M")
 
 
@@ -267,7 +267,7 @@ def read_master_inventory() -> pd.DataFrame:
         wb = openpyxl.load_workbook(str(INVENTORY_XLSX), read_only=True, data_only=True)
     except PermissionError:
         sys.exit(
-            f"ERROR: Cannot read the master inventory — the file may be open in Excel.\n"
+            f"ERROR: Cannot read the master inventory - the file may be open in Excel.\n"
             f"  Close the file and re-run the script:\n"
             f"  {INVENTORY_XLSX}"
         )
@@ -284,7 +284,7 @@ def read_master_inventory() -> pd.DataFrame:
                 "Input_Category":  str(cat).strip(),
                 "Missing":         str(r[10]).strip().upper() == "T",
                 "Constant_Rept":   str(r[11]).strip().upper() == "T",
-                "Used_in_DCR":     str(r[12]).strip().upper() != "F",  # T or blank → True
+                "Used_in_DCR":     str(r[12]).strip().upper() != "F",  # T or blank -> True
             })
     return pd.DataFrame(records)
 
@@ -293,7 +293,7 @@ def _extract_wy_pattern(ser_clean):
     """Extract a 12-month repeating pattern from non-missing baseline data.
 
     Strategy (in order of preference):
-      1. Find the last **complete** water year (Oct–Sep) and use its 12 values.
+      1. Find the last **complete** water year (Oct-Sep) and use its 12 values.
       2. If no complete WY exists, build the pattern from the last occurrence
          of each calendar month across the entire series.
 
@@ -336,7 +336,7 @@ def build_constant_rept_overrides(
     """For a Constant/Rept SV, extract a repeating annual pattern from the
     baseline and tile it across the entire overwrite window.
 
-    The pattern is sourced from the last complete water year (Oct–Sep) in the
+    The pattern is sourced from the last complete water year (Oct-Sep) in the
     baseline.  If no complete WY exists, falls back to the last available value
     for each calendar month.
 
@@ -350,7 +350,7 @@ def build_constant_rept_overrides(
     if part_key not in baseline_bucket:
         return {}
 
-    # ── Step 1: Read all D-part blocks and merge into one unified series ──
+    # -- Step 1: Read all D-part blocks and merge into one unified series --
     block_data = []  # list of (pathname, eom_pd, ts_vals)
     merged = {}      # {datetime: value} across all blocks
     for pathname in baseline_bucket[part_key]:
@@ -366,7 +366,7 @@ def build_constant_rept_overrides(
     if not merged:
         return {pn: tv for pn, _, tv in block_data}
 
-    # ── Step 2: Extract ONE pattern from the merged series ───────────────
+    # -- Step 2: Extract ONE pattern from the merged series ---------------
     merged_dates = sorted(merged.keys())
     merged_ser = pd.Series(
         [merged[d] for d in merged_dates],
@@ -382,7 +382,7 @@ def build_constant_rept_overrides(
         print(f"  WARNING: Constant/Rept pattern for {part_key} is missing "
               f"months: {missing_str}")
 
-    # ── Step 3: Apply the single pattern to every block ──────────────────
+    # -- Step 3: Apply the single pattern to every block ------------------
     result = {}
     for pathname, eom_pd, ts_vals in block_data:
         mask = (eom_pd >= overwrite_start) & (eom_pd <= overwrite_end)
@@ -399,27 +399,27 @@ def generate_per_variable_plots(stats_csv: Path, cached_series: dict = None):
     """Generate diagnostic figures for every modified (Part B, Part C).
 
     If *cached_series* is provided (a dict from ``compute_modification_statistics``),
-    DSS files are **not** re-read — a major speed-up.
+    DSS files are **not** re-read - a major speed-up.
 
     Three figure sets are produced per variable:
 
-    1. **Monthly** — ``figures/all-terms/<Cat>/<B>__<C>_r2=<NN>.png``
-       Left: monthly time-series, Right: monthly scatter with R²/NSE.
+    1. **Monthly** - ``figures/all-terms/<Cat>/<B>__<C>_r2=<NN>.png``
+       Left: monthly time-series, Right: monthly scatter with R2/NSE.
 
-    2. **Annual** — ``figures/all-terms-annual/<Cat>/<B>__<C>_r2=<NN>.png``
-       Left: water-year annual time-series, Right: annual scatter with R²/NSE.
+    2. **Annual** - ``figures/all-terms-annual/<Cat>/<B>__<C>_r2=<NN>.png``
+       Left: water-year annual time-series, Right: annual scatter with R2/NSE.
 
-    3. **Monthly Average** — ``figures/all-terms-mavg/<Cat>/<B>__<C>.png``
+    3. **Monthly Average** - ``figures/all-terms-mavg/<Cat>/<B>__<C>.png``
        Left: 12-month climatology bar chart, Right: climatology scatter.
 
     Terms are separated into three output tiers:
 
-    - **all-terms** / **all-terms-annual** / **all-terms-mavg** — regular
+    - **all-terms** / **all-terms-annual** / **all-terms-mavg** - regular
       reconstructed terms.
-    - **all-terms-constant-rept** / **-annual** / **-mavg** — terms whose
+    - **all-terms-constant-rept** / **-annual** / **-mavg** - terms whose
       modified values are a 12-month repeating pattern (inventory
       ``Constant/Rept = T``).
-    - **all-terms-constant** / **-annual** / **-mavg** — terms whose modified
+    - **all-terms-constant** / **-annual** / **-mavg** - terms whose modified
       values are a single constant (zero or otherwise).
     """
     import matplotlib
@@ -429,8 +429,8 @@ def generate_per_variable_plots(stats_csv: Path, cached_series: dict = None):
 
     _MEAN_UNITS = {"CFS", "MG/L", "FAHRENHE", "KPA", "NONE", "DAYS"}
 
-    FIG_W     = 6.5      # inches — maximum width
-    FIG_H     = 2.5      # inches — height (controls scatter squareness)
+    FIG_W     = 6.5      # inches - maximum width
+    FIG_H     = 2.5      # inches - height (controls scatter squareness)
     FONT_SIZE = 7
 
     plt.rcParams.update({
@@ -449,7 +449,7 @@ def generate_per_variable_plots(stats_csv: Path, cached_series: dict = None):
                      "Apr", "May", "Jun", "Jul", "Aug", "Sep"]
     _MONTH_NUMS   = [10, 11, 12, 1, 2, 3, 4, 5, 6, 7, 8, 9]
 
-    # ── Output directories ───────────────────────────────────────────────
+    # -- Output directories -----------------------------------------------
     # Regular reconstructed terms
     dir_monthly = stats_csv.parent / "figures" / "all-terms"
     dir_annual  = stats_csv.parent / "figures" / "all-terms-annual"
@@ -467,21 +467,21 @@ def generate_per_variable_plots(stats_csv: Path, cached_series: dict = None):
               dir_monthly_const, dir_annual_const, dir_mavg_const):
         d.mkdir(parents=True, exist_ok=True)
 
-    # ── R² / NSE / Category lookup from the stats CSV ────────────────────
+    # -- R2 / NSE / Category lookup from the stats CSV --------------------
     stats_df = pd.read_csv(stats_csv)
 
     inv = read_master_inventory()
     cat_map = {}
-    rept_map = {}   # (Part_B, Part_C) → bool  (Constant/Rept flag)
+    rept_map = {}   # (Part_B, Part_C) -> bool  (Constant/Rept flag)
     for _, r in inv.iterrows():
         cat_map[(r["Part_B"], r["Part_C"])] = r["Input_Category"]
         rept_map[(r["Part_B"], r["Part_C"])] = bool(r.get("Constant_Rept", False))
 
-    # Build Input_Category → numbered folder name lookup from MODULE_CONFIG
+    # Build Input_Category -> numbered folder name lookup from MODULE_CONFIG
     _cat_to_folder = {}
     for label, (_rel, inv_cat) in MODULE_CONFIG.items():
-        _cat_to_folder[inv_cat] = label          # e.g. "CalSimHydro" → "_05_CalSimHydro"
-    # Categories without dedicated validation modules — map to their directory numbers
+        _cat_to_folder[inv_cat] = label          # e.g. "CalSimHydro" -> "_05_CalSimHydro"
+    # Categories without dedicated validation modules - map to their directory numbers
     _NO_VALIDATION_FOLDER = {
         "Closure Terms":      "_07_ClosureTerms",
         "Day-Volume Fraction": "_09_DayVolumeFraction",
@@ -496,7 +496,7 @@ def generate_per_variable_plots(stats_csv: Path, cached_series: dict = None):
     stats_lookup = {}
     for _, row in stats_df.iterrows():
         k = (row["Part_B"], row["Part_C"])
-        # Skip all-zero paths — nothing useful to plot
+        # Skip all-zero paths - nothing useful to plot
         if row.get("AllZero", False):
             continue
         stats_lookup[k] = {
@@ -508,7 +508,7 @@ def generate_per_variable_plots(stats_csv: Path, cached_series: dict = None):
             "Category": cat_map.get(k, "Unknown"),
         }
 
-    # ── Catalog baseline DSS ─────────────────────────────────────────────
+    # -- Catalog baseline DSS ---------------------------------------------
     with HecDss.Open(str(BASELINE_DSS), version=6, catalog_flag=True) as _dss:
         _bp = _dss.getPathnameList(DSS_PATTERN)
     baseline_bucket = {}
@@ -516,7 +516,7 @@ def generate_per_variable_plots(stats_csv: Path, cached_series: dict = None):
         k = path_key(p)
         baseline_bucket.setdefault(k, []).append(p)
 
-    # ── Helper: R²/NSE computation ───────────────────────────────────────
+    # -- Helper: R2/NSE computation ---------------------------------------
     import warnings
 
     def _r2(obs, sim):
@@ -534,7 +534,7 @@ def generate_per_variable_plots(stats_csv: Path, cached_series: dict = None):
         ss_tot = np.sum((obs - np.mean(obs)) ** 2)
         return 1.0 - ss_res / ss_tot if ss_tot > 0 else np.nan
 
-    # ── Helper: plot time-series + scatter panel ─────────────────────────
+    # -- Helper: plot time-series + scatter panel -------------------------
     def _plot_ts_scatter(b_x, b_y, m_x, m_y, title, units, r2_val, nse_val,
                          out_path, x_is_date=True):
         """Shared plotting logic for monthly / annual figures."""
@@ -592,7 +592,7 @@ def generate_per_variable_plots(stats_csv: Path, cached_series: dict = None):
         fig.savefig(out_path, bbox_inches="tight")
         plt.close(fig)
 
-    # ── Helper: monthly-average bar + scatter ────────────────────────────
+    # -- Helper: monthly-average bar + scatter ----------------------------
     def _plot_mavg(b_mavg, m_mavg, title, units, out_path):
         """12-month climatology bar chart + scatter."""
         fig = plt.figure(figsize=(FIG_W, FIG_H))
@@ -651,33 +651,33 @@ def generate_per_variable_plots(stats_csv: Path, cached_series: dict = None):
         fig.savefig(out_path, bbox_inches="tight")
         plt.close(fig)
 
-    # ── Helper: classify a term ──────────────────────────────────────────
+    # -- Helper: classify a term ------------------------------------------
     def _classify_term(pk, m_ser):
         """Return 'constant-rept', 'constant', or 'regular'.
 
-        - 'constant-rept' — inventory Constant/Rept = T
-        - 'constant'      — modified series is a single constant value
-                            (std ≈ 0, including all-zero)
-        - 'regular'       — everything else
+        - 'constant-rept' - inventory Constant/Rept = T
+        - 'constant'      - modified series is a single constant value
+                            (std ~ 0, including all-zero)
+        - 'regular'       - everything else
         """
         if rept_map.get(pk, False):
             # Check if it is *also* a flat constant (all same value)
             if m_ser.std() < 1e-10:
                 return "constant"        # truly constant, even if flagged rept
             return "constant-rept"
-        # Not flagged as Constant/Rept — check for flat constant
+        # Not flagged as Constant/Rept - check for flat constant
         if m_ser.std() < 1e-10:
             return "constant"
         return "regular"
 
-    # Map classification → (monthly_dir, annual_dir, mavg_dir)
+    # Map classification -> (monthly_dir, annual_dir, mavg_dir)
     _CLASS_DIRS = {
         "regular":       (dir_monthly,       dir_annual,       dir_mavg),
         "constant-rept": (dir_monthly_rept,  dir_annual_rept,  dir_mavg_rept),
         "constant":      (dir_monthly_const, dir_annual_const, dir_mavg_const),
     }
 
-    # ── Generate figures per variable ────────────────────────────────────
+    # -- Generate figures per variable ------------------------------------
     n_plotted = 0
     n_by_class = {"regular": 0, "constant-rept": 0, "constant": 0}
     all_keys  = sorted(stats_lookup.keys())
@@ -730,7 +730,7 @@ def generate_per_variable_plots(stats_csv: Path, cached_series: dict = None):
                     yield pk, b_ser, m_ser, units
 
     if _use_cache:
-        print("    (using cached series — DSS reads skipped)")
+        print("    (using cached series - DSS reads skipped)")
 
     for pk, b_ser, m_ser, units in _iter_series():
         info     = stats_lookup.get(pk, {})
@@ -749,7 +749,7 @@ def generate_per_variable_plots(stats_csv: Path, cached_series: dict = None):
         cat_folder = _cat_to_folder.get(category, f"_XX_{category}")
         cat_safe = cat_folder.replace("/", "_").replace("\\", "_").strip()
 
-        # ── 1) Monthly time-series + scatter ─────────────────────────
+        # -- 1) Monthly time-series + scatter -------------------------
         cat_dir_m = _dir_m / cat_safe
         cat_dir_m.mkdir(parents=True, exist_ok=True)
         fname_m = f"{pk[0]}__{pk[1]}.png".replace("/", "_")
@@ -759,7 +759,7 @@ def generate_per_variable_plots(stats_csv: Path, cached_series: dict = None):
             cat_dir_m / fname_m, x_is_date=True,
         )
 
-        # ── 2) Annual time-series + scatter ──────────────────────────
+        # -- 2) Annual time-series + scatter --------------------------
         idx = b_ser.index
         wy_labels = np.where(idx.month >= 10, idx.year + 1, idx.year)
         df_wy = pd.DataFrame({"base": b_ser.values, "mod": m_ser.values},
@@ -783,7 +783,7 @@ def generate_per_variable_plots(stats_csv: Path, cached_series: dict = None):
                 cat_dir_a / fname_a, x_is_date=False,
             )
 
-        # ── 3) Monthly average climatology ───────────────────────────
+        # -- 3) Monthly average climatology ---------------------------
         b_mavg = np.array([b_ser[b_ser.index.month == m].mean()
                            for m in _MONTH_NUMS])
         m_mavg = np.array([m_ser[m_ser.index.month == m].mean()
@@ -802,9 +802,9 @@ def generate_per_variable_plots(stats_csv: Path, cached_series: dict = None):
             print(f"    ... {n_plotted} variables plotted")
 
     print(f"  Per-variable plots:  {n_plotted} variables")
-    print(f"    regular:       {n_by_class['regular']:>4d}  → all-terms/")
-    print(f"    constant-rept: {n_by_class['constant-rept']:>4d}  → all-terms-constant-rept/")
-    print(f"    constant:      {n_by_class['constant']:>4d}  → all-terms-constant/")
+    print(f"    regular:       {n_by_class['regular']:>4d}  -> all-terms/")
+    print(f"    constant-rept: {n_by_class['constant-rept']:>4d}  -> all-terms-constant-rept/")
+    print(f"    constant:      {n_by_class['constant']:>4d}  -> all-terms-constant/")
     return n_plotted
 
 
@@ -842,11 +842,11 @@ def generate_stats_report(stats_csv: Path, cached_series: dict = None):
     fig_dir = out_dir / "figures"
     fig_dir.mkdir(exist_ok=True)
 
-    # ── Load stats & join inventory category ─────────────────────────────
+    # -- Load stats & join inventory category -----------------------------
     df = pd.read_csv(stats_csv)
     inv = read_master_inventory()
 
-    # Build (Part_B, Part_C) → Input_Category lookup  &  Constant_Rept flag
+    # Build (Part_B, Part_C) -> Input_Category lookup  &  Constant_Rept flag
     cat_map = {}
     rept_map = {}
     for _, r in inv.iterrows():
@@ -860,7 +860,7 @@ def generate_stats_report(stats_csv: Path, cached_series: dict = None):
         lambda r: rept_map.get((r["Part_B"], r["Part_C"]), False), axis=1
     )
 
-    # Exclude paths flagged as all-zero / trivial (both baseline & modified ≈ 0)
+    # Exclude paths flagged as all-zero / trivial (both baseline & modified ~ 0)
     n_allzero = 0
     if "AllZero" in df.columns:
         n_allzero = df["AllZero"].sum()
@@ -899,7 +899,7 @@ def generate_stats_report(stats_csv: Path, cached_series: dict = None):
     cat_order += sorted(_present - set(cat_order))
     n_total = len(df)
 
-    # Subset excluding Constant/Rept terms — used for summary figures only
+    # Subset excluding Constant/Rept terms - used for summary figures only
     df_plots = df[~df["Constant_Rept"]].copy()
     n_rept = n_total - len(df_plots)
     # Keep only categories that still have rows after filtering.
@@ -925,12 +925,12 @@ def generate_stats_report(stats_csv: Path, cached_series: dict = None):
     _MONTHS = ["Oct", "Nov", "Dec", "Jan", "Feb", "Mar",
                "Apr", "May", "Jun", "Jul", "Aug", "Sep"]
 
-    # ══════════════════════════════════════════════════════════════════════
+    # ----------------------------------------------------------------------
     # 1.  Text report
-    # ══════════════════════════════════════════════════════════════════════
+    # ----------------------------------------------------------------------
     lines = []
     lines.append("=" * 72)
-    lines.append("  Modification Statistics — Summary Report")
+    lines.append("  Modification Statistics - Summary Report")
     lines.append("=" * 72)
     lines.append("")
     lines.append(f"  Total paths analysed:  {n_total}")
@@ -944,9 +944,9 @@ def generate_stats_report(stats_csv: Path, cached_series: dict = None):
     for cat in cat_order:
         sub = df[df["Input_Category"] == cat]
         n = len(sub)
-        lines.append("─" * 72)
+        lines.append("-" * 72)
         lines.append(f"  {cat}  ({n} path{'s' if n != 1 else ''})")
-        lines.append("─" * 72)
+        lines.append("-" * 72)
 
         # Overall quality metrics
         r2m  = sub["R2-Monthly"].dropna()
@@ -956,10 +956,10 @@ def generate_stats_report(stats_csv: Path, cached_series: dict = None):
 
         lines.append("")
         lines.append("  Goodness-of-fit                   Median     Mean      Min       Max")
-        for label, s in [("R² (monthly)", r2m), ("NSE (monthly)", nsem),
-                         ("R² (annual)", r2a), ("NSE (annual)", nsea)]:
+        for label, s in [("R2 (monthly)", r2m), ("NSE (monthly)", nsem),
+                         ("R2 (annual)", r2a), ("NSE (annual)", nsea)]:
             if s.empty:
-                lines.append(f"    {label:28s}     —         —         —         —")
+                lines.append(f"    {label:28s}     -         -         -         -")
             else:
                 lines.append(f"    {label:28s} {s.median():9.4f} {s.mean():9.4f} "
                              f"{s.min():9.4f} {s.max():9.4f}")
@@ -974,7 +974,7 @@ def generate_stats_report(stats_csv: Path, cached_series: dict = None):
                 v = sub[col].median()
                 line_vals += f"{m}: {v:+7.1f}%  "
             else:
-                line_vals += f"{m}:     —  "
+                line_vals += f"{m}:     -  "
         lines.append(line_vals)
 
         # Annual summary
@@ -996,13 +996,13 @@ def generate_stats_report(stats_csv: Path, cached_series: dict = None):
             lines.append("  Lowest NSE-Monthly paths:")
             for _, w in worst.iterrows():
                 lines.append(f"    {w['Part_B']:30s} {w['Part_C']:20s}  "
-                             f"R²={w['R2-Monthly']:.4f}  NSE={w['NSE-Monthly']:.4f}")
+                             f"R2={w['R2-Monthly']:.4f}  NSE={w['NSE-Monthly']:.4f}")
 
-        # Paths excluded from box plots (NaN R2-Monthly → constant, zero, or missing)
+        # Paths excluded from box plots (NaN R2-Monthly -> constant, zero, or missing)
         nan_r2 = sub[sub["R2-Monthly"].isna()][["Part_B", "Part_C"]]
         if not nan_r2.empty:
             lines.append("")
-            lines.append(f"  Excluded from box plots (NaN R²-Monthly — constant/zero/missing):")
+            lines.append(f"  Excluded from box plots (NaN R2-Monthly - constant/zero/missing):")
             for _, w in nan_r2.iterrows():
                 lines.append(f"    {w['Part_B']:30s} {w['Part_C']:20s}")
 
@@ -1013,9 +1013,9 @@ def generate_stats_report(stats_csv: Path, cached_series: dict = None):
     rpt_path.write_text("\n".join(lines), encoding="utf-8")
     print(f"  Report:  {rpt_path.name}")
 
-    # ══════════════════════════════════════════════════════════════════════
+    # ----------------------------------------------------------------------
     # 2.  Figures
-    # ══════════════════════════════════════════════════════════════════════
+    # ----------------------------------------------------------------------
     plt.rcParams.update({"figure.dpi": 300, "font.size": 7,
                          "axes.titlesize": 7, "axes.labelsize": 7,
                          "xtick.labelsize": 7, "ytick.labelsize": 7,
@@ -1023,7 +1023,7 @@ def generate_stats_report(stats_csv: Path, cached_series: dict = None):
 
     n_cats = len(cat_order_plots)
 
-    # ── Module group mapping for bracket annotations ──────────────────
+    # -- Module group mapping for bracket annotations ------------------
     _CAT_TO_MODULE_GROUP = {
         "CalSimHydro":              "mod_hydrology",
         "CalSimHydroEE":            "mod_hydrology",
@@ -1084,12 +1084,12 @@ def generate_stats_report(stats_csv: Path, cached_series: dict = None):
                     fontsize=6, fontstyle="italic", color="0.3",
                     clip_on=False)
 
-    # ── Figs 1-4: Individual R2/NSE box plots by category ───────────────
+    # -- Figs 1-4: Individual R2/NSE box plots by category ---------------
     #    (Constant/Rept terms excluded; n= reflects non-NaN count per metric)
     for col, title, fname in [
-        ("R2-Monthly",  "R² (Monthly)",  "r2_monthly_by_category.png"),
+        ("R2-Monthly",  "R2 (Monthly)",  "r2_monthly_by_category.png"),
         ("NSE-Monthly", "NSE (Monthly)", "nse_monthly_by_category.png"),
-        ("R2-Ann",      "R² (Annual)",   "r2_annual_by_category.png"),
+        ("R2-Ann",      "R2 (Annual)",   "r2_annual_by_category.png"),
         ("NSE-Ann",     "NSE (Annual)",  "nse_annual_by_category.png"),
     ]:
         fig, ax = plt.subplots(figsize=(min(7, 0.65 * n_cats + 2), 5.0))
@@ -1137,7 +1137,7 @@ def generate_stats_report(stats_csv: Path, cached_series: dict = None):
         plt.close(fig)
         print(f"  Figure:  figures/{fname}")
 
-    # ── Fig 5: Monthly % change heatmap by category ─────────────────────
+    # -- Fig 5: Monthly % change heatmap by category ---------------------
     #    (Constant/Rept terms excluded)
     pct_cols = [f"PctChange-{m}-Avg" for m in _MONTHS]
     existing_cols = [c for c in pct_cols if c in df_plots.columns]
@@ -1174,7 +1174,7 @@ def generate_stats_report(stats_csv: Path, cached_series: dict = None):
         plt.close(fig)
         print(f"  Figure:  figures/pctchange_monthly_by_category.png")
 
-    # ── Figs 6+: Scatter — |Annual Avg Baseline| vs Avg Annual % Change ─
+    # -- Figs 6+: Scatter - |Annual Avg Baseline| vs Avg Annual % Change -
     #    One plot per category + one "All" plot.  Constant/Rept excluded.
     _scatter_dir = fig_dir / "annual_scatter"
     _scatter_dir.mkdir(exist_ok=True)
@@ -1185,7 +1185,7 @@ def generate_stats_report(stats_csv: Path, cached_series: dict = None):
 
         def _scatter_base_vs_mod(sub, title, out_path):
             """Scatter: Mean Annual Baseline (x) vs Mean Annual Product A (y).
-            Linear axes, 1:1 line plus ±10% reference lines."""
+            Linear axes, 1:1 line plus +/-10% reference lines."""
             x = sub["Base-Ann-Avg"].values.astype(float)
             y = sub["Mod-Ann-Avg"].values.astype(float)
             mask = np.isfinite(x) & np.isfinite(y)
@@ -1197,7 +1197,7 @@ def generate_stats_report(stats_csv: Path, cached_series: dict = None):
             ax.scatter(x, y, s=8, alpha=0.55,
                        color="#1f77b4", edgecolors="none", zorder=2)
 
-            # ── Reference lines ──────────────────────────────────────
+            # -- Reference lines --------------------------------------
             all_v = np.concatenate([x, y])
             v_lo  = float(np.nanmin(all_v))
             v_hi  = float(np.nanmax(all_v))
@@ -1208,7 +1208,7 @@ def generate_stats_report(stats_csv: Path, cached_series: dict = None):
 
             # 1:1 line
             ax.plot(ref, ref, "k-", lw=0.8, alpha=0.5, zorder=1, label="1:1")
-            # ±10 % deviation lines
+            # +/-10 % deviation lines
             ax.plot(ref, ref * 1.10, color="#d62728", ls="--", lw=0.7,
                     alpha=0.6, zorder=1, label="\u00b110%")
             ax.plot(ref, ref * 0.90, color="#d62728", ls="--", lw=0.7,
@@ -1242,7 +1242,7 @@ def generate_stats_report(stats_csv: Path, cached_series: dict = None):
                 unit_label = f" [{unit}]" if unit else ""
                 _scatter_base_vs_mod(
                     unit_sub,
-                    f"{cat}{unit_label} — Baseline vs Product A",
+                    f"{cat}{unit_label} - Baseline vs Product A",
                     _scatter_dir / f"{safe_cat}{suffix}.png",
                 )
                 _n_scatter += 1
@@ -1250,14 +1250,14 @@ def generate_stats_report(stats_csv: Path, cached_series: dict = None):
         print(f"  Scatter plots:  figures/annual_scatter/  "
               f"({_n_scatter} plots across {len(cat_order_plots)} categories)")
 
-    # ══════════════════════════════════════════════════════════════════════
+    # ----------------------------------------------------------------------
     # 3.  Per-variable diagnostic plots
-    # ══════════════════════════════════════════════════════════════════════
+    # ----------------------------------------------------------------------
     print("  Generating per-variable diagnostic plots ...")
     if not CLI_ARGS.no_term_plots:
         generate_per_variable_plots(stats_csv, cached_series=cached_series)
     else:
-        print("    (skipped — --no-term-plots flag set)")
+        print("    (skipped - --no-term-plots flag set)")
 
     return rpt_path
 
@@ -1306,7 +1306,7 @@ def generate_summary_tables(stats_csv: Path):
         return tbl
 
     output_csv = OUTPUT_DIR / "summary_tables.csv"
-    sections = []   # list of (section_name, DataFrame) — written sequentially
+    sections = []   # list of (section_name, DataFrame) - written sequentially
 
     def _append_section(name, tbl):
         """Add a titled section DataFrame to the sections list."""
@@ -1348,7 +1348,7 @@ def generate_summary_tables(stats_csv: Path):
         _append_section(section_name, tbl)
 
     # ==================================================================
-    # Rim Inflow — Individual Unimpaired
+    # Rim Inflow - Individual Unimpaired
     # ==================================================================
     rim = df[df["Input_Category"] == "Rim Inflow"].copy()
     unimp_terms = [
@@ -1368,7 +1368,7 @@ def generate_summary_tables(stats_csv: Path):
     _append_section("Rim - Unimpaired", unimp_df)
 
     # ==================================================================
-    # Rim Inflow — Grand Total of I_* nodes
+    # Rim Inflow - Grand Total of I_* nodes
     # ==================================================================
     # Exclude all UNIMP_* flows except UNIMP_WH (which has no constituent
     # I_* nodes in the stats CSV and must be included directly).
@@ -1399,7 +1399,7 @@ def generate_summary_tables(stats_csv: Path):
     _append_section("Rim - Total", total_row)
 
     # ==================================================================
-    # Rim Inflow — Included / Excluded detail for grand total validation
+    # Rim Inflow - Included / Excluded detail for grand total validation
     # ==================================================================
     all_rim_pb = sorted(rim["Part_B"].unique())
     detail_records = []
@@ -1441,7 +1441,7 @@ def generate_summary_tables(stats_csv: Path):
         sub["_const_key"] = list(zip(sub["Part_B"], sub["Part_C"]))
         sub = sub[~sub["_const_key"].isin(const_keys)]
         # Safety net: also drop rows where R2 rounds to 1.0 or is NaN
-        # (indistinguishable base vs. mod → effectively constant)
+        # (indistinguishable base vs. mod -> effectively constant)
         sub = sub[sub["R2-Monthly"].notna() & (sub["R2-Monthly"] < 0.9999)]
         tbl = (
             sub[["Part_B", "Part_C"] + METRIC_COLS + ANN_COLS]
@@ -1505,7 +1505,7 @@ def compute_modification_statistics(all_modified_keys, baseline_bucket):
         return 1.0 - ss_res / ss_tot if ss_tot > 0 else np.nan
 
     stat_rows = []
-    cached_series = {}   # (B,C) → {"b_ser", "m_ser", "units"}
+    cached_series = {}   # (B,C) -> {"b_ser", "m_ser", "units"}
     n_read_errors = 0
 
     # Look up Input_Category for each (Part_B, Part_C)
@@ -1654,19 +1654,19 @@ def compute_modification_statistics(all_modified_keys, baseline_bucket):
     return len(stats_df), cached_series
 
 
-# ══════════════════════════════════════════════════════════════════════════════
-# STEP 0 — Pre-flight
-# ══════════════════════════════════════════════════════════════════════════════
+# ------------------------------------------------------------------------------
+# STEP 0 - Pre-flight
+# ------------------------------------------------------------------------------
 
-# ── Compute-stats-only mode ──────────────────────────────────────────────────
+# -- Compute-stats-only mode --------------------------------------------------
 if CLI_ARGS.compute_stats:
     print("=" * 72)
-    print("  Product A Historical Validation — Compute Statistics Only")
+    print("  Product A Historical Validation - Compute Statistics Only")
     print("=" * 72)
 
     if not OUTPUT_DSS.exists():
         sys.exit(
-            f"ERROR: Compiled DSS not found — run the full compilation first.\n"
+            f"ERROR: Compiled DSS not found - run the full compilation first.\n"
             f"  Expected: {OUTPUT_DSS}"
         )
     if not BASELINE_DSS.exists():
@@ -1675,7 +1675,7 @@ if CLI_ARGS.compute_stats:
     paths_mod_csv = OUTPUT_DIR / "paths_modified.csv"
     if not paths_mod_csv.exists():
         sys.exit(
-            f"ERROR: paths_modified.csv not found — run the full compilation first.\n"
+            f"ERROR: paths_modified.csv not found - run the full compilation first.\n"
             f"  Expected: {paths_mod_csv}"
         )
 
@@ -1713,16 +1713,16 @@ if CLI_ARGS.compute_stats:
     sys.exit(0)
 
 
-# ── Stats-report-only mode (no compilation, no stats recompute) ──────────────
+# -- Stats-report-only mode (no compilation, no stats recompute) --------------
 if CLI_ARGS.stats_report:
     print("=" * 72)
-    print("  Product A Historical Validation — Generate Stats Report")
+    print("  Product A Historical Validation - Generate Stats Report")
     print("=" * 72)
 
     stats_csv = OUTPUT_DIR / "modification_statistics.csv"
     if not stats_csv.exists():
         sys.exit(
-            f"ERROR: modification_statistics.csv not found — "
+            f"ERROR: modification_statistics.csv not found - "
             f"run --compute-stats first.\n  Expected: {stats_csv}"
         )
 
@@ -1732,16 +1732,16 @@ if CLI_ARGS.stats_report:
     sys.exit(0)
 
 
-# ── Summary-tables-only mode ─────────────────────────────────────────────────
+# -- Summary-tables-only mode -------------------------------------------------
 if CLI_ARGS.summary_tables:
     print("=" * 72)
-    print("  Product A Historical Validation — Summary Tables")
+    print("  Product A Historical Validation - Summary Tables")
     print("=" * 72)
 
     stats_csv = OUTPUT_DIR / "modification_statistics.csv"
     if not stats_csv.exists():
         sys.exit(
-            f"ERROR: modification_statistics.csv not found — "
+            f"ERROR: modification_statistics.csv not found - "
             f"run --compute-stats first.\n  Expected: {stats_csv}"
         )
 
@@ -1751,7 +1751,7 @@ if CLI_ARGS.summary_tables:
 
 
 print("=" * 72)
-print("  Product A Historical Validation — DSS Compilation")
+print("  Product A Historical Validation - DSS Compilation")
 print("=" * 72)
 
 if not BASELINE_DSS.exists():
@@ -1760,7 +1760,7 @@ if not INVENTORY_XLSX.exists():
     sys.exit(f"ERROR: Master inventory not found:\n  {INVENTORY_XLSX}")
 
 # Warn early if the inventory Excel is locked (open in Excel) so the user
-# can close it and press Enter to continue — before the long run begins.
+# can close it and press Enter to continue - before the long run begins.
 while True:
     try:
         with open(INVENTORY_XLSX, "r+b"):
@@ -1780,10 +1780,10 @@ while True:
 OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 COMPILED_CSV.mkdir(parents=True, exist_ok=True)
 
-# ── Locate source CSVs per module ────────────────────────────────────────────
-available_modules = OrderedDict()   # label → list[Path] of data CSVs
+# -- Locate source CSVs per module --------------------------------------------
+available_modules = OrderedDict()   # label -> list[Path] of data CSVs
 missing_modules   = []
-module_csv_mtimes = OrderedDict()   # label → {csv_name: mtime_str}
+module_csv_mtimes = OrderedDict()   # label -> {csv_name: mtime_str}
 
 for label, (src_dir, _inv_cat) in MODULE_CONFIG.items():
     csvs = collect_data_csvs(src_dir)
@@ -1811,28 +1811,28 @@ if missing_modules:
 print()
 
 
-# ══════════════════════════════════════════════════════════════════════════════
-# STEP 1 — Copy CSVs into compiled_input_files/<module>/
-# ══════════════════════════════════════════════════════════════════════════════
+# ------------------------------------------------------------------------------
+# STEP 1 - Copy CSVs into compiled_input_files/<module>/
+# ------------------------------------------------------------------------------
 print("Step 1: Copying source CSVs into compiled_input_files/ ...")
 for label, csvs in available_modules.items():
     dest_dir = COMPILED_CSV / label
     dest_dir.mkdir(parents=True, exist_ok=True)
     for csv_path in csvs:
         shutil.copy2(csv_path, dest_dir / csv_path.name)
-    print(f"  {label:40s}  → {len(csvs)} file(s) copied")
+    print(f"  {label:40s}  -> {len(csvs)} file(s) copied")
 print()
 
 
-# ══════════════════════════════════════════════════════════════════════════════
-# STEP 2 — Catalog baseline DSS
-# ══════════════════════════════════════════════════════════════════════════════
+# ------------------------------------------------------------------------------
+# STEP 2 - Catalog baseline DSS
+# ------------------------------------------------------------------------------
 print("Step 2: Cataloging baseline DSS ...")
 with HecDss.Open(str(BASELINE_DSS), version=6, catalog_flag=True) as dss_base:
     baseline_paths = dss_base.getPathnameList(DSS_PATTERN)
 
 baseline_keys = set()
-baseline_bucket = {}   # (B,C) → [pathnames]
+baseline_bucket = {}   # (B,C) -> [pathnames]
 for p in baseline_paths:
     k = path_key(p)
     baseline_keys.add(k)
@@ -1843,20 +1843,20 @@ print(f"  Unique (Part B, Part C):  {len(baseline_keys):,}")
 print()
 
 
-# ══════════════════════════════════════════════════════════════════════════════
-# STEP 3 — Build per-module intermediate DSS files
-# ══════════════════════════════════════════════════════════════════════════════
+# ------------------------------------------------------------------------------
+# STEP 3 - Build per-module intermediate DSS files
+# ------------------------------------------------------------------------------
 print("Step 3: Building intermediate DSS per module ...")
 print("-" * 72)
 
-module_dss_paths   = OrderedDict()   # label → Path to intermediate DSS
-module_modified    = {}              # label → set of (B,C) keys modified
+module_dss_paths   = OrderedDict()   # label -> Path to intermediate DSS
+module_modified    = {}              # label -> set of (B,C) keys modified
 module_not_in_base = []              # records of (B,C) not found in baseline
 
 for label, csvs in available_modules.items():
     t0 = time.time()
 
-    # ── 3a. Read & combine CSVs for this module ─────────────────────────────
+    # -- 3a. Read & combine CSVs for this module -----------------------------
     frames = []
     for f in csvs:
         df = pd.read_csv(f)
@@ -1867,7 +1867,7 @@ for label, csvs in available_modules.items():
     required = {"Part B", "Part C", "Year", "Month", "Value"}
     missing_cols = required - set(csv_df.columns)
     if missing_cols:
-        print(f"  [WARN] {label}: CSV missing columns {sorted(missing_cols)} — skipping")
+        print(f"  [WARN] {label}: CSV missing columns {sorted(missing_cols)} - skipping")
         continue
 
     csv_df["PARTB"] = csv_df["Part B"].map(excel_to_part)
@@ -1882,7 +1882,7 @@ for label, csvs in available_modules.items():
         if len(s) > 0:
             override_dict[(partb, partc)] = s
 
-    # ── 3b. Create intermediate DSS ─────────────────────────────────────────
+    # -- 3b. Create intermediate DSS -----------------------------------------
     int_dss = OUTPUT_DIR / f"{label}__productA.dss"
     if int_dss.exists():
         int_dss.unlink()
@@ -1960,16 +1960,16 @@ print("-" * 72)
 print()
 
 
-# ══════════════════════════════════════════════════════════════════════════════
-# STEP 3b — Auto-fill Constant/Rept SVs from baseline last-12-month pattern
-# ══════════════════════════════════════════════════════════════════════════════
+# ------------------------------------------------------------------------------
+# STEP 3b - Auto-fill Constant/Rept SVs from baseline last-12-month pattern
+# ------------------------------------------------------------------------------
 print("Step 3b: Auto-filling Constant/Rept SVs ...")
 
 # Read inventory early to identify Constant/Rept keys
 inventory_df = read_master_inventory()
 print(f"  Inventory rows loaded: {len(inventory_df):,}")
 
-# Category → module label mapping
+# Category -> module label mapping
 inv_category_map = {}
 for label, (_rel, inv_cat) in MODULE_CONFIG.items():
     inv_category_map[inv_cat] = label
@@ -2041,9 +2041,9 @@ print(f"  Already provided by module CSVs: {len(const_rept_keys & already_from_c
 print()
 
 
-# ══════════════════════════════════════════════════════════════════════════════
-# STEP 4 — Compile final DSS from intermediate DSS files
-# ══════════════════════════════════════════════════════════════════════════════
+# ------------------------------------------------------------------------------
+# STEP 4 - Compile final DSS from intermediate DSS files
+# ------------------------------------------------------------------------------
 print("Step 4: Compiling final ProductA_Historical_Validation_SV.dss ...")
 t_start = time.time()
 
@@ -2100,12 +2100,12 @@ print(f"  Total paths written from modules: {len(modified_records):,}")
 print()
 
 
-# ══════════════════════════════════════════════════════════════════════════════
-# STEP 5 — Inventory cross-reference (flag-aware)
-# ══════════════════════════════════════════════════════════════════════════════
+# ------------------------------------------------------------------------------
+# STEP 5 - Inventory cross-reference (flag-aware)
+# ------------------------------------------------------------------------------
 print("Step 5: Cross-referencing against master inventory ...")
 
-# ── Classify inventory SVs by flags ──────────────────────────────────────────
+# -- Classify inventory SVs by flags ------------------------------------------
 # Skipped: Missing=T
 inv_skipped_missing = inventory_df[inventory_df["Missing"] == True].copy()
 skipped_missing_keys = set(zip(inv_skipped_missing["Part_B"], inv_skipped_missing["Part_C"]))
@@ -2145,7 +2145,7 @@ expected_keys = set(zip(expected_svs["Part_B"], expected_svs["Part_C"]))
 # Actually modified (B,C) across all modules (includes constant_rept auto-fill)
 actual_keys = all_modified_keys
 
-# ── Inventory diagnostic sets ────────────────────────────────────────────────
+# -- Inventory diagnostic sets ------------------------------------------------
 inv_expected_modified = expected_keys & actual_keys
 inv_expected_missing  = expected_keys - actual_keys
 inv_unexpected        = actual_keys - expected_keys - const_rept_all_keys  # don't flag const/rept as unexpected
@@ -2162,12 +2162,12 @@ print(f"  Modified but NOT in inventory:         {len(inv_unexpected):,}")
 print()
 
 
-# ══════════════════════════════════════════════════════════════════════════════
-# STEP 6 — Write all diagnostic CSVs
-# ══════════════════════════════════════════════════════════════════════════════
+# ------------------------------------------------------------------------------
+# STEP 6 - Write all diagnostic CSVs
+# ------------------------------------------------------------------------------
 print("Step 6: Writing diagnostics ...")
 
-# ── paths_modified.csv ───────────────────────────────────────────────────────
+# -- paths_modified.csv -------------------------------------------------------
 modified_df = pd.DataFrame(modified_records)
 if not modified_df.empty:
     modified_df = modified_df.sort_values(["Module", "Part B", "Part C"]).reset_index(drop=True)
@@ -2175,7 +2175,7 @@ fp = OUTPUT_DIR / "paths_modified.csv"
 modified_df.to_csv(fp, index=False)
 print(f"  {fp.name:45s}  {len(modified_df):>6,} records")
 
-# ── paths_unchanged.csv ─────────────────────────────────────────────────────
+# -- paths_unchanged.csv -----------------------------------------------------
 unchanged_keys = baseline_keys - all_modified_keys
 unchanged_records = []
 for k in sorted(unchanged_keys):
@@ -2188,7 +2188,7 @@ fp = OUTPUT_DIR / "paths_unchanged.csv"
 unchanged_df.to_csv(fp, index=False)
 print(f"  {fp.name:45s}  {len(unchanged_df):>6,} records")
 
-# ── paths_not_in_baseline.csv ───────────────────────────────────────────────
+# -- paths_not_in_baseline.csv -----------------------------------------------
 nib_df = pd.DataFrame(module_not_in_base)
 if not nib_df.empty:
     nib_df = nib_df.sort_values(["Module", "Part B", "Part C"]).reset_index(drop=True)
@@ -2196,7 +2196,7 @@ fp = OUTPUT_DIR / "paths_not_in_baseline.csv"
 nib_df.to_csv(fp, index=False)
 print(f"  {fp.name:45s}  {len(nib_df):>6,} records")
 
-# ── inventory_expected_modified.csv ──────────────────────────────────────────
+# -- inventory_expected_modified.csv ------------------------------------------
 inv_mod_rows = expected_svs[
     expected_svs.apply(lambda r: (r["Part_B"], r["Part_C"]) in inv_expected_modified, axis=1)
 ].copy()
@@ -2205,7 +2205,7 @@ fp = OUTPUT_DIR / "inventory_expected_modified.csv"
 inv_mod_rows.to_csv(fp, index=False)
 print(f"  {fp.name:45s}  {len(inv_mod_rows):>6,} records")
 
-# ── inventory_expected_missing.csv ───────────────────────────────────────────
+# -- inventory_expected_missing.csv -------------------------------------------
 inv_miss_rows = expected_svs[
     expected_svs.apply(lambda r: (r["Part_B"], r["Part_C"]) in inv_expected_missing, axis=1)
 ].copy()
@@ -2214,7 +2214,7 @@ fp = OUTPUT_DIR / "inventory_expected_missing.csv"
 inv_miss_rows.to_csv(fp, index=False)
 print(f"  {fp.name:45s}  {len(inv_miss_rows):>6,} records")
 
-# ── inventory_constant_rept.csv ──────────────────────────────────────────────
+# -- inventory_constant_rept.csv ----------------------------------------------
 inv_cr_rows = inv_const_rept_all.copy()
 inv_cr_rows["Auto_Filled"] = inv_cr_rows.apply(
     lambda r: (r["Part_B"], r["Part_C"]) in const_rept_filled, axis=1
@@ -2227,17 +2227,17 @@ fp = OUTPUT_DIR / "inventory_constant_rept.csv"
 inv_cr_rows.to_csv(fp, index=False)
 print(f"  {fp.name:45s}  {len(inv_cr_rows):>6,} records")
 
-# ── inventory_skipped_missing.csv ────────────────────────────────────────────
+# -- inventory_skipped_missing.csv --------------------------------------------
 fp = OUTPUT_DIR / "inventory_skipped_missing.csv"
 inv_skipped_missing.sort_values(["Input_Category", "Part_B", "Part_C"]).reset_index(drop=True).to_csv(fp, index=False)
 print(f"  {fp.name:45s}  {len(inv_skipped_missing):>6,} records")
 
-# ── inventory_skipped_not_in_dcr.csv ─────────────────────────────────────────
+# -- inventory_skipped_not_in_dcr.csv -----------------------------------------
 fp = OUTPUT_DIR / "inventory_skipped_not_in_dcr.csv"
 inv_skipped_not_dcr.sort_values(["Input_Category", "Part_B", "Part_C"]).reset_index(drop=True).to_csv(fp, index=False)
 print(f"  {fp.name:45s}  {len(inv_skipped_not_dcr):>6,} records")
 
-# ── inventory_unexpected.csv ─────────────────────────────────────────────────
+# -- inventory_unexpected.csv -------------------------------------------------
 inv_unexp_rows = []
 for mk in sorted(inv_unexpected):
     mods = [r["Module"] for r in modified_records
@@ -2252,17 +2252,17 @@ inv_unexp_df.to_csv(fp, index=False)
 print(f"  {fp.name:45s}  {len(inv_unexp_df):>6,} records")
 
 
-# ══════════════════════════════════════════════════════════════════════════════
-# STEP 7 — Compilation summary
-# ══════════════════════════════════════════════════════════════════════════════
-# ══════════════════════════════════════════════════════════════════════════════
+# ------------------------------------------------------------------------------
+# STEP 7 - Compilation summary
+# ------------------------------------------------------------------------------
+# ------------------------------------------------------------------------------
 n_mod_unique  = len(all_modified_keys)
 n_unch_unique = len(unchanged_keys)
 n_nib_unique  = len(set((r["Part B"], r["Part C"]) for r in module_not_in_base)) if module_not_in_base else 0
 
 lines = [
     "=" * 65,
-    "  Product A Historical Validation — Compilation Summary",
+    "  Product A Historical Validation - Compilation Summary",
     "=" * 65,
     "",
     f"  Baseline DSS:  {BASELINE_DSS.name}",
@@ -2272,7 +2272,7 @@ lines = [
     f"  Baseline monthly paths (total):        {len(baseline_paths):>6,}",
     f"  Baseline unique (Part B, Part C):      {len(baseline_keys):>6,}",
     "",
-    "─── Module Contributions ───",
+    "--- Module Contributions ---",
     "",
 ]
 
@@ -2285,7 +2285,7 @@ for label in MODULE_CONFIG:
 
 lines += [
     "",
-    "─── Path Categories ───",
+    "--- Path Categories ---",
     "",
     f"    Modified (Part B,C) combinations:    {n_mod_unique:>6,}",
     f"    Modified DSS paths (total):           {len(modified_records):>6,}",
@@ -2295,23 +2295,23 @@ lines += [
     "",
     f"    Not in baseline (Part B,C):          {n_nib_unique:>6,}",
     "",
-    "─── Inventory Flags ───",
+    "--- Inventory Flags ---",
     "",
     f"    Total inventory SVs:                 {len(inventory_df):>6,}",
-    f"    Skipped — Missing=T:                 {len(skipped_missing_keys):>6,}",
-    f"    Skipped — Used_in_DCR=F:             {len(skipped_not_dcr_keys):>6,}",
+    f"    Skipped - Missing=T:                 {len(skipped_missing_keys):>6,}",
+    f"    Skipped - Used_in_DCR=F:             {len(skipped_not_dcr_keys):>6,}",
     f"    Constant/Rept (total):               {len(const_rept_all_keys):>6,}",
     f"      Auto-filled by script:             {len(const_rept_filled):>6,}",
     f"      Already in module CSVs:            {len(const_rept_keys & already_from_csv):>6,}",
     "",
-    "─── Inventory Cross-Reference (active SVs) ───",
+    "--- Inventory Cross-Reference (active SVs) ---",
     "",
     f"    Expected from CSV modules:           {len(expected_keys):>6,}",
     f"    Expected & successfully modified:     {len(inv_expected_modified):>6,}",
     f"    Expected but MISSING:                {len(inv_expected_missing):>6,}",
     f"    Modified but NOT in inventory:        {len(inv_unexpected):>6,}",
     "",
-    "─── Categories Without Validation Modules ───",
+    "--- Categories Without Validation Modules ---",
     "",
 ]
 
@@ -2333,7 +2333,7 @@ for cat in sorted(CATEGORIES_WITHOUT_VALIDATION):
 
 lines += [
     "",
-    "─── Source CSV Modification Dates ───",
+    "--- Source CSV Modification Dates ---",
     "",
 ]
 for label, mtimes in module_csv_mtimes.items():
@@ -2343,7 +2343,7 @@ for label, mtimes in module_csv_mtimes.items():
     lines.append("")
 
 lines += [
-    "─── Modules Skipped (no data CSVs) ───",
+    "--- Modules Skipped (no data CSVs) ---",
     "",
 ]
 if missing_modules:
@@ -2364,9 +2364,9 @@ for line in lines:
 
 print(f"\nDone.  Output: {OUTPUT_DSS}")
 
-# ══════════════════════════════════════════════════════════════════════════════
-# STEP 8 — Compute modification statistics & generate report
-# ══════════════════════════════════════════════════════════════════════════════
+# ------------------------------------------------------------------------------
+# STEP 8 - Compute modification statistics & generate report
+# ------------------------------------------------------------------------------
 print()
 print("Step 8: Computing modification statistics ...")
 t_stats = time.time()

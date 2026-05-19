@@ -188,11 +188,11 @@ def classify_wyt(index_series, thresholds, valley):
     Classify water year types based on index values.
     
     Classification thresholds (lower index = drier):
-    - index < c → Critical (C, 5)
-    - c ≤ index < d → Dry (D, 4)
-    - d ≤ index < bn → Below Normal (BN, 3)
-    - bn ≤ index < an → Above Normal (AN, 2)
-    - index ≥ an → Wet (W, 1)
+    - index < c -> Critical (C, 5)
+    - c <= index < d -> Dry (D, 4)
+    - d <= index < bn -> Below Normal (BN, 3)
+    - bn <= index < an -> Above Normal (AN, 2)
+    - index >= an -> Wet (W, 1)
     
     Args:
         index_series: Series of flow indices
@@ -342,7 +342,7 @@ def process_product_a(input_path, output_dir, thresholds):
 def process_product_b(input_dir, output_dir, thresholds):
     """
     Process Product B (1000-year stochastic) data.
-    Processes 10 × 100-year chunks separately.
+    Processes 10 x 100-year chunks separately.
     
     Args:
         input_dir: Directory containing *_qmo_n01.csv through *_qmo_n10.csv files

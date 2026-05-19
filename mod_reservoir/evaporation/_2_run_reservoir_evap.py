@@ -70,10 +70,10 @@ _MONTH_NAMES = {
 
 def _load_climate_data_product_b(file_path: str) -> pd.DataFrame:
     """
-    Load Product B WGEN climate data using a PeriodIndex — consistent with all
+    Load Product B WGEN climate data using a PeriodIndex - consistent with all
     other project scripts that handle the 1000-year stochastic sequence.
 
-    Product B WGEN files use years 1–1008 (below pandas Timestamp min ~1677),
+    Product B WGEN files use years 1-1008 (below pandas Timestamp min ~1677),
     so date construction into a DatetimeIndex fails.  A daily PeriodIndex
     anchored at 2025-01-01 (368,172 periods) spans the full 1000-year sequence
     and is compatible with pandas resample() for monthly aggregation.
@@ -258,7 +258,7 @@ def create_combined_output(
     combined.to_csv(output_file)
 
     print(f"\nCombined output: {output_file}")
-    print(f"  {combined.shape[0]} months × {combined.shape[1]} reservoirs")
+    print(f"  {combined.shape[0]} months x {combined.shape[1]} reservoirs")
 
 
 def create_summary_statistics(
@@ -426,7 +426,7 @@ def create_product_b_chunk_outputs(
     """
     if not results:
         return
-    months_per_chunk = 1200   # 100 WYs × 12 months
+    months_per_chunk = 1200   # 100 WYs x 12 months
     skip_months = 9            # Jan-Sep of synthetic year 1
     total_chunks = 10
     total_needed = skip_months + months_per_chunk * total_chunks
@@ -435,7 +435,7 @@ def create_product_b_chunk_outputs(
     output_path = Path(output_dir)
     output_path.mkdir(parents=True, exist_ok=True)
 
-    print(f"\nWriting Product B chunk files ({total_chunks} chunks × {months_per_chunk} months)...")
+    print(f"\nWriting Product B chunk files ({total_chunks} chunks x {months_per_chunk} months)...")
     for i in range(total_chunks):
         rows = []
         for code, df in results.items():
@@ -593,10 +593,10 @@ def create_temperature_range_boxplot(
     ax.set_xticks(positions_list)
     ax.set_xticklabels(labels, fontsize=7)
     ax.tick_params(axis='y', labelsize=7)
-    ax.set_ylabel('Mean Monthly Temperature Range (°C)', fontsize=7, fontweight='bold')
+    ax.set_ylabel('Mean Monthly Temperature Range (degC)', fontsize=7, fontweight='bold')
     ax.set_title(
-        'Monthly Temperature Range (Tmax − Tmin) by Region\n'
-        'Average per Reservoir for Oct 1921 – Sep 2018',
+        'Monthly Temperature Range (Tmax - Tmin) by Region\n'
+        'Average per Reservoir for Oct 1921 - Sep 2018',
         fontsize=7, fontweight='bold', pad=10
     )
     ax.grid(True, alpha=0.3, axis='y')
@@ -606,9 +606,9 @@ def create_temperature_range_boxplot(
     all_pa = [v for vals in dtr_data['Product A'].values() for v in vals]
 
     stats_text = (
-        f"Original:   {np.min(all_orig):.1f} – {np.max(all_orig):.1f} °C  "
+        f"Original:   {np.min(all_orig):.1f} - {np.max(all_orig):.1f} degC  "
         f"(mean: {np.mean(all_orig):.1f})\n"
-        f"Product A:  {np.min(all_pa):.1f} – {np.max(all_pa):.1f} °C  "
+        f"Product A:  {np.min(all_pa):.1f} - {np.max(all_pa):.1f} degC  "
         f"(mean: {np.mean(all_pa):.1f})"
     )
     ax.text(
@@ -713,7 +713,7 @@ def create_climate_boxplots(
         except Exception as e:
             print(f"    {res_code} climate load error: {e}")
 
-    # --- Create 1×2 figure ---
+    # --- Create 1x2 figure ---
     fig, axes = plt.subplots(1, 2, figsize=(6.5, 3.5))
     region_colors = ['#1f77b4', '#ff7f0e', '#2ca02c']
 

@@ -141,9 +141,9 @@ class EvaporationCalculator:
         Parameters:
         -----------
         tmax_c : float
-            Maximum temperature (°C)
+            Maximum temperature (degC)
         tmin_c : float
-            Minimum temperature (°C)
+            Minimum temperature (degC)
         month : int
             Month number (1-12)
         days_in_month : int
@@ -184,9 +184,9 @@ class EvaporationCalculator:
         dates : pd.DatetimeIndex
             Monthly dates
         tmax_c : np.ndarray
-            Monthly average maximum temperatures (°C)
+            Monthly average maximum temperatures (degC)
         tmin_c : np.ndarray
-            Monthly average minimum temperatures (°C)
+            Monthly average minimum temperatures (degC)
 
         Returns:
         --------
@@ -261,8 +261,8 @@ def load_climate_data(
     2. Month
     3. Day
     4. Precipitation (mm) - not used
-    5. Maximum temperature (°C)
-    6. Minimum temperature (°C)
+    5. Maximum temperature (degC)
+    6. Minimum temperature (degC)
 
     Parameters:
     -----------

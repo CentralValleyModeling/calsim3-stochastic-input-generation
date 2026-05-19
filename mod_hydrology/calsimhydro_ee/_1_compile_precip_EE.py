@@ -1,11 +1,11 @@
 """
 Compile WBA Precipitation for CalSimHydroEE
 ============================================
-Computes simple-average daily precipitation (mm → in) across all VIC grid cells
+Computes simple-average daily precipitation (mm -> in) across all VIC grid cells
 within each Water Balance Area (WBA) and writes outputs for CalSimHydroEE.
 
 Product A: one CSV per WBA (full period), optional DSS file.
-Product B: 10 chunk CSVs per WBA (Jan 1920 – Dec 2021 each, 100-WY core per chunk)
+Product B: 10 chunk CSVs per WBA (Jan 1920 - Dec 2021 each, 100-WY core per chunk)
            + optional per-chunk DSS files.
 
 Inputs
@@ -16,8 +16,8 @@ Inputs
 Outputs
 -------
 - output/_1_compile_precip_EE/Product_A/pcp/<WBA>_pcp.csv
-- output/_1_compile_precip_EE/Product_B/pcp/<WBA>_pcp_n01.csv … n10.csv
-- (optional) CS3_DailyPrecipitation_EE.dss  /  CS3_DailyPrecipitation_EE_n01.dss … n10.dss
+- output/_1_compile_precip_EE/Product_B/pcp/<WBA>_pcp_n01.csv ... n10.csv
+- (optional) CS3_DailyPrecipitation_EE.dss  /  CS3_DailyPrecipitation_EE_n01.dss ... n10.dss
 
 Usage
 -----

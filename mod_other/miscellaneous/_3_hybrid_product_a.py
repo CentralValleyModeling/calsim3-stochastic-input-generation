@@ -24,13 +24,13 @@ from utils.paths import get_base_dir, get_module_generated_dir
 from utils.wyt_monthlyavg_framework import compute_wyt_pattern, compute_product_targets, water_year
 from utils.qmap_product_a_from_pairs import run_product_a_qmap_from_pairs
 
-# ── Paths ──────────────────────────────────────────────────────────────
+# -- Paths --------------------------------------------------------------
 _REPO_DIR = Path(__file__).resolve().parents[2]
 _gen = get_module_generated_dir("mod_other/miscellaneous")
 _wyt_gen = get_module_generated_dir("mod_hydrology/water_year_types")
 _rim_gen = get_module_generated_dir("mod_hydrology/rim_inflow")
 
-# ── Config ─────────────────────────────────────────────────────────────
+# -- Config -------------------------------------------------------------
 DSS_FILE = str(get_base_dir() / "CalSim3" / "__calsim_sv_default__.dss")
 HYBRID_TERMS_CSV = (
     _REPO_DIR / "mod_other" / "miscellaneous" / "reference"
@@ -54,14 +54,14 @@ SIM_END = "2018-09-30"
 PRODUCT_A_START_WY = 1972
 PRODUCT_A_END_WY = 2018
 
-# ── Output directories ────────────────────────────────────────────────
+# -- Output directories ------------------------------------------------
 BASE_RESULTS_DIR = _gen / "output" / "_3_hybrid_product_a"
 WYT_INTERMEDIATE_DIR = BASE_RESULTS_DIR / "hybrid_wyt_product_a"
 QMAP_INTERMEDIATE_DIR = BASE_RESULTS_DIR / "hybrid_qmap_product_a"    # CalSim-format CSVs (Part 3 input)
 FINAL_DIR = _gen / "output" / "_product_a_validation"
 
 
-# %% ── Helpers ─────────────────────────────────────────────────────────
+# %% -- Helpers ---------------------------------------------------------
 def _install_pandas_me_compat() -> None:
     """Support newer 'ME' month-end alias on pandas < 2.2."""
     try:
