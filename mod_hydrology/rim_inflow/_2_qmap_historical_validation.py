@@ -34,12 +34,12 @@ Usage
 
 import os, sys, numpy as np, pandas as pd, seaborn as sns, matplotlib.pyplot as plt
 from pathlib import Path
-from pydsstools.heclib.dss import HecDss
 
 # Add repo root to path for utils imports
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 from utils.paths import get_base_dir, get_inventory_dir, get_module_generated_dir
 from utils.quantile_mapping import qmap_single
+from utils import dss_io
 
 _SCRIPT_DIR = Path(__file__).resolve().parent
 _gen = get_module_generated_dir("mod_hydrology/rim_inflow")
@@ -127,7 +127,7 @@ def excel_to_partB(name:str) -> str:
 
 def read_calsim_monthly_multi(dssfile, strList):
     full_idx = pd.date_range('1915-01-31', f'{vic_end_year}-12-31', freq='ME')
-    with HecDss.Open(dssfile, version=6, catalog_flag=True) as dss:
+    with dss_io.open_dss(dssfile, version=6, catalog_flag=True) as dss:
         paths   = dss.getPathnameList("/*/*/*/*/1MON/*")
         bucket  = {}
         for p in paths:

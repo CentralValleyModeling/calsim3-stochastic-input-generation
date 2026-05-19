@@ -40,10 +40,10 @@ from typing import Dict, Tuple
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
-from pydsstools.heclib.dss import HecDss
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 from utils.paths import get_base_dir, get_module_generated_dir
+from utils import dss_io
 
 # %% -- CONSTANTS -------------------------------------------------------------
 _SCRIPT_DIR = Path(__file__).resolve().parent
@@ -110,7 +110,7 @@ def read_dss_data(
         return {}
 
     out: Dict[Tuple[str, str], pd.Series] = {}
-    with HecDss.Open(str(dss_path), version=6) as dss:
+    with dss_io.open_dss(str(dss_path), version=6, catalog_flag=False) as dss:
         all_paths = dss.getPathnameList("/*/*/*/*/1MON/*/")
         print(f"    Catalog: {len(all_paths)} monthly paths found")
 

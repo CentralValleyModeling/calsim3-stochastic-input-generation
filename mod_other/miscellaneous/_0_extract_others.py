@@ -30,11 +30,11 @@ from pathlib import Path
 
 import numpy as np
 import pandas as pd
-from pydsstools.heclib.dss import HecDss
 
 # Add repo root to path for utils imports
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 from utils.paths import get_base_dir, get_module_generated_dir, get_inventory_dir
+from utils import dss_io
 
 
 # -- Paths --------------------------------------------------------------------
@@ -79,7 +79,7 @@ def extract_other_monthlies_from_dss(dss_path: Path, master_xls_path: Path) -> p
     # --- Open the baseline DSS and organize monthly paths by Part B
     dss_monthly = {}
     print(f"Opening DSS: {dss_path.name}")
-    with HecDss.Open(str(dss_path), version=6) as dss:
+    with dss_io.open_dss(str(dss_path), version=6, catalog_flag=False) as dss:
         # Filter catalog to monthly records only
         all_paths = dss.getPathnameList("/*/*/*/*/1MON/*/")
         print(f"  {len(all_paths)} monthly paths found in DSS catalog")
