@@ -29,11 +29,7 @@ import pandas as pd
 # Add repo root to path for utils imports
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 from utils.paths import get_base_dir, get_module_generated_dir
-
-try:
-    from pydsstools.heclib.dss import HecDss  
-except Exception:  #
-    HecDss = None
+from utils import dss_io
 
 # -----------------------------------------------------------------------------
 # User-facing defaults
@@ -182,12 +178,6 @@ def read_calsim_monthly_pairs(
     matching a requested (B, C) pair are stitched together by updating a common
     monthly index.
     """
-    if HecDss is None:
-        raise ImportError(
-            "pydsstools / HecDss is not available in this Python environment. "
-            "Install it before running DSS reads."
-        )
-
     requested = {
         (norm_token(b), norm_token(c))
         for b, c in specs
@@ -196,38 +186,16 @@ def read_calsim_monthly_pairs(
     if not requested:
         return {}
 
-    full_idx = pd.date_range(dss_read_start, dss_read_end, freq="ME")
-    out: dict[tuple[str, str], pd.Series] = {}
-
-    with HecDss.Open(str(dssfile), version=6, catalog_flag=True) as dss:
-        paths = dss.getPathnameList("/*/*/*/*/1MON/*")
-        bucket: dict[tuple[str, str], list[str]] = {}
-        for path in paths:
-            parts = path.strip("/").split("/")
-            if len(parts) != 6:
-                continue
-            b_part = parts[1].strip().upper()
-            c_part = parts[2].strip().upper()
-            key = (b_part, c_part)
-            if key in requested:
-                bucket.setdefault(key, []).append(path)
-
-        for key in sorted(requested):
-            if key not in bucket:
-                continue
-            master = pd.Series(index=full_idx, dtype=float)
-            # Sort primarily by D-part, then full path for stability.
-            for path in sorted(bucket[key], key=lambda x: (x.strip("/").split("/")[3], x)):
-                ts = dss.read_ts(path, trim_missing=True)
-                vals = np.asarray(ts.values, dtype=float)
-                vals = np.where(vals <= -900, np.nan, vals)
-                # DSS stores period-end timestamps (e.g. Feb for Jan data).
-                # Shift back by one month so the index reflects the actual data month.
-                idx = (pd.to_datetime(ts.pytimes).to_period("M") - 1).to_timestamp("M")
-                master.update(pd.Series(vals, index=idx))
-            if master.notna().any():
-                out[key] = master
-    return out
+    # Direct open (no junction; catalog_flag=True) + the shared faithful read
+    # loop in utils.dss_io. dss_io.read_monthly_series is a byte-equivalent
+    # copy of the prior inline loop: same "/*/*/*/*/1MON/*" catalog query,
+    # same case-insensitive (B, C) bucketing, same (D-part, path) sort,
+    # same -900 sentinel and end-of-month index shift, same master.update
+    # stitch onto a fixed month-end index.
+    with dss_io.open_dss(str(dssfile), version=6, catalog_flag=True,
+                         use_junction=False) as dss:
+        return dss_io.read_monthly_series(
+            dss, requested, dss_read_start, dss_read_end)
 
 
 # -----------------------------------------------------------------------------
