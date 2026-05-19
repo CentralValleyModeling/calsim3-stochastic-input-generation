@@ -1,9 +1,19 @@
 """
 Reservoir Evaporation Processing Script (Product A & B)
-
+=======================================================
 Processes WGEN gridded climate data to calculate evaporation time series
 for CalSim 3.0 reservoirs using the Hargreaves-Samani method.
 Automatically finds the nearest weather file for each reservoir.
+
+Inputs
+------
+- WGEN gridded climate (Product_A / Product_B)
+- reference/reservoir_parameters.json (from _0_extract_reservoir_database)
+
+Dependencies
+------------
+- evaporation.py  (Hargreaves-Samani engine)
+- utils/paths.py  (data-dir resolution)
 
 Usage:
     python _2_run_reservoir_evap.py --Product_A             # Product A, all reservoirs
@@ -30,11 +40,12 @@ Output (--compare-a):
         Monthly mean evaporation per reservoir; Product A vs B.
 """
 
-import pandas as pd
-import numpy as np
-from pathlib import Path
 import sys
 import time
+from pathlib import Path
+
+import numpy as np
+import pandas as pd
 import matplotlib.pyplot as plt
 from matplotlib.patches import Patch
 
@@ -203,7 +214,7 @@ def process_reservoirs(
             annual_avg = evap_df['evaporation_in'].mean() * 12
             print(f"OK {len(evap_df):4d} months | {annual_avg:5.1f} in/yr")
         else:
-            print(f"FAILED")
+            print("FAILED")
 
     elapsed = time.time() - start_time
 
@@ -294,7 +305,7 @@ def create_summary_statistics(
     print(f"\nSummary statistics: {output_file}")
 
     # Print summary
-    print(f"\nStatistics:")
+    print("\nStatistics:")
     print(f"  Mean annual evaporation: {summary_df['annual_total_in'].mean():.2f} in/yr")
     print(f"  Range: {summary_df['annual_total_in'].min():.2f} - {summary_df['annual_total_in'].max():.2f} in/yr")
 
@@ -906,7 +917,7 @@ def create_annual_boxplot(
             pos_product_a = i * 4 + 1.4
             
             # Excel boxplot (lightest)
-            bp1 = ax.boxplot([excel_data], positions=[pos_excel], widths=0.6,
+            ax.boxplot([excel_data], positions=[pos_excel], widths=0.6,
                              patch_artist=True, showfliers=False,
                              boxprops=dict(facecolor=color, alpha=0.3, edgecolor=color, linewidth=1),
                              medianprops=dict(color='darkred', linewidth=1.5),
@@ -914,7 +925,7 @@ def create_annual_boxplot(
                              capprops=dict(color=color, linewidth=1))
             
             # Validation Python boxplot (medium)
-            bp2 = ax.boxplot([validation_data], positions=[pos_validation], widths=0.6,
+            ax.boxplot([validation_data], positions=[pos_validation], widths=0.6,
                              patch_artist=True, showfliers=False,
                              boxprops=dict(facecolor=color, alpha=0.6, edgecolor=color, linewidth=1),
                              medianprops=dict(color='darkred', linewidth=1.5),
@@ -922,7 +933,7 @@ def create_annual_boxplot(
                              capprops=dict(color=color, linewidth=1))
             
             # Product A boxplot (darkest)
-            bp3 = ax.boxplot([product_a_data], positions=[pos_product_a], widths=0.6,
+            ax.boxplot([product_a_data], positions=[pos_product_a], widths=0.6,
                              patch_artist=True, showfliers=False,
                              boxprops=dict(facecolor=color, alpha=0.95, edgecolor=color, linewidth=1),
                              medianprops=dict(color='darkred', linewidth=1.5),

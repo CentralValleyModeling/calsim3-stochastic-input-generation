@@ -1,30 +1,42 @@
 """
-Extract daily basin-averaged precipitation for Oroville/Feather River basin
-from WGEN weather data using grid cells specified in CS3_8RI_OROVI_GridInfo.txt.
+Extract Daily Basin-Averaged Precipitation for Oroville / Feather River
+======================================================================
+Computes grid-weighted daily basin-average precipitation (inches) for the
+Oroville/Feather River basin from WGEN weather data, using grid weights from
+CS3_8RI_OROVI_GridInfo.txt.
 
-Computes weighted averages based on grid cell weights from the grid info file.
-Outputs daily precipitation values in inches.
+For Product_B: 10 chunk CSVs of 100 water years each (WY1922-WY2021); skips
+Jan-Sep of Year 1 to align to the October water-year start.
+For Product_A and Historical: single output files.
 
-For Product_B: Creates 10 chunk CSVs of 100 water years each (WY1922-WY2021).
-               Skips Jan-Sep of Year 1 to align to October water year start.
-For Product_A and Historical: Creates single output files.
+Inputs
+------
+- WGEN weather data (Product_A / Product_B / Historical)
+- mod_forcing/vic/reference/GridInfo/CS3_8RI_OROVI_GridInfo.txt (override with --grid_info)
 
-Usage:
+Outputs
+-------
+- <generated>/output/_3_oroville_daily_precip/  (daily precip CSVs)
+
+Dependencies
+------------
+- utils/paths.py  (data-dir resolution)
+
+Usage
+-----
     python _3_oroville_daily_precip.py --source Product_A
     python _3_oroville_daily_precip.py --source Product_B
     python _3_oroville_daily_precip.py --source Historical
-    python _3_oroville_daily_precip.py --compare            # Compare Product A vs B monthly averages
-    python _3_oroville_daily_precip.py --source Product_B --compare  # Generate B then compare
-
-Grid info file: mod_forcing/vic/reference/GridInfo/CS3_8RI_OROVI_GridInfo.txt (override with --grid_info)
-
-Author: Created 2026-01-08
+    python _3_oroville_daily_precip.py --compare
+    python _3_oroville_daily_precip.py --source Product_B --compare
 """
-import sys
+
 import argparse
+import sys
+from pathlib import Path
+
 import numpy as np
 import pandas as pd
-from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 from utils.paths import get_base_dir, get_module_generated_dir
@@ -407,7 +419,7 @@ def main():
     if not data_folder.exists():
         raise FileNotFoundError(f"Data folder not found: {data_folder}")
     
-    print(f"Processing Oroville basin daily precipitation")
+    print("Processing Oroville basin daily precipitation")
     print(f"  Source: {args.source}")
     if args.source != 'Historical':
         print(f"  Scenario: {args.scenario}")
@@ -472,7 +484,7 @@ def main():
         # Product_A or Historical: single continuous output
         date_index = pd.date_range(start=start_date, end=end_date, freq='D')
 
-        print(f"\nCalculating basin-averaged precipitation...")
+        print("\nCalculating basin-averaged precipitation...")
         daily_df = calculate_basin_daily_precipitation(grid_info_df, str(data_folder), date_index)
 
         # Save output

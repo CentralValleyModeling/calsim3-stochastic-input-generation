@@ -1,18 +1,32 @@
 """
 Hargreaves-Samani Evaporation Calculator for CalSim 3.0 Reservoirs
-
+==================================================================
 Core implementation of the Hargreaves-Samani equation for calculating
-reservoir evaporation rates using temperature data. Supports all 95
+reservoir evaporation rates from temperature data. Supports all 95
 CalSim 3.0 reservoirs with reservoir-specific parameters.
+
+Inputs
+------
+- WGEN gridded temperature (supplied by the caller)
+- reference/reservoir_parameters.json
+
+Outputs
+-------
+- monthly evaporation series returned to the caller (no files written here)
+
+Dependencies
+------------
+- utils/paths.py  (data-dir resolution)
 """
 
-import sys
-import numpy as np
-import pandas as pd
-from typing import Dict, Optional
-from pathlib import Path
 import calendar
 import json
+import sys
+from pathlib import Path
+from typing import Dict, Optional
+
+import numpy as np
+import pandas as pd
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 from utils.paths import get_module_generated_dir, get_base_dir

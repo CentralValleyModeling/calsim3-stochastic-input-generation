@@ -1,8 +1,9 @@
 #!/usr/bin/env python
 """
-_4_oroville_level5.py
-
-Compute Oroville rule-curve level5 storage from wetness index.
+Compute Oroville Rule-Curve Level 5 Storage
+===========================================
+Computes Oroville rule-curve Level 5 storage from the wetness index for
+Product A and/or Product B.
 
 Usage:
     python _4_oroville_level5.py                        # Both Product A and B (default)
@@ -327,7 +328,7 @@ def main() -> None:
                     for tag, csv_path, out_csv in jobs
                 }
                 for fut in as_completed(futures):
-                    tag = futures[fut]
+                    futures[fut]
                     result = fut.result()  # raises if the worker failed
                     print(f"  Wrote: {result}")
 

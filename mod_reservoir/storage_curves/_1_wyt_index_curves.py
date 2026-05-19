@@ -582,7 +582,7 @@ def main():
         # Allow DSS fills only in the first few months of each Part B/C series
         boundary_months = 3  # corresponds to first Oct–Dec when using WY alignment
 
-        nan_mask = df["Value"].isna()
+        df["Value"].isna()
 
         # First, validate that all NaNs are within the allowed boundary window
         invalid_nan_info = []
