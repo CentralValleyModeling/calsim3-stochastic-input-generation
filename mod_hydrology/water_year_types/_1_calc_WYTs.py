@@ -1,13 +1,25 @@
 """
-Calculate Water Year Types (WYTs) for Sacramento Valley and San Joaquin Valley.
+Calculate Water Year Types (WYTs)
+=================================
+Sacramento 40-30-30 Index and San Joaquin 60-20-20 Index calculations based
+on rim-inflow aggregations with recursive index formulas. Supports Product A
+(historical validation) and Product B (stochastic 1000-year).
 
-Sacramento 40-30-30 Index and San Joaquin 60-20-20 Index calculations
-based on rim inflow aggregations with recursive index formulas.
+Inputs
+------
+- Rim-inflow QM time series (rim_inflow calsim_qmap_validation_TS.csv)
 
-Supports both Product A (historical validation) and Product B (stochastic 1000-year).
+Outputs
+-------
+- <generated>/output/_1_calc_WYTs/Product_A/  (Sac + SJ WYT indices)
+- <generated>/output/_1_calc_WYTs/Product_B/  (with --product B)
 
-Examples
---------
+Dependencies
+------------
+- utils/paths.py  (data-dir resolution)
+
+Usage
+-----
 # Process both products with default paths:
     cd ./water_year_types && python _1_calc_WYTs.py
 
@@ -24,12 +36,11 @@ Examples
         --product_a_output path/to/output
 """
 
+import argparse
 import sys
 from pathlib import Path
-import argparse
 
 import pandas as pd
-import numpy as np
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 from utils.paths import get_module_generated_dir
