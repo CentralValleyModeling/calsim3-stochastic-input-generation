@@ -1,16 +1,33 @@
-#%% Consolidated postprocessing for CalSimHydro Product A DSS outputs.
-#
-# Extracts, merges, and compares scenario time series from CalSimHydro DSS files
-# (CS3L2015V0Hydro_SV, RiceOutput, HydroRebalanceSJRdemands). Produces:
-#   1. Merged scenario CSVs, summary statistics, and boxplots (comparison mode)
-#   2. Validation CSVs in Part B / Part C / Year / Month / Value format
-#
-# Usage:
-#     python _3_postprocess_product_a.py                     # run everything
-#     python _3_postprocess_product_a.py --sources cshydro   # single source
-#     python _3_postprocess_product_a.py --skip-compare      # validation only
-#     python _3_postprocess_product_a.py --skip-validate     # comparison only
-#%%
+"""
+Postprocess CalSimHydro Product A DSS Outputs
+=============================================
+Extracts, merges, and compares scenario time series from CalSimHydro DSS
+files (CS3L2015V0Hydro_SV, RiceOutput, HydroRebalanceSJRdemands). Produces
+merged-scenario CSVs + summary statistics + boxplots (comparison mode) and
+Part B / Part C / Year / Month / Value validation CSVs.
+
+Inputs
+------
+- [EXTERNAL] CalSimHydro Product A scenario DSS (per the SOURCES dict)
+- Master inventory xlsx
+
+Outputs
+-------
+- output/_3_postprocess_product_a/  (merged + summary CSVs, boxplots)
+- output/_3_postprocess_product_a/_product_a_validation/  (CalSim-format CSVs)
+
+Dependencies
+------------
+- utils/dss_io.py, utils/csv_io.py  (DSS read + validation conversion)
+- utils/paths.py                    (data-dir resolution)
+
+Usage
+-----
+    python _3_postprocess_product_a.py                     # run everything
+    python _3_postprocess_product_a.py --sources cshydro   # single source
+    python _3_postprocess_product_a.py --skip-compare      # validation only
+    python _3_postprocess_product_a.py --skip-validate     # comparison only
+"""
 
 import os
 import sys

@@ -1,6 +1,6 @@
-# %% -- Compile Product A Historical Validation DSS ---------------------------
 """
-Consolidated Product A historical-validation compiler.
+Consolidated Product A Historical-Validation Compiler
+=====================================================
 
 Workflow
 --------

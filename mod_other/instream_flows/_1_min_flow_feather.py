@@ -1,6 +1,6 @@
 """
-_1_min_flow_feather.py
-
+Feather River Minimum Instream Flow (MINFLOWFEATHER)
+====================================================
 Computes MINFLOWFEATHER (Feather River minimum instream flow, cfs) by
 replicating the logic in MIF_FEATHER_Logic_Reconstruction.xlsx.
 

@@ -1,5 +1,6 @@
 """
-Append historical wind to WGEN Product A met files for VIC forcing.
+Append Historical Wind to WGEN Product A Met Files (VIC Forcing)
+================================================================
 
 Reads daily wind (4th column) from each Historical_Climate data file, merges
 it onto the matching WGEN meteo file by date, and writes the wind-appended

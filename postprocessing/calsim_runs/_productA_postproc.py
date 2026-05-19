@@ -1,8 +1,8 @@
 """
-_productA_postproc.py
-
-Product A validation post-processing using the shared CalView-style pickle cache
-(values.pkl / diffs.pkl / units.pkl / fields.pkl).
+Product A Validation Post-Processing
+====================================
+Product A validation post-processing using the shared CalView-style pickle
+cache (values.pkl / diffs.pkl / units.pkl / fields.pkl).
 
 Outputs:
 1) Annual Water Year summary tables for:

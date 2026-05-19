@@ -1,10 +1,7 @@
 # -*- coding: utf-8 -*-
-import sys, io
-if hasattr(sys.stdout, 'reconfigure'):
-    sys.stdout.reconfigure(encoding='utf-8')
-
-# %% -- Delta Accretion for NDOI - Direct Calculation from WGEN Precipitation --
 """
+Delta Accretion for NDOI - Direct Calculation from WGEN Precipitation
+=====================================================================
 Calculates the Delta precipitation accretion term (DELTAACCRETIONFORNDOI) for
 CalSim 3.0 using WGEN precipitation for the grid cell nearest to:
 
@@ -48,9 +45,14 @@ Usage
 """
 
 import os
+import sys
 from pathlib import Path
+
 import numpy as np
 import pandas as pd
+
+if hasattr(sys.stdout, 'reconfigure'):
+    sys.stdout.reconfigure(encoding='utf-8')
 
 # Add repo root to path for utils imports
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
@@ -271,7 +273,7 @@ def run_product_b():
         chunk_df.to_csv(fpath, index=False)
         print(f'    Chunk {i + 1:02d}/10 -> {fname}')
 
-    print(f'\nProduct B stats:')
+    print('\nProduct B stats:')
     print(f'  Value range: [{aligned_b[:MONTHS_PER_CHUNK * TOTAL_CHUNKS].min():.3f}, '
           f'{aligned_b[:MONTHS_PER_CHUNK * TOTAL_CHUNKS].max():.3f}] TAF  '
           f'(mean {aligned_b[:MONTHS_PER_CHUNK * TOTAL_CHUNKS].mean():.3f} TAF)')

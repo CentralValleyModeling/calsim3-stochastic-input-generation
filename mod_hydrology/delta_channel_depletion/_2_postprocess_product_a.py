@@ -1,6 +1,6 @@
 """
 Postprocess DCD (Delta Channel Depletion) DSS Outputs
-
+=====================================================
 Extracts time series from DCD DSS output files (PlanningStudy and Product A),
 merges into comparison CSVs, computes summary statistics, generates boxplots,
 and creates the Product A validation CSV for CalSim compilation.

@@ -1,5 +1,6 @@
 """
 WGEN Closure Terms: Weighted vs 4-Year-Block Stitched, with Correlations
+=======================================================================
 
 What this does
 --------------

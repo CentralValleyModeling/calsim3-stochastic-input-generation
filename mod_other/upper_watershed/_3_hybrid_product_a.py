@@ -1,5 +1,7 @@
 """
-Build Product A hybrid terms: Hybrid = (WYT_avg + QMap) / 2.
+Build Product A Hybrid Terms (upper watershed)
+==============================================
+Hybrid = (WYT_avg + QMap) / 2.
 
 For each term in hybrid_terms_product_a_upper_watershed.csv, this script:
   1. Computes WYT monthly averages for Product A (1972-2018)

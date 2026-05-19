@@ -1,5 +1,7 @@
 """
-Build Product A hybrid terms: Hybrid = (WYT_avg + QMap) / 2.
+Build Product A Hybrid Terms (miscellaneous)
+============================================
+Hybrid = (WYT_avg + QMap) / 2.
 
 For each term in hybrid_terms_miscellaneous.csv, this script:
   1. Computes WYT monthly averages for Product A (1972-2018)

@@ -1,12 +1,30 @@
-"""Runner script: defines inputs, calls the framework, and writes outputs.
+"""
+Upper-Watershed Terms - WYT Monthly-Average Reconstruction
+==========================================================
+Runner that defines the upper-watershed term specs, calls the shared WYT
+monthly-average framework, and writes the Product A / Product B outputs.
 
-Outputs are written under:
-  <generated>/output/_1_wyt_monthlyavg/monthly_avg_historical/
-  <generated>/output/_product_a_validation/
-  <generated>/output/_product_b_final/
+Inputs
+------
+- CalSim baseline DSS (historical term series)
+- reference/wyt_avg_terms.csv (term specs + WYT basin per term)
+- water_year_types WYT indices (Product A / Product B)
 
-Framework module:
-  utils/wyt_monthlyavg_framework.py
+Outputs
+-------
+- <generated>/output/_1_wyt_monthlyavg/monthly_avg_historical/
+- <generated>/output/_product_a_validation/
+- <generated>/output/_product_b_final/
+
+Dependencies
+------------
+- utils/wyt_monthlyavg_framework.py  (WYT reconstruction engine)
+- utils/paths.py                     (data-dir resolution)
+
+Usage
+-----
+    cd mod_other/upper_watershed
+    python _1_wyt_monthlyavg.py
 """
 
 from __future__ import annotations
