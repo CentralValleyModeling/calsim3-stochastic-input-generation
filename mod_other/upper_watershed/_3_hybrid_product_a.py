@@ -20,7 +20,6 @@ from pathlib import Path
 
 import pandas as pd
 
-# %%
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 from utils.paths import get_base_dir, get_module_generated_dir
 from utils.wyt_monthlyavg_framework import compute_wyt_pattern, compute_product_targets, water_year
@@ -63,7 +62,7 @@ QMAP_INTERMEDIATE_DIR = BASE_RESULTS_DIR / "hybrid_qmap_product_a"    # CalSim-f
 FINAL_DIR = _gen / "output" / "_product_a_validation"
 
 
-# %% -- Helpers ---------------------------------------------------------
+# -- Helpers ---------------------------------------------------------
 def _install_pandas_me_compat() -> None:
     """Support newer 'ME' month-end alias on pandas < 2.2."""
     try:
@@ -125,7 +124,6 @@ def _to_sv_format(df: pd.DataFrame) -> pd.DataFrame:
     })
 
 
-# %%
 ####################################################################
 ### Part 1 - WYT Averaging (Product A) ###
 ####################################################################
@@ -177,7 +175,6 @@ def run_wyt_product_a(prefix: str, wyt_terms_df: pd.DataFrame) -> None:
     wyt_csv.unlink(missing_ok=True)
 
 
-# %%
 ####################################################################
 ### Part 2 - Quantile Mapping (Product A) ###
 ####################################################################
@@ -206,7 +203,6 @@ def run_qmap_product_a(qmap_pairs_df: pd.DataFrame) -> None:
     print(f"  QMap intermediates written to: {QMAP_INTERMEDIATE_DIR}")
 
 
-# %%
 ####################################################################
 ### Part 3 - Final Hybrid = (WYT + QMap) / 2 ###
 ####################################################################
@@ -273,7 +269,6 @@ def run_final_hybrid(prefix: str) -> None:
     print(f"  Final hybrid: {total} file(s) written to {FINAL_DIR}")
 
 
-# %%
 ####################################################################
 ### Main ###
 ####################################################################

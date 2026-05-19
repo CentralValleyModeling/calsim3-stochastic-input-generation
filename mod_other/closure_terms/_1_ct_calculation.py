@@ -603,7 +603,7 @@ def plot_corr_boxplots_13_terms(perblock_df: pd.DataFrame, out_path: Path) -> No
             data.append(vals); labels.append(_short_label(t))
 
     fig, ax = plt.subplots(figsize=(8, 6))
-    bp = ax.boxplot(
+    ax.boxplot(
         data, vert=False, patch_artist=True, showmeans=True,
         boxprops=dict(facecolor="#A8C4E0", edgecolor="black", linewidth=0.8),
         medianprops=dict(color="#E67E22", linewidth=1.5),
@@ -638,7 +638,7 @@ def plot_coverage_pct_boxplot(block_map: pd.DataFrame, out_path: Path) -> None:
     """
     vals = block_map["coverage_pct"].dropna().to_numpy()
     fig, ax = plt.subplots(figsize=(8, 3))
-    bp = ax.boxplot(
+    ax.boxplot(
         [vals], vert=False, patch_artist=True, showmeans=True, whis=[5, 95],
         boxprops=dict(facecolor="#A8C4E0", edgecolor="black", linewidth=0.8),
         medianprops=dict(color="#E67E22", linewidth=1.5),

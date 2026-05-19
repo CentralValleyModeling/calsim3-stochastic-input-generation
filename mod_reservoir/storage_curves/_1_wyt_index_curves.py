@@ -31,7 +31,7 @@ Outputs are written under:
 
 Output CSV format: Part B, Part C, Year, Month, Value
 """
-# %% -- IMPORTS ---------------------------------------------------------------
+# -- IMPORTS ---------------------------------------------------------------
 import argparse
 import sys
 from pathlib import Path
@@ -45,7 +45,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 from utils.paths import get_base_dir, get_module_generated_dir
 from utils import dss_io
 
-# %% -- CONSTANTS -------------------------------------------------------------
+# -- CONSTANTS -------------------------------------------------------------
 _SCRIPT_DIR = Path(__file__).resolve().parent
 _REPO_ROOT = Path(__file__).resolve().parents[2]
 _REF = _SCRIPT_DIR / "reference"
@@ -78,7 +78,7 @@ TARGET_PRODUCT = "both"
 _DEFAULT_DSS = get_base_dir() / "CalSim3" / "__calsim_sv_default__.dss"
 
 
-# %% -- DSS READER -------------------------------------------------------------
+# -- DSS READER -------------------------------------------------------------
 
 def read_dss_data(
     dss_path: Path,
@@ -142,7 +142,7 @@ def read_dss_data(
     return out
 
 
-# %% -- HELPERS ----------------------------------------------------------------
+# -- HELPERS ----------------------------------------------------------------
 
 def water_year(dt) -> int:
     """CA convention: WY N is Oct(N-1) - Sep(N)."""
@@ -161,7 +161,7 @@ def _make_monthly_index(wy_min: int, wy_max: int) -> pd.DataFrame:
     return out
 
 
-# %% -- SCHEDULE READERS -------------------------------------------------------
+# -- SCHEDULE READERS -------------------------------------------------------
 
 def read_monthly_schedule(csv_path: Path) -> pd.DataFrame:
     """Load reservoir_schedule_monthly.csv as raw long-form DataFrame."""
@@ -183,7 +183,7 @@ def _collect_partbc_specs(monthly_sched: pd.DataFrame, wyt_sched: pd.DataFrame) 
     return specs
 
 
-# %% -- WYT LOADERS ------------------------------------------------------------
+# -- WYT LOADERS ------------------------------------------------------------
 
 def _read_wyt_csv(path: Path) -> pd.DataFrame:
     """Read a WYT CSV, return DataFrame with columns [WY, WYT]."""
@@ -222,7 +222,7 @@ def _load_wyt(wyt_dir: Path, basins: set, product: str, ensemble: str = "") -> D
     return tables
 
 
-# %% -- CORE: GENERATE TARGET TIME SERIES -------------------------------------
+# -- CORE: GENERATE TARGET TIME SERIES -------------------------------------
 
 def generate_targets(
     monthly_sched: pd.DataFrame,
@@ -329,7 +329,7 @@ def generate_targets(
     return out
 
 
-# %% -- OUTPUT WRITERS ---------------------------------------------------------
+# -- OUTPUT WRITERS ---------------------------------------------------------
 
 def _write_product_a(df: pd.DataFrame, prefix: str) -> None:
     """Write Product A validation CSV."""
@@ -357,7 +357,7 @@ def _write_product_b(df: pd.DataFrame, ensemble: str) -> None:
         print(f"  [OK] {out_path.name}")
 
 
-# %% -- METRICS ----------------------------------------------------------------
+# -- METRICS ----------------------------------------------------------------
 
 def _calc_metrics(actual: pd.Series, reconstructed: pd.Series) -> dict:
     """Compute R-squared, NSE, and PBIAS between actual and reconstructed."""
@@ -423,7 +423,7 @@ def _plot_actual_vs_reconstructed(
     print(f"  [PLOT] {out_path.name}")
 
 
-# %% -- HISTORICAL VALIDATION --------------------------------------------------
+# -- HISTORICAL VALIDATION --------------------------------------------------
 
 def run_historical_validation(
     monthly_sched: pd.DataFrame,
@@ -520,7 +520,7 @@ def run_historical_validation(
         )
 
 
-# %% -- MAIN ------------------------------------------------------------------
+# -- MAIN ------------------------------------------------------------------
 
 def main():
     ap = argparse.ArgumentParser(

@@ -510,13 +510,13 @@ def main():
     print("="*80)
 
     loc = db.get_location('FOLSM')
-    print(f"\nLocation:")
+    print("\nLocation:")
     print(f"  Latitude:  {loc['latitude']:.4f}deg")
     print(f"  Longitude: {loc['longitude']:.4f}deg")
     print(f"  Elevation: {loc['elevation_ft']:.0f} ft")
 
     ra = db.get_ra_monthly('FOLSM')
-    print(f"\nRa values (mm/day) by month:")
+    print("\nRa values (mm/day) by month:")
     month_names = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
                    'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
     for i, name in enumerate(month_names, 1):
@@ -525,7 +525,7 @@ def main():
             print()
 
     annual = db.get_annual_calibration('FOLSM')
-    print(f"\nAnnual calibration:")
+    print("\nAnnual calibration:")
     print(f"  Factor:    {annual['factor']:.6f}")
     print(f"  Slope:     {annual['slope']:.6f}")
     print(f"  Intercept: {annual['intercept']:.6f}")

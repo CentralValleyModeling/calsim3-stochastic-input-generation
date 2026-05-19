@@ -460,7 +460,7 @@ def run_generate(product: str) -> None:
     storage_start = storage["date"].min().date()
     storage_end   = storage["date"].max().date()
     print(f"  Note: Product A storage covers {storage_start} to {storage_end}; "
-          f"E_PEDRO_SV output will be limited to this period.")
+          "E_PEDRO_SV output will be limited to this period.")
 
     er_a = _load_er_a()
     er_a["date"] = er_a["date"].dt.to_period("M").dt.to_timestamp()

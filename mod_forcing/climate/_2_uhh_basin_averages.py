@@ -480,7 +480,7 @@ def process_location(shorthand, grid_info_file, grid_info_folder, data_folder, o
     )
     
     # Apply VPD quantile mapping using temperature as basis
-    print(f"  Applying VPD quantile mapping...")
+    print("  Applying VPD quantile mapping...")
     try:
         target_vpd = read_target_vpd_data(excel_file, base_shorthand)
         print(f"    Target VPD data: {len(target_vpd)} months")
@@ -493,13 +493,13 @@ def process_location(shorthand, grid_info_file, grid_info_folder, data_folder, o
         # Merge VPD into monthly_data
         monthly_data = monthly_data.merge(vpd_data, on=['year', 'month'], how='left')
         vpd_enabled = True
-        print(f"  VPD quantile mapping completed")
+        print("  VPD quantile mapping completed")
     except Exception as e:
         import traceback
         print(f"  Warning: VPD quantile mapping failed: {e}")
-        print(f"  Error details:")
+        print("  Error details:")
         traceback.print_exc()
-        print(f"  Proceeding without VPD output")
+        print("  Proceeding without VPD output")
         vpd_enabled = False
     
     # Construct VPD location name
@@ -674,7 +674,7 @@ def create_validation_csv(
         print(f"  Written: {output_file} ({n_locations} locations, {len(output_df)} rows)")
 
     print(f"\n{'=' * 80}")
-    print(f"Validation CSVs complete.")
+    print("Validation CSVs complete.")
     print(f"{'=' * 80}")
 
 
@@ -1047,13 +1047,13 @@ def print_validation_report(location, results):
         res = results[var_type]
         units = res['units']
         
-        print(f"\n  Annual Average:")
+        print("\n  Annual Average:")
         print(f"    CalSim:        {res['ref_annual_avg']:10.4f} {units}")
         print(f"    Output:        {res['output_annual_avg']:10.4f} {units}")
         print(f"    Difference:    {res['annual_diff']:10.4f} {units} ({res['annual_pct_diff']:+.2f}%)")
         
-        print(f"\n  Monthly Averages:")
-        print(f"    Month    CalSim    Output       Diff        % Diff")
+        print("\n  Monthly Averages:")
+        print("    Month    CalSim    Output       Diff        % Diff")
         print(f"    {'-'*60}")
         for month in range(1, 13):
             ref_val = res['ref_monthly_avg'].get(month, np.nan)
@@ -1161,11 +1161,11 @@ def run_validate_outputs(scenario):
         print(f"\nDetailed summary saved to: {summary_file}")
     
     # Generate plots
-    print(f"\nGenerating monthly boxplots...")
+    print("\nGenerating monthly boxplots...")
     create_monthly_boxplots(all_monthly_data, validation_folder, scenario)
     print(f"Boxplots saved to: {validation_folder}")
     
-    print(f"\nGenerating annual comparison plots...")
+    print("\nGenerating annual comparison plots...")
     create_annual_comparison_plots(all_results, validation_folder, locations, scenario)
     print(f"Annual comparison plots saved to: {validation_folder}")
 
@@ -1842,13 +1842,13 @@ def main():
         summary_file = script_output_folder / "_summary.csv"
         summary_df.to_csv(summary_file, index=False)
         print(f"\n{'='*80}")
-        print(f"Processing complete!")
+        print("Processing complete!")
         print(f"Successfully processed {len(summaries)} out of {len(locations_df)} locations")
         print(f"Summary saved to: {summary_file}")
         print(f"{'='*80}")
         
         # Print summary statistics
-        print(f"\nSummary Statistics:")
+        print("\nSummary Statistics:")
         print(f"  Average number of grid cells per basin: {summary_df['num_grid_cells'].mean():.1f}")
         print(f"  Average monthly precip (across all basins): {summary_df['mean_monthly_precip_inches'].mean():.2f} inches")
         print(f"  Average monthly tavg (across all basins): {summary_df['mean_monthly_tavg_f'].mean():.2f} degF")

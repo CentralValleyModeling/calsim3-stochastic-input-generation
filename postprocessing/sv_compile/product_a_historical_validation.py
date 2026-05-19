@@ -70,7 +70,6 @@ import os
 import sys
 import time
 import shutil
-import glob
 import argparse
 import atexit
 import warnings
@@ -267,8 +266,8 @@ def read_master_inventory() -> pd.DataFrame:
         wb = openpyxl.load_workbook(str(INVENTORY_XLSX), read_only=True, data_only=True)
     except PermissionError:
         sys.exit(
-            f"ERROR: Cannot read the master inventory - the file may be open in Excel.\n"
-            f"  Close the file and re-run the script:\n"
+            "ERROR: Cannot read the master inventory - the file may be open in Excel.\n"
+            "  Close the file and re-run the script:\n"
             f"  {INVENTORY_XLSX}"
         )
     ws = wb["MASTER"]
@@ -823,7 +822,6 @@ def generate_stats_report(stats_csv: Path, cached_series: dict = None):
     import matplotlib
     matplotlib.use("Agg")
     import matplotlib.pyplot as plt
-    from matplotlib.ticker import MaxNLocator
 
     _FS = 7
     plt.rcParams.update({
@@ -982,7 +980,7 @@ def generate_stats_report(stats_csv: Path, cached_series: dict = None):
             ann_chg = sub["AbsChange-Ann-Avg"].dropna()
             ann_pct = sub["PctChange-Ann-Avg"].dropna()
             lines.append("")
-            lines.append(f"  Annual change (WY):  "
+            lines.append("  Annual change (WY):  "
                          f"abs median = {ann_chg.median():+.2f}  "
                          f"| pct median = {ann_pct.median():+.1f}%  "
                          f"| range [{ann_pct.min():+.1f}%, {ann_pct.max():+.1f}%]")
@@ -1002,7 +1000,7 @@ def generate_stats_report(stats_csv: Path, cached_series: dict = None):
         nan_r2 = sub[sub["R2-Monthly"].isna()][["Part_B", "Part_C"]]
         if not nan_r2.empty:
             lines.append("")
-            lines.append(f"  Excluded from box plots (NaN R2-Monthly - constant/zero/missing):")
+            lines.append("  Excluded from box plots (NaN R2-Monthly - constant/zero/missing):")
             for _, w in nan_r2.iterrows():
                 lines.append(f"    {w['Part_B']:30s} {w['Part_C']:20s}")
 
@@ -1172,7 +1170,7 @@ def generate_stats_report(stats_csv: Path, cached_series: dict = None):
         fig.tight_layout()
         fig.savefig(fig_dir / "pctchange_monthly_by_category.png", bbox_inches="tight")
         plt.close(fig)
-        print(f"  Figure:  figures/pctchange_monthly_by_category.png")
+        print("  Figure:  figures/pctchange_monthly_by_category.png")
 
     # -- Figs 6+: Scatter - |Annual Avg Baseline| vs Avg Annual % Change -
     #    One plot per category + one "All" plot.  Constant/Rept excluded.
@@ -1247,7 +1245,7 @@ def generate_stats_report(stats_csv: Path, cached_series: dict = None):
                 )
                 _n_scatter += 1
 
-        print(f"  Scatter plots:  figures/annual_scatter/  "
+        print("  Scatter plots:  figures/annual_scatter/  "
               f"({_n_scatter} plots across {len(cat_order_plots)} categories)")
 
     # ----------------------------------------------------------------------
@@ -1666,7 +1664,7 @@ if CLI_ARGS.compute_stats:
 
     if not OUTPUT_DSS.exists():
         sys.exit(
-            f"ERROR: Compiled DSS not found - run the full compilation first.\n"
+            "ERROR: Compiled DSS not found - run the full compilation first.\n"
             f"  Expected: {OUTPUT_DSS}"
         )
     if not BASELINE_DSS.exists():
@@ -1675,7 +1673,7 @@ if CLI_ARGS.compute_stats:
     paths_mod_csv = OUTPUT_DIR / "paths_modified.csv"
     if not paths_mod_csv.exists():
         sys.exit(
-            f"ERROR: paths_modified.csv not found - run the full compilation first.\n"
+            "ERROR: paths_modified.csv not found - run the full compilation first.\n"
             f"  Expected: {paths_mod_csv}"
         )
 
@@ -1722,7 +1720,7 @@ if CLI_ARGS.stats_report:
     stats_csv = OUTPUT_DIR / "modification_statistics.csv"
     if not stats_csv.exists():
         sys.exit(
-            f"ERROR: modification_statistics.csv not found - "
+            "ERROR: modification_statistics.csv not found - "
             f"run --compute-stats first.\n  Expected: {stats_csv}"
         )
 
@@ -1741,7 +1739,7 @@ if CLI_ARGS.summary_tables:
     stats_csv = OUTPUT_DIR / "modification_statistics.csv"
     if not stats_csv.exists():
         sys.exit(
-            f"ERROR: modification_statistics.csv not found - "
+            "ERROR: modification_statistics.csv not found - "
             f"run --compute-stats first.\n  Expected: {stats_csv}"
         )
 
@@ -1768,9 +1766,9 @@ while True:
         break  # file is accessible
     except PermissionError:
         print(
-            f"\nWARNING: The master inventory appears to be open in Excel.\n"
+            "\nWARNING: The master inventory appears to be open in Excel.\n"
             f"  {INVENTORY_XLSX}\n"
-            f"  Close the file, then press Enter to continue (or Ctrl+C to abort)..."
+            "  Close the file, then press Enter to continue (or Ctrl+C to abort)..."
         )
         try:
             input()

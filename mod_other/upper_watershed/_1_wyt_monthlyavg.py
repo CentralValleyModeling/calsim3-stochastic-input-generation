@@ -45,7 +45,7 @@ _REPO_DIR = Path(__file__).resolve().parents[2]
 _gen = get_module_generated_dir("mod_other/upper_watershed")
 _wyt_gen = get_module_generated_dir("mod_hydrology/water_year_types")
 
-# %% -- CONFIG -----------------------------------------------------------
+# -- CONFIG -----------------------------------------------------------
 dss_file = str(get_base_dir() / "CalSim3" / "__calsim_sv_default__.dss")
 terms_csv = str(_SCRIPT_DIR / "reference" / "wyt_avg_terms.csv")
 
@@ -73,7 +73,7 @@ _WYT_INPUT_DIRS = {"A": "Product_A", "B": "Product_B"}
 # Where the historical WYT CSVs live
 wyt_hist_dir = str(_REPO_DIR / "mod_hydrology" / "water_year_types" / "reference")
 
-# %% -- RESULTS ROOT ------------------------------------------------------
+# -- RESULTS ROOT ------------------------------------------------------
 BASE_RESULTS_DIR = _gen / "output"/"_1_wyt_monthlyavg"
 PRODUCT_A_DIR = _gen / "output" / "_product_a_validation"
 PRODUCT_B_DIR = _gen / "output" / "_product_b_final"
@@ -173,7 +173,7 @@ def main() -> None:
     hist_cmp_path = hist_dir / f"{prefix}_actual_vs_reconstructed.csv"
     hist_cmp_df.to_csv(hist_cmp_path, index=False)
 
-    print(f"\nHistorical outputs:")
+    print("\nHistorical outputs:")
     print(f"  - {pattern_path}")
     print(f"  - {hist_cmp_path}")
 

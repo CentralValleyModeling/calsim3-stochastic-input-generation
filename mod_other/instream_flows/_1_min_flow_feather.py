@@ -459,7 +459,7 @@ def _load_xlsx_unimp_orov() -> pd.Series:
     """
     import openpyxl
     from datetime import datetime as _dt
-    print(f"\nLoading Historical UNIMP_OROV from spreadsheet Main sheet:")
+    print("\nLoading Historical UNIMP_OROV from spreadsheet Main sheet:")
     print(f"  {PATH_XLSX}")
     wb = openpyxl.load_workbook(PATH_XLSX, read_only=True, data_only=True)
     rows = list(wb['Main'].iter_rows(values_only=True))
@@ -488,7 +488,7 @@ def run_validation():
     unimp_hist = _load_xlsx_unimp_orov()
 
     xlsx_thresh = _load_xlsx_thresholds()
-    print(f"\n  Spreadsheet thresholds (from Main_WA):")
+    print("\n  Spreadsheet thresholds (from Main_WA):")
     print(f"    ANN_THRESH  = {xlsx_thresh['ann_thresh']:.4f} TAF")
     print(f"    TWOY_THRESH = {xlsx_thresh['twoy_thresh']:.4f} TAF")
     print(f"    (module defaults: ANN={ANN_THRESH:.4f}, TWOY={TWOY_THRESH:.4f})")

@@ -10,7 +10,6 @@ Usage
     python _0_load_sv.py
 """
 
-import os
 import sys
 import pandas as pd
 import numpy as np

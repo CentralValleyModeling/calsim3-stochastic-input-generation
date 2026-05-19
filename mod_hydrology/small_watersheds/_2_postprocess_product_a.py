@@ -47,7 +47,7 @@ from utils.paths import get_module_generated_dir, get_inventory_dir
 _GEN_DIR = get_module_generated_dir("mod_hydrology/small_watersheds")
 
 
-# %% -- CONSTANTS --------------------------------------------------------
+# -- CONSTANTS --------------------------------------------------------
 OUTPUT_DIR = str(_GEN_DIR / "output" / "_2_postprocess_product_a")
 VALIDATION_DIR = str(_GEN_DIR / "output" / "_2_postprocess_product_a" / "_product_a_validation")
 
@@ -63,7 +63,7 @@ DSS_PATHS = [
 SCENARIO_LABELS = ['Historical_1921', 'ProductA']
 
 
-# %% -- HELPER FUNCTIONS ------------------------------------------------
+# -- HELPER FUNCTIONS ------------------------------------------------
 
 def load_master_inventory():
     """Load and filter SmallWatersheds entries from the master inventory."""
@@ -129,7 +129,7 @@ def compute_summary(df, time_unit, agg_func, label, value_cols):
     return grouped
 
 
-# %% -- POSTPROCESS ------------------------------------------------------
+# -- POSTPROCESS ------------------------------------------------------
 
 def run_postprocess():
     """Extract DSS data, merge scenarios, generate summary statistics and boxplots."""
@@ -232,7 +232,7 @@ def run_postprocess():
     return merged_df
 
 
-# %% -- VALIDATION CSV ---------------------------------------------------
+# -- VALIDATION CSV ---------------------------------------------------
 
 def create_validation_csv(merged_df=None, output_dir=None, start_wy=1972, end_wy=2018):
     """
@@ -312,13 +312,13 @@ def create_validation_csv(merged_df=None, output_dir=None, start_wy=1972, end_wy
     print(f"\n  Written   : {output_file}")
     print(f"  Variables : {n_variables}")
     print(f"  Rows      : {len(val_df)}")
-    print(f"  Date range: "
+    print("  Date range: "
           f"{df_filtered['Date'].min().strftime('%Y-%m')} - "
           f"{df_filtered['Date'].max().strftime('%Y-%m')}")
     print("=" * 80)
 
 
-# %% -- CLI ENTRY POINT -------------------------------------------------
+# -- CLI ENTRY POINT -------------------------------------------------
 
 def main():
     """Main entry point."""
