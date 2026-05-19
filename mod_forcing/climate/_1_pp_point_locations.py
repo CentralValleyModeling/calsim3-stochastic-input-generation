@@ -27,13 +27,14 @@ Usage
     cd mod_forcing/climate && python _1_pp_point_locations.py --source Historical
 """
 
+import argparse
+import glob
 import os
 import sys
-import glob
-import argparse
+from pathlib import Path
+
 import numpy as np
 import pandas as pd
-from pathlib import Path
 
 # Add repo root to path for utils imports
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
@@ -471,13 +472,13 @@ def main():
         summary_file = script_output_folder / "_summary.csv"
         summary_df.to_csv(summary_file, index=False)
         print(f"\n{'='*80}")
-        print(f"Processing complete!")
+        print("Processing complete!")
         print(f"Successfully processed {len(summaries)} out of {len(locations_df)} locations")
         print(f"Summary saved to: {summary_file}")
         print(f"{'='*80}")
         
         # Print summary statistics
-        print(f"\nSummary Statistics:")
+        print("\nSummary Statistics:")
         print(f"  Mean distance to grid cell: {summary_df['distance_km'].mean():.2f} km")
         print(f"  Max distance to grid cell: {summary_df['distance_km'].max():.2f} km")
         print(f"  Average monthly precip (across all locations): {summary_df['mean_monthly_precip_inches'].mean():.2f} inches")

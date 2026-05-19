@@ -1,14 +1,44 @@
+"""
+Compile Rim Inflows from VIC Flux Files
+=======================================
+Routes VIC RUNOFF + BASEFLOW through grid weights to monthly rim inflows for
+each CalSim rim location, writing per-location monthly CSVs (and DSS) for
+Product A (1921-2018) or Product B (1000-year, chunked).
+
+Inputs
+------
+- Grid-info files (rim-location grid weights)
+- VIC flux files (RUNOFF, BASEFLOW, ...)
+
+Outputs
+-------
+- <generated>/output/routed/Product_A/1/CS3_<loc>_qmo.csv  (+ DSS)
+- <generated>/output/routed/Product_B/1/...  (with --product_b)
+
+Dependencies
+------------
+- utils/paths.py  (data-dir resolution)
+
+Usage
+-----
+    cd mod_forcing/vic
+    python _2_compile_rim_inflows.py              # Product A
+    python _2_compile_rim_inflows.py --product_b  # Product B
+"""
+
+import argparse
+import glob
 import os
 import sys
-import glob
-import argparse
-import pandas as pd
-import numpy as np
 from pathlib import Path
+
+import numpy as np
+import pandas as pd
 
 # Add repo root to path for utils imports
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 from utils.paths import get_module_generated_dir
+
 
 class compile_rim_inflows:
     """
