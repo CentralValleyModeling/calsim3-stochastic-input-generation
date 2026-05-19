@@ -51,11 +51,7 @@ the Product A quantile-mapped Millerton inflow.
 Validation achieved $R^2 = 0.78$ with values predominantly aligned to actual inputs. Minor misalignments appear in two contexts: minimum storage values during September through February, and anomalous behavior during the 2012-2015 drought period where actual CalSim inputs maintain storage consistently higher than expected.
 
 ![Mammoth Pool QM Validation](figures/s3-inputs_mammoth-pool-qm-validation.png)
-*Mammoth Pool storage quantile mapping validation, WY 1972--2018 (R^2 = 0.78). Millerton inflow serves as basis (R = 0.7). Storage oscillates seasonally between approximately 10--20 TAF (troughs) and 120--125 TAF (peaks), with reconstructed values (orange) generally tracking actual CalSim inputs (blue).* The drought anomaly likely reflects maintenance or operational constraints where actual operations deviated from typical patterns. Attempting to replicate such anomalies through algorithms may be counterproductive, as the systematic reconstruction based on hydrologic relationships provides more defensible projections for synthetic sequences.
-
-
-
-
+*Mammoth Pool storage quantile mapping validation, WY 1972--2018 (R^2 = 0.78). Millerton inflow serves as basis (R = 0.76). Mammoth storage shows a seasonal pattern, with low-storage periods generally around 10–30 TAF and high-storage peaks of roughly 120-124 TAF during the spring-summer refill period, with the highest sustained peaks in wetter years. The reconstructed series generally follows the timing and magnitude of the historical CalSim input series, although some mid to high storage values are underestimated. A distinct departure is evident during the 2012–2015 drought, when the historical CalSim input storage remains higher than the reconstructed in many months. The drought anomaly likely reflects maintenance or operational constraints where actual operations deviated from typical patterns. Attempting to replicate such anomalies through algorithms may be counterproductive, as the systematic reconstruction based on hydrologic relationships provides more defensible projections for synthetic sequences.
 
 :::{admonition} Suggested Plot
 :class: note
@@ -74,7 +70,7 @@ antecedent watershed wetness.
 Daily precipitation is first converted to a Feather River basin
 wetness index. The wetness index is then translated into a flood reservation
 requirement and, finally, into a daily top of conservation storage target.
-Monthly end-of-month values are written as the CalSim storage-level series
+Monthly end of month values are written as the CalSim storage-level series
 `S_OROVLLEVEL5`.
 
 
@@ -87,7 +83,7 @@ using 2021 LiDAR and 2022 multibeam-sonar data revised Lake Oroville’s
 capacity to 3,424,753 acre-feet, or approximately 3,424.8 TAF (DWR, 2024). This is about
 113 TAF, or 3 percent, less than the original 1968 estimate.
 
-The updated bathymetry requires an explicit elevation-to-volume translation in the reconstruction: The USACE flood-control rule curve is referenced to reservoir elevation and flood-reservation space, whereas the CalSim `S_OROVLLEVEL5` input is expressed as a storage volume. Because of the revised bathymetry, the elevation that historically corresponded to 3,538 TAF of gross pool capacity now corresponds to only 3,424.8 TAF. The volume-based rule curve must therefore be rescaled so that flood-control allocations remain consistent with the operating elevations specified in the USACE Water Control Manual, even though the underlying storage volumes have changed.
+The updated bathymetry requires an explicit elevation to volume translation in the reconstruction. The USACE Water Control Manual defines the flood-control requirement in terms of reservoir elevation and required flood-reservation space, and its listed storage volumes are tied to the manual’s historical area-capacity curve. CalSim `S_OROVLLEVEL5` input is expressed as a storage volume. Because of the revised bathymetry, the elevation that historically corresponded to 3,538 TAF of gross pool capacity now corresponds to only 3,424.8 TAF. The volume-based rule curve must therefore be rescaled so that flood-control allocations remain consistent with the operating elevations specified in the USACE Water Control Manual, even though the underlying storage volumes have changed.
 
 
 #### Wetness-Index Method
@@ -124,34 +120,29 @@ $$
 
 where $S_{\max}$ is the adjusted maximum storage capacity.
 
-#### Seasonal Rule-Curve Translation
+#### Seasonal Rule Curve Translation
 
 The daily top-of-conservation target follows the seasonal structure of the
 Lake Oroville flood-control rule curve:
 
 - From September 15 to October 15, storage ramps down from the summer
-  maximum storage to the wetness-dependent flood-season target.
+  maximum storage to the wetness dependent flood season target.
 - From October 15 through March 31, the target remains at the
-  wetness-dependent flood-season storage level.
+  wetness dependent flood season storage level.
 - After March 31, the target refills toward the summer maximum at the
   prescribed refill rate, capped at $S_{\max}$.
 
-This produces lower allowable conservation storage during wet antecedent
-conditions and higher allowable conservation storage during dry antecedent
-conditions. In operational terms, a wetter watershed requires more reserved
-flood-control space because additional precipitation is more likely to
-produce rapid runoff.
 
 #### Synthetic Hydroclimate Implementation
 
-For synthetic sequences, the same wetness-index and rule-curve calculation is applied to WGEN-derived daily Oroville basin precipitation. The resulting daily storage targets are aggregated to monthly end-of-month values compatible with Calsim monthly input.
+For synthetic sequences, the same wetness index and rule curve calculation is applied to WGEN-derived daily Oroville basin precipitation. The resulting daily storage targets are aggregated to monthly end of month values compatible with Calsim monthly input.
 
 #### Validation
 
-Validation against historical CalSim inputs shows that the wetness-index approach
+Validation against historical CalSim inputs shows that the wetness index approach
 captures the primary seasonal drawdown and refill behavior, with remaining
 differences largely reflecting the method’s sensitivity to daily precipitation
-timing and basin-mean precipitation representation.
+timing and basin mean precipitation representation.
 
 
 
@@ -199,10 +190,12 @@ The five WYT-based reservoir storage level reconstructions show strong performan
 ::::{tab-set}
 :::{tab-item} Folsom Level 2
 ![Reservoir Storage Curves Overview](figures/s3-inputs_reservoir-storage-curves.png)
-*Folsom Level 2 (minimum pool) storage reconstruction, 1921--2021. Actual CalSim input (blue) and WYT-based reconstruction (orange) show step-function behavior alternating between approximately 300 and 350 TAF depending on water year type. Agreement is near-perfect, with only brief departures visible in a few years (~1951, 1978, 1985, 1993)
+
+*Folsom Level 2 (minimum pool) storage reconstruction, 1921--2021. Actual CalSim input (blue) and WYT-based reconstruction (orange) show step-function behavior alternating between approximately 300 and 350 TAF depending on water year type. Agreement is near-perfect, with only brief departures visible in a few years (~1951, 1978, 1985, 1993)*
 :::
 :::{tab-item} Shasta Level 2
 ![Reservoir Storage WYT Alignment](figures/s3-inputs_reservoir-storage-wyt-alignment.png)
+
 *Shasta Level 2 (S_SHASTA) storage reconstruction, 1921--2021. Reconstructed WYT-based values (orange) step between approximately 800 and 2,000 TAF depending on water year type. Actual CalSim inputs (blue) are available only in limited time windows (circa 1989--1995 and 2009--2021), showing general agreement in the overlap periods with minor mismatches in level assignment.*
 :::
 ::::
@@ -221,6 +214,7 @@ Monthly schedule series use a fixed 12-month seasonal pattern that repeats ident
 ::::{tab-set}
 :::{tab-item} Don Pedro Level 4
 ![Reservoir Storage Validation](figures/s3-inputs_reservoir-storage-validation.png)
+
 *Don Pedro Level 4 (S_PEDRO) storage reconstruction validation, 1921--2021. Reconstructed values (orange) closely track actual CalSim inputs (blue) across the seasonal range of approximately 1,700--2,030 TAF. One anomalous drawdown to approximately 1,250 TAF around 1977--1980 in the historical record is not replicated by the reconstruction, consistent with the identified unique operational event.*
 :::
 ::::
