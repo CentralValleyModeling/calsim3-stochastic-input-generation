@@ -20,9 +20,14 @@
 > mode that runs both in one go. To switch to the Product B pipeline,
 > re-invoke each command with `--product B`.
 >
+> **Tier structure mirrors `docs/source/input-generation/overview.md`:**
+> Tier 1 Forcing -> Tier 2 Core Hydrology -> Tier 3 Water Year Types ->
+> Tier 4 Dependent Modules -> Tier 5 Final Compilation. Within Tier 2, each
+> external-run model is presented as a contiguous block:
+> compile precip/ET -> [EXTERNAL] model run -> postprocess.
+>
 > **Per-script details** (CLI flags / methodology) live in each script's
-> standardized header docstring; this runbook only carries what you need to
-> *run the pipeline in order*. Convention is enforced by
+> standardized header docstring. Convention is enforced by
 > `tools/check_scripts.py` and CI.
 
 ---
@@ -30,67 +35,75 @@
 ## A. End-to-end ordering (quick reference)
 
 ```
-Tier 0  SETUP (reference data; run once / when inputs change)
-        python mod_reservoir/evaporation/_0_extract_reservoir_database.py --extract
-        python mod_other/miscellaneous/_0_extract_others.py
-        python mod_other/upper_watershed/_0_load_sv.py
-
-Tier 1  FORCING
+Tier 1  FORCING (mod_forcing)
+    VIC:
         python mod_forcing/vic/_1_append_wind_wgen_hist.py
-        -> [EXTERNAL] VIC model run (wind-appended forcing)
+        -> [EXTERNAL] VIC hydrologic model run
         python mod_forcing/vic/_2_compile_rim_inflows.py --product A
+    Climate:
+        python mod_forcing/climate/_1_pp_point_locations.py --source Product_A --scenario 1
+        python mod_forcing/climate/_2_uhh_basin_averages.py --source Product_A --scenario 1
 
-Tier 2  CLIMATE
-        python mod_forcing/climate/_1_pp_point_locations.py  --source Product_A --scenario 1
-        python mod_forcing/climate/_2_uhh_basin_averages.py  --source Product_A --scenario 1
-
-Tier 3  MODEL-INPUT PREP  (depends on Tier 2 climate + Tier 1 forcing)
+Tier 2  CORE HYDROLOGY (mod_hydrology)
+    CalSimHydro:
         python mod_hydrology/calsimhydro/_1_compile_precip.py --product A --clip_period 1920-10-01 2018-09-30
         python mod_hydrology/calsimhydro/_2_compile_et.py --product A --et_type all --vic_col_index 7 --write_dss
+        -> [EXTERNAL] CalSimHydro model run
+        python mod_hydrology/calsimhydro/_3_postprocess_product_a.py --sources cshydro rebalance rice
+    CalSimHydroEE:
         python mod_hydrology/calsimhydro_ee/_1_compile_precip_EE.py --product A
-        python mod_hydrology/delta_channel_depletion/_1_compile_precip_DETAW.py --product A
-        python mod_hydrology/small_watersheds/_1_compile_precip_sws.py --product A
-
-Tier 3e [EXTERNAL] MODEL RUNS  (consume Tier 3 precip/ET; produce scenario DSS)
-        CalSimHydro run        (<- calsimhydro _1 precip + _2 ET)
-        CalSimHydroEE run      (<- calsimhydro_ee _1 precip)
-        DETAW / DCD run        (<- delta_channel_depletion _1 precip)
-        Small Watersheds run   (<- small_watersheds _1 precip)
-
-Tier 4  RIM QM + WATER-YEAR TYPES
+        -> [EXTERNAL] CalSimHydroEE model run
+        python mod_hydrology/calsimhydro_ee/_2_postprocess_product_a.py
+    Rim Inflow:
         python mod_hydrology/rim_inflow/_2_qmap_historical_validation.py
+    Small Watersheds:
+        python mod_hydrology/small_watersheds/_1_compile_precip_sws.py --product A
+        -> [EXTERNAL] Small Watersheds model run
+        python mod_hydrology/small_watersheds/_2_postprocess_product_a.py
+    Delta Channel Depletion:
+        python mod_hydrology/delta_channel_depletion/_1_compile_precip_DETAW.py --product A
+        -> [EXTERNAL] DETAW/DCD model run
+        python mod_hydrology/delta_channel_depletion/_2_postprocess_product_a.py
+
+Tier 3  WATER YEAR TYPES (mod_hydrology)
         python mod_hydrology/water_year_types/_1_calc_WYTs.py --product A
 
-Tier 5  POSTPROCESS EXTERNAL DSS + RESERVOIR/RECONSTRUCTION
-        python mod_hydrology/calsimhydro/_3_postprocess_product_a.py --sources cshydro rebalance rice
-        python mod_hydrology/calsimhydro_ee/_2_postprocess_product_a.py
-        python mod_hydrology/delta_channel_depletion/_2_postprocess_product_a.py
-        python mod_hydrology/small_watersheds/_2_postprocess_product_a.py
-        python mod_hydrology/tulare_gw_terms/_1_wyt_monthlyavg.py --product A
+Tier 4  DEPENDENT MODULES
+    Reservoir Evaporation:
+        python mod_reservoir/evaporation/_0_extract_reservoir_database.py --extract   (setup; run once)
         python mod_reservoir/evaporation/_2_run_reservoir_evap.py --product A
+    Reservoir Storage Curves:
         python mod_reservoir/storage_curves/_1_wyt_index_curves.py --product A
-              -> python mod_reservoir/storage_curves/_2_qmap_product_a.py
-              -> python mod_reservoir/storage_curves/_3_oroville_daily_precip.py
-              -> python mod_reservoir/storage_curves/_4_oroville_level5.py
-
-Tier 6  OTHER TERMS
+        python mod_reservoir/storage_curves/_2_qmap_product_a.py
+        python mod_reservoir/storage_curves/_3_oroville_daily_precip.py --source Product_A --scenario 1
+        python mod_reservoir/storage_curves/_4_oroville_level5.py --product A
+    Tulare Groundwater Terms:
+        python mod_hydrology/tulare_gw_terms/_1_wyt_monthlyavg.py --product A
+    Instream Flows:
         python mod_other/instream_flows/_1_min_flow_feather.py --product A
         python mod_other/instream_flows/_2_sjr_rest_req.py --product A
-        python mod_other/miscellaneous/_1_wyt_monthlyavg.py --product A
-              -> python mod_other/miscellaneous/_2_DeltaAccretionForNDOI.py --product A
-              -> python mod_other/miscellaneous/_3_hybrid_product_a.py
-              -> python mod_other/miscellaneous/_4_qmap_product_a.py
+    Upper Watershed Modules:
+        python mod_other/upper_watershed/_0_load_sv.py                              (setup; run once)
         python mod_other/upper_watershed/_1_wyt_monthlyavg.py --product A
-              -> python mod_other/upper_watershed/_2_qmap_product_a.py
-              -> python mod_other/upper_watershed/_3_hybrid_product_a.py
-              -> python mod_other/upper_watershed/_4_pge_wy_allocation.py --product A
-              -> python mod_other/upper_watershed/_5_dnp_evaporation.py --product A
+        python mod_other/upper_watershed/_2_qmap_product_a.py
+        python mod_other/upper_watershed/_3_hybrid_product_a.py
+        python mod_other/upper_watershed/_4_pge_wy_allocation.py --product A
+        python mod_other/upper_watershed/_5_dnp_evaporation.py --calibrate          (setup; run once)
+        python mod_other/upper_watershed/_5_dnp_evaporation.py --product A
+    Closure Terms:
         python mod_other/closure_terms/_1_ct_calculation.py --product A
+    Other Variables (Miscellaneous):
+        python mod_other/miscellaneous/_0_extract_others.py                          (setup; run once)
+        python mod_other/miscellaneous/_1_wyt_monthlyavg.py --product A
+        python mod_other/miscellaneous/_2_DeltaAccretionForNDOI.py --product A
+        python mod_other/miscellaneous/_3_hybrid_product_a.py
+        python mod_other/miscellaneous/_4_qmap_product_a.py
 
-Tier 7  FINAL COMPILATION
+Tier 5  FINAL COMPILATION (postprocessing)
         python postprocessing/sv_compile/product_a_historical_validation.py
         -> ProductA_Historical_Validation_SV.dss  (WY 1972-2018)
-        (optional, post external CalSim run:
+
+        (optional, post external CalSim 3.0 run consuming the SV DSS:
          python postprocessing/calsim_runs/_productA_pickle_builder.py
          python postprocessing/calsim_runs/_productA_postproc.py)
 ```
@@ -112,13 +125,11 @@ upper_watershed.
   (`MASTER` sheet) -- authoritative SV inventory; drives postprocessor
   filtering and the final compiler's expected/missing/constant-rept
   accounting.
-- `<module>/reference/qmap_pairs.csv` -- QM target/predictor pairs
-  (`target_part_b,target_part_c,predictor_part_b,predictor_part_c,lower_bound,upper_bound[,allow_negative]`).
+- `<module>/reference/qmap_pairs.csv` -- QM target/predictor pairs.
 - `mod_hydrology/rim_inflow/reference/CalSim3_VIC_name_mapping.csv`,
   `RimInflowAnchor.xlsx` -- rim QM pairing + anchor/tributary mass balance.
-- `.github/copilot-instructions.md` -- per-module script tables (cross-checked
-  against this runbook's tier ordering); also documents the script
-  convention enforced by `tools/check_scripts.py`.
+- `.github/copilot-instructions.md` -- per-module script tables and the
+  numbered-script convention enforced by `tools/check_scripts.py`.
 
 Quantile mapping is **deterministic / reproducible** (global `QMAP_SEED` in
 `utils/quantile_mapping.py`); the full Product A pipeline is byte-identical
@@ -126,82 +137,165 @@ run-to-run on identical inputs.
 
 ---
 
-## Tier 0 - Setup (reference data)
+## Tier 1 - Forcing (mod_forcing)
 
-| Script | Command | Inputs | Outputs | Consumed by |
-|---|---|---|---|---|
-| evaporation/_0 | `python mod_reservoir/evaporation/_0_extract_reservoir_database.py --extract` | reservoir-parameter Excel workbook | `reference/reservoir_parameters.json` (95 reservoirs) | evaporation/_2 |
-| miscellaneous/_0 | `python mod_other/miscellaneous/_0_extract_others.py` | CalSim baseline `__calsim_sv_default__.dss` | baseline "Other" monthly series (module reference) | miscellaneous/_1, _3, _4 |
-| upper_watershed/_0 | `python mod_other/upper_watershed/_0_load_sv.py` | upper-watershed `*_SV.dss`; master inventory xlsx | `output/_0_load_sv/all_dss_paths*.csv`, `matched_dss_to_inventory.csv` | upper_watershed/_1.._5 |
-
-## Tier 1 - Forcing (WGEN -> VIC -> rim inflows)
-
-| Script | Command | Inputs | Outputs | Consumed by |
-|---|---|---|---|---|
-| vic/_1 | `python mod_forcing/vic/_1_append_wind_wgen_hist.py` | WGEN `Product_A` met files; historical wind | wind-appended VIC forcing | [EXTERNAL] VIC model run |
-| [EXTERNAL] VIC | manual VIC run outside this repo | wind-appended forcing | VIC flux files (RUNOFF + BASEFLOW) | vic/_2 |
-| vic/_2 | `python mod_forcing/vic/_2_compile_rim_inflows.py --product A` (`--product B` for B) | VIC fluxes; grid weights | routed monthly rim inflows `CS3_*_qmo.csv` (+ DSS) | rim_inflow/_2, water_year_types/_1 |
-
-## Tier 2 - Climate extraction
-
-| Script | Command | Inputs | Outputs | Consumed by |
-|---|---|---|---|---|
-| climate/_1 | `python mod_forcing/climate/_1_pp_point_locations.py --source Product_A --scenario 1` | WGEN met files; PP point reference | per-location monthly precip CSVs | climate/_2; downstream point-precip consumers |
-| climate/_2 | `python mod_forcing/climate/_2_uhh_basin_averages.py --source Product_A --scenario 1` | WGEN met files; CS3 baseline DSS (historical UHH precip via `dss_io`); grid weights | basin-average precip/Tmax/Tmin/VPD + `_product_a_validation/` SV CSVs | calsimhydro/_1, _2; evaporation/_2; final compiler (`climate`) |
-
-## Tier 3 - Model-input preparation
-
-| Script | Command | Inputs | Outputs | Consumed by |
-|---|---|---|---|---|
-| calsimhydro/_1 | `python mod_hydrology/calsimhydro/_1_compile_precip.py --product A --clip_period 1920-10-01 2018-09-30` (`--product B` for B) | WGEN met files; WBA grid info | daily WBA precip CSVs | [EXTERNAL] CalSimHydro run |
-| calsimhydro/_2 | `python mod_hydrology/calsimhydro/_2_compile_et.py --product A --et_type all --vic_col_index 7 --write_dss --n_workers 8` (`--product B` for B) | VIC fluxes; WBA grid; CS3 RefETo DSS (QM target) | monthly QM'd ET CSVs per WBA (WY 1972-2018) | [EXTERNAL] CalSimHydro run |
-| calsimhydro_ee/_1 | `python mod_hydrology/calsimhydro_ee/_1_compile_precip_EE.py --product A` (`--product B` for B) | WGEN met files; East-Side grid info | daily East-Side precip CSVs | [EXTERNAL] CSHydroEE run |
-| delta_channel_depletion/_1 | `python mod_hydrology/delta_channel_depletion/_1_compile_precip_DETAW.py --product A` (`--product B` for B) | WGEN met files; DCD station list | daily DCD-station precip | [EXTERNAL] DETAW/DCD run |
-| small_watersheds/_1 | `python mod_hydrology/small_watersheds/_1_compile_precip_sws.py --product A` (`--product B` for B) | WGEN met files; SWS station list | monthly SWS precip (in/mo) | [EXTERNAL] SWS run |
-
-## Tier 3e - External model runs (not repo scripts)
-
-| Run | Inputs | Outputs (scenario DSS) | Consumed by |
+| Script | Command | Inputs | Outputs |
 |---|---|---|---|
-| [EXTERNAL] CalSimHydro | calsimhydro/_1 precip + calsimhydro/_2 ET | `CalSimHydro_Product_A/CS3L2015V0Hydro_SV.dss`; `.../RiceOutput.dss`; `Rebalance_Product_A/.../HydroRebalanceSJRdemands.dss` (+ Historical/VICPrecip/QMET) | calsimhydro/_3 |
-| [EXTERNAL] CalSimHydroEE | calsimhydro_ee/_1 precip | `CalSimHydroEE_Product_A/CalSimHydroEE_DP_EA.dss` (+ Historical/VICPrecip/QMET) | calsimhydro_ee/_2 |
-| [EXTERNAL] DETAW/DCD | delta_channel_depletion/_1 precip | `DCD_Calsim3_PlanningStudy[_Product_A]_1921-2018/.../CS3sv_DCD_PRISM_Dtrnd.dss` | delta_channel_depletion/_2 |
-| [EXTERNAL] Small Watersheds | small_watersheds/_1 precip | SWS Product A DSS | small_watersheds/_2 |
+| vic/_1 | `python mod_forcing/vic/_1_append_wind_wgen_hist.py` | WGEN `Product_A` met files; historical wind | wind-appended VIC forcing |
+| [EXTERNAL] VIC | manual VIC model run | wind-appended forcing | VIC flux files (RUNOFF + BASEFLOW) |
+| vic/_2 | `python mod_forcing/vic/_2_compile_rim_inflows.py --product A` | VIC fluxes; grid weights | routed monthly rim inflows `CS3_*_qmo.csv` (+ DSS) |
+| climate/_1 | `python mod_forcing/climate/_1_pp_point_locations.py --source Product_A --scenario 1` | WGEN met files; PP point reference | per-location monthly precip CSVs |
+| climate/_2 | `python mod_forcing/climate/_2_uhh_basin_averages.py --source Product_A --scenario 1` | WGEN met files; CS3 baseline DSS (UHH precip); grid weights | basin-average precip/Tmax/Tmin/VPD + `_product_a_validation/` SV CSVs |
 
-## Tier 4 - Rim-inflow QM + water-year types
+---
 
-| Script | Command | Inputs | Outputs | Consumed by |
-|---|---|---|---|---|
-| rim_inflow/_2 | `python mod_hydrology/rim_inflow/_2_qmap_historical_validation.py` | VIC routed inflows (vic/_2); CS3 baseline DSS; `CalSim3_VIC_name_mapping.csv`; `RimInflowAnchor.xlsx` | `_riminflow_productA_1972_2018.csv` (+ TS/summary, figures) | water_year_types/_1; instream_flows; QM predictor for miscellaneous/_4, upper_watershed/_2, storage_curves/_2; final compiler |
-| water_year_types/_1 | `python mod_hydrology/water_year_types/_1_calc_WYTs.py --product A` (`--product B` for B) | rim inflows (Sac: SRBB+OROV+YUBA+FOLS; SJ: ST+TU+ME+SJ) | WYT indices under `_1_calc_WYTs/Product_A/` | tulare_gw_terms/_1; miscellaneous/_1; upper_watershed/_1 |
+## Tier 2 - Core Hydrology (mod_hydrology)
 
-## Tier 5 - Postprocess external DSS + reservoir / reconstruction
+Each external-run model is a contiguous block: compile inputs ->
+[EXTERNAL] model run -> postprocess scenario DSS into validation CSVs.
 
-| Script | Command | Inputs | Outputs | Consumed by |
-|---|---|---|---|---|
-| calsimhydro/_3 | `python mod_hydrology/calsimhydro/_3_postprocess_product_a.py` (`--sources cshydro rebalance rice`; `--skip-compare`; `--skip-validate`) | [EXTERNAL] CalSimHydro Product A scenario DSS; master inventory | merged-scenario + summary CSVs + `_product_a_validation/*.csv` | final compiler (`calsimhydro`) |
-| calsimhydro_ee/_2 | `python mod_hydrology/calsimhydro_ee/_2_postprocess_product_a.py` | [EXTERNAL] CSHydroEE DSS; master inventory | `_cshydroEE_productA_1972_2018.csv` (+ merged/summary/boxplots) | final compiler (`calsimhydro_ee`) |
-| delta_channel_depletion/_2 | `python mod_hydrology/delta_channel_depletion/_2_postprocess_product_a.py` | [EXTERNAL] DCD DSS; master inventory (CFS->TAF) | `_dcd_productA_1972_2018.csv` (+ merged/summary/boxplots) | final compiler (`delta_channel_depletion`) |
-| small_watersheds/_2 | `python mod_hydrology/small_watersheds/_2_postprocess_product_a.py` | [EXTERNAL] SWS DSS; master inventory | `_product_a_validation/*.csv` | final compiler (`small_watersheds`) |
-| tulare_gw_terms/_1 | `python mod_hydrology/tulare_gw_terms/_1_wyt_monthlyavg.py --product A` (`--product B` for B) | WYT indices (water_year_types/_1) | `_1_wyt_monthlyavg/_product_a_validation/*.csv` | final compiler (`tulare_gw_terms`) |
-| evaporation/_2 | `python mod_reservoir/evaporation/_2_run_reservoir_evap.py --product A` (append `FOLSM SHSTA` for a subset; `--product B` for B; `--compare-a` for B-vs-A comparison) | climate temps (climate/_2); `reservoir_parameters.json` (evaporation/_0) | per-reservoir monthly evap CSVs + `_product_a_validation/*.csv` | final compiler (`evaporation`) |
-| storage_curves/_1.._4 | in order: `python mod_reservoir/storage_curves/_1_wyt_index_curves.py --product A`; `_2_qmap_product_a.py`; `_3_oroville_daily_precip.py`; `_4_oroville_level5.py` | CS3 baseline DSS; rim/precip; `reference/qmap_pairs.csv` | storage curves + `_product_a_validation/*.csv` | final compiler (`storage_curves`) |
+### CalSimHydro (746 vars)
 
-## Tier 6 - Other terms
+1. `python mod_hydrology/calsimhydro/_1_compile_precip.py --product A --clip_period 1920-10-01 2018-09-30`
+   - **Inputs:** WGEN met files; WBA grid info
+   - **Outputs:** daily WBA precip CSVs
+2. `python mod_hydrology/calsimhydro/_2_compile_et.py --product A --et_type all --vic_col_index 7 --write_dss --n_workers 8`
+   - **Inputs:** VIC fluxes; WBA grid; CS3 RefETo DSS (QM target)
+   - **Outputs:** monthly QM'd ET CSVs per WBA (WY 1972-2018)
+3. **[EXTERNAL] CalSimHydro model run** -- manual; consumes the precip + ET above.
+   - **Outputs:** `CalSimHydro_Product_A/CS3L2015V0Hydro_SV.dss`, `RiceOutput.dss`, `Rebalance_Product_A/.../HydroRebalanceSJRdemands.dss` (+ Historical/VICPrecip/QMET scenarios)
+4. `python mod_hydrology/calsimhydro/_3_postprocess_product_a.py --sources cshydro rebalance rice`
+   - **Inputs:** external CalSimHydro Product A scenario DSS; master inventory
+   - **Outputs:** merged-scenario + summary CSVs + `_product_a_validation/*.csv`
 
-| Script | Command | Inputs | Outputs | Consumed by |
-|---|---|---|---|---|
-| instream_flows/_1, _2 | `python mod_other/instream_flows/_1_min_flow_feather.py --product A`; `python mod_other/instream_flows/_2_sjr_rest_req.py --product A` (`--product B` for B; `--product validation` for the 3-way comparison artifact) | rim inflows (rim_inflow/_2) | `_product_a_validation/*.csv` (MINFLOWFEATHER; REST_REQ_NP/REST_REQ_P) | final compiler (`instream_flows`) |
-| miscellaneous/_1.._4 | in order: `python mod_other/miscellaneous/_1_wyt_monthlyavg.py --product A`; `_2_DeltaAccretionForNDOI.py --product A`; `_3_hybrid_product_a.py`; `_4_qmap_product_a.py` | miscellaneous/_0 baseline; WYT indices; rim_inflow/_2 rim CSV; `reference/qmap_pairs.csv` | `_product_a_validation/*.csv` (incl. `TULE_WET_INDX_productA_1972_2018.csv`); `_4_qmap_product_a/` detail + figures | final compiler (`miscellaneous`) |
-| upper_watershed/_1.._5 | in order: `python mod_other/upper_watershed/_1_wyt_monthlyavg.py --product A`; `_2_qmap_product_a.py`; `_3_hybrid_product_a.py`; `_4_pge_wy_allocation.py --product A`; `_5_dnp_evaporation.py --product A` (`--calibrate` for the one-time hypsographic-curve setup) | upper_watershed/_0 SV reference; WYT indices; rim_inflow/_2 rim CSV; `reference/qmap_pairs.csv` | `_product_a_validation/*.csv` | final compiler (`upper_watershed`) |
-| closure_terms/_1 | `python mod_other/closure_terms/_1_ct_calculation.py --product A` (`--product B` for B; A runs the full closure analysis, B writes the stochastic chunk CSVs only) | upstream SV terms; WGEN-derived correlations | `_product_a_validation/*.csv` (closure-term reconciliation) | final compiler (closure category) |
+### CalSimHydroEE (17 vars)
 
-## Tier 7 - Final compilation to DSS
+1. `python mod_hydrology/calsimhydro_ee/_1_compile_precip_EE.py --product A`
+   - **Inputs:** WGEN met files; East-Side grid info
+   - **Outputs:** daily East-Side precip CSVs
+2. **[EXTERNAL] CalSimHydroEE model run**
+   - **Outputs:** `CalSimHydroEE_Product_A/CalSimHydroEE_DP_EA.dss` (+ Historical/VICPrecip/QMET)
+3. `python mod_hydrology/calsimhydro_ee/_2_postprocess_product_a.py`
+   - **Inputs:** external CSHydroEE DSS; master inventory
+   - **Outputs:** `_cshydroEE_productA_1972_2018.csv` (+ merged/summary/boxplots)
 
-| Script | Command | Inputs | Outputs | Consumed by |
-|---|---|---|---|---|
-| sv_compile (final) | `python postprocessing/sv_compile/product_a_historical_validation.py` (`--compute-stats`; `--stats-report`; `--no-term-plots`; `--summary-tables`) | every module's `_product_a_validation/*.csv`; CS3 baseline DSS; master inventory | `ProductA_Historical_Validation_SV.dss` (WY 1972-2018; overwrite window Oct 31 1971 - Sep 30 2018); diagnostic CSVs + per-category R2/NSE/trend figures | downstream CalSim 3.0 study |
-| (optional) calsim_runs | `python postprocessing/calsim_runs/_productA_pickle_builder.py`; `python postprocessing/calsim_runs/_productA_postproc.py` | external CalSim 3.0 run results consuming `ProductA_Historical_Validation_SV.dss` | Product A run pickle cache + postprocessed comparison artifacts | analysis / reporting (not the input-generation pipeline) |
+### Rim Inflow (227 vars)
+
+1. `python mod_hydrology/rim_inflow/_2_qmap_historical_validation.py`
+   - **Inputs:** VIC routed inflows (vic/_2); CS3 baseline DSS; `CalSim3_VIC_name_mapping.csv`; `RimInflowAnchor.xlsx`
+   - **Outputs:** `_riminflow_productA_1972_2018.csv` (+ TS/summary, figures)
+
+### Small Watersheds (210 vars)
+
+1. `python mod_hydrology/small_watersheds/_1_compile_precip_sws.py --product A`
+   - **Inputs:** WGEN met files; SWS station list
+   - **Outputs:** monthly SWS precip (in/mo)
+2. **[EXTERNAL] Small Watersheds model run**
+   - **Outputs:** SWS Product A DSS
+3. `python mod_hydrology/small_watersheds/_2_postprocess_product_a.py`
+   - **Inputs:** external SWS DSS; master inventory
+   - **Outputs:** `_product_a_validation/*.csv`
+
+### Delta Channel Depletion (28 vars)
+
+1. `python mod_hydrology/delta_channel_depletion/_1_compile_precip_DETAW.py --product A`
+   - **Inputs:** WGEN met files; DCD station list
+   - **Outputs:** daily DCD-station precip
+2. **[EXTERNAL] DETAW/DCD model run**
+   - **Outputs:** `DCD_Calsim3_PlanningStudy_Product_A/.../CS3sv_DCD_PRISM_Dtrnd.dss`
+3. `python mod_hydrology/delta_channel_depletion/_2_postprocess_product_a.py`
+   - **Inputs:** external DCD DSS; master inventory (CFS->TAF)
+   - **Outputs:** `_dcd_productA_1972_2018.csv` (+ merged/summary/boxplots)
+
+---
+
+## Tier 3 - Water Year Types (mod_hydrology)
+
+| Script | Command | Inputs | Outputs |
+|---|---|---|---|
+| water_year_types/_1 | `python mod_hydrology/water_year_types/_1_calc_WYTs.py --product A` | rim inflows (Sac: SRBB+OROV+YUBA+FOLS; SJ: ST+TU+ME+SJ) | WYT indices under `_1_calc_WYTs/Product_A/` |
+
+---
+
+## Tier 4 - Dependent Modules
+
+### Reservoir Evaporation (95 vars)
+
+1. `python mod_reservoir/evaporation/_0_extract_reservoir_database.py --extract` *(setup; run once when the parameter spreadsheet changes)*
+   - **Inputs:** reservoir-parameter Excel workbook
+   - **Outputs:** `reference/reservoir_parameters.json` (95 reservoirs)
+2. `python mod_reservoir/evaporation/_2_run_reservoir_evap.py --product A`
+   - **Inputs:** climate temps (climate/_2); `reservoir_parameters.json`
+   - **Outputs:** per-reservoir monthly evap CSVs + `_product_a_validation/*.csv`
+
+### Reservoir Storage Curves (7 vars)
+
+1. `python mod_reservoir/storage_curves/_1_wyt_index_curves.py --product A`
+2. `python mod_reservoir/storage_curves/_2_qmap_product_a.py`
+3. `python mod_reservoir/storage_curves/_3_oroville_daily_precip.py --source Product_A --scenario 1`
+4. `python mod_reservoir/storage_curves/_4_oroville_level5.py --product A`
+- **Inputs:** CS3 baseline DSS; rim/precip; `reference/qmap_pairs.csv`
+- **Outputs:** storage curves + `_product_a_validation/*.csv`
+
+### Tulare Groundwater Terms (14 vars)
+
+1. `python mod_hydrology/tulare_gw_terms/_1_wyt_monthlyavg.py --product A`
+   - **Inputs:** WYT indices (water_year_types/_1)
+   - **Outputs:** `_1_wyt_monthlyavg/_product_a_validation/*.csv`
+
+### Instream Flows (3 vars)
+
+1. `python mod_other/instream_flows/_1_min_flow_feather.py --product A`
+2. `python mod_other/instream_flows/_2_sjr_rest_req.py --product A`
+- **Inputs:** rim inflows (rim_inflow/_2)
+- **Outputs:** `_product_a_validation/*.csv` (MINFLOWFEATHER; REST_REQ_NP/REST_REQ_P)
+- *Optional diagnostic:* both scripts also accept `--product validation` for a 3-way historical-comparison artifact (not a Product A or B output).
+
+### Upper Watershed Modules (12 vars)
+
+1. `python mod_other/upper_watershed/_0_load_sv.py` *(setup; run once when upstream SV inventories change)*
+   - **Inputs:** upper-watershed `*_SV.dss`; master inventory xlsx
+   - **Outputs:** `output/_0_load_sv/all_dss_paths*.csv`, `matched_dss_to_inventory.csv`
+2. `python mod_other/upper_watershed/_1_wyt_monthlyavg.py --product A`
+3. `python mod_other/upper_watershed/_2_qmap_product_a.py`
+4. `python mod_other/upper_watershed/_3_hybrid_product_a.py`
+5. `python mod_other/upper_watershed/_4_pge_wy_allocation.py --product A`
+6. `python mod_other/upper_watershed/_5_dnp_evaporation.py --calibrate` *(setup; run once to derive the hypsographic polynomial)*
+7. `python mod_other/upper_watershed/_5_dnp_evaporation.py --product A`
+- **Inputs:** upper_watershed/_0 SV reference; WYT indices; rim_inflow/_2 rim CSV; `reference/qmap_pairs.csv`
+- **Outputs:** `_product_a_validation/*.csv`
+
+### Closure Terms (13 vars)
+
+1. `python mod_other/closure_terms/_1_ct_calculation.py --product A`
+   - **Inputs:** upstream SV terms; WGEN-derived correlations
+   - **Outputs:** `_product_a_validation/*.csv` (closure-term reconciliation)
+
+### Other Variables (Miscellaneous) (6 vars)
+
+1. `python mod_other/miscellaneous/_0_extract_others.py` *(setup; run once when the CalSim baseline changes)*
+   - **Inputs:** CalSim baseline `__calsim_sv_default__.dss`
+   - **Outputs:** baseline "Other" monthly series (module reference)
+2. `python mod_other/miscellaneous/_1_wyt_monthlyavg.py --product A`
+3. `python mod_other/miscellaneous/_2_DeltaAccretionForNDOI.py --product A`
+4. `python mod_other/miscellaneous/_3_hybrid_product_a.py`
+5. `python mod_other/miscellaneous/_4_qmap_product_a.py`
+- **Inputs:** miscellaneous/_0 baseline; WYT indices; rim_inflow/_2 rim CSV; `reference/qmap_pairs.csv`
+- **Outputs:** `_product_a_validation/*.csv` (incl. `TULE_WET_INDX_productA_1972_2018.csv`); `_4_qmap_product_a/` detail + figures
+
+### Day Volume Fractions, Salinity
+
+No Product A scripts. Day Volume Fractions is Product B only; Salinity uses
+repeating historical patterns auto-filled by the final compiler.
+
+---
+
+## Tier 5 - Final Compilation (postprocessing)
+
+| Script | Command | Inputs | Outputs |
+|---|---|---|---|
+| sv_compile (final) | `python postprocessing/sv_compile/product_a_historical_validation.py` (`--compute-stats`; `--stats-report`; `--no-term-plots`; `--summary-tables`) | every module's `_product_a_validation/*.csv`; CS3 baseline DSS; master inventory | `ProductA_Historical_Validation_SV.dss` (WY 1972-2018; overwrite window Oct 31 1971 - Sep 30 2018); diagnostic CSVs + per-category R2/NSE/trend figures |
+| (optional) calsim_runs | `python postprocessing/calsim_runs/_productA_pickle_builder.py`; `python postprocessing/calsim_runs/_productA_postproc.py` | external CalSim 3.0 run results consuming `ProductA_Historical_Validation_SV.dss` | Product A run pickle cache + postprocessed comparison artifacts |
 
 The final compiler auto-fills inventory "Constant/Rept" SVs from the
 baseline 12-month repeat.
