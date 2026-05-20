@@ -231,16 +231,10 @@ class EvaporationCalculator:
             Monthly evaporation rates
         """
         # Resample to monthly averages
-        try:
-            monthly = daily_data.resample('ME').agg({
-                tmax_col: 'mean',
-                tmin_col: 'mean'
-            })
-        except ValueError:
-            monthly = daily_data.resample('M').agg({
-                tmax_col: 'mean',
-                tmin_col: 'mean'
-            })
+        monthly = daily_data.resample('ME').agg({
+            tmax_col: 'mean',
+            tmin_col: 'mean'
+        })
 
         return self.process_monthly_timeseries(
             monthly.index,

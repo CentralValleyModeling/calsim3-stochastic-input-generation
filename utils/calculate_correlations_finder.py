@@ -24,7 +24,7 @@ vic_path = str(get_module_generated_dir("mod_forcing/vic") / "output" / "routed"
 
 
 # %% --- Read DSS monthly inflow for ONE part_b ---
-full_index = pd.date_range("1915-01-31", "2021-12-31", freq="M")
+full_index = pd.date_range("1915-01-31", "2021-12-31", freq="ME")
 dss_series = None
 
 with HecDss.Open(str(dss_path), version=6, catalog_flag=True) as dss:

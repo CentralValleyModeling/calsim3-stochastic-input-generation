@@ -172,7 +172,7 @@ def run_product_a():
         day=df_a['day'].astype(int),
     ))
     ts_a = pd.Series(df_a['pr'].values, index=dates_a)
-    monthly_a = ts_a.resample('M').sum()
+    monthly_a = ts_a.resample('ME').sum()
     print(f'  Monthly totals: {len(monthly_a)} months')
 
     # --- Apply formula -------------------------------------------------------

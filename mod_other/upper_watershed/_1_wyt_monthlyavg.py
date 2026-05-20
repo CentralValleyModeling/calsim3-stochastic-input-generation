@@ -74,25 +74,6 @@ PRODUCT_A_DIR = _gen / "output" / "_product_a_validation"
 PRODUCT_B_DIR = _gen / "output" / "_product_b_final"
 
 
-def _install_pandas_me_compat() -> None:
-    """Support newer 'ME' month-end alias on pandas versions that only accept 'M'."""
-    try:
-        pd.date_range("2000-01-31", periods=1, freq="ME")
-        return
-    except Exception:
-        pass
-
-    original_date_range = pd.date_range
-
-    def _date_range_compat(*args, **kwargs):
-        freq = kwargs.get("freq")
-        if isinstance(freq, str) and freq.upper() == "ME":
-            kwargs["freq"] = "M"
-        return original_date_range(*args, **kwargs)
-
-    pd.date_range = _date_range_compat
-
-
 def _to_sv_format(df: pd.DataFrame) -> pd.DataFrame:
     """Convert framework long-format target to Part B,Part C,Year,Month,Value."""
     out = pd.DataFrame({
@@ -138,8 +119,6 @@ def main() -> None:
     ap.add_argument("--product", choices=["A", "B"], required=True,
                     help='Product to generate: A (historical 1921-2018) or B (stochastic 1000-yr chunks).')
     args = ap.parse_args()
-
-    _install_pandas_me_compat()
 
     prefix = OUTPUT_PREFIX.strip() if OUTPUT_PREFIX else Path(terms_csv).stem
     products = [args.product]

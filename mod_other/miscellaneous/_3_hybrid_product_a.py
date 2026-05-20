@@ -63,24 +63,6 @@ FINAL_DIR = _gen / "output" / "_product_a_validation"
 
 
 # -- Helpers ---------------------------------------------------------
-def _install_pandas_me_compat() -> None:
-    """Support newer 'ME' month-end alias on pandas < 2.2."""
-    try:
-        pd.date_range("2000-01-31", periods=1, freq="ME")
-        return
-    except Exception:
-        pass
-
-    original = pd.date_range
-
-    def _compat(*a, **kw):
-        if isinstance(kw.get("freq"), str) and kw["freq"].upper() == "ME":
-            kw["freq"] = "M"
-        return original(*a, **kw)
-
-    pd.date_range = _compat
-
-
 def prepare_hybrid_input_files(input_csv: Path) -> tuple[pd.DataFrame, pd.DataFrame]:
     """Split hybrid_terms CSV into WYT and QMap DataFrames."""
     df = pd.read_csv(input_csv)
@@ -274,7 +256,6 @@ def run_final_hybrid(prefix: str) -> None:
 ####################################################################
 
 def main() -> None:
-    _install_pandas_me_compat()
     wyt_terms_df, qmap_pairs_df = prepare_hybrid_input_files(HYBRID_TERMS_CSV)
 
     print("\n=== Part 1: WYT Averaging (Product A) ===")

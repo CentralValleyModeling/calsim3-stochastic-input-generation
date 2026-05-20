@@ -198,7 +198,7 @@ def compute_storage_from_precip(daily_csv_path: Path, smax: float, b_taf_per_day
     })
 
     tmp = daily_out.set_index("date")
-    monthly = tmp.resample("M").agg(
+    monthly = tmp.resample("ME").agg(
         S_target_eom_TAF=("S_target_TAF", "last"),
     ).reset_index().rename(columns={"date": "month_end"})
 

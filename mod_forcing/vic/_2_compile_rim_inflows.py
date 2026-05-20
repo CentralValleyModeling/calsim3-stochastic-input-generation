@@ -132,7 +132,7 @@ class compile_rim_inflows:
             # Product B: PeriodIndex can exceed Timestamp max (~2262), use groupby on period
             q_routed_monthly = q_routed.groupby(q_routed.index.asfreq('M')).sum()
         else:
-            q_routed_monthly = q_routed.resample('M').sum()
+            q_routed_monthly = q_routed.resample('ME').sum()
         print(f"  Generated {len(q_routed_monthly)} monthly values.")
         return q_routed_monthly
 

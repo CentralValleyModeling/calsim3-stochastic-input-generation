@@ -91,7 +91,7 @@ else:
 # %% --- read DSS monthly ET
 cshydro_refeto_file = os.path.join(cshydro_dir, cshydro_file)
 fid = HecDss.Open(cshydro_refeto_file,window=(startDate_dss,endDate_dss))
-cshydro_et = pd.DataFrame({'date': pd.date_range(start="1920-10-31", end="2021-09-30", freq='M')})
+cshydro_et = pd.DataFrame({'date': pd.date_range(start="1920-10-31", end="2021-09-30", freq='ME')})
 if cshydro_file == 'CS3_ET.dss':
     ts = fid.read_ts(f"/IWFM/{cshydro_wba}/RATE_INCH//1MON/EVAPOTRANSPIRATION/",window=(startDate_dss,endDate_dss))
 elif cshydro_file == 'CS3_RefETo.dss':
@@ -118,7 +118,7 @@ for lat, lon, pct_area in wba_info[['lat', 'lon', 'pct_area']].values:
     pct_area_total += pct_area
 vic_et = vic_et / pct_area_total
 # aggregate to monthly and convert mm to inches
-vic_et = vic_et.resample('M').sum() / 25.4
+vic_et = vic_et.resample('ME').sum() / 25.4
 vic_et.name = "VIC"
 vic_et.index.name = 'date'
 # remove last three months
@@ -128,7 +128,7 @@ vic_et = vic_et.loc[vic_et.index < '2018-10-01']
 et_comparison = pd.merge(cshydro_et, vic_et, on='date')
 
 # %% annual totals and monthly means
-annual_et = et_comparison.resample('AS-OCT').sum().reset_index()
+annual_et = et_comparison.resample('YS-OCT').sum().reset_index()
 annual_et = annual_et.melt(id_vars='date', var_name='Model', value_name='ET')
 monthly_et = et_comparison.copy()
 monthly_et['month'] = monthly_et.index.month
@@ -215,7 +215,7 @@ ETTargetQmap = qmap.qmap_single(ETsim, EThist, ETTargetHist)
 et_data = et_data.merge(ETTargetQmap[['year', 'month', 'quantile_mapped_value']], on=['year', 'month'], how='left')
 et_data.index = et_comparison.index
 et_data.drop(columns=['year', 'month'], inplace=True)
-et_data_annual = et_data.resample('AS-OCT').sum()
+et_data_annual = et_data.resample('YS-OCT').sum()
 monthly_means = et_data.copy()
 monthly_means['month'] = monthly_means.index.month
 monthly_means = monthly_means.loc[monthly_means.index.year>=1972]

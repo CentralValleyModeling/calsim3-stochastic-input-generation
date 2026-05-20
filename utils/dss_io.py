@@ -148,14 +148,8 @@ def apply_sentinel(values, sentinel: float = -900):
 
 
 def _date_range_me(start, end=None, **kwargs) -> pd.DatetimeIndex:
-    """Month-end DatetimeIndex compatible with old and new pandas.
-
-    pandas >= 2.2 uses ``freq="ME"``; older versions require ``freq="M"``.
-    """
-    try:
-        return pd.date_range(start, end, freq="ME", **kwargs)
-    except ValueError:
-        return pd.date_range(start, end, freq="M", **kwargs)
+    """Month-end DatetimeIndex (pandas 2.2+ ``freq="ME"``)."""
+    return pd.date_range(start, end, freq="ME", **kwargs)
 
 
 # -- Filesystem helper --------------------------------------------------------

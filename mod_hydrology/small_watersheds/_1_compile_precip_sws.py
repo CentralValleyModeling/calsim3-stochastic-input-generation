@@ -134,7 +134,7 @@ class CompileSmallWatershedPrecip:
             weight_total += weight
 
         series_mm = weighted_sum / weight_total
-        in_series = (series_mm * self.mm_to_in).resample('M').sum()
+        in_series = (series_mm * self.mm_to_in).resample('ME').sum()
         in_series.name = grid_subset.iloc[0].watershed_id
         return in_series
 

@@ -521,10 +521,7 @@ def create_temperature_range_boxplot(
                 daily = daily.loc['1921-10-01':'2018-09-30']
                 if len(daily) > 0:
                     # Aggregate to monthly means first, then compute range
-                    try:
-                        monthly = daily.resample('ME').mean()
-                    except ValueError:
-                        monthly = daily.resample('M').mean()
+                    monthly = daily.resample('ME').mean()
                     monthly_dtr = monthly['tmax_c'] - monthly['tmin_c']
                     pa_dtr_mean = monthly_dtr.mean()
                     dtr_data['Product A'][region].append(pa_dtr_mean)
@@ -701,10 +698,7 @@ def create_climate_boxplots(
                 daily = load_climate_data(weather_file)
                 daily = daily.loc['1921-10-01':'2018-09-30']
                 if len(daily) > 0:
-                    try:
-                        monthly = daily.resample('ME').mean()
-                    except ValueError:
-                        monthly = daily.resample('M').mean()
+                    monthly = daily.resample('ME').mean()
                     for var in variables:
                         if var in monthly.columns:
                             climate_data[var]['Product A'][region].append(
