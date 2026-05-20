@@ -207,10 +207,19 @@ The four WYT-based reservoir storage-level reconstructions reproduce the step-fu
 :::
 ::::
 
-
 ### Monthly Schedule Levels
 
-Monthly schedule series use a fixed 12-month seasonal pattern that repeats identically every year regardless of water year type. **Don Pedro Level 4** (flood control) uses this pattern, with values ranging from 1,660 TAF (October) to 2,030 TAF (June), reflecting the seasonal flood reservation space cycle.
+Monthly schedule storage level series are defined by fixed 12-month patterns. Three series fall in this category: Folsom Level 4, Folsom Level 5, and Don Pedro Level 4. Folsom Level 4 and Folsom Level 5 repeat the same 12-month sequence throughout the historical record, so their CalSim 3 input time series are used directly.
+
+Don Pedro Level 4 generally follows a repeated annual schedule, but departs from that pattern in a few short periods. It is therefore regenerated for the stochastic sequences using the standard 12-month schedule.
+
+The monthly schedule series and their fixed monthly storage values (TAF) are:
+
+| Series | Oct | Nov | Dec | Jan | Feb | Mar | Apr | May | Jun | Jul | Aug | Sep |
+|--------|----:|----:|----:|----:|----:|----:|----:|----:|----:|----:|----:|----:|
+| S_PEDROLEVEL4 | 1,660 | 1,690 | 1,690 | 1,690 | 1,690 | 1,690 | 1,713 | 2,002 | 2,030 | 1,910 | 1,790 | 1,700 |
+| S_FOLSMLEVEL4 | 592 | 567 | 567 | 567 | 567 | 756 | 900 | 967 | 592 | 592 | 592 | 592 |
+| S_FOLSMLEVEL5 | 712 | 567 | 567 | 567 | 567 | 756 | 900 | 967 | 967 | 942 | 792 | 752 |
 
 #### Validation
 
@@ -218,7 +227,7 @@ Monthly schedule series use a fixed 12-month seasonal pattern that repeats ident
 :::{tab-item} Don Pedro Level 4
 ![Reservoir Storage Validation](figures/s3-inputs_reservoir-storage-validation.png)
 
-*Don Pedro Level 4 (S_PEDRO) storage reconstruction validation, 1921--2021. Reconstructed values (orange) closely track actual CalSim inputs (blue) across the seasonal range of approximately 1,700--2,030 TAF. One anomalous drawdown to approximately 1,250 TAF around 1977--1980 in the historical record is not replicated by the reconstruction, consistent with the identified unique operational event.*
+*Don Pedro Level 4 (S_PEDRO) reconstruction, 1921–2021. The reconstructed series reproduces the fixed 12-month schedule, with values ranging from approximately 1,690 to 2,030 TAF. The reconstructed values closely match the DCR 2023 CalSim 3 input for most of the historical period. The main mismatch occurs around 1977–1980, when the historical input temporarily drops to approximately 1,250 TAF.*
 :::
 ::::
 
