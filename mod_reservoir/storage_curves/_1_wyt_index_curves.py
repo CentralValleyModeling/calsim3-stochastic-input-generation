@@ -373,7 +373,7 @@ def _calc_metrics(actual: pd.Series, reconstructed: pd.Series) -> dict:
     ss_res = np.sum((a - r) ** 2)
     ss_tot = np.sum((a - np.mean(a)) ** 2)
     nse = 1 - ss_res / ss_tot if ss_tot > 0 else np.nan
-    pbias = 100 * np.sum(a - r) / np.sum(a) if np.sum(np.abs(a)) > 0 else np.nan
+    pbias = 100 * np.sum(r - a) / np.sum(a) if np.sum(np.abs(a)) > 0 else np.nan
     corr = np.corrcoef(a, r)[0, 1]
     r2 = corr ** 2 if not np.isnan(corr) else np.nan
     return {"R2": r2, "NSE": nse, "PBIAS": pbias}

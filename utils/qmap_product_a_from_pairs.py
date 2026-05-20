@@ -559,7 +559,7 @@ def run_product_a_qmap_from_pairs(
         r2 = r ** 2 if np.isfinite(r) else np.nan
         nse_val = nse(qmap_vals, actual_vals)
         obs_sum = np.nansum(actual_vals)
-        pbias = ((np.nansum(actual_vals - qmap_vals) / obs_sum * 100)
+        pbias = ((np.nansum(qmap_vals - actual_vals) / obs_sum * 100)
                  if obs_sum != 0 else np.nan)
 
         print(f"  R2 = {r2:.3f}, NSE = {nse_val:.3f}, PBIAS = {pbias:.1f}%")
