@@ -42,10 +42,39 @@ The flowchart logic begins with Condition 3, calculating average annual Oroville
 
 Developing this flowchart required careful interpretation of the 1983 agreement language, which describes conditions in legal prose rather than algorithmic notation. The translation from agreement text to threshold logic was discussed extensively during the November and December progress meetings, with particular attention to whether the rolling average should be computed on a water year or calendar year basis (water year was selected as more hydrologically meaningful) and how to handle the first year of simulation where no prior-year data exists.
 
-:::{admonition} Suggested Plot
-:class: note
-Flowchart diagram visualizing the Condition 3 -> Condition 1/2 decision logic with threshold values annotated. Include example water years showing how annual runoff and rolling averages trigger different conditions. Optionally overlay historical frequency of each condition occurring.
-:::
+```{mermaid}
+flowchart TD
+    START([Start]) --> A["Calculate average annual\nOroville unimpaired runoff\nfor previous WY"]
+
+    A --> Q1{"Annual runoff\n>= 28% of 4,364 TAF?"}
+
+    Q1 -- No --> C3["Condition 3\nOct-Feb: 900 cfs\nMar-Sep: 750 cfs"]
+
+    Q1 -- Yes --> B["Calculate 2-yr rolling average\nOroville unimpaired runoff\nfor previous two WYs"]
+
+    B --> Q2{"2-yr avg runoff\n>= 73% of 4,364 TAF?"}
+
+    Q2 -- No --> C3
+
+    Q2 -- Yes --> C["Calculate cumulative\nOroville unimpaired runoff\nfor previous WY, Apr-Jul"]
+
+    C --> Q3{"Apr-Jul runoff\n>= 55% of 1,942 TAF?"}
+
+    Q3 -- Yes --> C1["Condition 1\nOct-Mar: 1,700 cfs\nApr-Sep: 1,000 cfs"]
+
+    Q3 -- No --> C2["Condition 2\nOct-Feb: 1,200 cfs\nMar-Sep: 1,000 cfs"]
+
+    classDef process fill:#E87722,stroke:#C25F00,color:#fff
+    classDef decision fill:#1B5E8B,stroke:#0D3A5F,color:#fff
+    classDef output fill:#555555,stroke:#333333,color:#fff
+    classDef startnode fill:#F5C518,stroke:#B8941A,color:#333
+
+    class START startnode
+    class A,B,C process
+    class Q1,Q2,Q3 decision
+    class C1,C2,C3 output
+```
+*Feather River minimum instream flow decision logic based on the 1983 DWR--DFG agreement. Orange boxes are calculation steps; teal diamonds are threshold decisions; gray boxes are the resulting minimum flow conditions for the current water year.*
 
 #### Threshold Optimization
 
