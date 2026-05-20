@@ -31,8 +31,7 @@ Dependencies
 
 Usage
 -----
-    cd mod_reservoir/storage_curves
-    python _2_qmap_product_a.py
+    python mod_reservoir/storage_curves/_2_qmap_product_a.py
 
 Negative values can be controlled per pair via an optional ``allow_negative``
 column in qmap_pairs.csv (True/False).  If the column is absent, the

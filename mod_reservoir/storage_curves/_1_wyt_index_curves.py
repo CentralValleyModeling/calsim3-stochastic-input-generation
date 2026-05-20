@@ -30,6 +30,11 @@ Outputs are written under:
   <generated>/output/_product_b_final/              (Product B)
 
 Output CSV format: Part B, Part C, Year, Month, Value
+
+Usage
+-----
+    python mod_reservoir/storage_curves/_1_wyt_index_curves.py --product A
+    python mod_reservoir/storage_curves/_1_wyt_index_curves.py --product B
 """
 # -- IMPORTS ---------------------------------------------------------------
 import argparse
@@ -73,7 +78,6 @@ _BASIN_WYT_FILES = {
 }
 
 OUTPUT_PREFIX = "storage_curves"
-TARGET_PRODUCT = "both"
 
 _DEFAULT_DSS = get_base_dir() / "CalSim3" / "__calsim_sv_default__.dss"
 
@@ -526,16 +530,15 @@ def main():
     ap = argparse.ArgumentParser(
         description="Generate reservoir storage-level index curves for Product A and B."
     )
-    ap.add_argument("--product", type=str, choices=["A", "B", "both"], default=TARGET_PRODUCT,
-                    help="Which product to generate: A, B, or both (default: both)")
+    ap.add_argument("--product", type=str, choices=["A", "B"], required=True,
+                    help='Product to generate: A (historical 1921-2018) or B (stochastic 1000-yr chunks).')
     ap.add_argument("--yr-type-map", type=str, choices=["cy", "wy"], default=None,
                     help="Force all WYT series to map by Calendar Year (cy) or "
                          "Water Year (wy), ignoring per-series year_type_basis. "
                          "Default: use year_type_basis from CSV")
     args = ap.parse_args()
 
-    choice = args.product.strip().upper()
-    products = ["A", "B"] if choice == "BOTH" else [choice]
+    products = [args.product.strip().upper()]
 
     # Read schedule CSVs
     monthly_sched = read_monthly_schedule(_REF / "reservoir_schedule_monthly.csv")

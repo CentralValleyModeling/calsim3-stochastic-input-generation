@@ -38,10 +38,8 @@ CSV format: Part B, Part C, Year, Month, Value
 
 Usage
 -----
-    python _2_DeltaAccretionForNDOI.py                  # run both (default)
-    python _2_DeltaAccretionForNDOI.py --product A      # Product A only
-    python _2_DeltaAccretionForNDOI.py --product B      # Product B only
-    python _2_DeltaAccretionForNDOI.py --product both   # both (explicit)
+    python mod_other/miscellaneous/_2_DeltaAccretionForNDOI.py --product A
+    python mod_other/miscellaneous/_2_DeltaAccretionForNDOI.py --product B
 """
 
 import os
@@ -288,14 +286,14 @@ if __name__ == '__main__':
         description='Calculate DELTAACCRETIONFORNDOI from WGEN precipitation.'
     )
     parser.add_argument(
-        '--product', choices=['A', 'B', 'both'], default='both',
-        help='Which product to run: A, B, or both (default: both)'
+        '--product', choices=['A', 'B'], required=True,
+        help='Product to generate: A (historical 1921-2018) or B (stochastic 1000-yr chunks).'
     )
     args = parser.parse_args()
 
-    if args.product in ('A', 'both'):
+    if args.product == 'A':
         run_product_a()
-    if args.product in ('B', 'both'):
+    else:
         run_product_b()
 
     print('\n' + '=' * 72)

@@ -22,9 +22,9 @@ Outputs
 
 Usage
 -----
-    cd mod_forcing/climate && python _1_pp_point_locations.py --source Product_A --scenario 1
-    cd mod_forcing/climate && python _1_pp_point_locations.py --source Product_B --scenario 1
-    cd mod_forcing/climate && python _1_pp_point_locations.py --source Historical
+    python mod_forcing/climate/_1_pp_point_locations.py --source Product_A --scenario 1
+    python mod_forcing/climate/_1_pp_point_locations.py --source Product_B --scenario 1
+    python mod_forcing/climate/_1_pp_point_locations.py --source Historical
 """
 
 import argparse

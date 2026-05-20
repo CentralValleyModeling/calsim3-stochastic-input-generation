@@ -25,7 +25,7 @@ from pathlib import Path
 
 REPO = Path(__file__).resolve().parents[1]
 
-# Canonical Product A pipeline (docs/manifests/Product_A_Validation_Manifest.md
+# Canonical Product A pipeline (Product_A_Validation_Manifest.md
 # section A "End-to-end ordering"). Numbered pipeline scripts only -- shared
 # utils/ library modules are not CLI scripts and are exempt from rules 2-3.
 PRODUCT_A_SCRIPTS = [

@@ -26,12 +26,12 @@ Outputs
 
 Usage
 -----
-    cd mod_forcing/climate && python _2_uhh_basin_averages.py --source Historical
-    cd mod_forcing/climate && python _2_uhh_basin_averages.py --source Product_A --scenario 1
-    cd mod_forcing/climate && python _2_uhh_basin_averages.py --source Product_B --scenario 1
+    python mod_forcing/climate/_2_uhh_basin_averages.py --source Historical
+    python mod_forcing/climate/_2_uhh_basin_averages.py --source Product_A --scenario 1
+    python mod_forcing/climate/_2_uhh_basin_averages.py --source Product_B --scenario 1
 
     # Validate Product A outputs against historical reference
-    cd mod_forcing/climate && python _2_uhh_basin_averages.py --validate-outputs --scenario 1
+    python mod_forcing/climate/_2_uhh_basin_averages.py --validate-outputs --scenario 1
 """
 
 import os

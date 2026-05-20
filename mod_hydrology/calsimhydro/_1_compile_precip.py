@@ -13,7 +13,7 @@ Inputs
 Outputs
 -------
 - <generated>/output/_1_compile_precip/Product_A/  (daily WBA precip; optional DSS)
-- <generated>/output/_1_compile_precip/Product_B/  (with --Product_B)
+- <generated>/output/_1_compile_precip/Product_B/  (with --product B)
 
 Dependencies
 ------------
@@ -21,9 +21,8 @@ Dependencies
 
 Usage
 -----
-    cd mod_hydrology/calsimhydro
-    python _1_compile_precip.py --clip_period 1920-10-01 2018-09-30
-    python _1_compile_precip.py --Product_B
+    python mod_hydrology/calsimhydro/_1_compile_precip.py --product A --clip_period 1920-10-01 2018-09-30
+    python mod_hydrology/calsimhydro/_1_compile_precip.py --product B
 """
 
 import argparse
@@ -251,7 +250,8 @@ def main():
     parser.add_argument('--met_prefix', type=str, default='meteo', help='Prefix for met files')
     parser.add_argument('--met_sep', type=str, default='\\s+', help='Separator for met files')
     parser.add_argument('--clip_period', type=str, nargs=2, default=None, help='Clip period as start and end date (YYYY-MM-DD) [Product A only]')
-    parser.add_argument('--Product_B', action='store_true', help='If set, read WGEN Product B files and split outputs into ten 100-WY chunks.')
+    parser.add_argument('--product', choices=['A', 'B'], required=True,
+                        help='Product to generate: A (historical 1921-2018) or B (stochastic 1000-yr chunks).')
     args = parser.parse_args()
 
     # Resolve defaults based on product
@@ -260,7 +260,8 @@ def main():
     _gen = get_module_generated_dir("mod_hydrology/calsimhydro")
 
     grid_info_file = args.grid_info_file or str(_script_dir / 'reference' / 'WBA_Grid_Info.txt')
-    if args.Product_B:
+    product_b = args.product == 'B'
+    if product_b:
         met_path = args.met_path or str(_base / 'WGEN' / 'Product_B' / '1')
         output_path = args.output_path or str(_gen / 'output' / '_1_compile_precip' / 'Product_B')
     else:
@@ -276,14 +277,14 @@ def main():
         met_prefix=args.met_prefix,
         met_sep=args.met_sep,
         clip_period=args.clip_period,
-        product_b=args.Product_B
+        product_b=product_b
     )
     wba_precip = rim.run(select_wba=args.wbas)
     rim.write_to_dss(wba_precip)
 
 if __name__ == "__main__":
     # Product A (defaults: WGEN/Product_A/1, output/Product_A):
-    # python _1_compile_precip.py --grid_info_file ./reference/WBA_Grid_Info.txt --clip_period 1920-10-01 2018-09-30
+    # python _1_compile_precip.py --product A --grid_info_file ./reference/WBA_Grid_Info.txt --clip_period 1920-10-01 2018-09-30
     # Product B (defaults: WGEN/Product_B/1, output/Product_B; writes 10 chunk files per WBA):
-    # python _1_compile_precip.py --grid_info_file ./reference/WBA_Grid_Info.txt --Product_B
+    # python _1_compile_precip.py --product B --grid_info_file ./reference/WBA_Grid_Info.txt
     main()

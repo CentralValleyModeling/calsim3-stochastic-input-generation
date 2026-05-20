@@ -93,11 +93,9 @@ Reference:
 
 Usage
 -----
-    python _1_min_flow_feather.py                        # run all outputs (default)
-    python _1_min_flow_feather.py --product validation  # Output 1 only
-    python _1_min_flow_feather.py --product A           # Output 2 only
-    python _1_min_flow_feather.py --product B           # Output 3 only
-    python _1_min_flow_feather.py --product all         # all outputs (explicit)
+    python mod_other/instream_flows/_1_min_flow_feather.py --product validation  # Output 1
+    python mod_other/instream_flows/_1_min_flow_feather.py --product A           # Output 2
+    python mod_other/instream_flows/_1_min_flow_feather.py --product B           # Output 3
 """
 
 import os
@@ -595,16 +593,16 @@ def run_product_b():
         print(f"  [n{n:02d}] {len(df_pb):,} rows  WY {wy_first_pb}-{wy_last_pb}  -> {os.path.basename(out_path)}")
 
 
-def main(product: str = 'all'):
-    """Run one or all outputs.  product in {'validation', 'A', 'B', 'all'}."""
+def main(product: str):
+    """Run one output.  product in {'validation', 'A', 'B'}."""
     print("=" * 65)
     print("MINFLOWFEATHER - Feather River Minimum Instream Flow")
     print("=" * 65)
-    if product in ('validation', 'all'):
+    if product == 'validation':
         run_validation()
-    if product in ('A', 'all'):
+    elif product == 'A':
         run_product_a()
-    if product in ('B', 'all'):
+    elif product == 'B':
         run_product_b()
     print("\nOK  Done.\n")
 
@@ -615,8 +613,9 @@ if __name__ == '__main__':
         description='Compute MINFLOWFEATHER (Feather River minimum instream flow).'
     )
     parser.add_argument(
-        '--product', choices=['validation', 'A', 'B', 'all'], default='all',
-        help='Which output to run: validation, A, B, or all (default: all)'
+        '--product', choices=['validation', 'A', 'B'], required=True,
+        help='Which output to run: validation (3-way comparison wide CSV), '
+             'A (Product A historical 1922-2018), or B (Product B 10 stochastic chunks).'
     )
     args = parser.parse_args()
     main(product=args.product)

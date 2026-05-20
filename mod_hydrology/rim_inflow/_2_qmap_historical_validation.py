@@ -29,7 +29,7 @@ Outputs
 
 Usage
 -----
-    cd mod_hydrology/rim_inflow && python _2_qmap_historical_validation.py
+    python mod_hydrology/rim_inflow/_2_qmap_historical_validation.py
 """
 
 import os, sys, numpy as np, pandas as pd, seaborn as sns, matplotlib.pyplot as plt

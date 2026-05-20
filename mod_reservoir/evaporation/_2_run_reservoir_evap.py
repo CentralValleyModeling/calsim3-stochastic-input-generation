@@ -16,12 +16,12 @@ Dependencies
 - utils/paths.py  (data-dir resolution)
 
 Usage:
-    python _2_run_reservoir_evap.py --Product_A             # Product A, all reservoirs
-    python _2_run_reservoir_evap.py --Product_A FOLSM       # Product A, single reservoir
-    python _2_run_reservoir_evap.py --Product_A FOLSM SHSTA OROVL  # Product A, specific reservoirs
-    python _2_run_reservoir_evap.py --Product_B             # Product B, all reservoirs
-    python _2_run_reservoir_evap.py --Product_B FOLSM       # Product B, single reservoir
-    python _2_run_reservoir_evap.py --compare-a             # Compare B vs A (reads pre-generated outputs)
+    python mod_reservoir/evaporation/_2_run_reservoir_evap.py --product A             # Product A, all reservoirs
+    python mod_reservoir/evaporation/_2_run_reservoir_evap.py --product A FOLSM       # Product A, single reservoir
+    python mod_reservoir/evaporation/_2_run_reservoir_evap.py --product A FOLSM SHSTA OROVL  # Product A, specific reservoirs
+    python mod_reservoir/evaporation/_2_run_reservoir_evap.py --product B             # Product B, all reservoirs
+    python mod_reservoir/evaporation/_2_run_reservoir_evap.py --product B FOLSM       # Product B, single reservoir
+    python mod_reservoir/evaporation/_2_run_reservoir_evap.py --compare-a             # Compare B vs A (reads pre-generated outputs)
 
 Output (Product A):
     - Individual CSV files: output/_2_run_reservoir_evap/Product_A/individual_reservoirs/{Region}/{CODE}.csv
@@ -1143,15 +1143,24 @@ def compare_product_b_with_a(
 
 def main():
     """Main entry point."""
-    product_a = '--Product_A' in sys.argv
-    product_b = '--Product_B' in sys.argv
-    compare_a = '--compare-a' in sys.argv
-    args = [a for a in sys.argv[1:] if not a.startswith('--')]
+    import argparse
+    parser = argparse.ArgumentParser(
+        description='Run reservoir evaporation for Product A or Product B '
+                    '(or compare Product B output to Product A baseline).')
+    group = parser.add_mutually_exclusive_group(required=True)
+    group.add_argument('--product', choices=['A', 'B'],
+                       help='Product to generate: A (historical 1921-2018) or B (stochastic 1000-yr chunks).')
+    group.add_argument('--compare-a', action='store_true',
+                       help='Compare existing Product B outputs against the Product A baseline (no new run).')
+    parser.add_argument('reservoirs', nargs='*',
+                        help='Optional reservoir codes to process (e.g., FOLSM SHSTA). If empty, all reservoirs.')
+    args = parser.parse_args()
 
-    if not product_a and not product_b and not compare_a:
-        print("No action specified. Use --Product_A, --Product_B, or --compare-a.")
+    if args.compare_a:
+        compare_product_b_with_a()
         return
 
+    product_b = args.product == 'B'
     if product_b:
         output_dir = str(_gen / 'output' / '_2_run_reservoir_evap' / '_product_b_final')
         weather_dir = str(get_base_dir() / 'WGEN' / 'Product_B' / '1')
@@ -1161,51 +1170,47 @@ def main():
         weather_dir = str(get_base_dir() / 'WGEN' / 'Product_A' / '1')
         product_label = "Product A (1921-2018)"
 
-    if product_a or product_b:
-        print(f"\n_2_run_reservoir_evap.py  |  {product_label}")
-        print(f"  weather : {weather_dir}")
-        print(f"  output  : {output_dir}\n")
+    print(f"\n_2_run_reservoir_evap.py  |  {product_label}")
+    print(f"  weather : {weather_dir}")
+    print(f"  output  : {output_dir}\n")
 
-        if args:
-            codes = [code.upper() for code in args]
-            print(f"\nProcessing {len(codes)} reservoir(s): {', '.join(codes)}\n")
-            results = process_reservoirs(
-                reservoir_codes=codes,
-                output_dir=output_dir,
-                weather_dir=weather_dir,
-                product_b=product_b,
-            )
+    if args.reservoirs:
+        codes = [code.upper() for code in args.reservoirs]
+        print(f"\nProcessing {len(codes)} reservoir(s): {', '.join(codes)}\n")
+        results = process_reservoirs(
+            reservoir_codes=codes,
+            output_dir=output_dir,
+            weather_dir=weather_dir,
+            product_b=product_b,
+        )
+    else:
+        print("\nProcessing all reservoirs...\n")
+        results = process_reservoirs(
+            output_dir=output_dir,
+            weather_dir=weather_dir,
+            product_b=product_b,
+        )
+
+    if len(results) > 0:
+        if product_b:
+            create_product_b_chunk_outputs(results, output_dir=output_dir)
         else:
-            print("\nProcessing all reservoirs...\n")
-            results = process_reservoirs(
-                output_dir=output_dir,
-                weather_dir=weather_dir,
-                product_b=product_b,
+            create_combined_output(
+                results,
+                output_file=str(Path(output_dir) / 'combined_evaporation.csv')
             )
+            create_summary_statistics(
+                results,
+                output_file=str(Path(output_dir) / 'summary_statistics.csv')
+            )
+            create_validation_csv(output_dir=output_dir)
+            create_annual_boxplot(output_dir=output_dir)
+            create_temperature_range_boxplot(output_dir=output_dir)
+            create_climate_boxplots(output_dir=output_dir)
 
-        if len(results) > 0:
-            if product_b:
-                create_product_b_chunk_outputs(results, output_dir=output_dir)
-            else:
-                create_combined_output(
-                    results,
-                    output_file=str(Path(output_dir) / 'combined_evaporation.csv')
-                )
-                create_summary_statistics(
-                    results,
-                    output_file=str(Path(output_dir) / 'summary_statistics.csv')
-                )
-                create_validation_csv(output_dir=output_dir)
-                create_annual_boxplot(output_dir=output_dir)
-                create_temperature_range_boxplot(output_dir=output_dir)
-                create_climate_boxplots(output_dir=output_dir)
-
-            print("\n" + "="*80)
-            print("Processing complete!")
-            print("="*80)
-
-    if compare_a:
-        compare_product_b_with_a()
+        print("\n" + "="*80)
+        print("Processing complete!")
+        print("="*80)
 
 
 if __name__ == '__main__':

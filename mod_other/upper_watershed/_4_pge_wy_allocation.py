@@ -40,7 +40,8 @@ Output:
 
 Usage
 -----
-    cd mod_other/upper_watershed && python _4_pge_wy_allocation.py
+    python mod_other/upper_watershed/_4_pge_wy_allocation.py --product A
+    python mod_other/upper_watershed/_4_pge_wy_allocation.py --product B
 """
 
 from __future__ import annotations
@@ -59,9 +60,6 @@ from utils.paths import get_module_generated_dir
 # Configuration
 # ------------------------------------------------------------------------------
 RUN_DIR = Path(__file__).resolve().parent
-
-# Target product: "A", "B", or "BOTH"
-TARGET_PRODUCT = "BOTH"
 
 # CalSim study period for Product A (water years)
 PRODUCT_A_START_WY = 1972
@@ -379,6 +377,13 @@ def run_product_b(config: dict) -> list[Path]:
 # Main
 # ------------------------------------------------------------------------------
 def main():
+    import argparse
+    ap = argparse.ArgumentParser(
+        description="PGE_WY_ALLOCATION_SV reconstruction from FOLSM_INFLOW thresholds.")
+    ap.add_argument("--product", choices=["A", "B"], required=True,
+                    help='Product to generate: A (historical 1921-2018) or B (stochastic 1000-yr chunks).')
+    args = ap.parse_args()
+
     print("PGE_WY_ALLOCATION_SV Reconstruction")
     print("=" * 60)
 
@@ -390,12 +395,9 @@ def main():
     print(f"  Default ratio: {config['default_ratio']}")
     print(f"  Allocation start month: {config['allocation_start_month']}")
 
-    target = TARGET_PRODUCT.upper().strip()
-
-    if target in ("A", "BOTH"):
+    if args.product == "A":
         run_product_a(config)
-
-    if target in ("B", "BOTH"):
+    else:
         run_product_b(config)
 
     print("\n" + "=" * 60)

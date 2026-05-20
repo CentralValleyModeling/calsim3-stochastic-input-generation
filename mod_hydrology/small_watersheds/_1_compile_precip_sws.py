@@ -22,10 +22,10 @@ Dependencies
 Usage
 -----
 Product A (historical, clip to WY 1921-2018):
-    python _1_compile_precip_sws.py --clip_period 1920-10-01 2018-09-30
+    python mod_hydrology/small_watersheds/_1_compile_precip_sws.py --product A --clip_period 1920-10-01 2018-09-30
 
 Product B (stochastic, writes 10 chunk .dat files):
-    python _1_compile_precip_sws.py --Product_B
+    python mod_hydrology/small_watersheds/_1_compile_precip_sws.py --product B
 """
 
 import argparse
@@ -241,8 +241,8 @@ def parse_args():
     p.add_argument("--clip_period", nargs=2, default=None, help="Clip start end (YYYY-MM-DD YYYY-MM-DD) [Product A only].")
     p.add_argument("--output_path", default=None,
                    help="Output directory. Default resolved from config.")
-    p.add_argument("--Product_B", action="store_true",
-                   help="If set, read WGEN Product B files and split output into ten 100-WY chunk CSVs.")
+    p.add_argument("--product", choices=['A', 'B'], required=True,
+                   help='Product to generate: A (historical 1921-2018) or B (stochastic 1000-yr chunks).')
     return p.parse_args()
 
 
@@ -259,7 +259,8 @@ def main():
     cvprecip_file = args.CVprecip_file or str(
         script_dir / 'reference' / 'CVprecipWY1921_2021.dat'
     )
-    if args.Product_B:
+    product_b = args.product == 'B'
+    if product_b:
         met_path = args.met_path or str(_base / 'WGEN' / 'Product_B' / '1')
         output_path = args.output_path or str(_gen / 'output' / '_1_compile_precip_sws' / 'Product_B')
     else:
@@ -274,11 +275,11 @@ def main():
         start_date=args.start_date,
         end_date=args.end_date,
         clip_period=args.clip_period,
-        product_b=args.Product_B,
+        product_b=product_b,
     )
     df = compiler.compile_all()
 
-    if args.Product_B:
+    if product_b:
         compiler.write_product_b_chunks(df, cvprecip_file, output_path)
     else:
         compiler.write_matrix(df, cvprecip_file, output_path)
@@ -287,8 +288,4 @@ def main():
     print(f"Rows (months): {df.shape[0]}, Watersheds: {df.shape[1]}")
 
 if __name__ == "__main__":
-    # Product A:
-    # python _1_compile_precip_sws.py --clip_period 1920-10-01 2018-09-30
-    # Product B (writes 10 chunk .dat files):
-    # python _1_compile_precip_sws.py --Product_B
     main()

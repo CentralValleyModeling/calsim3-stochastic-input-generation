@@ -57,8 +57,8 @@ desired_order = [excel_to_part_BC(name) for name in SmallWatersheds_rows.iloc[:,
 # DSS File Paths
 _dcd_runs = _GEN_DIR / "DeltaChannelDepletion_Runs"
 dss_paths = [
-    str(_dcd_runs / "DCD_Calsim3_PlanningStudy_1921-2018" / "DCD" / "Output" / "CALSIM3" / "CS3sv_DCD_PRISM_Dtrnd.dss"),      # Value 1
-    str(_dcd_runs / "DCD_Calsim3_PlanningStudy_ProductA_1921-2018" / "DCD" / "Output" / "CALSIM3" / "CS3sv_DCD_PRISM_Dtrnd.dss"),       # Value 2
+    str(_dcd_runs / "DCD_Calsim3_PlanningStudy_1921-2018" / "DCD" / "Output" / "CALSIM3" / "CS3sv_DCD_PRISM_Dtrnd.dss"),
+    str(_dcd_runs / "DCD_Calsim3_PlanningStudy_Product_A" / "DCD" / "Output" / "CALSIM3" / "CS3sv_DCD_PRISM_Dtrnd.dss"),
 ]
 
 

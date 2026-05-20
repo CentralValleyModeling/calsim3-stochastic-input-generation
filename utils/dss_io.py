@@ -64,17 +64,23 @@ def needs_junction(dss_path) -> bool:
 
 def create_junction(target_dir):
     """Create (or re-create) a directory junction at _DSS_LINK -> target_dir."""
-    if _DSS_LINK.exists():
+    target_str = str(target_dir)
+    if target_str.startswith("\\\\?\\"):
+        target_str = target_str[4:]  # mklink /J requires a plain path, not \\?\ prefix
+    # Use os.path.lexists so we also catch broken junctions (Path.exists follows
+    # the reparse point and returns False if the target is gone, which would
+    # leak a stale link and break the next mklink).
+    if os.path.lexists(str(_DSS_LINK)):
         subprocess.run(["cmd", "/c", "rmdir", str(_DSS_LINK)], capture_output=True)
     subprocess.run(
-        ["cmd", "/c", "mklink", "/J", str(_DSS_LINK), str(target_dir)],
+        ["cmd", "/c", "mklink", "/J", str(_DSS_LINK), target_str],
         check=True, capture_output=True,
     )
 
 
 def remove_junction():
     """Remove the _DSS_LINK junction (does not affect target directory)."""
-    if _DSS_LINK.exists():
+    if os.path.lexists(str(_DSS_LINK)):
         subprocess.run(["cmd", "/c", "rmdir", str(_DSS_LINK)], capture_output=True)
 
 

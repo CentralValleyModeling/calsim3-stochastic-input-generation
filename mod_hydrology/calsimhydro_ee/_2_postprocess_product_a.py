@@ -26,7 +26,7 @@ Outputs
 
 Usage
 -----
-    cd mod_hydrology/calsimhydro_ee && python _2_postprocess_product_a.py
+    python mod_hydrology/calsimhydro_ee/_2_postprocess_product_a.py
 """
 
 import os

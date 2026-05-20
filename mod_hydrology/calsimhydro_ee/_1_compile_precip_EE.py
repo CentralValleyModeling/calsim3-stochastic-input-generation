@@ -22,17 +22,17 @@ Outputs
 Usage
 -----
     # Product A (clip to CalSim validation window)
-    cd mod_hydrology/calsimhydro_ee && python _1_compile_precip_EE.py \
+    python mod_hydrology/calsimhydro_ee/_1_compile_precip_EE.py --product A \
         --clip_period 1920-10-01 2018-09-30
 
     # Product B (10 chunks)
-    cd mod_hydrology/calsimhydro_ee && python _1_compile_precip_EE.py --Product_B
+    python mod_hydrology/calsimhydro_ee/_1_compile_precip_EE.py --product B
 
-    # Process specific WBAs only
-    cd mod_hydrology/calsimhydro_ee && python _1_compile_precip_EE.py --wbas 2 5 10
+    # Process specific WBAs only (Product A)
+    python mod_hydrology/calsimhydro_ee/_1_compile_precip_EE.py --product A --wbas 2 5 10
 
-    # Skip DSS output
-    cd mod_hydrology/calsimhydro_ee && python _1_compile_precip_EE.py --no_dss
+    # Skip DSS output (Product A)
+    python mod_hydrology/calsimhydro_ee/_1_compile_precip_EE.py --product A --no_dss
 """
 
 import argparse
@@ -277,8 +277,8 @@ def main():
     ap.add_argument('--met_sep', default='\\s+', help='Separator for met files (regex OK)')
     ap.add_argument('--clip_period', nargs=2, default=None, help='Optional clip start end (YYYY-MM-DD) [Product A only]')
     ap.add_argument('--no_dss', action='store_true', help='Do not write DSS output')
-    ap.add_argument('--Product_B', action='store_true',
-                    help='If set, read WGEN Product B files and split outputs into ten 100-WY chunks.')
+    ap.add_argument('--product', choices=['A', 'B'], required=True,
+                    help='Product to generate: A (historical 1921-2018) or B (stochastic 1000-yr chunks).')
     args = ap.parse_args()
 
     _script_dir = Path(__file__).resolve().parent
@@ -286,7 +286,8 @@ def main():
     _gen = get_module_generated_dir("mod_hydrology/calsimhydro_ee")
 
     coord_file = args.coord_file or str(_script_dir / 'reference' / 'CalSimHydroEE_WBA_Coordinate_List.csv')
-    if args.Product_B:
+    product_b = args.product == 'B'
+    if product_b:
         met_path = args.met_path or str(_base / 'WGEN' / 'Product_B' / '1')
         output_path = args.output_path or str(_gen / 'output' / '_1_compile_precip_EE' / 'Product_B')
     else:
@@ -303,7 +304,7 @@ def main():
         met_sep=args.met_sep,
         clip_period=args.clip_period,
         write_dss=not args.no_dss,
-        product_b=args.Product_B,
+        product_b=product_b,
     )
     results = runner.run(select_wbas=args.wbas)
     runner.write_to_dss(results)

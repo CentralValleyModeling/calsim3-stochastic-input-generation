@@ -13,7 +13,7 @@ Inputs
 Outputs
 -------
 - <generated>/output/routed/Product_A/1/CS3_<loc>_qmo.csv  (+ DSS)
-- <generated>/output/routed/Product_B/1/...  (with --product_b)
+- <generated>/output/routed/Product_B/1/...  (with --product B)
 
 Dependencies
 ------------
@@ -21,9 +21,8 @@ Dependencies
 
 Usage
 -----
-    cd mod_forcing/vic
-    python _2_compile_rim_inflows.py              # Product A
-    python _2_compile_rim_inflows.py --product_b  # Product B
+    python mod_forcing/vic/_2_compile_rim_inflows.py --product A
+    python mod_forcing/vic/_2_compile_rim_inflows.py --product B
 """
 
 import argparse
@@ -219,12 +218,14 @@ def main():
     parser.add_argument('--start_date', type=str, default='1915-01-01', help='Start date (YYYY-MM-DD)')
     parser.add_argument('--end_date', type=str, default='2018-12-31', help='End date (YYYY-MM-DD)')
     parser.add_argument('--watersheds', type=str, nargs='*', default=None, help='Watershed names to select (optional)')
-    parser.add_argument('--Product_B', action='store_true', help='If set, split outputs into ten 100-year chunks (trim last ~8 years).')
+    parser.add_argument('--product', choices=['A', 'B'], required=True,
+                        help='Product to generate: A (historical 1921-2018) or B (stochastic 1000-yr chunks).')
     args = parser.parse_args()
 
     grid_info_path = args.grid_info_path or str(_script_dir / 'reference' / 'GridInfo')
 
-    if args.Product_B:
+    product_b = args.product == 'B'
+    if product_b:
         fluxes_path = args.fluxes_path or str(_vic_gen / 'output' / 'fluxes' / 'Product_B' / '1')
         output_path = args.output_path or str(_vic_gen / 'output' / 'routed' / 'Product_B' / '1')
     else:
@@ -237,7 +238,7 @@ def main():
         output_path=output_path,
         start_date=args.start_date,
         end_date=args.end_date,
-        product_b=args.Product_B,
+        product_b=product_b,
         full_vic=args.full_vic
     )
     rim.run(select_watershed=args.watersheds)
@@ -246,7 +247,7 @@ if __name__ == "__main__":
     # Historical:
     # python _2_compile_rim_inflows.py --grid_info_path ./reference/GridInfo --fluxes_path ./output/fluxes/Historical --output_path ./output/routed/Historical --watersheds CS3_8RI_DPR_I
     # Product A:
-    # python _2_compile_rim_inflows.py --grid_info_path ./reference/GridInfo --fluxes_path ./output/fluxes/Product_A/1 --output_path ./output/routed/Product_A/1 --watersheds CS3_8RI_OROVI
+    # python _2_compile_rim_inflows.py --product A --grid_info_path ./reference/GridInfo --fluxes_path ./output/fluxes/Product_A/1 --output_path ./output/routed/Product_A/1 --watersheds CS3_8RI_OROVI
     # Product B (writes 10 chunk files per watershed):
-    # python _2_compile_rim_inflows.py --grid_info_path ./reference/GridInfo --fluxes_path ./output/fluxes/Product_B/1 --output_path ./output/routed/Product_B/1 --Product_B --watersheds CS3_8RI_OROVI
+    # python _2_compile_rim_inflows.py --product B --grid_info_path ./reference/GridInfo --fluxes_path ./output/fluxes/Product_B/1 --output_path ./output/routed/Product_B/1 --watersheds CS3_8RI_OROVI
     main()

@@ -21,8 +21,7 @@ Dependencies
 
 Usage
 -----
-    cd mod_other/miscellaneous
-    python _0_extract_others.py
+    python mod_other/miscellaneous/_0_extract_others.py
 """
 
 import sys

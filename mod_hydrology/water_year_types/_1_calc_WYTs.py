@@ -20,17 +20,14 @@ Dependencies
 
 Usage
 -----
-# Process both products with default paths:
-    cd ./water_year_types && python _1_calc_WYTs.py
+# Process Product A:
+    python mod_hydrology/water_year_types/_1_calc_WYTs.py --product A
 
-# Process Product A only:
-    cd ./water_year_types && python _1_calc_WYTs.py --product A
-
-# Process Product B only:
-    cd ./water_year_types && python _1_calc_WYTs.py --product B
+# Process Product B:
+    python mod_hydrology/water_year_types/_1_calc_WYTs.py --product B
 
 # Override input/output paths:
-    cd ./water_year_types && python _1_calc_WYTs.py \
+    python mod_hydrology/water_year_types/_1_calc_WYTs.py \
         --product A \
         --product_a_input path/to/calsim_qmap_validation_TS.csv \
         --product_a_output path/to/output
@@ -419,8 +416,8 @@ def process_product_b(input_dir, output_dir, thresholds):
 
 def main():
     parser = argparse.ArgumentParser(description='Calculate Water Year Types for CalSim')
-    parser.add_argument('--product', choices=['A', 'B', 'both'], default='both',
-                        help='Which product to process (default: both)')
+    parser.add_argument('--product', choices=['A', 'B'], required=True,
+                        help='Product to generate: A (historical 1921-2018) or B (stochastic 1000-yr chunks).')
     parser.add_argument('--product_a_input', 
                         default=str(_rim_gen / 'output' / '_2_qmap_historical_validation' / 'calsim_qmap_validation_TS.csv'),
                         help='Path to Product A input CSV')
@@ -442,13 +439,10 @@ def main():
     print(f"  San Joaquin: {THRESHOLDS['san_joaquin']}")
     print()
     
-    # Process Product A
-    if args.product in ['A', 'both']:
+    if args.product == 'A':
         process_product_a(args.product_a_input, args.product_a_output, THRESHOLDS)
         print()
-    
-    # Process Product B
-    if args.product in ['B', 'both']:
+    else:
         process_product_b(args.product_b_input, args.product_b_output, THRESHOLDS)
         print()
     

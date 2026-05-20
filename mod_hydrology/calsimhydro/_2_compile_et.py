@@ -13,7 +13,7 @@ Inputs
 Outputs
 -------
 - <generated>/output/_2_compile_et/Product_A/  (monthly QM'd ET CSVs; optional DSS)
-- <generated>/output/_2_compile_et/Product_B/  (with --Product_B)
+- <generated>/output/_2_compile_et/Product_B/  (with --product B)
 
 Dependencies
 ------------
@@ -22,13 +22,13 @@ Dependencies
 Usage
 -----
 Product A - single type:
-    python _2_compile_et.py --et_type RefET --vic_col_index 7 --write_dss --n_workers 8
+    python mod_hydrology/calsimhydro/_2_compile_et.py --product A --et_type RefET --vic_col_index 7 --write_dss --n_workers 8
 
 Product A - all types at once:
-    python _2_compile_et.py --et_type all --vic_col_index 7 --write_dss --n_workers 8
+    python mod_hydrology/calsimhydro/_2_compile_et.py --product A --et_type all --vic_col_index 7 --write_dss --n_workers 8
 
 Product B - all types at once:
-    python _2_compile_et.py --et_type all --vic_col_index 7 --write_dss --Product_B --n_workers 16
+    python mod_hydrology/calsimhydro/_2_compile_et.py --product B --et_type all --vic_col_index 7 --write_dss --n_workers 16
 """
 
 import argparse
@@ -639,9 +639,10 @@ def main():
 	)
 
 	parser.add_argument(
-		"--Product_B",
-		action="store_true",
-		help="If set, read stochastic VIC fluxes and split QM output into ten 100-WY chunks.",
+		"--product",
+		choices=['A', 'B'],
+		required=True,
+		help='Product to generate: A (historical 1921-2018) or B (stochastic 1000-yr chunks).',
 	)
 	parser.add_argument(
 		"--hist_vic_path",
@@ -672,7 +673,8 @@ def main():
 		args.cshydro_cropet_dss = str(_script_dir / "reference" / "CS3_ET.dss")
 	if args.cshydro_panevap_dss is None:
 		args.cshydro_panevap_dss = str(_script_dir / "reference" / "CS3_PanEvapGerber.dss")
-	if args.Product_B:
+	product_b = args.product == 'B'
+	if product_b:
 		vic_path = args.vic_path or str(_vic_gen / 'output' / 'fluxes' / 'Product_B' / '1')
 		hist_vic_path = args.hist_vic_path or str(_vic_gen / 'output' / 'fluxes' / 'Product_A' / '1')
 		output_path = args.output_path or str(_cshydro_gen / 'output' / '_2_compile_et' / 'Product_B')
@@ -713,7 +715,7 @@ def main():
 			end_date=args.end_date,
 			vic_col_index=args.vic_col_index,
 			write_dss=args.write_dss,
-			product_b=args.Product_B,
+			product_b=product_b,
 			hist_vic_path=hist_vic_path,
 			n_workers=args.n_workers,
 		)
@@ -723,11 +725,5 @@ def main():
 
 
 if __name__ == "__main__":
-	# Product A - single type:
-	# python _2_compile_et.py --et_type RefET --vic_col_index 7 --write_dss --n_workers 8
-	# Product A - all types at once:
-	# python _2_compile_et.py --et_type all --vic_col_index 7 --write_dss --n_workers 8
-	# Product B - all types at once:
-	# python _2_compile_et.py --et_type all --vic_col_index 7 --write_dss --Product_B --n_workers 16
 	main()
 

@@ -44,7 +44,7 @@ source_suffix = {
 
 # -- Build options -------------------------------------------------------------
 templates_path   = ['_templates']
-exclude_patterns = ['_build', 'Thumbs.db', '.DS_Store', 'source/MIGRATION.md', 'source/figures/README.md', 'manifests']
+exclude_patterns = ['_build', 'Thumbs.db', '.DS_Store', 'source/MIGRATION.md', 'source/figures/README.md']
 
 # -- HTML output ---------------------------------------------------------------
 html_theme       = 'sphinx_book_theme'

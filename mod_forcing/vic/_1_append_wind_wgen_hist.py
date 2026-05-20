@@ -8,8 +8,7 @@ meteo files to the VIC input directory.
 
 Usage
 -----
-    cd mod_forcing/vic
-    python _1_append_wind_wgen_hist.py
+    python mod_forcing/vic/_1_append_wind_wgen_hist.py
 """
 import os
 import sys

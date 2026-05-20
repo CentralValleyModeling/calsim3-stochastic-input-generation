@@ -14,6 +14,12 @@ Dependencies
 - mod_hydrology/rim_inflow/_3_qmap_productB.py
     Product B UNIMP_SJ is read from per-chunk CSVs:
     ``data/GENERATED/mod_hydrology/rim_inflow/output/_3_qmap_product_b/UNIMP_SJ_qmo_n*.csv``
+
+Usage
+-----
+    python mod_other/instream_flows/_2_sjr_rest_req.py --product validation
+    python mod_other/instream_flows/_2_sjr_rest_req.py --product A
+    python mod_other/instream_flows/_2_sjr_rest_req.py --product B
 """
 from __future__ import annotations
 
@@ -612,46 +618,60 @@ def run_product_b(
     return written
 
 
-if __name__ == "__main__":
+def main() -> None:
+    import argparse
+    ap = argparse.ArgumentParser(
+        description="Reconstruct REST_REQ_NP and REST_REQ_P from UNIMP_SJ unimpaired flow.")
+    ap.add_argument("--product", choices=["validation", "A", "B"], required=True,
+                    help="Output to run: validation (historical-comparison CSV), "
+                         "A (Product A historical 1972-2018), or B (Product B 10 chunks).")
+    args = ap.parse_args()
+
     written: list[Path] = []
 
-    # Read default CalSim REST_REQ values once - used for leading-edge months
-    # (e.g. Oct 1971-Feb 1972, Oct 1921-Feb 1922) that lack complete WY data
-    # for reconstruction.
-    default_rest_req = get_default_calsim_rest_req(dssfile=DSS_FILE)
-
-    written.append(
-        build_historical_comparison(
-            dssfile=DSS_FILE,
-            outdir=DEFAULT_OUT_HIST,
-            pulse_bpart="REST_REQ_P",
-            nonpulse_bpart="REST_REQ_NP",
-            part_c="RELEASE-HYDROGRAPH",
+    if args.product == "validation":
+        written.append(
+            build_historical_comparison(
+                dssfile=DSS_FILE,
+                outdir=DEFAULT_OUT_HIST,
+                pulse_bpart="REST_REQ_P",
+                nonpulse_bpart="REST_REQ_NP",
+                part_c="RELEASE-HYDROGRAPH",
+            )
         )
-    )
+    else:
+        # Read default CalSim REST_REQ values once - used for leading-edge months
+        # (e.g. Oct 1971-Feb 1972, Oct 1921-Feb 1922) that lack complete WY data
+        # for reconstruction.
+        default_rest_req = get_default_calsim_rest_req(dssfile=DSS_FILE)
 
-    written.extend(
-        run_product_a(
-            product_a_csv=DEFAULT_PRODUCT_A,
-            outdir=DEFAULT_OUT_A,
-            pulse_bpart="REST_REQ_P",
-            nonpulse_bpart="REST_REQ_NP",
-            part_c="RELEASE-HYDROGRAPH",
-            default_rest_req=default_rest_req,
-        )
-    )
-
-    written.extend(
-        run_product_b(
-            product_b_dir=DEFAULT_PRODUCT_B_DIR,
-            outdir=DEFAULT_OUT_B,
-            pulse_bpart="REST_REQ_P",
-            nonpulse_bpart="REST_REQ_NP",
-            part_c="RELEASE-HYDROGRAPH",
-            default_rest_req=default_rest_req,
-        )
-    )
+        if args.product == "A":
+            written.extend(
+                run_product_a(
+                    product_a_csv=DEFAULT_PRODUCT_A,
+                    outdir=DEFAULT_OUT_A,
+                    pulse_bpart="REST_REQ_P",
+                    nonpulse_bpart="REST_REQ_NP",
+                    part_c="RELEASE-HYDROGRAPH",
+                    default_rest_req=default_rest_req,
+                )
+            )
+        else:
+            written.extend(
+                run_product_b(
+                    product_b_dir=DEFAULT_PRODUCT_B_DIR,
+                    outdir=DEFAULT_OUT_B,
+                    pulse_bpart="REST_REQ_P",
+                    nonpulse_bpart="REST_REQ_NP",
+                    part_c="RELEASE-HYDROGRAPH",
+                    default_rest_req=default_rest_req,
+                )
+            )
 
     print("Created files:")
     for path in written:
         print(path)
+
+
+if __name__ == "__main__":
+    main()

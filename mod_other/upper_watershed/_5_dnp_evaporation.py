@@ -54,10 +54,9 @@ Outputs  (data/GENERATED/mod_other/upper_watershed/output/)
 
 Usage
 -----
-  python _5_dnp_evaporation.py --run calibrate
-  python _5_dnp_evaporation.py --run A
-  python _5_dnp_evaporation.py --run B
-  python _5_dnp_evaporation.py --run both
+  python mod_other/upper_watershed/_5_dnp_evaporation.py --calibrate
+  python mod_other/upper_watershed/_5_dnp_evaporation.py --product A
+  python mod_other/upper_watershed/_5_dnp_evaporation.py --product B
 """
 
 from __future__ import annotations
@@ -567,30 +566,23 @@ def run_generate(product: str) -> None:
 
 def main() -> None:
     parser = argparse.ArgumentParser(
-        description="Don Pedro evaporation: calibrate hypsographic curve and/or generate E_PEDRO_SV."
+        description="Don Pedro evaporation: calibrate hypsographic curve or generate E_PEDRO_SV."
     )
-    parser.add_argument(
-        "--run",
-        choices=["calibrate", "A", "B", "both"],
-        required=True,
-        help=(
-            "calibrate - derive hypsographic polynomial from historical data; "
-            "A - generate Product A; "
-            "B - generate Product B; "
-            "both - generate both A and B (requires calibrate to have been run first)"
-        ),
+    group = parser.add_mutually_exclusive_group(required=True)
+    group.add_argument(
+        "--product", choices=["A", "B"],
+        help="Generate E_PEDRO_SV for the chosen product (requires --calibrate to have been run first).",
+    )
+    group.add_argument(
+        "--calibrate", action="store_true",
+        help="Derive the hypsographic polynomial from historical data (one-time setup).",
     )
     args = parser.parse_args()
 
-    if args.run == "calibrate":
+    if args.calibrate:
         run_calibrate()
-    elif args.run == "A":
-        run_generate("A")
-    elif args.run == "B":
-        run_generate("B")
-    elif args.run == "both":
-        run_generate("A")
-        run_generate("B")
+    else:
+        run_generate(args.product)
 
     print("\n" + "=" * 72)
     print("Done.")

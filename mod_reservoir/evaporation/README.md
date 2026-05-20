@@ -81,9 +81,9 @@ Expected: 0.00% mean difference, 100% pass rate across all 95 reservoirs.
 ### 2. Process Product A / B Data
 
 ```bash
-python _2_run_reservoir_evap.py                         # Product A, all reservoirs
-python _2_run_reservoir_evap.py FOLSM SHSTA OROVL       # Product A, specific reservoirs
-python _2_run_reservoir_evap.py --Product_B              # Product B, all reservoirs
+python mod_reservoir/evaporation/_2_run_reservoir_evap.py --product A                  # Product A, all reservoirs
+python mod_reservoir/evaporation/_2_run_reservoir_evap.py --product A FOLSM SHSTA OROVL  # Product A, specific reservoirs
+python mod_reservoir/evaporation/_2_run_reservoir_evap.py --product B                  # Product B, all reservoirs
 ```
 
 Outputs go to `data/GENERATED/mod_reservoir/evaporation/output/_2_run_reservoir_evap/`.

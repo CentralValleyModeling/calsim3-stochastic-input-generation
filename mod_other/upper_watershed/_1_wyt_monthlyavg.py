@@ -23,12 +23,13 @@ Dependencies
 
 Usage
 -----
-    cd mod_other/upper_watershed
-    python _1_wyt_monthlyavg.py
+    python mod_other/upper_watershed/_1_wyt_monthlyavg.py --product A
+    python mod_other/upper_watershed/_1_wyt_monthlyavg.py --product B
 """
 
 from __future__ import annotations
 
+import argparse
 from pathlib import Path
 import sys
 
@@ -61,12 +62,6 @@ OUTPUT_PREFIX = "upper_watershed"
 #   - term_part_b
 #   - term_part_c
 #   - basin_wyt    (sj or sac; can vary by term)
-
-# Choose target WGEN product(s):
-#    "both" -> run Product A then Product B (default)
-#    "A"    -> one WYT series (1972-2018)
-#    "B"    -> ALWAYS n01..n10; WY 1922-2021
-TARGET_PRODUCT = "Both"
 
 _WYT_INPUT_DIRS = {"A": "Product_A", "B": "Product_B"}
 
@@ -138,17 +133,16 @@ def _write_targets(product_key: str, prefix: str, targets) -> None:
 
 
 def main() -> None:
+    ap = argparse.ArgumentParser(
+        description="Upper-Watershed terms via WYT monthly-average reconstruction.")
+    ap.add_argument("--product", choices=["A", "B"], required=True,
+                    help='Product to generate: A (historical 1921-2018) or B (stochastic 1000-yr chunks).')
+    args = ap.parse_args()
+
     _install_pandas_me_compat()
 
     prefix = OUTPUT_PREFIX.strip() if OUTPUT_PREFIX else Path(terms_csv).stem
-    choice = TARGET_PRODUCT.strip().upper()
-
-    if choice == "BOTH":
-        products = ["A", "B"]
-    elif choice in ("A", "B"):
-        products = [choice]
-    else:
-        raise ValueError(f"TARGET_PRODUCT must be 'A', 'B', or 'both', got '{TARGET_PRODUCT}'")
+    products = [args.product]
 
     # Read DSS and compute pattern once
     print("Reading DSS and computing historical pattern...")

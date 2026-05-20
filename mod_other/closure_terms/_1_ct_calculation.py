@@ -33,6 +33,11 @@ Dependencies
 - utils.paths (get_base_dir, get_module_generated_dir)
 - pydsstools
 - numpy, pandas, matplotlib
+
+Usage
+-----
+    python mod_other/closure_terms/_1_ct_calculation.py --product A
+    python mod_other/closure_terms/_1_ct_calculation.py --product B
 """
 from __future__ import annotations
 
@@ -825,8 +830,9 @@ def main():
                     help="CalSim DSS file with monthly closure terms")
     ap.add_argument("--outdir", default=DEFAULT_OUTDIR, type=Path,
                     help="Output folder")
-    ap.add_argument("--Product_B", action="store_true",
-                    help="Only write Product B chunk CSVs (skip analysis)")
+    ap.add_argument("--product", choices=['A', 'B'], required=True,
+                    help='Product to generate: A (full analysis: weighted closure timeseries, '
+                         'dominant 4-yr windows, correlations, boxplots) or B (stochastic chunk CSVs only).')
     args = ap.parse_args()
 
     outdir = args.outdir; outdir.mkdir(parents=True, exist_ok=True)
@@ -885,12 +891,12 @@ def main():
     # --- Weighted-average closure (uses shares computed by calendar month of wgen_date)
     weighted = compute_weighted_closure(counts, cal_map, ct_month_table, term_cols)
 
-    # --- Product B only mode: write chunks and exit
-    if args.Product_B:
+    # --- Product B mode: write chunks and exit
+    if args.product == 'B':
         _write_product_b_chunks(weighted, term_cols)
         return
 
-    # --- Full analysis below ---
+    # --- Product A: full analysis below ---
 
     # Build "all sources" text
     all_sources = build_all_sources_column(counts)
@@ -951,9 +957,6 @@ def main():
         counts_by_label,
         outdir / "wgen_num_distinct_pairs_cdf.png"
     )
-
-    # --- Product B chunk CSVs (always in full run)
-    _write_product_b_chunks(weighted, term_cols)
 
     print("Done. Outputs written to:", outdir.resolve())
 

@@ -227,8 +227,8 @@ def main() -> None:
         description="Compute Oroville rule-curve level5 storage from wetness index.",
     )
     parser.add_argument(
-        "--product", choices=["A", "B", "both"], default="both",
-        help="Which product to run: A, B, or both (default: both)",
+        "--product", choices=["A", "B"], required=True,
+        help='Product to generate: A (historical 1921-2018) or B (stochastic 1000-yr chunks).',
     )
     parser.add_argument(
         "--chunks", nargs="+", type=int,
@@ -249,7 +249,7 @@ def main() -> None:
     # =====================
     # Product A
     # =====================
-    if args.product in ("A", "both"):
+    if args.product == "A":
         daily_path = input_dir / "Oroville_Daily_Precip_ProductA_Scenario1.csv"
         dss_path = DEFAULT_DSS
 
@@ -303,7 +303,7 @@ def main() -> None:
     # =====================
     # Product B
     # =====================
-    if args.product in ("B", "both"):
+    if args.product == "B":
         PRODUCT_B_DIR.mkdir(parents=True, exist_ok=True)
 
         # Build work list

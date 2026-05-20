@@ -33,8 +33,7 @@ Dependencies
 
 Usage
 -----
-    cd mod_other/miscellaneous
-    python _4_qmap_product_a.py
+    python mod_other/miscellaneous/_4_qmap_product_a.py
 
 Negative values can be controlled per pair via an optional ``allow_negative``
 column in qmap_pairs.csv (True/False).  If the column is absent, the

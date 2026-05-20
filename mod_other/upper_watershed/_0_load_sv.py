@@ -6,8 +6,7 @@ them against the Master Inventory Spreadsheet on DSS parts C+D concatenation.
 
 Usage
 -----
-    cd mod_other/upper_watershed
-    python _0_load_sv.py
+    python mod_other/upper_watershed/_0_load_sv.py
 """
 
 import sys

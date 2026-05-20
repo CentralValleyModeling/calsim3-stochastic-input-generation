@@ -22,10 +22,10 @@ Dependencies
 Usage
 -----
 Product A (historical, writes mm_pcp4.csv and LODI_PT4.csv):
-    python _1_compile_precip_DETAW.py --clip_period 1921-09-30 2018-09-30
+    python mod_hydrology/delta_channel_depletion/_1_compile_precip_DETAW.py --product A --clip_period 1921-09-30 2018-09-30
 
 Product B (stochastic, writes 10 chunk files for stations + Lodi):
-    python _1_compile_precip_DETAW.py --Product_B
+    python mod_hydrology/delta_channel_depletion/_1_compile_precip_DETAW.py --product B
 """
 
 import argparse
@@ -369,8 +369,8 @@ def main():
     ap.add_argument('--met_sep', default='\s+', help='Separator for met files (regex OK)') 
     ap.add_argument('--clip_period', nargs=2, default=None, help='Optional clip start end (YYYY-MM-DD) [Product A only]') 
     ap.add_argument('--lodi_output_csv', default=None, help='Optional path to write Lodi precip and temperature CSV') 
-    ap.add_argument('--Product_B', action='store_true',
-                    help='If set, read WGEN Product B files and split output into ten 100-WY chunk CSVs.')
+    ap.add_argument('--product', choices=['A', 'B'], required=True,
+                    help='Product to generate: A (historical 1921-2018) or B (stochastic 1000-yr chunks).')
     args = ap.parse_args()
 
     script_dir = Path(__file__).resolve().parent
@@ -380,7 +380,8 @@ def main():
     coord_file = args.coord_file or str(
         script_dir / 'reference' / 'USBR_LTO_ClimateChange_DCD_StnsVICCoordinates_20210425.csv'
     )
-    if args.Product_B:
+    product_b = args.product == 'B'
+    if product_b:
         met_path   = args.met_path   or str(_base / 'WGEN' / 'Product_B' / '1')
         output_csv = args.output_csv or str(_gen / 'output' / '_1_compile_precip_DETAW' / 'Product_B' / 'mm_pcp4.csv')
         lodi_csv   = args.lodi_output_csv or str(_gen / 'output' / '_1_compile_precip_DETAW' / 'Product_B' / 'LODI_PT4.csv')
@@ -398,16 +399,12 @@ def main():
         met_prefix=args.met_prefix,
         met_sep=args.met_sep,
         clip_period=args.clip_period,
-        product_b=args.Product_B,
+        product_b=product_b,
     )
     runner.run()
 
-    if args.Product_B or lodi_csv:
+    if product_b or lodi_csv:
         runner.export_lodi_with_temps(lodi_csv)
 
 if __name__ == "__main__":
-    # Product A:
-    # python _1_compile_precip_DETAW.py --clip_period 1921-09-30 2018-09-30
-    # Product B (writes 10 chunk files for stations + Lodi):
-    # python _1_compile_precip_DETAW.py --Product_B
     main()
