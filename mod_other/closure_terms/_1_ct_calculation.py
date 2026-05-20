@@ -36,8 +36,14 @@ Dependencies
 
 Usage
 -----
-    python mod_other/closure_terms/_1_ct_calculation.py --product A
     python mod_other/closure_terms/_1_ct_calculation.py --product B
+    python mod_other/closure_terms/_1_ct_calculation.py --diagnostics
+
+Closure terms are Product B only. The Product A pipeline auto-fills them
+from the CalSim baseline via the Constant/Rept pathway (same as salinity).
+The --diagnostics mode is a non-product analysis used to characterize the
+WGEN-resampling-based weighted-average methodology against a 4-yr-block
+stitched alternative; it does not emit any SV CSV.
 """
 from __future__ import annotations
 
@@ -830,9 +836,15 @@ def main():
                     help="CalSim DSS file with monthly closure terms")
     ap.add_argument("--outdir", default=DEFAULT_OUTDIR, type=Path,
                     help="Output folder")
-    ap.add_argument("--product", choices=['A', 'B'], required=True,
-                    help='Product to generate: A (full analysis: weighted closure timeseries, '
-                         'dominant 4-yr windows, correlations, boxplots) or B (stochastic chunk CSVs only).')
+    mode = ap.add_mutually_exclusive_group(required=True)
+    mode.add_argument("--product", choices=['B'],
+                      help='Generate Product B stochastic chunk CSVs (one set of 10 chunks '
+                           'per closure term). Product A closure terms are auto-filled by '
+                           'the final compiler from the CalSim baseline (Constant/Rept).')
+    mode.add_argument("--diagnostics", action='store_true',
+                      help='Non-product diagnostic mode: writes weighted vs 4-yr-block stitched '
+                           'closure timeseries, per-block correlations, coverage boxplots, etc. '
+                           'Used to characterize the WGEN weighted-average methodology.')
     args = ap.parse_args()
 
     outdir = args.outdir; outdir.mkdir(parents=True, exist_ok=True)
@@ -896,7 +908,7 @@ def main():
         _write_product_b_chunks(weighted, term_cols)
         return
 
-    # --- Product A: full analysis below ---
+    # --- Diagnostics mode: WGEN methodology analysis (no SV output) ---
 
     # Build "all sources" text
     all_sources = build_all_sources_column(counts)

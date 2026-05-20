@@ -90,8 +90,6 @@ Tier 4  DEPENDENT MODULES
         python mod_other/upper_watershed/_4_pge_wy_allocation.py --product A
         python mod_other/upper_watershed/_5_dnp_evaporation.py --calibrate          (setup; run once)
         python mod_other/upper_watershed/_5_dnp_evaporation.py --product A
-    Closure Terms:
-        python mod_other/closure_terms/_1_ct_calculation.py --product A
     Other Variables (Miscellaneous):
         python mod_other/miscellaneous/_0_extract_others.py                          (setup; run once)
         python mod_other/miscellaneous/_1_wyt_monthlyavg.py --product A
@@ -265,12 +263,6 @@ Each external-run model is a contiguous block: compile inputs ->
 - **Inputs:** upper_watershed/_0 SV reference; WYT indices; rim_inflow/_2 rim CSV; `reference/qmap_pairs.csv`
 - **Outputs:** `_product_a_validation/*.csv`
 
-### Closure Terms (13 vars)
-
-1. `python mod_other/closure_terms/_1_ct_calculation.py --product A`
-   - **Inputs:** upstream SV terms; WGEN-derived correlations
-   - **Outputs:** `_product_a_validation/*.csv` (closure-term reconciliation)
-
 ### Other Variables (Miscellaneous) (6 vars)
 
 1. `python mod_other/miscellaneous/_0_extract_others.py` *(setup; run once when the CalSim baseline changes)*
@@ -283,10 +275,14 @@ Each external-run model is a contiguous block: compile inputs ->
 - **Inputs:** miscellaneous/_0 baseline; WYT indices; rim_inflow/_2 rim CSV; `reference/qmap_pairs.csv`
 - **Outputs:** `_product_a_validation/*.csv` (incl. `TULE_WET_INDX_productA_1972_2018.csv`); `_4_qmap_product_a/` detail + figures
 
-### Day Volume Fractions, Salinity
+### Closure Terms, Day Volume Fractions, Salinity
 
-No Product A scripts. Day Volume Fractions is Product B only; Salinity uses
-repeating historical patterns auto-filled by the final compiler.
+No Product A scripts. Closure Terms and Day Volume Fractions are Product B
+only; Closure Terms and Salinity use repeating historical patterns
+auto-filled by the final compiler (Constant/Rept = T in the master
+inventory). The closure-terms diagnostic mode
+(`mod_other/closure_terms/_1_ct_calculation.py --diagnostics`) is a
+non-product methodology analysis and emits no SV CSV.
 
 ---
 
