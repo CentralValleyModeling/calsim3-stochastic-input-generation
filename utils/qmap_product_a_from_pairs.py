@@ -345,7 +345,7 @@ def _plot_monthly_box(detail, target_b, column, ylabel,
     """Monthly box plot in water-year order (Oct-Sep)."""
     months_list = list(range(10, 13)) + list(range(1, 10))
     box_data = [
-        detail.loc[detail["Month"] == m, column].dropna().values
+        detail.loc[detail["month"] == m, column].dropna().values
         for m in months_list
     ]
 
@@ -566,18 +566,18 @@ def run_product_a_qmap_from_pairs(
 
         # 7) Detail dataframe
         detail = pd.DataFrame({
-            "target": target_b,
-            "predictor": pred_b,
-            "Year": common_sim.year.astype(int),
-            "Month": common_sim.month.astype(int),
-            "predictor_sim": pred_sim.values,
-            "actual": actual_vals,
-            "qmap": qmap_vals,
+            "target_historical_train": target_b,
+            "basis_historical_train": pred_b,
+            "year": common_sim.year.astype(int),
+            "month": common_sim.month.astype(int),
+            "basis_qm_sim": pred_sim.values,
+            "target_historical_sim": actual_vals,
+            "target_qm_sim": qmap_vals,
         })
-        detail["error"] = detail["qmap"] - detail["actual"]
+        detail["error"] = detail["target_qm_sim"] - detail["target_historical_sim"]
         with np.errstate(divide="ignore", invalid="ignore"):
-            pct = ((detail["qmap"] - detail["actual"])
-                   / detail["actual"] * 100)
+            pct = ((detail["target_qm_sim"] - detail["target_historical_sim"])
+                   / detail["target_historical_sim"] * 100)
         pct[~np.isfinite(pct)] = np.nan
         detail["error_pct"] = pct
 
