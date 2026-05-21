@@ -1,4 +1,4 @@
-r"""
+"""
 Historical vs Modified Historical Pickle Cache Builder
 ======================================================
 Two-scenario wrapper around the shared CalView-style DSS pickle builder
@@ -30,15 +30,9 @@ Usage
 -----
     python postprocessing/calsim_runs/_historical_modified_pickle_builder.py
 
-If HEC-DSS raises a 256-char Fortran CNAME path limit error, rebuild with
-short DSS copies (Windows)::
-
-    mkdir C:\tmp\dss
-    copy /Y "<historical DSS path>"          "C:\tmp\dss\hist.dss"
-    copy /Y "<modified historical DSS path>" "C:\tmp\dss\modhist.dss"
-    python postprocessing/calsim_runs/_historical_modified_pickle_builder.py ^
-        --baseline-dss C:\tmp\dss\hist.dss ^
-        --compare-dss  C:\tmp\dss\modhist.dss
+Long Windows file paths (e.g. on OneDrive) are handled transparently by the
+shared builder via ``utils.dss_io.open_dss``, which shortens the path that
+HEC-DSS sees via a ``_dss_link`` directory junction.
 """
 
 from __future__ import annotations
@@ -55,20 +49,6 @@ sys.path.insert(0, str(REPO_ROOT))
 
 from utils.dss_pickle_builder import Scenario, build_pickles_from_metrics_csv
 from utils.paths import get_base_dir, get_generated_dir
-
-
-SHORT_PATH_HELP = r"""
-HEC-DSS path length note:
-    If the default DSS path is longer than 256 characters, pydsstools can fail
-    before reading Modified Historical. Rebuild with short DSS copies (Windows):
-
-    mkdir C:\tmp\dss
-    copy /Y "<historical DSS path>"          "C:\tmp\dss\hist.dss"
-    copy /Y "<modified historical DSS path>" "C:\tmp\dss\modhist.dss"
-    python postprocessing/calsim_runs/_historical_modified_pickle_builder.py ^
-        --baseline-dss C:\tmp\dss\hist.dss ^
-        --compare-dss  C:\tmp\dss\modhist.dss
-"""
 
 
 # -----------------------------
@@ -107,8 +87,6 @@ def _require_file(path: Path, label: str) -> Path:
 def main() -> Dict[str, str]:
     parser = argparse.ArgumentParser(
         description="Build pickles for the Historical vs Modified Historical paired comparison.",
-        epilog=SHORT_PATH_HELP,
-        formatter_class=argparse.RawDescriptionHelpFormatter,
     )
     parser.add_argument("--baseline-name", default="Historical",
                         help="Scenario name for the historical baseline DSS.")
