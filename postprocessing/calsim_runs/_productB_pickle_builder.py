@@ -1,24 +1,38 @@
 r"""
-Build pickle cache for Product B stochastic runs.
+Product B Run Pickle Cache Builder
+==================================
+Builds the CalView-style DSS pickle cache (values, diffs, units) for one
+baseline / benchmark CalSim run plus the ten Product B block runs
+(n01 ... n10). Used by downstream Product B run postprocessing.
 
-Expected pattern:
-- one baseline / benchmark DSS
-- ten Product B DSS files for blocks n01 ... n10
+Inputs
+------
+- One baseline / benchmark DSS (CLI: ``--baseline-dss``)
+- A root directory containing the ten Product B DV DSS files
+  (CLI: ``--product-b-root`` plus ``--glob`` to discover the chunked DSS
+  files; n01 ... n10 are auto-detected from the path names,
+  case-insensitive)
+- Shared metric definitions: ``reference/metrics.csv``
+- Shared builder: ``utils/dss_pickle_builder.py``
 
-The shared builder lives in ../utils/dss_pickle_builder.py and the shared metric
-definitions live in ../reference/metrics.csv.
+Outputs
+-------
+- Pickle cache files in ``--out-dir`` (values / diffs / units pkls per
+  scenario, ready for postprocessing).
 
-Example:
+Dependencies
+------------
+- utils.dss_pickle_builder
+- utils.paths
 
-    python _pickle_builder.py ^
+Usage
+-----
+    python postprocessing/calsim_runs/_productB_pickle_builder.py ^
         --baseline-name Historical ^
         --baseline-dss "..\benchmark\DSS\output\benchmark.dss" ^
         --product-b-root "data\GENERATED\postprocessing\calsim_runs\product_b\dv_out" ^
         --glob "**\*.dss" ^
         --out-dir "data\GENERATED\postprocessing\calsim_runs\product_b\pickle_files"
-
-The Product B block scenarios are auto-discovered from the path names using a
-case-insensitive n01...n10 pattern.
 """
 
 from __future__ import annotations

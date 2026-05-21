@@ -1,13 +1,37 @@
 """
-Build Product B hybrid terms: Hybrid = (WYT_avg + QMap) / 2.
-
+Upper Watershed Product B Hybrid Terms = (WYT_avg + QMap) / 2
+=============================================================
 For each term in hybrid_terms_upper_watershed.csv, this script:
-  1. Computes WYT monthly averages for Product B (10 chunks)
-  2. Runs Product B quantile mapping using matched rim inflow predictors
-  3. Averages the two results to produce final hybrid values
+  1. Computes WYT monthly averages for Product B (10 chunks).
+  2. Runs Product B quantile mapping using matched rim inflow predictors.
+  3. Averages the two results to produce the final hybrid value.
 
-Intermediate outputs:  output/_3_hybrid/
-Final Product B CSVs:  output/_product_b_final/
+Inputs
+------
+- mod_other/upper_watershed/reference/hybrid_terms_upper_watershed.csv
+- BASE/CalSim3/__calsim_sv_default__.dss (historical training basis/target)
+- WYT historical reference (mod_hydrology/water_year_types/reference/)
+- WYT Product B targets (mod_hydrology/water_year_types/output/
+  _1_calc_WYTs/Product_B/)
+- Rim inflow Product B chunks (mod_hydrology/rim_inflow/output/
+  _3_qmap_product_b/)
+
+Outputs
+-------
+- output/_3_hybrid_product_b/                          intermediate WYT + QMap
+- output/_3_hybrid_product_b/hybrid_wyt_product_b/     WYT per-chunk CSVs
+- output/_3_hybrid_product_b/hybrid_qmap_product_b/    QMap per-chunk CSVs
+- output/_product_b_final/<part_b>_product_b_<ts>.csv  final hybrid
+
+Dependencies
+------------
+- utils.wyt_monthlyavg_framework
+- utils.qmap_product_b_from_pairs
+- utils.paths
+
+Usage
+-----
+    python mod_other/upper_watershed/_3_hybrid_product_b.py
 """
 
 from __future__ import annotations
@@ -17,7 +41,6 @@ from pathlib import Path
 
 import pandas as pd
 
-# %%
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 from utils.paths import get_base_dir, get_module_generated_dir
 from utils.wyt_monthlyavg_framework import compute_wyt_pattern, compute_product_targets
@@ -28,13 +51,13 @@ from utils.qmap_product_b_from_pairs import (
     find_timeseries_in_dir,
 )
 
-# ── Paths ──────────────────────────────────────────────────────────────
+# -- Paths --------------------------------------------------------------
 _REPO_DIR = Path(__file__).resolve().parents[2]
 _gen = get_module_generated_dir("mod_other/upper_watershed")
 _wyt_gen = get_module_generated_dir("mod_hydrology/water_year_types")
 _rim_gen = get_module_generated_dir("mod_hydrology/rim_inflow")
 
-# ── Config ─────────────────────────────────────────────────────────────
+# -- Config -------------------------------------------------------------
 DSS_FILE = str(get_base_dir() / "CalSim3" / "__calsim_sv_default__.dss")
 HYBRID_TERMS_CSV = (
     _REPO_DIR / "mod_other" / "upper_watershed" / "reference" / "hybrid_terms_upper_watershed.csv"
@@ -46,14 +69,14 @@ WYT_HIST_DIR = str(_REPO_DIR / "mod_hydrology" / "water_year_types" / "reference
 WYT_PRODUCT_B_DIR = str(_wyt_gen / "output" / "_1_calc_WYTs" / "Product_B")
 SIM_IN_DIR = _rim_gen / "output" / "_3_qmap_product_b"
 
-# ── Output directories ────────────────────────────────────────────────
+# -- Output directories ------------------------------------------------
 BASE_RESULTS_DIR = _gen / "output" / "_3_hybrid_product_b"
 WYT_INTERMEDIATE_DIR = BASE_RESULTS_DIR / "hybrid_wyt_product_b"
 QMAP_INTERMEDIATE_DIR = BASE_RESULTS_DIR / "hybrid_qmap_product_b"
 FINAL_DIR = _gen / "output" / "_product_b_final"
 
 
-# %% ── Helpers ─────────────────────────────────────────────────────────
+# -- Helpers ---------------------------------------------------------
 def prepare_hybrid_input_files(input_csv: Path) -> tuple[pd.DataFrame, pd.DataFrame]:
     """Split hybrid_terms CSV into WYT and QMap DataFrames."""
     df = pd.read_csv(input_csv)
@@ -89,7 +112,6 @@ def _to_sv_format(df: pd.DataFrame) -> pd.DataFrame:
     })
 
 
-# %%
 ####################################################################
 ### Part 1 - WYT Averaging (Product B) ###
 ####################################################################
@@ -141,7 +163,6 @@ def run_wyt_product_b(prefix: str, wyt_terms_df: pd.DataFrame) -> None:
     wyt_csv.unlink(missing_ok=True)
 
 
-# %%
 ####################################################################
 ### Part 2 - Quantile Mapping (Product B) ###
 ####################################################################
@@ -198,7 +219,6 @@ def run_qmap_product_b(qmap_pairs_df: pd.DataFrame) -> None:
     print(f"  QMap intermediates: {total} file(s)")
 
 
-# %%
 ####################################################################
 ### Part 3 - Final Hybrid = (WYT + QMap) / 2 ###
 ####################################################################
@@ -263,7 +283,6 @@ def run_final_hybrid(prefix: str) -> None:
     print(f"  Final hybrid: {total} file(s) written to {FINAL_DIR}")
 
 
-# %%
 ####################################################################
 ### Main ###
 ####################################################################

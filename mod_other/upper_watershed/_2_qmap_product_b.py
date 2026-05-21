@@ -1,15 +1,36 @@
+"""
+Upper Watershed Product B Quantile Mapping (non-rimflow / non-ET)
+=================================================================
+Thin wrapper around ``utils.qmap_product_b_from_pairs.
+run_product_b_qmap_from_pairs`` for the upper_watershed module: configures
+the path constants for this module's reference, sim-input, and output
+directories, runs the shared QM engine, and rewrites the per-chunk
+detail CSVs into final CalSim ``Part B, Part C, Year, Month, Value``
+format under ``output/_product_b_final/``.
+
+Inputs
+------
+- mod_other/upper_watershed/reference/qmap_pairs.csv
+- BASE/CalSim3/__calsim_sv_default__.dss (historical training basis/target)
+- Rim inflow Product B chunks (mod_hydrology/rim_inflow/output/
+  _3_qmap_product_b/)
+
+Outputs
+-------
+- output/_2_qmap_product_b/                          intermediate detail CSVs
+- output/_product_b_final/<part_b>_productB_<ts>.csv final per-chunk CSVs
+
+Dependencies
+------------
+- utils.qmap_product_b_from_pairs
+- utils.paths
+
+Usage
+-----
+    python mod_other/upper_watershed/_2_qmap_product_b.py
+"""
+
 from __future__ import annotations
-
-"""
-Wrapper script for Product-B quantile mapping of non-rimflow/non-ET terms.
-
-This script defines paths and calls the quantile-mapping logic in
-``utils.qmap_product_b_from_pairs``, then writes a second set of chunked
-100-year CSVs in final CalSim format (Part B, Part C, Year, Month, Value)
-into ``output/_product_b_final/``.
-
-Copy this script to each module folder and update the paths below as needed.
-"""
 
 import sys
 from pathlib import Path
