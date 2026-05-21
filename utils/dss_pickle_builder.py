@@ -42,6 +42,8 @@ from typing import Dict, List, Sequence, Tuple
 import numpy as np
 import pandas as pd
 
+from utils.dss_io import open_dss
+
 
 # -----------------------------
 # Data classes
@@ -158,18 +160,6 @@ def evaluate_construction(expr: str, series_lookup: Dict[str, pd.Series]) -> pd.
     return out
 
 
-def _require_pydsstools() -> None:
-    try:
-        from pydsstools.heclib.dss import HecDss  # noqa: F401
-    except Exception as exc:
-        raise ImportError(
-            "pydsstools is required to read DSS. Install with:\n"
-            "  conda install -c conda-forge pydsstools\n"
-            "or\n"
-            "  pip install pydsstools\n"
-        ) from exc
-
-
 def to_monthly_taf(series: pd.Series, units: str) -> pd.Series:
     """Convert a monthly series to TAF if possible."""
 
@@ -246,35 +236,20 @@ def load_metric_specs_from_csv(metrics_csv_path: str) -> List[MetricSpec]:
     return specs
 
 
-def _strip_long_path_prefix(p: str) -> str:
-    """Remove the ``\\\\?\\`` Windows long-path prefix that confuses Fortran."""
-    if p.startswith("\\\\?\\"):
-        return p[4:]
-    return p
-
-
 def single_scenario_pull(
     dss_path: str,
     bparts: Sequence[str],
     shift_index_days: int = -1,
 ) -> Tuple[pd.DataFrame, Dict[str, str], Dict[str, str]]:
-    """Open one DSS file once and pull all requested B-parts."""
+    """Open one DSS file once and pull all requested B-parts.
 
-    _require_pydsstools()
-    from pydsstools.heclib.dss import HecDss
-
-    dss_path_clean = _strip_long_path_prefix(str(dss_path))
-
-    if len(dss_path_clean) > 256:
-        raise OSError(
-            f"DSS path exceeds 256-char Fortran CNAME limit ({len(dss_path_clean)} chars).\n"
-            f"  Copy the file to a shorter path.\n"
-            f"  Path: {dss_path_clean}"
-        )
-
-    fid = HecDss.Open(dss_path_clean)
-
-    try:
+    Long Windows file paths (> 200 chars) are transparently shortened via a
+    Windows directory junction by ``utils.dss_io.open_dss``, so the underlying
+    Fortran HEC-DSS library always sees a path well under its 256-char CNAME
+    limit. The per-record (DSS pathname) 256-char limit is still enforced
+    below by filtering ``getPathnameList`` results.
+    """
+    with open_dss(dss_path, version=6, catalog_flag=False) as fid:
         try:
             pathnames_raw = fid.getPathnameList("/*/*/*/*/*/*/", sort=1)
         except Exception:
@@ -292,9 +267,8 @@ def single_scenario_pull(
 
         if not pathnames:
             raise RuntimeError(
-                f"No valid pathnames found in DSS file (0 records). "
-                f"This often means the path is too long for HEC-DSS Fortran.\n"
-                f"  Path: {dss_path_clean}"
+                f"No valid pathnames found in DSS file (0 records).\n"
+                f"  Path: {dss_path}"
             )
 
         df_paths = pd.DataFrame(pathnames, columns=["AllPaths"])
@@ -341,8 +315,6 @@ def single_scenario_pull(
                 )
             except Exception as exc:
                 print(f"  Warning: could not read B-part '{bpart_up}' -- {exc}")
-    finally:
-        fid.close()
 
     if not df_ts.empty:
         df_ts.index = pd.to_datetime(df_ts.index)

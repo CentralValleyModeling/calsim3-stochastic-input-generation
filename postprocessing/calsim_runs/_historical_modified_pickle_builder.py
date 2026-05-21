@@ -1,28 +1,38 @@
-r"""
-Build pickle cache for the Historical vs Modified Historical paired comparison.
+"""
+Historical vs Modified Historical Pickle Cache Builder
+======================================================
+Two-scenario wrapper around the shared CalView-style DSS pickle builder
+(``utils.dss_pickle_builder``) that compares one historical CalSim 3 DV
+against a modified historical run for the Freeport / Vernalis metrics
+listed in ``reference/metrics_historical_modified_freeport_vernalis.csv``.
 
-This is a focused, two-scenario wrapper around the shared builder
-(``utils/dss_pickle_builder.py``) that compares one historical CalSim 3 DV
-against a modified historical run. Metric definitions live in:
+Inputs
+------
+- Historical baseline DV DSS:
+  ``BASE/CalSim3/Studies/9.3.1_danube_hist/DSS/output/
+  DCR2023_DV_9.3.1_Danube_Hist_v1.7.dss``
+- Modified historical DV DSS:
+  ``GENERATED/postprocessing/calsim_runs/historical_modified/dv_out/
+  DCR2023_DV_9.3.1_Danube_Hist_v1.7.dss``
+- Metric definitions: ``reference/metrics_historical_modified_freeport_vernalis.csv``
 
-    postprocessing/calsim_runs/reference/metrics_historical_modified_freeport_vernalis.csv
+Outputs
+-------
+- ``GENERATED/postprocessing/calsim_runs/historical_modified/pickle_files/``
+  (values.pkl, diffs.pkl, units.pkl, fields.pkl, meta.json)
 
-Usage from the repo root::
+Dependencies
+------------
+- utils.dss_pickle_builder, utils.paths
+- pandas, numpy, pydsstools
 
-    python postprocessing\calsim_runs\_historical_modified_pickle_builder.py
+Usage
+-----
+    python postprocessing/calsim_runs/_historical_modified_pickle_builder.py
 
-Dependencies:
-    Use the project environment from ``environment.yml``. This wrapper imports
-    ``utils.dss_pickle_builder``, which requires pandas, numpy, and pydsstools.
-
-If HEC-DSS raises a 256-character Fortran CNAME path limit error, rebuild with
-short DSS copies::
-
-    if not exist "C:\tmp\dss" mkdir "C:\tmp\dss"
-    copy /Y "<historical DSS path>" "C:\tmp\dss\hist.dss"
-    copy /Y "<modified historical DSS path>" "C:\tmp\dss\modhist.dss"
-
-    python postprocessing\calsim_runs\_historical_modified_pickle_builder.py --baseline-dss C:\tmp\dss\hist.dss --compare-dss C:\tmp\dss\modhist.dss
+Long Windows file paths (e.g. on OneDrive) are handled transparently by the
+shared builder via ``utils.dss_io.open_dss``, which shortens the path that
+HEC-DSS sees via a ``_dss_link`` directory junction.
 """
 
 from __future__ import annotations
@@ -41,18 +51,6 @@ from utils.dss_pickle_builder import Scenario, build_pickles_from_metrics_csv
 from utils.paths import get_base_dir, get_generated_dir
 
 
-SHORT_PATH_HELP = r"""
-HEC-DSS path length note:
-    If the default DSS path is longer than 256 characters, pydsstools can fail
-    before reading Modified Historical. Rebuild with short DSS copies:
-
-    if not exist "C:\tmp\dss" mkdir "C:\tmp\dss"
-    copy /Y "<historical DSS path>" "C:\tmp\dss\hist.dss"
-    copy /Y "<modified historical DSS path>" "C:\tmp\dss\modhist.dss"
-    python postprocessing\calsim_runs\_historical_modified_pickle_builder.py --baseline-dss C:\tmp\dss\hist.dss --compare-dss C:\tmp\dss\modhist.dss
-"""
-
-
 # -----------------------------
 # Defaults (resolved via utils.paths so config.json is honored)
 # -----------------------------
@@ -66,7 +64,7 @@ HISTORICAL_DSS = (
 MODIFIED_HISTORICAL_DSS = (
     get_generated_dir()
     / "postprocessing" / "calsim_runs"
-    / "historical_modified" / "9.3.1_danube_hist_New" / "DSS" / "output"
+    / "historical_modified" / "dv_out"
     / "DCR2023_DV_9.3.1_Danube_Hist_v1.7.dss"
 )
 
@@ -89,8 +87,6 @@ def _require_file(path: Path, label: str) -> Path:
 def main() -> Dict[str, str]:
     parser = argparse.ArgumentParser(
         description="Build pickles for the Historical vs Modified Historical paired comparison.",
-        epilog=SHORT_PATH_HELP,
-        formatter_class=argparse.RawDescriptionHelpFormatter,
     )
     parser.add_argument("--baseline-name", default="Historical",
                         help="Scenario name for the historical baseline DSS.")

@@ -74,7 +74,7 @@ Tier 4  DEPENDENT MODULES
         python mod_reservoir/evaporation/_2_run_reservoir_evap.py --product A
     Reservoir Storage Curves:
         python mod_reservoir/storage_curves/_1_wyt_index_curves.py --product A
-        python mod_reservoir/storage_curves/_2_qmap_product_a.py
+        python mod_reservoir/storage_curves/_2_qmap.py --product A
         python mod_reservoir/storage_curves/_3_oroville_daily_precip.py --source Product_A --scenario 1
         python mod_reservoir/storage_curves/_4_oroville_level5.py --product A
     Tulare Groundwater Terms:
@@ -85,8 +85,8 @@ Tier 4  DEPENDENT MODULES
     Upper Watershed Modules:
         python mod_other/upper_watershed/_0_load_sv.py                              (setup; run once)
         python mod_other/upper_watershed/_1_wyt_monthlyavg.py --product A
-        python mod_other/upper_watershed/_2_qmap_product_a.py
-        python mod_other/upper_watershed/_3_hybrid_product_a.py
+        python mod_other/upper_watershed/_2_qmap.py --product A
+        python mod_other/upper_watershed/_3_hybrid.py --product A
         python mod_other/upper_watershed/_4_pge_wy_allocation.py --product A
         python mod_other/upper_watershed/_5_dnp_evaporation.py --calibrate          (setup; run once)
         python mod_other/upper_watershed/_5_dnp_evaporation.py --product A
@@ -94,8 +94,8 @@ Tier 4  DEPENDENT MODULES
         python mod_other/miscellaneous/_0_extract_others.py                          (setup; run once)
         python mod_other/miscellaneous/_1_wyt_monthlyavg.py --product A
         python mod_other/miscellaneous/_2_DeltaAccretionForNDOI.py --product A
-        python mod_other/miscellaneous/_3_hybrid_product_a.py
-        python mod_other/miscellaneous/_4_qmap_product_a.py
+        python mod_other/miscellaneous/_3_hybrid.py --product A
+        python mod_other/miscellaneous/_4_qmap.py --product A
 
 Tier 5  FINAL COMPILATION (postprocessing)
         python postprocessing/sv_compile/product_a_historical_validation.py
@@ -229,7 +229,7 @@ Each external-run model is a contiguous block: compile inputs ->
 ### Reservoir Storage Curves (7 vars)
 
 1. `python mod_reservoir/storage_curves/_1_wyt_index_curves.py --product A`
-2. `python mod_reservoir/storage_curves/_2_qmap_product_a.py`
+2. `python mod_reservoir/storage_curves/_2_qmap.py --product A`
 3. `python mod_reservoir/storage_curves/_3_oroville_daily_precip.py --source Product_A --scenario 1`
 4. `python mod_reservoir/storage_curves/_4_oroville_level5.py --product A`
 - **Inputs:** CS3 baseline DSS; rim/precip; `reference/qmap_pairs.csv`
@@ -255,8 +255,8 @@ Each external-run model is a contiguous block: compile inputs ->
    - **Inputs:** upper-watershed `*_SV.dss`; master inventory xlsx
    - **Outputs:** `output/_0_load_sv/all_dss_paths*.csv`, `matched_dss_to_inventory.csv`
 2. `python mod_other/upper_watershed/_1_wyt_monthlyavg.py --product A`
-3. `python mod_other/upper_watershed/_2_qmap_product_a.py`
-4. `python mod_other/upper_watershed/_3_hybrid_product_a.py`
+3. `python mod_other/upper_watershed/_2_qmap.py --product A`
+4. `python mod_other/upper_watershed/_3_hybrid.py --product A`
 5. `python mod_other/upper_watershed/_4_pge_wy_allocation.py --product A`
 6. `python mod_other/upper_watershed/_5_dnp_evaporation.py --calibrate` *(setup; run once to derive the hypsographic polynomial)*
 7. `python mod_other/upper_watershed/_5_dnp_evaporation.py --product A`
@@ -270,10 +270,10 @@ Each external-run model is a contiguous block: compile inputs ->
    - **Outputs:** baseline "Other" monthly series (module reference)
 2. `python mod_other/miscellaneous/_1_wyt_monthlyavg.py --product A`
 3. `python mod_other/miscellaneous/_2_DeltaAccretionForNDOI.py --product A`
-4. `python mod_other/miscellaneous/_3_hybrid_product_a.py`
-5. `python mod_other/miscellaneous/_4_qmap_product_a.py`
+4. `python mod_other/miscellaneous/_3_hybrid.py --product A`
+5. `python mod_other/miscellaneous/_4_qmap.py --product A`
 - **Inputs:** miscellaneous/_0 baseline; WYT indices; rim_inflow/_2 rim CSV; `reference/qmap_pairs.csv`
-- **Outputs:** `_product_a_validation/*.csv` (incl. `TULE_WET_INDX_productA_1972_2018.csv`); `_4_qmap_product_a/` detail + figures
+- **Outputs:** `_product_a_validation/*.csv` (incl. `TULE_WET_INDX_productA_1972_2018.csv`); `_4_qmap/product_a/` detail + figures
 
 ### Closure Terms, Day Volume Fractions, Salinity
 

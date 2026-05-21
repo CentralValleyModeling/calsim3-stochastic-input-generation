@@ -1,17 +1,17 @@
 """
 Quantile-Map Product B Rim Inflows
 ==================================
-Train on the full Product A overlap (Oct 1921 – Dec 2018) and apply to
-Product B stochastic VIC routed flows (10 chunks × 100 water years).
+Train on the full Product A overlap (Oct 1921 - Dec 2018) and apply to
+Product B stochastic VIC routed flows (10 chunks x 100 water years).
 
 Workflow
 --------
-1. Load CalSim ↔ VIC pairings from CalSim3_VIC_name_mapping.csv.
+1. Load CalSim <-> VIC pairings from CalSim3_VIC_name_mapping.csv.
 2. Build training distributions from Product A VIC and CalSim DSS data.
 3. For each pair, concatenate all 10 Product B chunks into one series,
    run qmap_single() once, then split mapped values back per chunk.
 4. Enforce anchor/tributary mass balance (RimInflowAnchor.xlsx).
-5. Write per-inflow CSVs: <CalSim>_<VIC>_qmo_n01.csv … n10.csv
+5. Write per-inflow CSVs: <CalSim>_<VIC>_qmo_n01.csv ... n10.csv
 
 Uses multiprocessing (ProcessPoolExecutor) for step 3.
 
@@ -67,11 +67,11 @@ BASE_OUT_DIR  = str(_gen / "output" / "_3_qmap_product_b")
 OUT_TS_DIR    = BASE_OUT_DIR
 os.makedirs(OUT_TS_DIR, exist_ok=True)
 
-# All Product B chunks span exactly 100 water years (Oct 1921 – Sep 2021,
+# All Product B chunks span exactly 100 water years (Oct 1921 - Sep 2021,
 # i.e. WY 1922-2021).  We enforce this canonical date range regardless of
 # whatever year labels the VIC source files happen to carry, so mismatched
 # file timestamps can never corrupt the output Year/Month columns.
-PRODUCT_B_MONTHS    = 1200                   # 100 WY × 12 months
+PRODUCT_B_MONTHS    = 1200                   # 100 WY x 12 months
 PRODUCT_B_START     = pd.Timestamp("1921-10-31")   # first month-end date
 
 ANCHOR_XLSX  = str(_SCRIPT_DIR / "reference" / "RimInflowAnchor.xlsx")
@@ -97,7 +97,7 @@ def read_master_pairs():
     df_inflow    = df_master[df_master[col_I].astype(str).str.strip().str.lower() == "rim inflow"]
     calsim_inflows = df_inflow[col_C].dropna().unique().tolist()
 
-    # CalSim ↔ VIC matched pairs (from name mapping CSV)
+    # CalSim <-> VIC matched pairs (from name mapping CSV)
     name_map_csv = str(_SCRIPT_DIR / "reference" / "CalSim3_VIC_name_mapping.csv")
     df_pairs = pd.read_csv(name_map_csv).rename(columns={"CS3_Inflow": "CalSim_Inflow"})
     df_pairs = df_pairs.dropna(subset=["CalSim_Inflow", "VIC_Inflow"])
@@ -212,11 +212,11 @@ def load_vic_sim_series(vic_name: str, sim_dir: str, ts: str):
 
     if len(vals) != PRODUCT_B_MONTHS:
         raise ValueError(
-            f"{fname}: expected {PRODUCT_B_MONTHS} rows (Oct 1921 – Sep 2021) "
+            f"{fname}: expected {PRODUCT_B_MONTHS} rows (Oct 1921 - Sep 2021) "
             f"but got {len(vals)}."
         )
 
-    # Enforce the canonical Product B date range (Oct 1921 – Sep 2021), ignoring
+    # Enforce the canonical Product B date range (Oct 1921 - Sep 2021), ignoring
     # whatever year/month labels the VIC file contains.  All Product B chunks must
     # span exactly 100 water years using this convention.
     canonical_idx = pd.date_range(PRODUCT_B_START, periods=PRODUCT_B_MONTHS, freq="ME")
@@ -461,7 +461,7 @@ def main():
         return
 
     # --- 3. Split mapped results back to each time series and write outputs ------
-    print(f"\nWriting output CSVs ...")
+    print("\nWriting output CSVs ...")
     total_files = 0
     for ts in timeseries_list:
 

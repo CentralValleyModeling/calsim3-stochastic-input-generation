@@ -1,24 +1,35 @@
-r"""
-Build pickle cache for Product B stochastic runs.
+"""
+Product B Stochastic Run Pickle Cache Builder
+=============================================
+11-scenario wrapper around the shared CalView-style DSS pickle builder
+(``utils.dss_pickle_builder``) that pairs the historical baseline DV DSS
+with the ten Product B block DV DSS files (n01 .. n10) produced by an
+external CalSim 3 run. Used as input to ``_productB_postproc.py``. The
+n01..n10 labels are auto-detected from the DSS filenames (case-insensitive).
 
-Expected pattern:
-- one baseline / benchmark DSS
-- ten Product B DSS files for blocks n01 ... n10
+Inputs
+------
+- Historical baseline DV DSS:
+  ``BASE/CalSim3/Studies/9.3.1_danube_hist/DSS/output/
+  DCR2023_DV_9.3.1_Danube_Hist_v1.7.dss``
+- 10 Product B DV DSS (auto-discovered under ``--product-b-root`` by default):
+  ``GENERATED/postprocessing/calsim_runs/product_b/dv_out/
+  DCR2023_DV_9.3.1_Danube_Hist_v1.7_ProductB_n{01..10}.dss``
+- Metric definitions: ``reference/metrics.csv``
 
-The shared builder lives in ../utils/dss_pickle_builder.py and the shared metric
-definitions live in ../reference/metrics.csv.
+Outputs
+-------
+- ``GENERATED/postprocessing/calsim_runs/product_b/pickle_files/``
+  (values.pkl, diffs.pkl, units.pkl, fields.pkl, meta.json)
 
-Example:
+Dependencies
+------------
+- utils.dss_pickle_builder, utils.paths
+- pandas, numpy, pydsstools
 
-    python _pickle_builder.py ^
-        --baseline-name Historical ^
-        --baseline-dss "..\benchmark\DSS\output\benchmark.dss" ^
-        --product-b-root "data\GENERATED\postprocessing\calsim_runs\product_b\dv_out" ^
-        --glob "**\*.dss" ^
-        --out-dir "data\GENERATED\postprocessing\calsim_runs\product_b\pickle_files"
-
-The Product B block scenarios are auto-discovered from the path names using a
-case-insensitive n01...n10 pattern.
+Usage
+-----
+    python postprocessing/calsim_runs/_productB_pickle_builder.py
 """
 
 from __future__ import annotations
@@ -53,6 +64,14 @@ PRODUCT_B_DV_DIR = (
     / "calsim_runs"
     / "product_b"
     / "dv_out"
+)
+
+PRODUCT_B_PICKLE_DIR = (
+    get_generated_dir()
+    / "postprocessing"
+    / "calsim_runs"
+    / "product_b"
+    / "pickle_files"
 )
 
 
@@ -136,7 +155,7 @@ def main() -> None:
     )
     parser.add_argument(
         "--out-dir",
-        default=str(get_generated_dir() / "postprocessing" / "calsim_runs" / "product_b" / "pickle_files"),
+        default=str(PRODUCT_B_PICKLE_DIR),
         help="Output directory for pickle cache",
     )
     args = parser.parse_args()

@@ -1,30 +1,38 @@
-r"""
-Build Pickle Cache for Product A Validation Runs
-================================================
+"""
+Product A Validation Run Pickle Cache Builder
+=============================================
+Two-scenario wrapper around the shared CalView-style DSS pickle builder
+(``utils.dss_pickle_builder``) that pairs the historical baseline DV DSS
+with the single Product A DV DSS produced by an external CalSim 3 run.
+Used as input to ``_productA_postproc.py`` (or ``_historical_modified_postproc.py``).
 
-Expected pattern:
-- one baseline / benchmark DSS
-- one Product A DSS
+Inputs
+------
+- Historical baseline DV DSS:
+  ``BASE/CalSim3/Studies/9.3.1_danube_hist/DSS/output/
+  DCR2023_DV_9.3.1_Danube_Hist_v1.7.dss``
+- Product A DV DSS (auto-discovered under ``--product-a-root`` by default):
+  ``GENERATED/postprocessing/calsim_runs/product_a/dv_out/
+  DCR2023_DV_9.3.1_Danube_Hist_v1.7_ProductA.dss``
+- Metric definitions: ``reference/metrics.csv``
 
-This is a thin Product A wrapper around the shared builder:
-    utils/dss_pickle_builder.py
+Outputs
+-------
+- ``GENERATED/postprocessing/calsim_runs/product_a/pickle_files/``
+  (values.pkl, diffs.pkl, units.pkl, fields.pkl, meta.json)
 
-The shared metric definitions are expected at:
-    postprocessing/calsim_runs/reference/metrics.csv
+Dependencies
+------------
+- utils.dss_pickle_builder, utils.paths
+- pandas, numpy, pydsstools
 
-Typical usage from:
-    calsim3-stochastic-input-generation/postprocessing/calsim_runs
+Usage
+-----
+    python postprocessing/calsim_runs/_productA_pickle_builder.py
 
-    python _productA_pickle_builder.py ^
-        --baseline-name Historical ^
-        --product-a-name "Product A" ^
-        --product-a-dss "..\\..\\data\\GENERATED\\postprocessing\\calsim_runs\\product_a\\dv_out\\DCR2023_DV_9.3.1_Danube_Hist_v1.7_ProductA.dss"
+Or pass an explicit Product A DSS instead of auto-discovery:
 
-Or let the script discover the Product A DSS:
-
-    python _productA_pickle_builder.py ^
-        --product-a-root "..\\..\\data\\GENERATED\\postprocessing\\calsim_runs\\product_a\\dv_out" ^
-        --glob "**/*.dss"
+    python postprocessing/calsim_runs/_productA_pickle_builder.py --product-a-dss <PATH>
 """
 
 from __future__ import annotations
@@ -85,9 +93,12 @@ def discover_product_a_dss(
 ) -> Path:
     """Discover a single Product A DSS under product_a_root.
 
-    The function first applies the glob, then prefers files whose path contains
-    "ProductA", "Product_A", or "Product A". If more than one candidate remains,
-    it raises and asks the user to pass --product-a-dss explicitly.
+    The function first applies the glob, then prefers files whose **filename**
+    contains "ProductA", "Product_A", or "Product A". Matching the filename
+    instead of the full path avoids false positives from a parent directory
+    named ``product_a`` (which would otherwise let auxiliary outputs like
+    ``CVGroundwaterBudget.dss`` pass the filter). If more than one candidate
+    remains, raises and asks the user to pass --product-a-dss explicitly.
     """
     root = Path(product_a_root)
     if not root.exists():
@@ -101,7 +112,7 @@ def discover_product_a_dss(
             f"No DSS files were found beneath {root} using glob {glob_pattern!r}."
         )
 
-    product_a_matches = [path for path in matches if _PRODUCT_A_RE.search(str(path))]
+    product_a_matches = [path for path in matches if _PRODUCT_A_RE.search(path.name)]
     candidates = product_a_matches if product_a_matches else matches
 
     if len(candidates) > 1:

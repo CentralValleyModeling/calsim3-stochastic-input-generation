@@ -37,7 +37,7 @@ Usage
     python mod_other/day_volume_fractions/_2_generate_product_b.py
 """
 
-# %% Imports
+# Imports
 import calendar
 import os
 import sys
@@ -51,7 +51,7 @@ from pydsstools.heclib.dss import HecDss
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 from utils.paths import get_base_dir, get_module_generated_dir
 
-# %% Paths
+# Paths
 _GEN_DIR = get_module_generated_dir("mod_other/day_volume_fractions")
 DEFAULT_DSS = get_base_dir() / "CalSim3" / "__calsim_sv_default__.dss"
 REFERENCE_CSV = Path(__file__).resolve().parent / "reference" / "reference_inflows.csv"
@@ -65,7 +65,7 @@ N_CHUNKS = 10
 MAX_WORKERS = max(1, (os.cpu_count() or 4) - 1)
 
 
-# %% Helper: read a single DSS monthly time series (multi-block merge)
+# Helper: read a single DSS monthly time series (multi-block merge)
 def _read_dss_series(dss, plist):
     """Merge multi-block DSS paths into a single Series, sorted by Part D."""
     master = {}
@@ -79,7 +79,7 @@ def _read_dss_series(dss, plist):
     return pd.Series(master).sort_index() if master else pd.Series(dtype="float64")
 
 
-# %% Extract all Vol-Fraction records from historical DSS
+# Extract all Vol-Fraction records from historical DSS
 def extract_vol_fractions(dss_path: Path) -> pd.DataFrame:
     """Read all monthly series with Part C = 'VOL-FRACTION' from DSS."""
 
@@ -112,7 +112,7 @@ def extract_vol_fractions(dss_path: Path) -> pd.DataFrame:
     return df
 
 
-# %% Build historical vol-fraction lookup keyed by WY
+# Build historical vol-fraction lookup keyed by WY
 def build_vf_by_wy(df_vf: pd.DataFrame) -> dict:
     """Return {wy: DataFrame of 12 monthly rows} for all available WYs."""
     df = df_vf.copy()
@@ -127,7 +127,7 @@ def build_vf_by_wy(df_vf: pd.DataFrame) -> dict:
     return lookup
 
 
-# %% Build historical annual flow index from DSS inflows
+# Build historical annual flow index from DSS inflows
 def build_historical_annual_index(dss_path: Path, ref_csv: Path) -> pd.Series:
     """Extract reference inflows from DSS and compute annual flow sum per WY."""
 
@@ -170,7 +170,7 @@ def build_historical_annual_index(dss_path: Path, ref_csv: Path) -> pd.Series:
     return annual
 
 
-# %% Load Product B inflows for one chunk from rim_inflow CSVs
+# Load Product B inflows for one chunk from rim_inflow CSVs
 def load_chunk_inflows(rim_dir: Path, chunk: int, ref_csv: Path) -> pd.DataFrame:
     """Read qmap_postAdj from rim inflow Product B CSVs for one chunk.
 
@@ -210,7 +210,7 @@ def load_chunk_inflows(rim_dir: Path, chunk: int, ref_csv: Path) -> pd.DataFrame
     return result
 
 
-# %% Compute annual flow index from chunk inflows
+# Compute annual flow index from chunk inflows
 def compute_chunk_annual_index(df_chunk: pd.DataFrame) -> pd.Series:
     """Sum all inflow columns by water year for a Product B chunk."""
     df = df_chunk.copy()
@@ -223,7 +223,7 @@ def compute_chunk_annual_index(df_chunk: pd.DataFrame) -> pd.Series:
     return annual
 
 
-# %% Match each synthetic WY to nearest historical WY
+# Match each synthetic WY to nearest historical WY
 def match_to_historical(
     synthetic_index: pd.Series,
     hist_index: pd.Series,
@@ -253,7 +253,7 @@ def match_to_historical(
     return pd.DataFrame(records)
 
 
-# %% Resample daily fractions for February leap-year mismatch
+# Resample daily fractions for February leap-year mismatch
 def _resample_feb_fractions(fractions, tgt_days):
     """Cumulative-volume interpolation: redistribute daily fractions
     onto *tgt_days* bins, preserving the total (sum stays the same).
@@ -266,7 +266,7 @@ def _resample_feb_fractions(fractions, tgt_days):
     return np.diff(cum_tgt)
 
 
-# %% Borrow vol-fraction pattern and format as standard Product B output
+# Borrow vol-fraction pattern and format as standard Product B output
 def build_product_b_vf(df_match: pd.DataFrame, vf_lookup: dict) -> pd.DataFrame:
     """For each matched WY, borrow vol-fraction pattern from historical year.
 
@@ -365,7 +365,7 @@ def build_product_b_vf(df_match: pd.DataFrame, vf_lookup: dict) -> pd.DataFrame:
     return df
 
 
-# %% Process a single chunk (top-level for pickling by ProcessPoolExecutor)
+# Process a single chunk (top-level for pickling by ProcessPoolExecutor)
 def _process_chunk(chunk, rim_dir, ref_csv, hist_annual, vf_lookup, out_dir, match_dir):
     """Process one Product B chunk: load inflows, match WYs, write output."""
     chunk_tag = f"n{chunk:02d}"
@@ -390,7 +390,7 @@ def _process_chunk(chunk, rim_dir, ref_csv, hist_annual, vf_lookup, out_dir, mat
     return chunk_tag, len(df_vf_chunk), "ok"
 
 
-# %% Main
+# Main
 def main():
     PRODUCT_B_FINAL.mkdir(parents=True, exist_ok=True)
 
