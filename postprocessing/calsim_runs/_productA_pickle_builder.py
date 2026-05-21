@@ -93,9 +93,12 @@ def discover_product_a_dss(
 ) -> Path:
     """Discover a single Product A DSS under product_a_root.
 
-    The function first applies the glob, then prefers files whose path contains
-    "ProductA", "Product_A", or "Product A". If more than one candidate remains,
-    it raises and asks the user to pass --product-a-dss explicitly.
+    The function first applies the glob, then prefers files whose **filename**
+    contains "ProductA", "Product_A", or "Product A". Matching the filename
+    instead of the full path avoids false positives from a parent directory
+    named ``product_a`` (which would otherwise let auxiliary outputs like
+    ``CVGroundwaterBudget.dss`` pass the filter). If more than one candidate
+    remains, raises and asks the user to pass --product-a-dss explicitly.
     """
     root = Path(product_a_root)
     if not root.exists():
@@ -109,7 +112,7 @@ def discover_product_a_dss(
             f"No DSS files were found beneath {root} using glob {glob_pattern!r}."
         )
 
-    product_a_matches = [path for path in matches if _PRODUCT_A_RE.search(str(path))]
+    product_a_matches = [path for path in matches if _PRODUCT_A_RE.search(path.name)]
     candidates = product_a_matches if product_a_matches else matches
 
     if len(candidates) > 1:
