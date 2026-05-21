@@ -86,7 +86,7 @@ Tier 4  DEPENDENT MODULES
         python mod_other/upper_watershed/_0_load_sv.py                              (setup; run once)
         python mod_other/upper_watershed/_1_wyt_monthlyavg.py --product A
         python mod_other/upper_watershed/_2_qmap.py --product A
-        python mod_other/upper_watershed/_3_hybrid_product_a.py
+        python mod_other/upper_watershed/_3_hybrid.py --product A
         python mod_other/upper_watershed/_4_pge_wy_allocation.py --product A
         python mod_other/upper_watershed/_5_dnp_evaporation.py --calibrate          (setup; run once)
         python mod_other/upper_watershed/_5_dnp_evaporation.py --product A
@@ -94,7 +94,7 @@ Tier 4  DEPENDENT MODULES
         python mod_other/miscellaneous/_0_extract_others.py                          (setup; run once)
         python mod_other/miscellaneous/_1_wyt_monthlyavg.py --product A
         python mod_other/miscellaneous/_2_DeltaAccretionForNDOI.py --product A
-        python mod_other/miscellaneous/_3_hybrid_product_a.py
+        python mod_other/miscellaneous/_3_hybrid.py --product A
         python mod_other/miscellaneous/_4_qmap.py --product A
 
 Tier 5  FINAL COMPILATION (postprocessing)
@@ -256,7 +256,7 @@ Each external-run model is a contiguous block: compile inputs ->
    - **Outputs:** `output/_0_load_sv/all_dss_paths*.csv`, `matched_dss_to_inventory.csv`
 2. `python mod_other/upper_watershed/_1_wyt_monthlyavg.py --product A`
 3. `python mod_other/upper_watershed/_2_qmap.py --product A`
-4. `python mod_other/upper_watershed/_3_hybrid_product_a.py`
+4. `python mod_other/upper_watershed/_3_hybrid.py --product A`
 5. `python mod_other/upper_watershed/_4_pge_wy_allocation.py --product A`
 6. `python mod_other/upper_watershed/_5_dnp_evaporation.py --calibrate` *(setup; run once to derive the hypsographic polynomial)*
 7. `python mod_other/upper_watershed/_5_dnp_evaporation.py --product A`
@@ -270,7 +270,7 @@ Each external-run model is a contiguous block: compile inputs ->
    - **Outputs:** baseline "Other" monthly series (module reference)
 2. `python mod_other/miscellaneous/_1_wyt_monthlyavg.py --product A`
 3. `python mod_other/miscellaneous/_2_DeltaAccretionForNDOI.py --product A`
-4. `python mod_other/miscellaneous/_3_hybrid_product_a.py`
+4. `python mod_other/miscellaneous/_3_hybrid.py --product A`
 5. `python mod_other/miscellaneous/_4_qmap.py --product A`
 - **Inputs:** miscellaneous/_0 baseline; WYT indices; rim_inflow/_2 rim CSV; `reference/qmap_pairs.csv`
 - **Outputs:** `_product_a_validation/*.csv` (incl. `TULE_WET_INDX_productA_1972_2018.csv`); `_4_qmap/product_a/` detail + figures

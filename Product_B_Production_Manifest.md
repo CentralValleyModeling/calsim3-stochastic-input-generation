@@ -85,7 +85,7 @@ Tier 4  DEPENDENT MODULES
         python mod_other/upper_watershed/_0_load_sv.py                               (setup; run once)
         python mod_other/upper_watershed/_1_wyt_monthlyavg.py --product B
         python mod_other/upper_watershed/_2_qmap.py --product B
-        python mod_other/upper_watershed/_3_hybrid_product_b.py
+        python mod_other/upper_watershed/_3_hybrid.py --product B
         python mod_other/upper_watershed/_4_pge_wy_allocation.py --product B
         python mod_other/upper_watershed/_5_dnp_evaporation.py --calibrate           (setup; run once)
         python mod_other/upper_watershed/_5_dnp_evaporation.py --product B
@@ -97,7 +97,7 @@ Tier 4  DEPENDENT MODULES
         python mod_other/miscellaneous/_0_extract_others.py                          (setup; run once)
         python mod_other/miscellaneous/_1_wyt_monthlyavg.py --product B
         python mod_other/miscellaneous/_2_DeltaAccretionForNDOI.py --product B
-        python mod_other/miscellaneous/_3_hybrid_product_b.py
+        python mod_other/miscellaneous/_3_hybrid.py --product B
         python mod_other/miscellaneous/_4_qmap.py --product B
 
 Tier 5  FINAL COMPILATION (postprocessing)
@@ -299,7 +299,7 @@ tools and are not part of the Product B pipeline.*
    - **Outputs:** `output/_0_load_sv/all_dss_paths*.csv`, `matched_dss_to_inventory.csv`
 2. `python mod_other/upper_watershed/_1_wyt_monthlyavg.py --product B`
 3. `python mod_other/upper_watershed/_2_qmap.py --product B`
-4. `python mod_other/upper_watershed/_3_hybrid_product_b.py`
+4. `python mod_other/upper_watershed/_3_hybrid.py --product B`
 5. `python mod_other/upper_watershed/_4_pge_wy_allocation.py --product B`
 6. `python mod_other/upper_watershed/_5_dnp_evaporation.py --calibrate` *(setup; run once to derive the hypsographic polynomial)*
 7. `python mod_other/upper_watershed/_5_dnp_evaporation.py --product B`
@@ -334,7 +334,7 @@ tools and are not part of the Product B pipeline.*
    - **Outputs:** baseline "Other" monthly series (module reference)
 2. `python mod_other/miscellaneous/_1_wyt_monthlyavg.py --product B`
 3. `python mod_other/miscellaneous/_2_DeltaAccretionForNDOI.py --product B`
-4. `python mod_other/miscellaneous/_3_hybrid_product_b.py`
+4. `python mod_other/miscellaneous/_3_hybrid.py --product B`
 5. `python mod_other/miscellaneous/_4_qmap.py --product B`
 - **Inputs:** miscellaneous/_0 baseline; WYT indices Product B;
   rim_inflow/_3 rim CSV; `reference/qmap_pairs.csv`
