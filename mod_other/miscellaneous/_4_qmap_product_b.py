@@ -65,9 +65,9 @@ def write_product_b_final(out_dir: Path, final_dir: Path, pair_csv: Path) -> Non
             final_df = pd.DataFrame({
                 "Part B": target_b,
                 "Part C": target_c,
-                "Year": df["Year"].astype(int),
-                "Month": df["Month"].astype(int),
-                "Value": df["qmap_target"],
+                "Year": df["year"].astype(int),
+                "Month": df["month"].astype(int),
+                "Value": df["target_qm_sim"],
             })
 
             out_fname = f"{target_b}_productB_{ts}.csv"

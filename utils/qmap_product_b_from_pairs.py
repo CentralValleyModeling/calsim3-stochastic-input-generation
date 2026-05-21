@@ -582,13 +582,12 @@ def run_product_b_qmap_from_pairs(
 
             out_df = pd.DataFrame(
                 {
-                    "target_part_b": target_b,
-                    "target_part_c": target_c,
-                    "predictor_part_b": basis_b,
-                    "Year": block["year"].astype(int).to_numpy(),
-                    "Month": block["month"].astype(int).to_numpy(),
-                    "basis_sim": block["basis_sim"].astype(float).to_numpy(),
-                    "qmap_target": block["qmap_target"].astype(float).to_numpy(),
+                    "target_historical_train": target_b,
+                    "basis_historical_train": basis_b,
+                    "year": block["year"].astype(int).to_numpy(),
+                    "month": block["month"].astype(int).to_numpy(),
+                    "basis_qm_sim": block["basis_sim"].astype(float).to_numpy(),
+                    "target_qm_sim": block["qmap_target"].astype(float).to_numpy(),
                 }
             )
 

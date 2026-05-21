@@ -185,9 +185,9 @@ def run_qmap_product_b(qmap_pairs_df: pd.DataFrame) -> None:
             final_df = pd.DataFrame({
                 "Part B": target_b,
                 "Part C": target_c,
-                "Year": df["Year"].astype(int),
-                "Month": df["Month"].astype(int),
-                "Value": df["qmap_target"],
+                "Year": df["year"].astype(int),
+                "Month": df["month"].astype(int),
+                "Value": df["target_qm_sim"],
             })
             final_df.to_csv(QMAP_INTERMEDIATE_DIR / f"{target_b}_product_b_{ts}.csv", index=False)
             total += 1
