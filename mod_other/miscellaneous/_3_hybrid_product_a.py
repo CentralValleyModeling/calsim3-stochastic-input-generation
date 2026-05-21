@@ -47,7 +47,7 @@ PRODUCT_A_RIM_CSV = (
     / "_product_a_validation" / "_riminflow_productA_1972_2018.csv"
 )
 
-# Product A time window (matching _2_qmap_product_a.py)
+# Product A time window (matching _4_qmap.py --product A)
 TRAIN_START = "1921-10-01"
 TRAIN_END = "1971-09-30"
 SIM_START = "1971-10-01"

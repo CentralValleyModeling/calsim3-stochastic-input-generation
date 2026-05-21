@@ -225,7 +225,7 @@ Oroville Level 5: storage-based, DCR 2023 sedimentation correction (3,538 -> 3,4
 
 | Script | Purpose | Product |
 |--------|---------|---------|
-| `_2_qmap_product_b.py` | Quantile-map Mammoth Pool storage for Product B | B |
+| `_2_qmap.py` | Quantile-map Mammoth Pool storage via qmap_pairs.csv | A & B (`--product A|B`) |
 
 ### mod_other/instream_flows/
 
@@ -241,7 +241,9 @@ Oroville Level 5: storage-based, DCR 2023 sedimentation correction (3,538 -> 3,4
 | `_0_extract_others.py` | Extract misc SVs from CalSim baseline DSS | Setup |
 | `_1_wyt_monthlyavg.py` | WYT monthly average reconstruction for misc SVs | A & B |
 | `_2_DeltaAccretionForNDOI.py` | Delta accretion: precip x area x coeff (direct calc) | A & B |
+| `_3_hybrid_product_a.py` | Hybrid (WYT+QM)/2 for Product A misc terms | A |
 | `_3_hybrid_product_b.py` | Hybrid (WYT+QM)/2 for Product B misc terms | B |
+| `_4_qmap.py` | Quantile mapping via qmap_pairs.csv for misc SVs | A & B (`--product A|B`) |
 
 ### mod_other/upper_watershed/
 
@@ -249,7 +251,8 @@ Oroville Level 5: storage-based, DCR 2023 sedimentation correction (3,538 -> 3,4
 |--------|---------|---------|
 | `_0_load_sv.py` | Load module SV outputs from DSS | Setup |
 | `_1_wyt_monthlyavg.py` | WYT monthly average reconstruction for upper watershed SVs | A & B |
-| `_2_qmap_product_b.py` | Product B quantile mapping via qmap_pairs.csv | B |
+| `_2_qmap.py` | Quantile mapping via qmap_pairs.csv for upper watershed SVs | A & B (`--product A|B`) |
+| `_3_hybrid_product_a.py` | Hybrid (WYT+QM)/2 for Product A upper watershed terms | A |
 | `_3_hybrid_product_b.py` | Hybrid (WYT+QM)/2 for Product B upper watershed terms | B |
 | `_4_pge_wy_allocation.py` | PGE_WY_ALLOCATION_SV: threshold logic on annual Folsom flow | A & B |
 | `_5_dnp_evaporation.py` | Don Pedro evaporation | A & B |

@@ -51,7 +51,7 @@ PRODUCT_A_SCRIPTS = [
     "mod_hydrology/tulare_gw_terms/_1_wyt_monthlyavg.py",
     "mod_reservoir/evaporation/_2_run_reservoir_evap.py",
     "mod_reservoir/storage_curves/_1_wyt_index_curves.py",
-    "mod_reservoir/storage_curves/_2_qmap_product_a.py",
+    "mod_reservoir/storage_curves/_2_qmap.py",
     "mod_reservoir/storage_curves/_3_oroville_daily_precip.py",
     "mod_reservoir/storage_curves/_4_oroville_level5.py",
     "mod_other/instream_flows/_1_min_flow_feather.py",
@@ -59,9 +59,9 @@ PRODUCT_A_SCRIPTS = [
     "mod_other/miscellaneous/_1_wyt_monthlyavg.py",
     "mod_other/miscellaneous/_2_DeltaAccretionForNDOI.py",
     "mod_other/miscellaneous/_3_hybrid_product_a.py",
-    "mod_other/miscellaneous/_4_qmap_product_a.py",
+    "mod_other/miscellaneous/_4_qmap.py",
     "mod_other/upper_watershed/_1_wyt_monthlyavg.py",
-    "mod_other/upper_watershed/_2_qmap_product_a.py",
+    "mod_other/upper_watershed/_2_qmap.py",
     "mod_other/upper_watershed/_3_hybrid_product_a.py",
     "mod_other/upper_watershed/_4_pge_wy_allocation.py",
     "mod_other/upper_watershed/_5_dnp_evaporation.py",
@@ -73,19 +73,18 @@ PRODUCT_A_SCRIPTS = [
 # Canonical Product B pipeline (Product_B_Production_Manifest.md section A
 # "End-to-end ordering"). Numbered pipeline scripts only -- shared utils/
 # library modules are exempt; scripts shared between A and B (compile_precip,
-# rim_inflow QM historical validation, water_year_types, etc.) live in the
-# Product A list above and are not duplicated here.
+# rim_inflow QM historical validation, water_year_types, the merged
+# --product-flagged qmap wrappers in upper_watershed/miscellaneous/
+# storage_curves, etc.) live in the Product A list above and are not
+# duplicated here.
 PRODUCT_B_SCRIPTS = [
     "mod_hydrology/rim_inflow/_3_qmap_productB.py",
     "mod_hydrology/calsimhydro/_4_postprocess_product_b.py",
     "mod_hydrology/calsimhydro_ee/_3_postprocess_product_b.py",
     "mod_hydrology/delta_channel_depletion/_3_postprocess_product_b.py",
     "mod_hydrology/small_watersheds/_3_postprocess_product_b.py",
-    "mod_reservoir/storage_curves/_2_qmap_product_b.py",
-    "mod_other/upper_watershed/_2_qmap_product_b.py",
     "mod_other/upper_watershed/_3_hybrid_product_b.py",
     "mod_other/miscellaneous/_3_hybrid_product_b.py",
-    "mod_other/miscellaneous/_4_qmap_product_b.py",
     "mod_other/day_volume_fractions/_2_generate_product_b.py",
     "postprocessing/sv_compile/product_b_compilation.py",
     "postprocessing/calsim_runs/_productB_pickle_builder.py",
