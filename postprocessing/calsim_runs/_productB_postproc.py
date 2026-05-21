@@ -82,7 +82,7 @@ PRODUCT_A_PICKLE_DIR = (
     get_generated_dir()
     / "postprocessing"
     / "calsim_runs"
-    / "product_a"
+    / "product_a_modified"
     / "pickle_files"
 )
 
