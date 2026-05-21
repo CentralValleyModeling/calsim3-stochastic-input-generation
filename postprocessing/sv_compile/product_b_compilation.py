@@ -1,68 +1,72 @@
-# %% -- Compile Product B (1000-year stochastic) SV CSVs --------------------
 """
-Consolidated Product B stochastic compilation script.
+Compile Product B (1000-year stochastic) SV CSVs and DSS
+========================================================
+Consolidates every module's per-chunk ``_product_b_final/*.csv`` into ten
+unified ``ProductB_SV_n{01..10}.csv`` files and writes the corresponding
+``ProductB_SV_n{01..10}.dss`` files by overlaying chunk values onto the
+CalSim baseline DSS template. Auto-fills inventory Constant/Rept SVs from
+the baseline 12-month pattern and runs Product A and CalSim baseline
+diagnostic comparisons.
 
-Workflow
---------
-1. Scan each module's ``_product_b_final/`` directory for data CSVs
-   (all CSVs are read; filenames not pattern-matched).
-   The rim_inflow module uses a non-standard format and is normalised
-   in-place (CalSim -> Part B, qmap_postAdj -> Value, inventory Part C).
-2. Assign each CSV to a chunk tag (n01-n10) from the filename.
-3. Cross-reference against the master inventory (same flags as Product A):
-   - Missing = T  ->  skip entirely
-   - Used in DCR = F  ->  skip entirely
-   - Constant/Rept = T  ->  auto-fill from baseline 12-month pattern
-4. For each chunk, concatenate all module CSVs + Constant/Rept rows into a
-   single compiled CSV: ``ProductB_SV_n{01..10}.csv``
-5. Compare Product B chunk statistics against compiled Product A DSS
-   (monthly means per Part B/C) and write diagnostic comparison CSV.
-6. Write inventory cross-reference diagnostics and compilation summary.
+Inputs
+------
+- Each module's GENERATED ``_product_b_final/*.csv`` (per the MODULE_CONFIG_B
+  scan order below: calsimhydro, calsimhydro_ee, evaporation, rim_inflow,
+  delta_channel_depletion, small_watersheds, storage_curves, instream_flows,
+  tulare_gw_terms, climate, miscellaneous, upper_watershed, closure_terms,
+  day_volume_fractions).
+- ``BASE/CalSim3/__calsim_sv_default__.dss`` (baseline template, Constant/Rept
+  12-month repeat source, units extractor).
+- ``GENERATED/postprocessing/sv_compile/product_a_validation/
+  ProductA_Historical_Validation_SV.dss`` (optional Product A comparison
+  input; written by ``product_a_historical_validation.py``).
+- ``inventory/_MASTER_INVENTORY_FOR_STOCHASTIC_INPUT_GENERATION_.xlsx``.
 
-Diagnostic outputs  (all written to ``product_b_compilation/``)
-------------------------------------------------------------------------
-- ``compiled_input_files/<module>/*.csv``  -- local copies of source CSVs
-- ``_product_b_compiled_sv/ProductB_SV_n01.csv`` .. ``n10.csv``
-- ``_product_b_compiled_sv/ProductB_SV_n01.dss`` .. ``n10.dss``
-- ``inventory_expected_modified.csv``
-- ``inventory_expected_missing.csv``
-- ``inventory_constant_rept.csv``
-- ``inventory_skipped_missing.csv``
-- ``inventory_skipped_not_in_dcr.csv``
-- ``inventory_unexpected.csv``
+Outputs (all written to ``product_b_compilation/``)
+---------------------------------------------------
+- ``compiled_input_files/<module>/*.csv`` -- local copies of source CSVs
+- ``_product_b_compiled_sv/ProductB_SV_n{01..10}.csv`` (+ matching .dss)
+- ``inventory_*`` cross-reference CSVs (expected/missing/constant_rept/
+  skipped_missing/skipped_not_in_dcr/unexpected)
 - ``sv_coverage_by_chunk.csv``
-- ``product_b_vs_a_comparison.csv``
-- ``product_b_vs_calsim_base_comparison.csv``
+- ``product_b_vs_a_comparison.csv``,
+  ``product_b_vs_calsim_base_comparison.csv``
 - ``compilation_summary.txt``
-- ``figures/vs_product_a/weighted_annual_pctdiff_by_category.png``
-- ``figures/vs_product_a/weighted_annual_pctdiff_by_category_clipped.png``
-- ``figures/vs_product_a/unweighted_annual_pctdiff_by_category.png``
-- ``figures/vs_product_a/unweighted_annual_pctdiff_by_category_clipped.png``
-- ``figures/vs_product_a/wy_exceedance_rank_shift_concept.png``
-- ``figures/vs_product_a/chunk_spread_by_category/*.png``
-- ``figures/vs_product_a/monthly_climatology/<category>/*.png``
-- ``figures/vs_calsim_base/weighted_annual_pctdiff_by_category.png``
-- ``figures/vs_calsim_base/weighted_annual_pctdiff_by_category_clipped.png``
-- ``figures/vs_calsim_base/unweighted_annual_pctdiff_by_category.png``
-- ``figures/vs_calsim_base/unweighted_annual_pctdiff_by_category_clipped.png``
-- ``figures/vs_calsim_base/wy_exceedance_rank_shift_concept.png``
-- ``figures/vs_calsim_base/chunk_spread_by_category/*.png``
-- ``figures/vs_calsim_base/monthly_climatology/<category>/*.png``
+- ``figures/vs_product_a/`` and ``figures/vs_calsim_base/`` PNGs
+  (weighted/unweighted annual %diff per category, exceedance rank shift,
+  monthly climatology, per-category chunk spread)
+
+Dependencies
+------------
+- ``utils.dss_io`` (open_dss, create_junction, remove_junction)
+- ``utils.paths``
+- pydsstools, numpy, pandas, matplotlib
+
+Usage
+-----
+    python postprocessing/sv_compile/product_b_compilation.py
+    python postprocessing/sv_compile/product_b_compilation.py --chunks 1 2 3
+    python postprocessing/sv_compile/product_b_compilation.py --skip-comparison
+    python postprocessing/sv_compile/product_b_compilation.py --skip-dss
+    python postprocessing/sv_compile/product_b_compilation.py --summary-figures
 
 CLI flags
 ---------
-- ``--skip-comparison``  Skip the Product A vs B comparison step.
-- ``--skip-dss``         Skip DSS file generation.
-- ``--chunks 1 2 3``     Process only specific chunks (default: all 10).
-- ``--summary-figures``  Regenerate only the summary figures from a previous comparison CSV.
+- ``--skip-comparison`` Skip the Product A vs B comparison step.
+- ``--skip-dss``        Skip DSS file generation (CSV only).
+- ``--chunks N [N ...]`` Process only specific chunks (default: all 10).
+- ``--summary-figures`` Regenerate figures from a previous comparison CSV.
+
+Note: this script runs procedurally at module load (no ``main()`` wrapper).
+Wrapping the ~2700-line body in a function is deferred to avoid a
+high-risk scoping reshuffle on a script with no tests; the file is never
+imported elsewhere (only run as ``python <path>``).
 """
 
-import os
 import sys
 import time
 import shutil
 import argparse
-import subprocess
 import atexit
 import warnings
 import functools
@@ -72,6 +76,7 @@ from pathlib import Path
 from collections import OrderedDict
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
+from utils import dss_io
 from utils.paths import get_base_dir, get_generated_dir, get_module_generated_dir, get_inventory_dir
 
 warnings.filterwarnings("ignore", message="Mean of empty slice")
@@ -111,35 +116,9 @@ CB_START = pd.Timestamp(1921, 10, 31)
 CB_END   = pd.Timestamp(2021,  9, 30)
 
 
-# -- Junction helper for long DSS paths -----------------------------------
-_REPO_ROOT  = Path(__file__).resolve().parents[2]
-_DSS_LINK   = _REPO_ROOT / "_dss_link"
-_PATH_LIMIT = 200
-
-
-def _create_junction(target_dir):
-    if _DSS_LINK.exists():
-        subprocess.run(["cmd", "/c", "rmdir", str(_DSS_LINK)], capture_output=True)
-    subprocess.run(
-        ["cmd", "/c", "mklink", "/J", str(_DSS_LINK), str(target_dir)],
-        check=True, capture_output=True,
-    )
-
-
-def _remove_junction():
-    if _DSS_LINK.exists():
-        subprocess.run(["cmd", "/c", "rmdir", str(_DSS_LINK)], capture_output=True)
-
-
-def _dss_str(path):
-    s = str(path)
-    if len(s) <= _PATH_LIMIT:
-        return s
-    try:
-        rel = Path(path).relative_to(Path(path).parent)
-        return str(_DSS_LINK / rel)
-    except ValueError:
-        return s
+# Junction lifecycle (mklink /J + Windows long-path handling) lives in
+# utils.dss_io; this script uses dss_io.open_dss / create_junction /
+# remove_junction.
 
 
 # -- CLI arguments ---------------------------------------------------------
@@ -450,8 +429,6 @@ def build_constant_rept_rows(dss_in, baseline_bucket, part_key):
     if part_key not in baseline_bucket:
         return pd.DataFrame()
 
-    from pydsstools.heclib.dss import HecDss
-
     # Merge all D-part blocks into one unified series
     merged = {}
     for pathname in baseline_bucket[part_key]:
@@ -510,18 +487,8 @@ def read_product_a_monthly_means(product_a_dss: Path, baseline_bucket: dict,
 
     Returns dict: (Part_B, Part_C) -> {month: mean_value}
     """
-    from pydsstools.heclib.dss import HecDss
-
-    use_junction = len(str(product_a_dss)) > _PATH_LIMIT
-    if use_junction:
-        _create_junction(product_a_dss.parent)
-        atexit.register(_remove_junction)
-        dss_path = str(_DSS_LINK / product_a_dss.name)
-    else:
-        dss_path = str(product_a_dss)
-
     result = {}
-    with HecDss.Open(dss_path, version=6, catalog_flag=True) as dss:
+    with dss_io.open_dss(product_a_dss, version=6, catalog_flag=True) as dss:
         pa_paths = dss.getPathnameList(DSS_PATTERN)
         pa_bucket = {}
         for p in pa_paths:
@@ -555,27 +522,14 @@ def read_product_a_monthly_means(product_a_dss: Path, baseline_bucket: dict,
                     monthly_means[m] = mm.mean()
             result[pk] = monthly_means
 
-    if use_junction:
-        _remove_junction()
-
     return result
 
 
 def read_product_a_monthly_series(product_a_dss: Path,
                                   keys_to_read: set) -> dict:
     """Read Product A compiled DSS monthly series per (Part B, Part C)."""
-    from pydsstools.heclib.dss import HecDss
-
-    use_junction = len(str(product_a_dss)) > _PATH_LIMIT
-    if use_junction:
-        _create_junction(product_a_dss.parent)
-        atexit.register(_remove_junction)
-        dss_path = str(_DSS_LINK / product_a_dss.name)
-    else:
-        dss_path = str(product_a_dss)
-
     result = {}
-    with HecDss.Open(dss_path, version=6, catalog_flag=True) as dss:
+    with dss_io.open_dss(product_a_dss, version=6, catalog_flag=True) as dss:
         pa_paths = dss.getPathnameList(DSS_PATTERN)
         pa_bucket = {}
         for p in pa_paths:
@@ -599,9 +553,6 @@ def read_product_a_monthly_series(product_a_dss: Path,
             if merged:
                 result[pk] = pd.Series(merged).sort_index()
 
-    if use_junction:
-        _remove_junction()
-
     return result
 
 
@@ -613,10 +564,8 @@ def read_calsim_base_monthly_means(baseline_bucket: dict,
 
     Returns dict: (Part_B, Part_C) -> {month: mean_value}
     """
-    from pydsstools.heclib.dss import HecDss
-
     result = {}
-    with HecDss.Open(str(BASELINE_DSS), version=6) as dss:
+    with dss_io.open_dss(BASELINE_DSS, version=6, catalog_flag=False) as dss:
         for pk in sorted(keys_to_read):
             if pk not in baseline_bucket:
                 continue
@@ -648,10 +597,8 @@ def read_calsim_base_monthly_series(baseline_bucket: dict,
                                     start: pd.Timestamp,
                                     end: pd.Timestamp) -> dict:
     """Read CalSim baseline DSS monthly series per (Part B, Part C)."""
-    from pydsstools.heclib.dss import HecDss
-
     result = {}
-    with HecDss.Open(str(BASELINE_DSS), version=6) as dss:
+    with dss_io.open_dss(BASELINE_DSS, version=6, catalog_flag=False) as dss:
         for pk in sorted(keys_to_read):
             if pk not in baseline_bucket:
                 continue
@@ -1129,8 +1076,8 @@ def _generate_comparison_figures(cmp_df, fig_dir, ref_label, active_tags,
 
         if unweighted_stats:
             _uw_title = (
-                f"Product B Chunk Average Annual % Difference by Input Category\n"
-                f"unweighted, excl. Constant/Rept"
+                "Product B Chunk Average Annual % Difference by Input Category\n"
+                "unweighted, excl. Constant/Rept"
             )
             _save_category_boxplot(
                 unweighted_stats, unweighted_labels, unweighted_cats_used,
@@ -1214,7 +1161,6 @@ def _generate_comparison_figures(cmp_df, fig_dir, ref_label, active_tags,
         q_grid = 1.0 - ex_grid / 100.0
         hist_curve = np.quantile(hist_vals, q_grid)
         pb_curve = np.quantile(pb_vals, q_grid)
-        hist_sorted = np.sort(hist_vals)
         hist_scale = float(np.nanmedian(np.abs(hist_vals)))
         pct_curve = []
         for q_prob, hq, pbq in zip(q_grid, hist_curve, pb_curve):
@@ -1341,7 +1287,7 @@ def _generate_comparison_figures(cmp_df, fig_dir, ref_label, active_tags,
         _n_ch = len(active_tags)
         _clrs = [plt.cm.tab10(i % 10) for i in range(_n_ch)]
 
-        # ── Monthly aggregation helpers ──────────────────────────────────────
+        # -- Monthly aggregation helpers --------------------------------------
         def _agg_ref(pk_set, agg):
             from collections import defaultdict
             monthly = defaultdict(list)
@@ -1385,7 +1331,7 @@ def _generate_comparison_figures(cmp_df, fig_dir, ref_label, active_tags,
             })
             return _annual_values_from_monthly_df(df_m, unit)
 
-        # ── Exceedance metric computation ────────────────────────────────────
+        # -- Exceedance metric computation ------------------------------------
         def _compute_curves(ref_ann, chunk_ann_by_tag):
             if len(ref_ann) < 5:
                 return {}, {}
@@ -1427,7 +1373,7 @@ def _generate_comparison_figures(cmp_df, fig_dir, ref_label, active_tags,
                     valid.append(term)
             return term_rank, term_pct, valid
 
-        # ── Figure generation ────────────────────────────────────────────────
+        # -- Figure generation ------------------------------------------------
         def _plot_section(s_safe, s_label, term_rank, term_pct, term_names):
             if not term_names:
                 return
@@ -1496,7 +1442,7 @@ def _generate_comparison_figures(cmp_df, fig_dir, ref_label, active_tags,
                 plt.close(fig)
                 print(f"    Figure: {out_dir.name}/{op.name}")
 
-        # ── Part-C-grouped sections ──────────────────────────────────────────
+        # -- Part-C-grouped sections ------------------------------------------
         # Part C terms to exclude from CalSimHydro (unchanged by design).
         _CALSIMHYDRO_PC_EXCL = {"URBAN-DEMAND", "WASTEWATER"}
 
@@ -1522,7 +1468,7 @@ def _generate_comparison_figures(cmp_df, fig_dir, ref_label, active_tags,
             _plot_section(s_safe, cat_name, tr, tp,
                           [t for t in sorted(pks_by_pc) if t in tr])
 
-        # ── Rim Inflow — Unimpaired ──────────────────────────────────────────
+        # -- Rim Inflow -- Unimpaired ------------------------------------------
         rim_pks = {(pb, pc) for (pb, pc), cat in _cat_lk.items()
                    if cat == "Rim Inflow"}
         u_pks = {u: {pk for pk in rim_pks if pk[0] == u}
@@ -1537,7 +1483,7 @@ def _generate_comparison_figures(cmp_df, fig_dir, ref_label, active_tags,
             _plot_section("RimUNIMP", "Rim Inflow - Unimpaired",
                           tr, tp, valid)
 
-        # ── Rim Inflow — Total ───────────────────────────────────────────────
+        # -- Rim Inflow -- Total -----------------------------------------------
         rim_tot = {pk for pk in rim_pks
                    if pk[0] not in _RIM_EXCL and "_UHH" not in pk[0]}
         if rim_tot:
@@ -1547,7 +1493,7 @@ def _generate_comparison_figures(cmp_df, fig_dir, ref_label, active_tags,
             )
             _plot_section("RimTotal", "Rim Inflow - Total", tr, tp, valid)
 
-        # ── Part-B sections ──────────────────────────────────────────────────
+        # -- Part-B sections --------------------------------------------------
         for cat_name, s_safe in _PARTB_SECTS:
             pks_by_pb = {}
             for (pb, pc), cat in _cat_lk.items():
@@ -1867,8 +1813,7 @@ if CLI_ARGS.summary_figures:
     print()
 
     # Catalog baseline DSS for unit extraction
-    from pydsstools.heclib.dss import HecDss
-    with HecDss.Open(str(BASELINE_DSS), version=6, catalog_flag=True) as _dss_b:
+    with dss_io.open_dss(BASELINE_DSS, version=6, catalog_flag=True) as _dss_b:
         _bp = _dss_b.getPathnameList(DSS_PATTERN)
     baseline_bucket = {}
     for p in _bp:
@@ -1898,7 +1843,7 @@ if CLI_ARGS.summary_figures:
         all_compiled_svs |= set(zip(_df_tmp["Part_B"], _df_tmp["Part_C"]))
 
     units_map = {}
-    with HecDss.Open(str(BASELINE_DSS), version=6) as _dss_u:
+    with dss_io.open_dss(BASELINE_DSS, version=6, catalog_flag=False) as _dss_u:
         for _pk in sorted(all_compiled_svs):
             if _pk not in baseline_bucket:
                 continue
@@ -2093,10 +2038,8 @@ const_rept_to_fill -= all_module_keys
 
 print(f"  Constant/Rept SVs to auto-fill: {len(const_rept_to_fill):,}")
 
-from pydsstools.heclib.dss import HecDss
-
 # Catalog baseline DSS
-with HecDss.Open(str(BASELINE_DSS), version=6, catalog_flag=True) as _dss_b:
+with dss_io.open_dss(BASELINE_DSS, version=6, catalog_flag=True) as _dss_b:
     _bp = _dss_b.getPathnameList(DSS_PATTERN)
 baseline_bucket = {}
 for p in _bp:
@@ -2109,7 +2052,7 @@ const_rept_frames = {}   # (Part B, Part C) -> DataFrame
 const_rept_filled = set()
 
 t0_cr = time.time()
-with HecDss.Open(str(BASELINE_DSS), version=6, catalog_flag=True) as dss_in:
+with dss_io.open_dss(BASELINE_DSS, version=6, catalog_flag=True) as dss_in:
     for pk in sorted(const_rept_to_fill):
         df_cr = build_constant_rept_rows(dss_in, baseline_bucket, pk)
         if not df_cr.empty:
@@ -2239,7 +2182,7 @@ if not CLI_ARGS.skip_dss:
     t0_cache = time.time()
     baseline_ts_cache = {}  # pathname -> dict
 
-    with HecDss.Open(str(BASELINE_DSS), version=6, catalog_flag=True) as dss_in:
+    with dss_io.open_dss(BASELINE_DSS, version=6, catalog_flag=True) as dss_in:
         for pk in sorted(all_compiled_pks):
             if pk not in baseline_bucket:
                 continue
@@ -2264,14 +2207,18 @@ if not CLI_ARGS.skip_dss:
     print(f"  Cached {len(baseline_ts_cache):,} baseline pathnames ({time.time()-t0_cache:.1f}s)")
 
     # -- 4b-iii: Prepare output files (copy baseline sequentially) -----
-    use_junction = len(str(COMPILED_DIR / "ProductB_SV_n01.dss")) > _PATH_LIMIT
+    # The chunk-write loop sets up the junction once for all 10 writes (rather
+    # than per-iteration) to avoid the mklink/rmdir overhead; that's why we
+    # call dss_io.create_junction / remove_junction explicitly here instead
+    # of using dss_io.open_dss for each write inside the loop.
+    use_junction = dss_io.needs_junction(COMPILED_DIR / "ProductB_SV_n01.dss")
     if use_junction:
-        _create_junction(COMPILED_DIR)
-        atexit.register(_remove_junction)
+        dss_io.create_junction(COMPILED_DIR)
+        atexit.register(dss_io.remove_junction)
 
     def _get_dss_str(path):
         if use_junction:
-            return str(_DSS_LINK / path.name)
+            return str(dss_io._DSS_LINK / path.name)
         return str(path)
 
     for tag in sorted(chunk_lookups):
@@ -2295,7 +2242,8 @@ if not CLI_ARGS.skip_dss:
         n_paths_written = 0
         n_svs_written = set()
 
-        with HecDss.Open(dss_str, version=6) as dss_out:
+        with dss_io.open_dss(dss_str, version=6, catalog_flag=False,
+                             use_junction=False) as dss_out:
             for pk, ym_vals in lookup.items():
                 if pk not in baseline_bucket:
                     continue
@@ -2344,7 +2292,7 @@ if not CLI_ARGS.skip_dss:
               f"{n_svs:>5,} (B,C)  ({time.time()-t_one:.1f}s)")
 
     if use_junction:
-        _remove_junction()
+        dss_io.remove_junction()
 
     print("-" * 72)
     print(f"  DSS compilation completed in {time.time()-t0_dss:.1f}s")
@@ -2496,7 +2444,7 @@ if not CLI_ARGS.skip_comparison:
             units_map[_pk] = _cached["units"]
     _missing_unit_keys = all_compiled_svs - set(units_map.keys())
     if _missing_unit_keys:
-        with HecDss.Open(str(BASELINE_DSS), version=6) as _dss_u:
+        with dss_io.open_dss(BASELINE_DSS, version=6, catalog_flag=False) as _dss_u:
             for _pk in sorted(_missing_unit_keys):
                 if _pk not in baseline_bucket:
                     continue
@@ -2514,11 +2462,11 @@ if not CLI_ARGS.skip_comparison:
 
     # -- 7a: Product A comparison (WY 1972-2021) --
     if not PRODUCT_A_DSS.exists():
-        print(f"  WARNING: Product A DSS not found, skipping Product A comparison.")
+        print("  WARNING: Product A DSS not found, skipping Product A comparison.")
         print(f"    Expected: {PRODUCT_A_DSS}")
     else:
         print()
-        print(f"  7a: Comparing against Product A (WY 1972-2021) ...")
+        print("  7a: Comparing against Product A (WY 1972-2021) ...")
         pa_means = read_product_a_monthly_means(
             PRODUCT_A_DSS, baseline_bucket, all_compiled_svs
         )
@@ -2556,7 +2504,7 @@ if not CLI_ARGS.skip_comparison:
 
     # -- 7b: CalSim baseline comparison (full 1921-2021) --
     print()
-    print(f"  7b: Comparing against CalSim baseline (WY 1922-2021) ...")
+    print("  7b: Comparing against CalSim baseline (WY 1922-2021) ...")
     cb_means = read_calsim_base_monthly_means(
         baseline_bucket, all_compiled_svs, CB_START, CB_END
     )
