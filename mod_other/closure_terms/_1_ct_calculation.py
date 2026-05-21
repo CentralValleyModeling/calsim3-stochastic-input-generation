@@ -1,5 +1,6 @@
 """
 WGEN Closure Terms: Weighted vs 4-Year-Block Stitched, with Correlations
+=======================================================================
 
 What this does
 --------------
@@ -32,6 +33,17 @@ Dependencies
 - utils.paths (get_base_dir, get_module_generated_dir)
 - pydsstools
 - numpy, pandas, matplotlib
+
+Usage
+-----
+    python mod_other/closure_terms/_1_ct_calculation.py --product B
+    python mod_other/closure_terms/_1_ct_calculation.py --diagnostics
+
+Closure terms are Product B only. The Product A pipeline auto-fills them
+from the CalSim baseline via the Constant/Rept pathway (same as salinity).
+The --diagnostics mode is a non-product analysis used to characterize the
+WGEN-resampling-based weighted-average methodology against a 4-yr-block
+stitched alternative; it does not emit any SV CSV.
 """
 from __future__ import annotations
 
@@ -602,7 +614,7 @@ def plot_corr_boxplots_13_terms(perblock_df: pd.DataFrame, out_path: Path) -> No
             data.append(vals); labels.append(_short_label(t))
 
     fig, ax = plt.subplots(figsize=(8, 6))
-    bp = ax.boxplot(
+    ax.boxplot(
         data, vert=False, patch_artist=True, showmeans=True,
         boxprops=dict(facecolor="#A8C4E0", edgecolor="black", linewidth=0.8),
         medianprops=dict(color="#E67E22", linewidth=1.5),
@@ -637,7 +649,7 @@ def plot_coverage_pct_boxplot(block_map: pd.DataFrame, out_path: Path) -> None:
     """
     vals = block_map["coverage_pct"].dropna().to_numpy()
     fig, ax = plt.subplots(figsize=(8, 3))
-    bp = ax.boxplot(
+    ax.boxplot(
         [vals], vert=False, patch_artist=True, showmeans=True, whis=[5, 95],
         boxprops=dict(facecolor="#A8C4E0", edgecolor="black", linewidth=0.8),
         medianprops=dict(color="#E67E22", linewidth=1.5),
@@ -824,8 +836,15 @@ def main():
                     help="CalSim DSS file with monthly closure terms")
     ap.add_argument("--outdir", default=DEFAULT_OUTDIR, type=Path,
                     help="Output folder")
-    ap.add_argument("--Product_B", action="store_true",
-                    help="Only write Product B chunk CSVs (skip analysis)")
+    mode = ap.add_mutually_exclusive_group(required=True)
+    mode.add_argument("--product", choices=['B'],
+                      help='Generate Product B stochastic chunk CSVs (one set of 10 chunks '
+                           'per closure term). Product A closure terms are auto-filled by '
+                           'the final compiler from the CalSim baseline (Constant/Rept).')
+    mode.add_argument("--diagnostics", action='store_true',
+                      help='Non-product diagnostic mode: writes weighted vs 4-yr-block stitched '
+                           'closure timeseries, per-block correlations, coverage boxplots, etc. '
+                           'Used to characterize the WGEN weighted-average methodology.')
     args = ap.parse_args()
 
     outdir = args.outdir; outdir.mkdir(parents=True, exist_ok=True)
@@ -863,7 +882,7 @@ def main():
     # -----------------------------------------------------------------
     dfd_valid = dfd.dropna(subset=["hist_year","hist_month","wgen_ym"]).copy()
 
-    # Count days per (calendar WGEN month from wgen_date) × (hist_year, hist_month)
+    # Count days per (calendar WGEN month from wgen_date) x (hist_year, hist_month)
     counts_by_label = (
         dfd_valid.groupby(["wgen_ym","hist_year","hist_month"], dropna=False)
                  .size().reset_index(name="n_days_from_hist_pair")
@@ -884,12 +903,12 @@ def main():
     # --- Weighted-average closure (uses shares computed by calendar month of wgen_date)
     weighted = compute_weighted_closure(counts, cal_map, ct_month_table, term_cols)
 
-    # --- Product B only mode: write chunks and exit
-    if args.Product_B:
+    # --- Product B mode: write chunks and exit
+    if args.product == 'B':
         _write_product_b_chunks(weighted, term_cols)
         return
 
-    # --- Full analysis below ---
+    # --- Diagnostics mode: WGEN methodology analysis (no SV output) ---
 
     # Build "all sources" text
     all_sources = build_all_sources_column(counts)
@@ -950,9 +969,6 @@ def main():
         counts_by_label,
         outdir / "wgen_num_distinct_pairs_cdf.png"
     )
-
-    # --- Product B chunk CSVs (always in full run)
-    _write_product_b_chunks(weighted, term_cols)
 
     print("Done. Outputs written to:", outdir.resolve())
 

@@ -1,18 +1,42 @@
+"""
+Extract "Other" baseline monthly series from the CalSim3 SV DSS
+===============================================================
+Reads the MASTER inventory, selects SVs whose module column starts with
+"Other", pulls every available monthly value for the matching DSS Part B
+series, and writes them to a single workbook for downstream miscellaneous
+reconstruction (WYT / hybrid / QM).
+
+Inputs
+------
+- CalSim baseline DSS: CalSim3/__calsim_sv_default__.dss
+- Master inventory: inventory/_MASTER_INVENTORY_FOR_STOCHASTIC_INPUT_GENERATION_.xlsx
+
+Outputs
+-------
+- <generated>/output/_0_extract_others/other_monthly_from_dss.xlsx
+
+Dependencies
+------------
+- utils/paths.py  (data-dir resolution)
+
+Usage
+-----
+    python mod_other/miscellaneous/_0_extract_others.py
+"""
+
 import sys
 from pathlib import Path
 
 import numpy as np
 import pandas as pd
-from pydsstools.heclib.dss import HecDss
 
 # Add repo root to path for utils imports
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 from utils.paths import get_base_dir, get_module_generated_dir, get_inventory_dir
+from utils import dss_io
 
 
-# ---------------------------------------------------------------------
-# Paths
-# ---------------------------------------------------------------------
+# -- Paths --------------------------------------------------------------------
 _GEN_DIR = get_module_generated_dir("mod_other/miscellaneous")
 
 DEFAULT_DSS        = get_base_dir() / "CalSim3" / "__calsim_sv_default__.dss"
@@ -31,7 +55,7 @@ def excel_to_part_b(name: str) -> str:
 
 def extract_other_monthlies_from_dss(dss_path: Path, master_xls_path: Path) -> pd.DataFrame:
     """
-    - Reads the MASTER Excel, selects rows where 9th column starts with 'Other' 
+    - Reads the MASTER Excel, selects rows where 9th column starts with 'Other'
     - Finds matching DSS monthly series (Part B) and extracts ALL available months.
     - Returns a DataFrame of all assembled series.
     """
@@ -54,7 +78,7 @@ def extract_other_monthlies_from_dss(dss_path: Path, master_xls_path: Path) -> p
     # --- Open the baseline DSS and organize monthly paths by Part B
     dss_monthly = {}
     print(f"Opening DSS: {dss_path.name}")
-    with HecDss.Open(str(dss_path), version=6) as dss:
+    with dss_io.open_dss(str(dss_path), version=6, catalog_flag=False) as dss:
         # Filter catalog to monthly records only
         all_paths = dss.getPathnameList("/*/*/*/*/1MON/*/")
         print(f"  {len(all_paths)} monthly paths found in DSS catalog")
@@ -115,9 +139,6 @@ def main():
         dss_path=DEFAULT_DSS,
         master_xls_path=DEFAULT_MASTER_XLS,
     )
-
-    # Write CSV
-    #df_other.to_csv(OUT_CSV, index_label="date", date_format="%Y-%m-%d")
 
     # Write results to Excel
     print(f"Writing output: {OUT_XLSX}")

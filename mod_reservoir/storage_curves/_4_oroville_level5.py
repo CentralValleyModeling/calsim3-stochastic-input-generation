@@ -1,8 +1,9 @@
 #!/usr/bin/env python
 """
-_4_oroville_level5.py
-
-Compute Oroville rule-curve level5 storage from wetness index.
+Compute Oroville Rule-Curve Level 5 Storage
+===========================================
+Computes Oroville rule-curve Level 5 storage from the wetness index for
+Product A and/or Product B.
 
 Usage:
     python _4_oroville_level5.py                        # Both Product A and B (default)
@@ -197,7 +198,7 @@ def compute_storage_from_precip(daily_csv_path: Path, smax: float, b_taf_per_day
     })
 
     tmp = daily_out.set_index("date")
-    monthly = tmp.resample("M").agg(
+    monthly = tmp.resample("ME").agg(
         S_target_eom_TAF=("S_target_TAF", "last"),
     ).reset_index().rename(columns={"date": "month_end"})
 
@@ -226,8 +227,8 @@ def main() -> None:
         description="Compute Oroville rule-curve level5 storage from wetness index.",
     )
     parser.add_argument(
-        "--product", choices=["A", "B", "both"], default="both",
-        help="Which product to run: A, B, or both (default: both)",
+        "--product", choices=["A", "B"], required=True,
+        help='Product to generate: A (historical 1921-2018) or B (stochastic 1000-yr chunks).',
     )
     parser.add_argument(
         "--chunks", nargs="+", type=int,
@@ -248,7 +249,7 @@ def main() -> None:
     # =====================
     # Product A
     # =====================
-    if args.product in ("A", "both"):
+    if args.product == "A":
         daily_path = input_dir / "Oroville_Daily_Precip_ProductA_Scenario1.csv"
         dss_path = DEFAULT_DSS
 
@@ -302,7 +303,7 @@ def main() -> None:
     # =====================
     # Product B
     # =====================
-    if args.product in ("B", "both"):
+    if args.product == "B":
         PRODUCT_B_DIR.mkdir(parents=True, exist_ok=True)
 
         # Build work list
@@ -327,7 +328,7 @@ def main() -> None:
                     for tag, csv_path, out_csv in jobs
                 }
                 for fut in as_completed(futures):
-                    tag = futures[fut]
+                    futures[fut]
                     result = fut.result()  # raises if the worker failed
                     print(f"  Wrote: {result}")
 

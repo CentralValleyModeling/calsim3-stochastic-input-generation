@@ -89,7 +89,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 from utils.paths import get_base_dir, get_module_generated_dir
 ```
 
-**Product selection**: `--Product_B` flag, `--source {Product_A, Product_B}`, or `--product {A, B, both}`.
+**Product selection**: `--product A|B` (required, no default; mod_forcing/climate scripts use `--source Product_A|Product_B|Historical`). A few scripts add a third choice for non-product output (e.g., `--product validation` on `_1_min_flow_feather.py` / `_2_sjr_rest_req.py`, or a separate `--calibrate` flag on `_5_dnp_evaporation.py`). Product A and Product B are always run separately - there is no "both" mode.
 
 **Output dirs**: `_gen / "output" / "_N_script_name"`. Validation: `output/<script_dir>/_product_a_validation/`. Product B final: `output/_product_b_final/`.
 
@@ -97,9 +97,29 @@ from utils.paths import get_base_dir, get_module_generated_dir
 
 **Water year**: `df['WY'] = df['date'].dt.year + (df['date'].dt.month >= 10).astype(int)`
 
-**DSS I/O**: `from pydsstools.heclib.dss import HecDss` with path format `/BASIN/LOCATION//PARAM/01JAN1921/1MONTH/RUN/`.
+**DSS I/O**: open every DSS file through `utils/dss_io.py` (`open_dss`,
+`read_monthly_series`, `read_monthly_frame`) instead of importing `HecDss`
+directly -- it centralizes the long-path / Windows-junction handling and the
+`catalog_flag` convention. DSS path format:
+`/BASIN/LOCATION//PARAM/01JAN1921/1MONTH/RUN/`.
 
-Many scripts use `# %%` cell markers for interactive VS Code execution.
+---
+
+## Script Convention
+
+Numbered pipeline scripts (`_0_*.py`, `_1_*.py`, ...) run in numeric order and
+follow a uniform shape, enforced by `tools/check_scripts.py` (run locally and
+in CI on push/PR -- see `.github/workflows/lint.yml`):
+
+- **Header docstring**: a `Title` line, a `===` underline, then
+  `Inputs` / `Outputs` / `Dependencies` / `Usage` sections.
+- **ASCII only** -- no non-ASCII characters anywhere in code or output
+  (CLAUDE.md hard rule).
+- **Grouped imports**: stdlib, then third-party, then local
+  (`from utils ...` after the `sys.path` bootstrap).
+- **CLI, not notebooks**: a `main()` plus an `if __name__ == "__main__":`
+  guard; no `# %%` Jupyter cell markers.
+- **Paths via `utils/paths.py`** -- never hard-code `../../data/`.
 
 ---
 
@@ -133,8 +153,8 @@ WGEN -> VIC (append wind, run model) -> VIC outputs -> [calsimhydro, calsimhydro
 | Script | Purpose | Product |
 |--------|---------|---------|
 | `_0_compare_et_cshydro_vic.py` | Compare ET: CalSimHydro vs VIC (analysis only) | -- |
-| `_1_compile_precip.py` | Daily WBA precip from WGEN met files | A & B (`--Product_B`) |
-| `_2_compile_et.py` | Area-weighted VIC ET -> QM to CalSim (parallel) | A & B (`--Product_B`, `--n_workers`) |
+| `_1_compile_precip.py` | Daily WBA precip from WGEN met files | A & B (`--product A|B`) |
+| `_2_compile_et.py` | Area-weighted VIC ET -> QM to CalSim (parallel) | A & B (`--product A|B`, `--n_workers`) |
 | `_3_postprocess_product_a.py` | Extract & postprocess CalSimHydro/Rebalance/Rice DSS -> validation CSVs | A (`--sources`, `--skip-compare`, `--skip-validate`) |
 | `_4_postprocess_product_b.py` | Extract Product B DSS (10 chunks) -> per-chunk CSVs | B (`--sources`, `--chunks`, `--compare-a`) |
 
@@ -142,7 +162,7 @@ WGEN -> VIC (append wind, run model) -> VIC outputs -> [calsimhydro, calsimhydro
 
 | Script | Purpose | Product |
 |--------|---------|---------|
-| `_1_compile_precip_EE.py` | East Side precip from WGEN grids | A & B (`--Product_B`) |
+| `_1_compile_precip_EE.py` | East Side precip from WGEN grids | A & B (`--product A|B`) |
 | `_2_postprocess_product_a.py` | Extract & postprocess CSHydroEE DSS -> validation CSVs | A |
 | `_3_postprocess_product_b.py` | Extract Product B DSS (10 chunks) -> per-chunk CSVs | B (`--chunks`, `--compare-a`, `--plot`) |
 
@@ -170,7 +190,7 @@ Rim components: Sac (SRBB+OROV+YUBA+FOLS), SJ (ST+TU+ME+SJ).
 
 | Script | Purpose | Product |
 |--------|---------|---------|
-| `_1_compile_precip_DETAW.py` | Daily precip for DCD stations from WGEN | A & B (`--Product_B`) |
+| `_1_compile_precip_DETAW.py` | Daily precip for DCD stations from WGEN | A & B (`--product A|B`) |
 | `_2_aggregate_dpflow_gwflow_for_DCD.py` | Aggregate DP/GW flow outputs | -- |
 | `_3_merge_DCD_outputs_for_CS3.py` | Merge DCD outputs for CalSim | -- |
 | `_4_postprocess_product_a.py` | Extract & postprocess DCD DSS -> validation CSVs | A |
@@ -180,7 +200,7 @@ Rim components: Sac (SRBB+OROV+YUBA+FOLS), SJ (ST+TU+ME+SJ).
 
 | Script | Purpose | Product |
 |--------|---------|---------|
-| `_1_compile_precip_sws.py` | Monthly precip (in/mo) for SWS from WGEN | A & B (`--Product_B`) |
+| `_1_compile_precip_sws.py` | Monthly precip (in/mo) for SWS from WGEN | A & B (`--product A|B`) |
 | `_1b_check_precip_output.py` | Verify compiled precip outputs (diagnostic) | -- |
 | `_2_postprocess_product_a.py` | Extract & postprocess SWS DSS -> validation CSVs | A |
 
@@ -197,7 +217,7 @@ Rim components: Sac (SRBB+OROV+YUBA+FOLS), SJ (ST+TU+ME+SJ).
 | `evaporation.py` | Core Hargreaves-Samani engine (imported by others) | Utility |
 | `_0_extract_reservoir_database.py` | Extract reservoir params from Excel -> JSON | Setup |
 | `_1_excel_to_python_validation.py` | Validate Python vs Excel evap results | Validation |
-| `_2_run_reservoir_evap.py` | Calculate evap for 95 reservoirs + validation output | A & B (`--Product_B`) |
+| `_2_run_reservoir_evap.py` | Calculate evap for 95 reservoirs + validation output | A & B (`--product A|B`, `--compare-a`) |
 
 Oroville Level 5: storage-based, DCR 2023 sedimentation correction (3,538 -> 3,424.8 TAF max).
 

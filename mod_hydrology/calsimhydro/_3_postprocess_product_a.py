@@ -1,25 +1,40 @@
-#%% Consolidated postprocessing for CalSimHydro Product A DSS outputs.
-#
-# Extracts, merges, and compares scenario time series from CalSimHydro DSS files
-# (CS3L2015V0Hydro_SV, RiceOutput, HydroRebalanceSJRdemands). Produces:
-#   1. Merged scenario CSVs, summary statistics, and boxplots (comparison mode)
-#   2. Validation CSVs in Part B / Part C / Year / Month / Value format
-#
-# Usage:
-#     python _3_postprocess_product_a.py                     # run everything
-#     python _3_postprocess_product_a.py --sources cshydro   # single source
-#     python _3_postprocess_product_a.py --skip-compare      # validation only
-#     python _3_postprocess_product_a.py --skip-validate     # comparison only
-#%%
+"""
+Postprocess CalSimHydro Product A DSS Outputs
+=============================================
+Extracts, merges, and compares scenario time series from CalSimHydro DSS
+files (CS3L2015V0Hydro_SV, RiceOutput, HydroRebalanceSJRdemands). Produces
+merged-scenario CSVs + summary statistics + boxplots (comparison mode) and
+Part B / Part C / Year / Month / Value validation CSVs.
+
+Inputs
+------
+- [EXTERNAL] CalSimHydro Product A scenario DSS (per the SOURCES dict)
+- Master inventory xlsx
+
+Outputs
+-------
+- output/_3_postprocess_product_a/  (merged + summary CSVs, boxplots)
+- output/_3_postprocess_product_a/_product_a_validation/  (CalSim-format CSVs)
+
+Dependencies
+------------
+- utils/dss_io.py, utils/csv_io.py  (DSS read + validation conversion)
+- utils/paths.py                    (data-dir resolution)
+
+Usage
+-----
+    python _3_postprocess_product_a.py                     # run everything
+    python _3_postprocess_product_a.py --sources cshydro   # single source
+    python _3_postprocess_product_a.py --skip-compare      # validation only
+    python _3_postprocess_product_a.py --skip-validate     # comparison only
+"""
 
 import os
 import sys
 import argparse
-import subprocess
 from pathlib import Path
 import numpy as np
 import pandas as pd
-from pydsstools.heclib.dss import HecDss
 from functools import reduce
 
 import seaborn as sns
@@ -27,6 +42,7 @@ import matplotlib.pyplot as plt
 
 # Add repo root to path for utils imports
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
+from utils import csv_io, dss_io
 from utils.paths import get_module_generated_dir, get_inventory_dir
 
 
@@ -122,106 +138,23 @@ def load_inventory(inv_filter):
     return excel_partcs, desired_order
 
 
-# -- Junction helper for long DSS paths ---------------------------------------
-# The Fortran HEC-DSS library inside pydsstools limits path names to 256 chars.
-# The data directory lives on OneDrive with a very long path, so we create a
-# temporary Windows directory junction under the repo root to shorten it.
-
-_REPO_ROOT = Path(__file__).resolve().parents[2]
-_DSS_LINK = _REPO_ROOT / "_dss_link"
-_PATH_LIMIT = 200  # conservative limit vs Fortran's 256-char CNAME
-
-
-def _needs_junction(dss_path):
-    return len(str(dss_path)) > _PATH_LIMIT
-
-
-def _create_junction(target_dir):
-    """Create (or re-create) a directory junction at _DSS_LINK -> target_dir."""
-    if _DSS_LINK.exists():
-        subprocess.run(["cmd", "/c", "rmdir", str(_DSS_LINK)], capture_output=True)
-    subprocess.run(
-        ["cmd", "/c", "mklink", "/J", str(_DSS_LINK), str(target_dir)],
-        check=True, capture_output=True,
-    )
-
-
-def _remove_junction():
-    """Remove the _DSS_LINK junction (does not affect target directory)."""
-    if _DSS_LINK.exists():
-        subprocess.run(["cmd", "/c", "rmdir", str(_DSS_LINK)], capture_output=True)
-
-
 # -- DSS extraction via pydsstools ---------------------------------------------
+# Long-path directory-junction handling, the catalog read loop, and the
+# start-of-period -> end-of-month shift now live in utils/dss_io (shared with
+# the qmap engine and the sv_compile compiler).
 
 def extract_dss_data(dss_path, excel_partcs):
     """Extract monthly time series from a DSS file, filtered to inventory parts.
 
-    Creates a directory junction for paths exceeding the Fortran 256-char
-    limit, then reads all monthly pathnames and assembles a DataFrame.
+    Opens via ``utils.dss_io.open_dss`` (auto directory-junction for paths
+    over the Fortran 256-char limit) and reads with ``read_monthly_frame``.
+    Opened with ``catalog_flag=False`` to match this script's historical
+    ``HecDss.Open(dss_path, version=6)`` call.
     """
     dss_path = Path(dss_path).resolve()
     print(f"    Reading DSS: {dss_path.name}")
-
-    use_junction = _needs_junction(dss_path)
-    if use_junction:
-        _create_junction(dss_path.parent)
-        work_path = str(_DSS_LINK / dss_path.name)
-        print(f"    Using junction: {work_path} ({len(work_path)} chars)")
-    else:
-        work_path = str(dss_path)
-
-    try:
-        return _read_dss(work_path, excel_partcs)
-    finally:
-        if use_junction:
-            _remove_junction()
-
-
-def _read_dss(dss_path, excel_partcs):
-    """Read monthly time series from a DSS file using pydsstools.
-
-    Groups pathnames by Part B/C, reads each path, concatenates date ranges,
-    filters -901 sentinel values, and returns a wide DataFrame.
-    """
-    data_dict = {}
-    with HecDss.Open(dss_path, version=6) as dss:
-        all_paths = dss.getPathnameList("/*/*/*/*/1MON/*/")
-        print(f"    Catalog: {len(all_paths)} monthly paths found")
-
-        # Group pathnames by Part B / Part C
-        buckets = {}
-        for p in all_paths:
-            parts = p.strip("/").split("/")
-            key = parts[1].upper() + "/" + parts[2]
-            buckets.setdefault(key, []).append(p)
-
-        # Filter to inventory SVs; fall back to all if none match
-        wanted = {k: v for k, v in buckets.items() if k in excel_partcs}
-        if not wanted:
-            print("    No inventory match -- reading all paths")
-            wanted = buckets
-        else:
-            print(f"    Matched {len(wanted)} of {len(excel_partcs)} inventory SVs")
-
-        for part_BC, plist in wanted.items():
-            master = {}
-            for p in sorted(plist, key=lambda x: x.strip("/").split("/")[3]):
-                ts = dss.read_ts(p, trim_missing=True)
-                vals = np.asarray(ts.values, dtype=float)
-                vals[vals <= -900] = np.nan
-                # pydsstools dates are start-of-period; shift to end-of-month
-                idx = (pd.to_datetime(ts.pytimes).to_period("M") - 1).to_timestamp("M")
-                s = pd.Series(vals, index=idx)
-                master.update(s.to_dict())
-            if master:
-                series = pd.Series(master).sort_index()
-                series.name = excel_partcs.get(part_BC, part_BC)
-                data_dict[series.name] = series
-
-    df = pd.DataFrame(data_dict).sort_index()
-    print(f"    Result: {df.shape[1]} variables, {len(df)} timesteps")
-    return df
+    with dss_io.open_dss(dss_path, version=6, catalog_flag=False) as dss:
+        return dss_io.read_monthly_frame(dss, excel_partcs)
 
 
 # -- COMPARISON MODE -----------------------------------------------------------
@@ -276,7 +209,7 @@ def run_comparison(source_key, src):
     merged_df = merged_df.sort_values(by=['SortOrder', 'Date'])
     merged_df = merged_df.drop(columns=['PartBC', 'SortOrder'])
 
-    # -- Save merged CSV -------------------------------------------------------────
+    # -- Save merged CSV -----------------------------------------------------------
     out_dir = os.path.join(COMPARE_DIR, source_key)
     os.makedirs(out_dir, exist_ok=True)
 
@@ -311,7 +244,7 @@ def run_comparison(source_key, src):
     print(f"  Summary CSV saved: {summary_csv}")
 
     # -- Boxplots (one per PartC, comparing scenarios) -------------------------
-    print(f"  Generating boxplots...")
+    print("  Generating boxplots...")
     plot_df = merged_df[['PartC'] + value_cols].copy()
     plot_df_melted = plot_df.melt(
         id_vars='PartC', value_vars=value_cols,
@@ -352,27 +285,10 @@ def run_comparison(source_key, src):
 # -- VALIDATION MODE -----------------------------------------------------------
 
 def to_validation_csv(df, start_wy, end_wy):
-    """Convert wide DataFrame to validation format (Part B, Part C, Year, Month, Value)."""
-    start_date = pd.Timestamp(start_wy - 1, 10, 1)
-    end_date = pd.Timestamp(end_wy, 9, 30)
-
-    long = df.stack().reset_index()
-    long.columns = ['Date', 'PartBC', 'Value']
-    long['Date'] = pd.to_datetime(long['Date'])
-
-    mask = (long['Date'] >= start_date) & (long['Date'] <= end_date)
-    long = long.loc[mask].copy()
-
-    if long.empty:
-        return pd.DataFrame(columns=['Part B', 'Part C', 'Year', 'Month', 'Value'])
-
-    long[['Part B', 'Part C']] = long['PartBC'].str.split('/', expand=True, n=1)
-    long['Year'] = long['Date'].dt.year
-    long['Month'] = long['Date'].dt.month
-
-    long = long.dropna(subset=['Value'])
-    long = long[['Part B', 'Part C', 'Year', 'Month', 'Value']]
-    return long.sort_values(['Part B', 'Part C', 'Year', 'Month']).reset_index(drop=True)
+    """Convert wide DataFrame to validation format (Part B, Part C, Year,
+    Month, Value).  Delegates to ``utils.csv_io.to_validation_df`` (faithful
+    copy; this function was its seed)."""
+    return csv_io.to_validation_df(df, start_wy, end_wy)
 
 
 def run_validation(source_key, src):

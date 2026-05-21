@@ -40,7 +40,8 @@ Output:
 
 Usage
 -----
-    cd mod_other/upper_watershed && python _4_pge_wy_allocation.py
+    python mod_other/upper_watershed/_4_pge_wy_allocation.py --product A
+    python mod_other/upper_watershed/_4_pge_wy_allocation.py --product B
 """
 
 from __future__ import annotations
@@ -55,13 +56,10 @@ import pandas as pd
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 from utils.paths import get_module_generated_dir
 
-# ──────────────────────────────────────────────────────────────────────────────
+# ------------------------------------------------------------------------------
 # Configuration
-# ──────────────────────────────────────────────────────────────────────────────
+# ------------------------------------------------------------------------------
 RUN_DIR = Path(__file__).resolve().parent
-
-# Target product: "A", "B", or "BOTH"
-TARGET_PRODUCT = "BOTH"
 
 # CalSim study period for Product A (water years)
 PRODUCT_A_START_WY = 1972
@@ -88,9 +86,9 @@ OUTPUT_A_DIR = _GEN_DIR / "output" / "_product_a_validation"
 OUTPUT_B_DIR = _GEN_DIR / "output" / "_product_b_final"
 
 
-# ──────────────────────────────────────────────────────────────────────────────
+# ------------------------------------------------------------------------------
 # Helper functions
-# ──────────────────────────────────────────────────────────────────────────────
+# ------------------------------------------------------------------------------
 def load_config(config_path: Path) -> dict:
     """Load thresholds and regression parameters from JSON config."""
     with open(config_path, "r", encoding="utf-8") as f:
@@ -222,9 +220,9 @@ def spread_ratio_to_monthly(
     return pd.DataFrame(records)
 
 
-# ──────────────────────────────────────────────────────────────────────────────
+# ------------------------------------------------------------------------------
 # Product A
-# ──────────────────────────────────────────────────────────────────────────────
+# ------------------------------------------------------------------------------
 def run_product_a(config: dict) -> Path:
     """Generate PGE_WY_ALLOCATION_SV for Product A using FOLSM_INFLOW from QMap."""
     print("\n" + "=" * 60)
@@ -280,9 +278,9 @@ def run_product_a(config: dict) -> Path:
     return out_path
 
 
-# ──────────────────────────────────────────────────────────────────────────────
+# ------------------------------------------------------------------------------
 # Product B
-# ──────────────────────────────────────────────────────────────────────────────
+# ------------------------------------------------------------------------------
 def read_folsm_product_b(chunk: int) -> pd.DataFrame:
     """Read FOLSM_INFLOW for a Product B chunk from _10_RimInflow output.
 
@@ -339,9 +337,9 @@ def run_product_b(config: dict) -> list[Path]:
         )
 
         # The chunk starts at Oct 1921, so spread_ratio_to_monthly needs a WY
-        # 1921 entry to assign allocations for Oct 1921 – Apr 1922.  WY 1921
+        # 1921 entry to assign allocations for Oct 1921 - Apr 1922.  WY 1921
         # cannot be computed (only 3 months of data available), so use WY 1922
-        # as the nearest proxy — same approach Product A uses for wy_before.
+        # as the nearest proxy - same approach Product A uses for wy_before.
         first_wy = int(wy_ratios["WY"].min())
         wy_before = wy_ratios[wy_ratios["WY"] == first_wy].copy()
         wy_before["WY"] = first_wy - 1
@@ -375,10 +373,17 @@ def run_product_b(config: dict) -> list[Path]:
     return output_paths
 
 
-# ──────────────────────────────────────────────────────────────────────────────
+# ------------------------------------------------------------------------------
 # Main
-# ──────────────────────────────────────────────────────────────────────────────
+# ------------------------------------------------------------------------------
 def main():
+    import argparse
+    ap = argparse.ArgumentParser(
+        description="PGE_WY_ALLOCATION_SV reconstruction from FOLSM_INFLOW thresholds.")
+    ap.add_argument("--product", choices=["A", "B"], required=True,
+                    help='Product to generate: A (historical 1921-2018) or B (stochastic 1000-yr chunks).')
+    args = ap.parse_args()
+
     print("PGE_WY_ALLOCATION_SV Reconstruction")
     print("=" * 60)
 
@@ -390,12 +395,9 @@ def main():
     print(f"  Default ratio: {config['default_ratio']}")
     print(f"  Allocation start month: {config['allocation_start_month']}")
 
-    target = TARGET_PRODUCT.upper().strip()
-
-    if target in ("A", "BOTH"):
+    if args.product == "A":
         run_product_a(config)
-
-    if target in ("B", "BOTH"):
+    else:
         run_product_b(config)
 
     print("\n" + "=" * 60)

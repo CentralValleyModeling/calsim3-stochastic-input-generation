@@ -1,16 +1,35 @@
-"""Runner script: defines inputs, calls the framework, and writes outputs.
+"""
+Upper-Watershed Terms - WYT Monthly-Average Reconstruction
+==========================================================
+Runner that defines the upper-watershed term specs, calls the shared WYT
+monthly-average framework, and writes the Product A / Product B outputs.
 
-Outputs are written under:
-  <generated>/output/_1_wyt_monthlyavg/monthly_avg_historical/
-  <generated>/output/_product_a_validation/
-  <generated>/output/_product_b_final/
+Inputs
+------
+- CalSim baseline DSS (historical term series)
+- reference/wyt_avg_terms.csv (term specs + WYT basin per term)
+- water_year_types WYT indices (Product A / Product B)
 
-Framework module:
-  utils/wyt_monthlyavg_framework.py
+Outputs
+-------
+- <generated>/output/_1_wyt_monthlyavg/monthly_avg_historical/
+- <generated>/output/_product_a_validation/
+- <generated>/output/_product_b_final/
+
+Dependencies
+------------
+- utils/wyt_monthlyavg_framework.py  (WYT reconstruction engine)
+- utils/paths.py                     (data-dir resolution)
+
+Usage
+-----
+    python mod_other/upper_watershed/_1_wyt_monthlyavg.py --product A
+    python mod_other/upper_watershed/_1_wyt_monthlyavg.py --product B
 """
 
 from __future__ import annotations
 
+import argparse
 from pathlib import Path
 import sys
 
@@ -27,7 +46,7 @@ _REPO_DIR = Path(__file__).resolve().parents[2]
 _gen = get_module_generated_dir("mod_other/upper_watershed")
 _wyt_gen = get_module_generated_dir("mod_hydrology/water_year_types")
 
-# %% ── CONFIG ───────────────────────────────────────────────────────────
+# -- CONFIG -----------------------------------------------------------
 dss_file = str(get_base_dir() / "CalSim3" / "__calsim_sv_default__.dss")
 terms_csv = str(_SCRIPT_DIR / "reference" / "wyt_avg_terms.csv")
 
@@ -44,40 +63,15 @@ OUTPUT_PREFIX = "upper_watershed"
 #   - term_part_c
 #   - basin_wyt    (sj or sac; can vary by term)
 
-# Choose target WGEN product(s):
-#    "both" -> run Product A then Product B (default)
-#    "A"    -> one WYT series (1972–2018)
-#    "B"    -> ALWAYS n01..n10; WY 1922–2021
-TARGET_PRODUCT = "Both"
-
 _WYT_INPUT_DIRS = {"A": "Product_A", "B": "Product_B"}
 
 # Where the historical WYT CSVs live
 wyt_hist_dir = str(_REPO_DIR / "mod_hydrology" / "water_year_types" / "reference")
 
-# %% -- RESULTS ROOT ------------------------------------------------------
+# -- RESULTS ROOT ------------------------------------------------------
 BASE_RESULTS_DIR = _gen / "output"/"_1_wyt_monthlyavg"
 PRODUCT_A_DIR = _gen / "output" / "_product_a_validation"
 PRODUCT_B_DIR = _gen / "output" / "_product_b_final"
-
-
-def _install_pandas_me_compat() -> None:
-    """Support newer 'ME' month-end alias on pandas versions that only accept 'M'."""
-    try:
-        pd.date_range("2000-01-31", periods=1, freq="ME")
-        return
-    except Exception:
-        pass
-
-    original_date_range = pd.date_range
-
-    def _date_range_compat(*args, **kwargs):
-        freq = kwargs.get("freq")
-        if isinstance(freq, str) and freq.upper() == "ME":
-            kwargs["freq"] = "M"
-        return original_date_range(*args, **kwargs)
-
-    pd.date_range = _date_range_compat
 
 
 def _to_sv_format(df: pd.DataFrame) -> pd.DataFrame:
@@ -120,17 +114,14 @@ def _write_targets(product_key: str, prefix: str, targets) -> None:
 
 
 def main() -> None:
-    _install_pandas_me_compat()
+    ap = argparse.ArgumentParser(
+        description="Upper-Watershed terms via WYT monthly-average reconstruction.")
+    ap.add_argument("--product", choices=["A", "B"], required=True,
+                    help='Product to generate: A (historical 1921-2018) or B (stochastic 1000-yr chunks).')
+    args = ap.parse_args()
 
     prefix = OUTPUT_PREFIX.strip() if OUTPUT_PREFIX else Path(terms_csv).stem
-    choice = TARGET_PRODUCT.strip().upper()
-
-    if choice == "BOTH":
-        products = ["A", "B"]
-    elif choice in ("A", "B"):
-        products = [choice]
-    else:
-        raise ValueError(f"TARGET_PRODUCT must be 'A', 'B', or 'both', got '{TARGET_PRODUCT}'")
+    products = [args.product]
 
     # Read DSS and compute pattern once
     print("Reading DSS and computing historical pattern...")
@@ -155,7 +146,7 @@ def main() -> None:
     hist_cmp_path = hist_dir / f"{prefix}_actual_vs_reconstructed.csv"
     hist_cmp_df.to_csv(hist_cmp_path, index=False)
 
-    print(f"\nHistorical outputs:")
+    print("\nHistorical outputs:")
     print(f"  - {pattern_path}")
     print(f"  - {hist_cmp_path}")
 

@@ -1,14 +1,43 @@
+"""
+Compile Rim Inflows from VIC Flux Files
+=======================================
+Routes VIC RUNOFF + BASEFLOW through grid weights to monthly rim inflows for
+each CalSim rim location, writing per-location monthly CSVs (and DSS) for
+Product A (1921-2018) or Product B (1000-year, chunked).
+
+Inputs
+------
+- Grid-info files (rim-location grid weights)
+- VIC flux files (RUNOFF, BASEFLOW, ...)
+
+Outputs
+-------
+- <generated>/output/routed/Product_A/1/CS3_<loc>_qmo.csv  (+ DSS)
+- <generated>/output/routed/Product_B/1/...  (with --product B)
+
+Dependencies
+------------
+- utils/paths.py  (data-dir resolution)
+
+Usage
+-----
+    python mod_forcing/vic/_2_compile_rim_inflows.py --product A
+    python mod_forcing/vic/_2_compile_rim_inflows.py --product B
+"""
+
+import argparse
+import glob
 import os
 import sys
-import glob
-import argparse
-import pandas as pd
-import numpy as np
 from pathlib import Path
+
+import numpy as np
+import pandas as pd
 
 # Add repo root to path for utils imports
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 from utils.paths import get_module_generated_dir
+
 
 class compile_rim_inflows:
     """
@@ -103,7 +132,7 @@ class compile_rim_inflows:
             # Product B: PeriodIndex can exceed Timestamp max (~2262), use groupby on period
             q_routed_monthly = q_routed.groupby(q_routed.index.asfreq('M')).sum()
         else:
-            q_routed_monthly = q_routed.resample('M').sum()
+            q_routed_monthly = q_routed.resample('ME').sum()
         print(f"  Generated {len(q_routed_monthly)} monthly values.")
         return q_routed_monthly
 
@@ -189,12 +218,14 @@ def main():
     parser.add_argument('--start_date', type=str, default='1915-01-01', help='Start date (YYYY-MM-DD)')
     parser.add_argument('--end_date', type=str, default='2018-12-31', help='End date (YYYY-MM-DD)')
     parser.add_argument('--watersheds', type=str, nargs='*', default=None, help='Watershed names to select (optional)')
-    parser.add_argument('--Product_B', action='store_true', help='If set, split outputs into ten 100-year chunks (trim last ~8 years).')
+    parser.add_argument('--product', choices=['A', 'B'], required=True,
+                        help='Product to generate: A (historical 1921-2018) or B (stochastic 1000-yr chunks).')
     args = parser.parse_args()
 
     grid_info_path = args.grid_info_path or str(_script_dir / 'reference' / 'GridInfo')
 
-    if args.Product_B:
+    product_b = args.product == 'B'
+    if product_b:
         fluxes_path = args.fluxes_path or str(_vic_gen / 'output' / 'fluxes' / 'Product_B' / '1')
         output_path = args.output_path or str(_vic_gen / 'output' / 'routed' / 'Product_B' / '1')
     else:
@@ -207,7 +238,7 @@ def main():
         output_path=output_path,
         start_date=args.start_date,
         end_date=args.end_date,
-        product_b=args.Product_B,
+        product_b=product_b,
         full_vic=args.full_vic
     )
     rim.run(select_watershed=args.watersheds)
@@ -216,7 +247,7 @@ if __name__ == "__main__":
     # Historical:
     # python _2_compile_rim_inflows.py --grid_info_path ./reference/GridInfo --fluxes_path ./output/fluxes/Historical --output_path ./output/routed/Historical --watersheds CS3_8RI_DPR_I
     # Product A:
-    # python _2_compile_rim_inflows.py --grid_info_path ./reference/GridInfo --fluxes_path ./output/fluxes/Product_A/1 --output_path ./output/routed/Product_A/1 --watersheds CS3_8RI_OROVI
+    # python _2_compile_rim_inflows.py --product A --grid_info_path ./reference/GridInfo --fluxes_path ./output/fluxes/Product_A/1 --output_path ./output/routed/Product_A/1 --watersheds CS3_8RI_OROVI
     # Product B (writes 10 chunk files per watershed):
-    # python _2_compile_rim_inflows.py --grid_info_path ./reference/GridInfo --fluxes_path ./output/fluxes/Product_B/1 --output_path ./output/routed/Product_B/1 --Product_B --watersheds CS3_8RI_OROVI
+    # python _2_compile_rim_inflows.py --product B --grid_info_path ./reference/GridInfo --fluxes_path ./output/fluxes/Product_B/1 --output_path ./output/routed/Product_B/1 --watersheds CS3_8RI_OROVI
     main()

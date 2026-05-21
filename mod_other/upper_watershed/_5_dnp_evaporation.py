@@ -54,10 +54,9 @@ Outputs  (data/GENERATED/mod_other/upper_watershed/output/)
 
 Usage
 -----
-  python _5_dnp_evaporation.py --run calibrate
-  python _5_dnp_evaporation.py --run A
-  python _5_dnp_evaporation.py --run B
-  python _5_dnp_evaporation.py --run both
+  python mod_other/upper_watershed/_5_dnp_evaporation.py --calibrate
+  python mod_other/upper_watershed/_5_dnp_evaporation.py --product A
+  python mod_other/upper_watershed/_5_dnp_evaporation.py --product B
 """
 
 from __future__ import annotations
@@ -71,7 +70,7 @@ import numpy as np
 import pandas as pd
 from scipy.stats import pearsonr
 
-# ── Repo path setup ───────────────────────────────────────────────────────────
+# -- Repo path setup -----------------------------------------------------------
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 from utils.paths import get_module_generated_dir
 
@@ -79,10 +78,10 @@ _SCRIPT_DIR = Path(__file__).resolve().parent
 _GEN_DIR    = get_module_generated_dir("mod_other/upper_watershed")
 _EVAP_GEN   = get_module_generated_dir("mod_reservoir/evaporation")
 
-# ── Reference (static) inputs ─────────────────────────────────────────────────
+# -- Reference (static) inputs -------------------------------------------------
 REF_DIR = _SCRIPT_DIR / "reference"
 
-# ── Generated output directories ─────────────────────────────────────────────
+# -- Generated output directories ---------------------------------------------
 OUTPUT_ROOT   = _GEN_DIR / "output" / "_5_dnp_evaporation"
 CALIBRATE_DIR = OUTPUT_ROOT / "calibrate"
 OUTPUT_A_DIR  = OUTPUT_ROOT / "Product_A"
@@ -90,17 +89,17 @@ OUTPUT_B_DIR  = OUTPUT_ROOT / "Product_B"
 CSV_A_DIR     = _GEN_DIR / "output" / "_product_a_validation"
 CSV_B_DIR     = _GEN_DIR / "output" / "_product_b_final"
 
-# ── External input: reservoir evaporation rates ───────────────────────────────
+# -- External input: reservoir evaporation rates -------------------------------
 _EVAP_OUTROOT = _EVAP_GEN / "output" / "_2_run_reservoir_evap"
 
-# ── Unit constants ────────────────────────────────────────────────────────────
+# -- Unit constants ------------------------------------------------------------
 FT2_PER_ACRE = 43_560
 IN_TO_FT     = 1 / 12
 
 
-# ═══════════════════════════════════════════════════════════════════════════════
+# -------------------------------------------------------------------------------
 # Shared helpers
-# ═══════════════════════════════════════════════════════════════════════════════
+# -------------------------------------------------------------------------------
 
 def load_polynomial(coeffs_path: Path) -> np.poly1d:
     """Load degree-2 polynomial from CSV produced by run_calibrate()."""
@@ -111,7 +110,7 @@ def _compute_surface_area(e_cfs: np.ndarray, er_in: np.ndarray,
                            days: np.ndarray) -> np.ndarray:
     """Back-calculate surface area (acres) from total evaporation and ER.
 
-    A = [E (cfs) × seconds_in_month] / [ER (ft) × ft²_per_acre]
+    A = [E (cfs) x seconds_in_month] / [ER (ft) x ft2_per_acre]
     """
     seconds = days * 86_400
     return np.where(
@@ -129,9 +128,9 @@ def _calc_evap_cfs(storage_taf: np.ndarray, er_in: np.ndarray,
     return volume_ft3 / (days * 86_400)
 
 
-# ═══════════════════════════════════════════════════════════════════════════════
-# Mode 1 – calibrate
-# ═══════════════════════════════════════════════════════════════════════════════
+# -------------------------------------------------------------------------------
+# Mode 1 - calibrate
+# -------------------------------------------------------------------------------
 
 def run_calibrate() -> None:
     """Reverse-engineer hypsographic curve from historical CalSim data."""
@@ -141,7 +140,7 @@ def run_calibrate() -> None:
 
     CALIBRATE_DIR.mkdir(parents=True, exist_ok=True)
 
-    # ── Load historical data ─────────────────────────────────────────────────
+    # -- Load historical data -------------------------------------------------
     print("Loading historical data from reference/...")
     storage    = pd.read_csv(REF_DIR / "s_pedro_sv_historical.csv")
     evap_rate  = pd.read_csv(REF_DIR / "er_pedro_sv_historical.csv")
@@ -156,9 +155,9 @@ def run_calibrate() -> None:
     df = (storage[["date", "storage_taf"]]
           .merge(evap_rate[["date", "er_inches"]], on="date", how="inner")
           .merge(evap_total[["date", "e_cfs"]], on="date", how="inner"))
-    print(f"  {len(df)} months, {df['date'].min().date()} – {df['date'].max().date()}")
+    print(f"  {len(df)} months, {df['date'].min().date()} - {df['date'].max().date()}")
 
-    # ── Calculate surface area ───────────────────────────────────────────────
+    # -- Calculate surface area -----------------------------------------------
     df["year"]  = df["date"].dt.year
     df["month"] = df["date"].dt.month
     df["days"]  = df["date"].dt.days_in_month
@@ -171,19 +170,19 @@ def run_calibrate() -> None:
         print(f"  Interpolating {na_count} months with ER=0...")
         df["surface_area_acres"] = df["surface_area_acres"].interpolate(method="linear")
 
-    print(f"  Surface area: {df['surface_area_acres'].min():.1f}–"
+    print(f"  Surface area: {df['surface_area_acres'].min():.1f}-"
           f"{df['surface_area_acres'].max():.1f} acres "
           f"(mean {df['surface_area_acres'].mean():.1f})")
 
-    # ── Fit degree-2 polynomial ──────────────────────────────────────────────
+    # -- Fit degree-2 polynomial ----------------------------------------------
     hypso       = df[["storage_taf", "surface_area_acres"]].sort_values("storage_taf")
     poly_coeffs = np.polyfit(hypso["storage_taf"], hypso["surface_area_acres"], deg=2)
     poly_func   = np.poly1d(poly_coeffs)
     r2 = pearsonr(hypso["surface_area_acres"], poly_func(hypso["storage_taf"]))[0] ** 2
-    print(f"\n  A = {poly_coeffs[0]:.6e}·S² + {poly_coeffs[1]:.6e}·S "
-          f"+ {poly_coeffs[2]:.6e}   (R²={r2:.4f})")
+    print(f"\n  A = {poly_coeffs[0]:.6e}-S2 + {poly_coeffs[1]:.6e}-S "
+          f"+ {poly_coeffs[2]:.6e}   (R2={r2:.4f})")
 
-    # ── Write outputs ────────────────────────────────────────────────────────
+    # -- Write outputs --------------------------------------------------------
     df[["date", "year", "month", "storage_taf", "er_inches",
         "e_cfs", "surface_area_acres"]].to_csv(
         CALIBRATE_DIR / "surface_area_historical.csv", index=False)
@@ -191,7 +190,7 @@ def run_calibrate() -> None:
     pd.DataFrame({
         "coefficient": ["a2", "a1", "a0"],
         "value":       poly_coeffs,
-        "description": ["S² coefficient", "S¹ coefficient", "constant"],
+        "description": ["S2 coefficient", "S1 coefficient", "constant"],
     }).to_csv(CALIBRATE_DIR / "hypsographic_polynomial_coeffs.csv", index=False)
 
     bins   = np.arange(hypso["storage_taf"].min(), hypso["storage_taf"].max() + 50, 50)
@@ -206,14 +205,14 @@ def run_calibrate() -> None:
 
     print(f"\n  Outputs written to: {CALIBRATE_DIR}")
 
-    # ── Plots ────────────────────────────────────────────────────────────────
+    # -- Plots ----------------------------------------------------------------
     s_smooth = np.linspace(hypso["storage_taf"].min(), hypso["storage_taf"].max(), 200)
     fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(14, 6))
     ax1.scatter(hypso["storage_taf"], hypso["surface_area_acres"],
                 alpha=0.3, s=10, label="Observed")
     ax1.plot(s_smooth, poly_func(s_smooth), "r-", lw=2, label="Polynomial (deg=2)")
     ax1.set_xlabel("Storage (TAF)"); ax1.set_ylabel("Surface Area (acres)")
-    ax1.set_title(f"Hypsographic Curve (R²={r2:.4f})")
+    ax1.set_title(f"Hypsographic Curve (R2={r2:.4f})")
     ax1.legend(); ax1.grid(alpha=0.3)
     ax2.plot(binned["storage_taf"], binned["surface_area_acres"],
              "o-", lw=2, label="Binned Observed")
@@ -241,9 +240,9 @@ def run_calibrate() -> None:
     print("  Plots saved.")
 
 
-# ═══════════════════════════════════════════════════════════════════════════════
-# Modes 2 & 3 – generate Product A / B
-# ═══════════════════════════════════════════════════════════════════════════════
+# -------------------------------------------------------------------------------
+# Modes 2 & 3 - generate Product A / B
+# -------------------------------------------------------------------------------
 
 def _load_storage_ref(product: str) -> pd.DataFrame:
     """
@@ -357,7 +356,7 @@ def _load_er_b_chunks() -> dict:
 def run_generate(product: str) -> None:
     """Generate E_PEDRO_SV for Product A or B."""
     print("\n" + "=" * 72)
-    print(f"GENERATE: Don Pedro Evaporation – Product {product}")
+    print(f"GENERATE: Don Pedro Evaporation - Product {product}")
     print("=" * 72)
 
     out_dir = OUTPUT_A_DIR if product == "A" else OUTPUT_B_DIR
@@ -365,22 +364,22 @@ def run_generate(product: str) -> None:
     out_dir.mkdir(parents=True, exist_ok=True)
     csv_dir.mkdir(parents=True, exist_ok=True)
 
-    # ── Load polynomial from calibrate output ────────────────────────────────
+    # -- Load polynomial from calibrate output --------------------------------
     coeffs_path = CALIBRATE_DIR / "hypsographic_polynomial_coeffs.csv"
     if not coeffs_path.exists():
         raise FileNotFoundError(
-            f"Polynomial coefficients not found – run `--run calibrate` first.\n  {coeffs_path}"
+            f"Polynomial coefficients not found - run `--run calibrate` first.\n  {coeffs_path}"
         )
     poly_func = load_polynomial(coeffs_path)
     c = pd.read_csv(coeffs_path)["value"].values
-    print(f"  Polynomial: A = {c[0]:.6e}·S² + {c[1]:.6e}·S + {c[2]:.6e}")
+    print(f"  Polynomial: A = {c[0]:.6e}-S2 + {c[1]:.6e}-S + {c[2]:.6e}")
 
     def _wy(d: pd.Timestamp) -> int:
         return d.year + 1 if d.month >= 10 else d.year
 
-    # ═════════════════════════════════════════════════════════════════════════
-    # Product B: process each storage chunk separately → 10 output files
-    # ═════════════════════════════════════════════════════════════════════════
+    # -------------------------------------------------------------------------
+    # Product B: process each storage chunk separately -> 10 output files
+    # -------------------------------------------------------------------------
     if product == "B":
         storage_chunks = _load_storage_chunks_b()
         er_chunks = _load_er_b_chunks()
@@ -451,16 +450,16 @@ def run_generate(product: str) -> None:
         print(f"\nProduct B outputs ({len(storage_chunks)} files): {csv_dir}")
         return
 
-    # ═════════════════════════════════════════════════════════════════════════
+    # -------------------------------------------------------------------------
     # Product A: single continuous time series (partial period, e.g. 1972-2018)
-    # ═════════════════════════════════════════════════════════════════════════
+    # -------------------------------------------------------------------------
     storage = _load_storage_ref(product)
     storage["date"] = storage["date"].dt.to_period("M").dt.to_timestamp()
 
     storage_start = storage["date"].min().date()
     storage_end   = storage["date"].max().date()
     print(f"  Note: Product A storage covers {storage_start} to {storage_end}; "
-          f"E_PEDRO_SV output will be limited to this period.")
+          "E_PEDRO_SV output will be limited to this period.")
 
     er_a = _load_er_a()
     er_a["date"] = er_a["date"].dt.to_period("M").dt.to_timestamp()
@@ -470,7 +469,7 @@ def run_generate(product: str) -> None:
 
     missing_er = storage["er_inches"].isna().sum()
     if missing_er:
-        print(f"  WARNING: {missing_er} months missing ER – will output NaN")
+        print(f"  WARNING: {missing_er} months missing ER - will output NaN")
     else:
         print(f"  ER matched for all {len(storage)} months")
 
@@ -497,7 +496,7 @@ def run_generate(product: str) -> None:
     }).to_csv(out_csv, index=False)
     print(f"  Wrote: {out_csv.name}")
 
-    # ── Plots ────────────────────────────────────────────────────────────────
+    # -- Plots ----------------------------------------------------------------
     e_hist = s_hist = None
     if (REF_DIR / "s_pedro_sv_historical.csv").exists():
         s_hist = pd.read_csv(REF_DIR / "s_pedro_sv_historical.csv")
@@ -561,36 +560,29 @@ def run_generate(product: str) -> None:
             print(f"    RMSE        : {np.sqrt((diff**2).mean()):.2f} CFS")
 
 
-# ═══════════════════════════════════════════════════════════════════════════════
+# -------------------------------------------------------------------------------
 # Entry point
-# ═══════════════════════════════════════════════════════════════════════════════
+# -------------------------------------------------------------------------------
 
 def main() -> None:
     parser = argparse.ArgumentParser(
-        description="Don Pedro evaporation: calibrate hypsographic curve and/or generate E_PEDRO_SV."
+        description="Don Pedro evaporation: calibrate hypsographic curve or generate E_PEDRO_SV."
     )
-    parser.add_argument(
-        "--run",
-        choices=["calibrate", "A", "B", "both"],
-        required=True,
-        help=(
-            "calibrate – derive hypsographic polynomial from historical data; "
-            "A – generate Product A; "
-            "B – generate Product B; "
-            "both – generate both A and B (requires calibrate to have been run first)"
-        ),
+    group = parser.add_mutually_exclusive_group(required=True)
+    group.add_argument(
+        "--product", choices=["A", "B"],
+        help="Generate E_PEDRO_SV for the chosen product (requires --calibrate to have been run first).",
+    )
+    group.add_argument(
+        "--calibrate", action="store_true",
+        help="Derive the hypsographic polynomial from historical data (one-time setup).",
     )
     args = parser.parse_args()
 
-    if args.run == "calibrate":
+    if args.calibrate:
         run_calibrate()
-    elif args.run == "A":
-        run_generate("A")
-    elif args.run == "B":
-        run_generate("B")
-    elif args.run == "both":
-        run_generate("A")
-        run_generate("B")
+    else:
+        run_generate(args.product)
 
     print("\n" + "=" * 72)
     print("Done.")

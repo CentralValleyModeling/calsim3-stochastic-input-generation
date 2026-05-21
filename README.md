@@ -88,13 +88,20 @@ Scripts within each module are numbered in execution order (`_1_`, `_2_`, ...).
 Example for reservoir evaporation:
 
 ```bash
-cd mod_reservoir/evaporation
-python _2_run_reservoir_evap.py            # Product A, all reservoirs
-python _2_run_reservoir_evap.py --Product_B  # Product B
+python mod_reservoir/evaporation/_2_run_reservoir_evap.py --product A   # Product A, all reservoirs
+python mod_reservoir/evaporation/_2_run_reservoir_evap.py --product B   # Product B
 ```
 
 ---
 
 ### 5. Documentation
 
-TODO
+Sphinx site: `cd docs && make html` (output `docs/_build/html`).
+
+**Execution runbooks** (standalone, not part of the Sphinx build):
+
+- [Product A Validation Runbook](Product_A_Validation_Manifest.md)
+
+The numbered-script convention (header docstring / ASCII / CLI / no `# %%`) is
+documented in [`.github/copilot-instructions.md`](.github/copilot-instructions.md#script-convention)
+and enforced by `tools/check_scripts.py` (run locally and in CI).

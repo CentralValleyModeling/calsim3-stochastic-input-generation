@@ -1,25 +1,40 @@
 """
-Compile monthly (area-weighted) precipitation for small watersheds from WGEN met files.
+Compile Monthly Area-Weighted Precipitation for Small Watersheds
+================================================================
+Reads grid info and daily WGEN meteorology, computes area-weighted monthly
+precip (inches/month) per small watershed, and writes the result into a
+CVprecip .dat template for Product A (historical) or Product B (10 chunks).
 
-Reads grid info and daily WGEN meteorology, computes area-weighted monthly precip
-(inches/month) per watershed, and writes the result into a CVprecip .dat template.
+Inputs
+------
+- Small-watershed grid-info file
+- WGEN met files (Product_A / Product_B)
+
+Outputs
+-------
+- CVprecip .dat  (Product A)
+- 10 chunk .dat files  (Product B)
+
+Dependencies
+------------
+- utils/paths.py  (data-dir resolution)
 
 Usage
 -----
 Product A (historical, clip to WY 1921-2018):
-    python _1_compile_precip_sws.py --clip_period 1920-10-01 2018-09-30
+    python mod_hydrology/small_watersheds/_1_compile_precip_sws.py --product A --clip_period 1920-10-01 2018-09-30
 
 Product B (stochastic, writes 10 chunk .dat files):
-    python _1_compile_precip_sws.py --Product_B
+    python mod_hydrology/small_watersheds/_1_compile_precip_sws.py --product B
 """
 
+import argparse
 import os
 import sys
-import argparse
-import pandas as pd
-import numpy as np
-from typing import List, Optional
 from pathlib import Path
+from typing import List, Optional
+
+import pandas as pd
 
 # Add repo root to path for utils imports
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
@@ -28,7 +43,7 @@ from utils.paths import get_base_dir, get_module_generated_dir
 
 class CompileSmallWatershedPrecip:
     """
-    Compile monthly (sum of daily) precipitation for each small watershed from VIC met files (area‑weighted).
+    Compile monthly (sum of daily) precipitation for each small watershed from VIC met files (area-weighted).
     Grid info file columns assumed:
         watershed_id  Lat  Lon  pct_area  f1  f2
     Weight used = f2 / f1 (see WBA documentation for details).
@@ -119,12 +134,12 @@ class CompileSmallWatershedPrecip:
             weight_total += weight
 
         series_mm = weighted_sum / weight_total
-        in_series = (series_mm * self.mm_to_in).resample('M').sum()
+        in_series = (series_mm * self.mm_to_in).resample('ME').sum()
         in_series.name = grid_subset.iloc[0].watershed_id
         return in_series
 
     def _aggregate_watershed_monthly_product_b(self, grid_subset: pd.DataFrame) -> pd.Series:
-        """Area-weighted daily precip (mm) → monthly inches for Product B (PeriodIndex, no real dates)."""
+        """Area-weighted daily precip (mm) -> monthly inches for Product B (PeriodIndex, no real dates)."""
         weighted_sum = None
         weight_total = 0.0
         for _, row in grid_subset.iterrows():
@@ -158,7 +173,7 @@ class CompileSmallWatershedPrecip:
         monthly_df = pd.concat(series_list, axis=1)
         if not self.product_b and self.clip_period:
             monthly_df = monthly_df.loc[self.clip_period[0]: self.clip_period[1]]
-            print(f"Clipped to {self.clip_period[0]} – {self.clip_period[1]}: {len(monthly_df)} months")
+            print(f"Clipped to {self.clip_period[0]} - {self.clip_period[1]}: {len(monthly_df)} months")
         else:
             print(f"Total months: {len(monthly_df)}")
         return monthly_df
@@ -226,8 +241,8 @@ def parse_args():
     p.add_argument("--clip_period", nargs=2, default=None, help="Clip start end (YYYY-MM-DD YYYY-MM-DD) [Product A only].")
     p.add_argument("--output_path", default=None,
                    help="Output directory. Default resolved from config.")
-    p.add_argument("--Product_B", action="store_true",
-                   help="If set, read WGEN Product B files and split output into ten 100-WY chunk CSVs.")
+    p.add_argument("--product", choices=['A', 'B'], required=True,
+                   help='Product to generate: A (historical 1921-2018) or B (stochastic 1000-yr chunks).')
     return p.parse_args()
 
 
@@ -244,7 +259,8 @@ def main():
     cvprecip_file = args.CVprecip_file or str(
         script_dir / 'reference' / 'CVprecipWY1921_2021.dat'
     )
-    if args.Product_B:
+    product_b = args.product == 'B'
+    if product_b:
         met_path = args.met_path or str(_base / 'WGEN' / 'Product_B' / '1')
         output_path = args.output_path or str(_gen / 'output' / '_1_compile_precip_sws' / 'Product_B')
     else:
@@ -259,11 +275,11 @@ def main():
         start_date=args.start_date,
         end_date=args.end_date,
         clip_period=args.clip_period,
-        product_b=args.Product_B,
+        product_b=product_b,
     )
     df = compiler.compile_all()
 
-    if args.Product_B:
+    if product_b:
         compiler.write_product_b_chunks(df, cvprecip_file, output_path)
     else:
         compiler.write_matrix(df, cvprecip_file, output_path)
@@ -272,8 +288,4 @@ def main():
     print(f"Rows (months): {df.shape[0]}, Watersheds: {df.shape[1]}")
 
 if __name__ == "__main__":
-    # Product A:
-    # python _1_compile_precip_sws.py --clip_period 1920-10-01 2018-09-30
-    # Product B (writes 10 chunk .dat files):
-    # python _1_compile_precip_sws.py --Product_B
     main()

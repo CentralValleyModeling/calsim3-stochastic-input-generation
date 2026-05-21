@@ -1,15 +1,12 @@
 # -*- coding: utf-8 -*-
-import sys, io
-if hasattr(sys.stdout, 'reconfigure'):
-    sys.stdout.reconfigure(encoding='utf-8')
-
-# %% ── Delta Accretion for NDOI – Direct Calculation from WGEN Precipitation ──
 """
+Delta Accretion for NDOI - Direct Calculation from WGEN Precipitation
+=====================================================================
 Calculates the Delta precipitation accretion term (DELTAACCRETIONFORNDOI) for
 CalSim 3.0 using WGEN precipitation for the grid cell nearest to:
 
     Station: STOCKTON FIRE STA 4  (CNRFC ID: SCKC1)
-    Latitude: 38.00°N, Longitude: 121.32°W
+    Latitude: 38.00degN, Longitude: 121.32degW
 
 Formula (replicates "Direct Calculation" tab of
     ./data/GENERATED/mod_other/miscellaneous/term_development/DELTAACCRETIONFORNDOI/
@@ -19,13 +16,13 @@ Formula (replicates "Direct Calculation" tab of
 
     where  precip_in = precip_mm * 0.0393701
 
-Product A – time-period based watershed area adjustments:
-    Before Oct 1, 1955  → watershed_area = 682,230 acres
-    Oct 1955 – Sep 1980 → watershed_area = 738,000 acres
-    Oct 1980 onwards    → watershed_area = 682,230 acres
+Product A - time-period based watershed area adjustments:
+    Before Oct 1, 1955  -> watershed_area = 682,230 acres
+    Oct 1955 - Sep 1980 -> watershed_area = 738,000 acres
+    Oct 1980 onwards    -> watershed_area = 682,230 acres
 
-Product B – fixed area ratio (final period):
-    Always              → watershed_area = 682,230 acres
+Product B - fixed area ratio (final period):
+    Always              -> watershed_area = 682,230 acres
 
 Outputs
 -------
@@ -41,47 +38,50 @@ CSV format: Part B, Part C, Year, Month, Value
 
 Usage
 -----
-    python _2_DeltaAccretionForNDOI.py                  # run both (default)
-    python _2_DeltaAccretionForNDOI.py --product A      # Product A only
-    python _2_DeltaAccretionForNDOI.py --product B      # Product B only
-    python _2_DeltaAccretionForNDOI.py --product both   # both (explicit)
+    python mod_other/miscellaneous/_2_DeltaAccretionForNDOI.py --product A
+    python mod_other/miscellaneous/_2_DeltaAccretionForNDOI.py --product B
 """
 
 import os
+import sys
 from pathlib import Path
+
 import numpy as np
 import pandas as pd
+
+if hasattr(sys.stdout, 'reconfigure'):
+    sys.stdout.reconfigure(encoding='utf-8')
 
 # Add repo root to path for utils imports
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 from utils.paths import get_base_dir, get_module_generated_dir
 
-# ── Constants ────────────────────────────────────────────────────────────────
-TARGET_LAT   = 38.00      # Stockton Fire Station No. 4 latitude (°N)
-TARGET_LON   = -121.32    # Stockton Fire Station No. 4 longitude (°W, negative)
+# -- Constants ----------------------------------------------------------------
+TARGET_LAT   = 38.00      # Stockton Fire Station No. 4 latitude (degN)
+TARGET_LON   = -121.32    # Stockton Fire Station No. 4 longitude (degW, negative)
 
 PART_B       = 'DELTAACCRETIONFORNDOI'
 PART_C       = 'FLOW'
 
 DELTA_AREA   = 679_699    # Delta Service Area (acres)
-MM_TO_IN     = 0.0393701  # mm → inches
+MM_TO_IN     = 0.0393701  # mm -> inches
 
 # Watershed area by period (Product A)
-AREA_PRE1955   = 682_230  # Oct 1930 – Sep 1955
-AREA_1955_1980 = 738_000  # Oct 1955 – Sep 1980
+AREA_PRE1955   = 682_230  # Oct 1930 - Sep 1955
+AREA_1955_1980 = 738_000  # Oct 1955 - Sep 1980
 AREA_POST1980  = 682_230  # Oct 1980 onwards
 
 # Product B fixed area
 AREA_PRODUCT_B = 682_230
 
-# ── Directories ───────────────────────────────────────────────────────────────
+# -- Directories ---------------------------------------------------------------
 _GEN_DIR     = get_module_generated_dir("mod_other/miscellaneous")
 WGEN_A_DIR   = get_base_dir() / "WGEN" / "Product_A" / "1"
 WGEN_B_DIR   = get_base_dir() / "WGEN" / "Product_B" / "1"
 OUTPUT_A_DIR = _GEN_DIR / "output" / "_product_a_validation"
 OUTPUT_B_DIR = _GEN_DIR / "output" / "_product_b_final"
 
-# ── Helpers ───────────────────────────────────────────────────────────────────
+# -- Helpers -------------------------------------------------------------------
 
 def find_nearest_wgen_file(wgen_dir: str, target_lat: float, target_lon: float) -> str:
     """Return the path to the nearest WGEN meteo file to (target_lat, target_lon)."""
@@ -152,7 +152,7 @@ def run_product_a():
     """Process Product A: WGEN 1915-2018, time-period area adjustments."""
     os.makedirs(OUTPUT_A_DIR, exist_ok=True)
 
-    # ── PRODUCT A ──────────────────────────────────────────────────────────────
+    # -- PRODUCT A --------------------------------------------------------------
     print('\n' + '=' * 72)
     print('PRODUCT A')
     print('=' * 72)
@@ -172,7 +172,7 @@ def run_product_a():
         day=df_a['day'].astype(int),
     ))
     ts_a = pd.Series(df_a['pr'].values, index=dates_a)
-    monthly_a = ts_a.resample('M').sum()
+    monthly_a = ts_a.resample('ME').sum()
     print(f'  Monthly totals: {len(monthly_a)} months')
 
     # --- Apply formula -------------------------------------------------------
@@ -271,29 +271,29 @@ def run_product_b():
         chunk_df.to_csv(fpath, index=False)
         print(f'    Chunk {i + 1:02d}/10 -> {fname}')
 
-    print(f'\nProduct B stats:')
+    print('\nProduct B stats:')
     print(f'  Value range: [{aligned_b[:MONTHS_PER_CHUNK * TOTAL_CHUNKS].min():.3f}, '
           f'{aligned_b[:MONTHS_PER_CHUNK * TOTAL_CHUNKS].max():.3f}] TAF  '
           f'(mean {aligned_b[:MONTHS_PER_CHUNK * TOTAL_CHUNKS].mean():.3f} TAF)')
 
 
-# ═══════════════════════════════════════════════════════════════════════════════
-# %% Entry point
-# ═══════════════════════════════════════════════════════════════════════════════
+# -------------------------------------------------------------------------------
+# Entry point
+# -------------------------------------------------------------------------------
 if __name__ == '__main__':
     import argparse
     parser = argparse.ArgumentParser(
         description='Calculate DELTAACCRETIONFORNDOI from WGEN precipitation.'
     )
     parser.add_argument(
-        '--product', choices=['A', 'B', 'both'], default='both',
-        help='Which product to run: A, B, or both (default: both)'
+        '--product', choices=['A', 'B'], required=True,
+        help='Product to generate: A (historical 1921-2018) or B (stochastic 1000-yr chunks).'
     )
     args = parser.parse_args()
 
-    if args.product in ('A', 'both'):
+    if args.product == 'A':
         run_product_a()
-    if args.product in ('B', 'both'):
+    else:
         run_product_b()
 
     print('\n' + '=' * 72)

@@ -1,0 +1,23 @@
+name: lint
+
+# Product A script-convention gate. tools/check_scripts.py is the single
+# source of truth for the convention (ASCII / no-# %% / === header /
+# pyflakes-clean); it depends only on the stdlib + pyflakes, so this job
+# stays lightweight (no conda solve / pydsstools / C++ build tools needed).
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  check-scripts:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install pyflakes
+        run: python -m pip install --upgrade pip pyflakes
+      - name: Product A script-convention gate
+        run: python tools/check_scripts.py

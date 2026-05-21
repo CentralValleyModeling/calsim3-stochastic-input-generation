@@ -60,16 +60,8 @@ def clean_text(value) -> str:
 
 
 def _date_range_me(start, end=None, **kwargs) -> pd.DatetimeIndex:
-    """Return a month-end DatetimeIndex, compatible with old and new pandas.
-
-    pandas >= 2.2 uses ``freq="ME"``; older versions require ``freq="M"``.
-    Catches the ``ValueError`` that older pandas raises for an unknown
-    frequency alias.
-    """
-    try:
-        return pd.date_range(start, end, freq="ME", **kwargs)
-    except ValueError:
-        return pd.date_range(start, end, freq="M", **kwargs)
+    """Month-end DatetimeIndex (pandas 2.2+ ``freq="ME"``)."""
+    return pd.date_range(start, end, freq="ME", **kwargs)
 
 
 def norm_token(value) -> str:

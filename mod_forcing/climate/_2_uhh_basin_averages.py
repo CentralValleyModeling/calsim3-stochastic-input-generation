@@ -7,7 +7,7 @@ Grid cell weights are read from mod_forcing/vic/reference/GridInfo/ files.
 VPD is derived via quantile mapping from temperature using CalSim historical VPD.
 
 Product A / Historical: one CSV per variable per location.
-Product B: 10 long-format chunk CSVs per variable (100 WY each, Oct 1921 – Sep 2021).
+Product B: 10 long-format chunk CSVs per variable (100 WY each, Oct 1921 - Sep 2021).
 
 Inputs
 ------
@@ -26,12 +26,12 @@ Outputs
 
 Usage
 -----
-    cd mod_forcing/climate && python _2_uhh_basin_averages.py --source Historical
-    cd mod_forcing/climate && python _2_uhh_basin_averages.py --source Product_A --scenario 1
-    cd mod_forcing/climate && python _2_uhh_basin_averages.py --source Product_B --scenario 1
+    python mod_forcing/climate/_2_uhh_basin_averages.py --source Historical
+    python mod_forcing/climate/_2_uhh_basin_averages.py --source Product_A --scenario 1
+    python mod_forcing/climate/_2_uhh_basin_averages.py --source Product_B --scenario 1
 
     # Validate Product A outputs against historical reference
-    cd mod_forcing/climate && python _2_uhh_basin_averages.py --validate-outputs --scenario 1
+    python mod_forcing/climate/_2_uhh_basin_averages.py --validate-outputs --scenario 1
 """
 
 import os
@@ -47,6 +47,7 @@ from matplotlib.patches import Patch
 
 # Add repo root to path for utils imports
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
+from utils import dss_io
 from utils.paths import get_base_dir, get_module_generated_dir
 from utils.quantile_mapping import qmap_single
 
@@ -215,9 +216,9 @@ def calculate_basin_monthly_averages(grid_info_df, data_folder, date_index=None,
     daily_tavg_c = weighted_tavg_sum / weight_total
 
     if product_b:
-        # PeriodIndex: resample with 'M' (not 'MS')
-        monthly_precip_mm = daily_precip_mm.resample('M').sum()
-        monthly_tavg_c = daily_tavg_c.resample('M').mean()
+        # PeriodIndex: resample with 'ME' (month-end)
+        monthly_precip_mm = daily_precip_mm.resample('ME').sum()
+        monthly_tavg_c = daily_tavg_c.resample('ME').mean()
         monthly_df = pd.DataFrame({
             'year':          [p.year  for p in monthly_precip_mm.index],
             'month':         [p.month for p in monthly_precip_mm.index],
@@ -479,7 +480,7 @@ def process_location(shorthand, grid_info_file, grid_info_folder, data_folder, o
     )
     
     # Apply VPD quantile mapping using temperature as basis
-    print(f"  Applying VPD quantile mapping...")
+    print("  Applying VPD quantile mapping...")
     try:
         target_vpd = read_target_vpd_data(excel_file, base_shorthand)
         print(f"    Target VPD data: {len(target_vpd)} months")
@@ -492,13 +493,13 @@ def process_location(shorthand, grid_info_file, grid_info_folder, data_folder, o
         # Merge VPD into monthly_data
         monthly_data = monthly_data.merge(vpd_data, on=['year', 'month'], how='left')
         vpd_enabled = True
-        print(f"  VPD quantile mapping completed")
+        print("  VPD quantile mapping completed")
     except Exception as e:
         import traceback
         print(f"  Warning: VPD quantile mapping failed: {e}")
-        print(f"  Error details:")
+        print("  Error details:")
         traceback.print_exc()
-        print(f"  Proceeding without VPD output")
+        print("  Proceeding without VPD output")
         vpd_enabled = False
     
     # Construct VPD location name
@@ -583,7 +584,7 @@ def create_validation_csv(
     end_date = pd.Timestamp(end_wy, 9, 30)
 
     print("=" * 80)
-    print("Creating Validation CSVs — UHH Basin Averages")
+    print("Creating Validation CSVs - UHH Basin Averages")
     print("=" * 80)
     print(f"Period: WY {start_wy}-{end_wy} ({start_date.strftime('%b %Y')} - {end_date.strftime('%b %Y')})")
     print(f"Source: {source_path}")
@@ -673,7 +674,7 @@ def create_validation_csv(
         print(f"  Written: {output_file} ({n_locations} locations, {len(output_df)} rows)")
 
     print(f"\n{'=' * 80}")
-    print(f"Validation CSVs complete.")
+    print("Validation CSVs complete.")
     print(f"{'=' * 80}")
 
 
@@ -873,7 +874,7 @@ def validate_location(location_shorthand, data_folder, excel_file, name_mapping)
     
     variables = [
         (ppt_name, ppt_name, 'precip', 'inches'),
-        (temp_name, temp_name, 'temp', '°F'),
+        (temp_name, temp_name, 'temp', 'degF'),
         (vpd_name, vpd_name, 'vpd', 'kPa')
     ]
     
@@ -921,7 +922,7 @@ def create_monthly_boxplots(all_monthly_data, output_folder, scenario):
     
     var_configs = {
         'precip': {'title': 'Precipitation', 'ylabel': 'Precipitation (inches)'},
-        'temp': {'title': 'Temperature', 'ylabel': 'Temperature (°F)'},
+        'temp': {'title': 'Temperature', 'ylabel': 'Temperature (degF)'},
         'vpd': {'title': 'Vapor Pressure Deficit', 'ylabel': 'VPD (kPa)'}
     }
     
@@ -977,7 +978,7 @@ def create_annual_comparison_plots(all_results, output_folder, locations, scenar
     """
     var_configs = {
         'precip': {'title': 'Precipitation', 'ylabel': 'Annual Average (inches)'},
-        'temp': {'title': 'Temperature', 'ylabel': 'Annual Average (°F)'},
+        'temp': {'title': 'Temperature', 'ylabel': 'Annual Average (degF)'},
         'vpd': {'title': 'Vapor Pressure Deficit', 'ylabel': 'Annual Average (kPa)'}
     }
     
@@ -1046,14 +1047,14 @@ def print_validation_report(location, results):
         res = results[var_type]
         units = res['units']
         
-        print(f"\n  Annual Average:")
+        print("\n  Annual Average:")
         print(f"    CalSim:        {res['ref_annual_avg']:10.4f} {units}")
         print(f"    Output:        {res['output_annual_avg']:10.4f} {units}")
         print(f"    Difference:    {res['annual_diff']:10.4f} {units} ({res['annual_pct_diff']:+.2f}%)")
         
-        print(f"\n  Monthly Averages:")
-        print(f"    Month    CalSim    Output       Diff        % Diff")
-        print(f"    {'─'*60}")
+        print("\n  Monthly Averages:")
+        print("    Month    CalSim    Output       Diff        % Diff")
+        print(f"    {'-'*60}")
         for month in range(1, 13):
             ref_val = res['ref_monthly_avg'].get(month, np.nan)
             out_val = res['output_monthly_avg'].get(month, np.nan)
@@ -1160,11 +1161,11 @@ def run_validate_outputs(scenario):
         print(f"\nDetailed summary saved to: {summary_file}")
     
     # Generate plots
-    print(f"\nGenerating monthly boxplots...")
+    print("\nGenerating monthly boxplots...")
     create_monthly_boxplots(all_monthly_data, validation_folder, scenario)
     print(f"Boxplots saved to: {validation_folder}")
     
-    print(f"\nGenerating annual comparison plots...")
+    print("\nGenerating annual comparison plots...")
     create_annual_comparison_plots(all_results, validation_folder, locations, scenario)
     print(f"Annual comparison plots saved to: {validation_folder}")
 
@@ -1224,14 +1225,14 @@ def write_product_b_chunks(summaries: list, output_folder):
     """
     Compile all locations into 10 long-format chunk CSVs (100 WYs each).
     Skips first 9 months (Jan-Sep synthetic year 1) for WY alignment.
-    Template dates: Oct 1921 – Sep 2021 (WY1922–2021).
+    Template dates: Oct 1921 - Sep 2021 (WY1922-2021).
     Writes three file sets: _uhh_precip_productB_n01..n10.csv,
                             _uhh_temperature_productB_n01..n10.csv,
                             _uhh_vpd_productB_n01..n10.csv
     Format: Part B, Part C, Year, Month, Value
     """
     skip_months     = 9     # Jan-Sep of synthetic year 1
-    months_per_chunk = 1200 # 100 WYs × 12 months
+    months_per_chunk = 1200 # 100 WYs x 12 months
     total_chunks    = 10
     total_needed    = skip_months + months_per_chunk * total_chunks
 
@@ -1245,7 +1246,7 @@ def write_product_b_chunks(summaries: list, output_folder):
         {'col': 'vpd_kpa',       'part_c': 'VPD',          'name_key': 'vpd_location_name',  'file_stem': '_uhh_vpd_productB'},
     ]
 
-    print(f"\nWriting Product B chunk files ({total_chunks} chunks × {months_per_chunk} months)...")
+    print(f"\nWriting Product B chunk files ({total_chunks} chunks x {months_per_chunk} months)...")
 
     for vc in var_configs:
         col = vc['col']
@@ -1264,7 +1265,7 @@ def write_product_b_chunks(summaries: list, output_folder):
             loc_data[loc_name] = vals
 
         if not loc_data:
-            print(f"  Skipping {vc['file_stem']} — no valid locations")
+            print(f"  Skipping {vc['file_stem']} - no valid locations")
             continue
 
         for i in range(total_chunks):
@@ -1324,7 +1325,6 @@ def _historical_wy_totals_from_dss(ppt_part_b: str, start_wy: int = 1922, end_wy
 
     Returns DataFrame with columns: WY, precip_inches.
     """
-    from pydsstools.heclib.dss import HecDss  # local import
     dss_file = get_base_dir() / "CalSim3" / "__calsim_sv_default__.dss"
     if not dss_file.exists():
         raise FileNotFoundError(f"Default CalSim SV DSS not found: {dss_file}")
@@ -1332,7 +1332,12 @@ def _historical_wy_totals_from_dss(ppt_part_b: str, start_wy: int = 1922, end_wy
     b_target = ppt_part_b.strip().upper()
     c_target = "PRECIP"
 
-    with HecDss.Open(str(dss_file), version=6, catalog_flag=True) as dss:
+    # Direct open (no junction, catalog_flag=True) matches this function's
+    # historical HecDss.Open call.  The bespoke single-pair match, ValueError,
+    # and full_idx are kept verbatim -- dss_io.read_monthly_series's notna()
+    # gate would change the "paths exist but all-NaN" edge case.
+    with dss_io.open_dss(str(dss_file), version=6, catalog_flag=True,
+                         use_junction=False) as dss:
         paths = dss.getPathnameList("/*/*/*/*/1MON/*")
         matches = []
         for p in paths:
@@ -1348,10 +1353,9 @@ def _historical_wy_totals_from_dss(ppt_part_b: str, start_wy: int = 1922, end_wy
         master = pd.Series(index=full_idx, dtype=float)
         for path in sorted(matches, key=lambda x: (x.strip("/").split("/")[3], x)):
             ts = dss.read_ts(path, trim_missing=True)
-            vals = np.asarray(ts.values, dtype=float)
-            vals = np.where(vals <= -900, np.nan, vals)
+            vals = dss_io.apply_sentinel(ts.values)
             # DSS stores period-end timestamps; shift back one month so index is the data month.
-            idx = (pd.to_datetime(ts.pytimes).to_period("M") - 1).to_timestamp("M")
+            idx = dss_io.eom_index(ts.pytimes)
             master.update(pd.Series(vals, index=idx))
 
     s = master.dropna()
@@ -1838,16 +1842,16 @@ def main():
         summary_file = script_output_folder / "_summary.csv"
         summary_df.to_csv(summary_file, index=False)
         print(f"\n{'='*80}")
-        print(f"Processing complete!")
+        print("Processing complete!")
         print(f"Successfully processed {len(summaries)} out of {len(locations_df)} locations")
         print(f"Summary saved to: {summary_file}")
         print(f"{'='*80}")
         
         # Print summary statistics
-        print(f"\nSummary Statistics:")
+        print("\nSummary Statistics:")
         print(f"  Average number of grid cells per basin: {summary_df['num_grid_cells'].mean():.1f}")
         print(f"  Average monthly precip (across all basins): {summary_df['mean_monthly_precip_inches'].mean():.2f} inches")
-        print(f"  Average monthly tavg (across all basins): {summary_df['mean_monthly_tavg_f'].mean():.2f} °F")
+        print(f"  Average monthly tavg (across all basins): {summary_df['mean_monthly_tavg_f'].mean():.2f} degF")
     else:
         print("\nNo locations were successfully processed.")
 

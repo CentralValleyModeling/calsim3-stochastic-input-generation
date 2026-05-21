@@ -3,10 +3,10 @@ Extract Monthly Precipitation for PP Point Locations
 ====================================================
 Extracts monthly precipitation time series from WGEN weather data for all
 PP point locations specified in reference/pp_point_locations.csv.
-Finds the nearest VIC grid cell for each lat/lon and aggregates daily → monthly.
+Finds the nearest VIC grid cell for each lat/lon and aggregates daily -> monthly.
 
 Product A: one CSV per location.
-Product B: 10 long-format chunk CSVs (100 WY each, Oct 1921 – Sep 2021).
+Product B: 10 long-format chunk CSVs (100 WY each, Oct 1921 - Sep 2021).
 
 Inputs
 ------
@@ -22,18 +22,19 @@ Outputs
 
 Usage
 -----
-    cd mod_forcing/climate && python _1_pp_point_locations.py --source Product_A --scenario 1
-    cd mod_forcing/climate && python _1_pp_point_locations.py --source Product_B --scenario 1
-    cd mod_forcing/climate && python _1_pp_point_locations.py --source Historical
+    python mod_forcing/climate/_1_pp_point_locations.py --source Product_A --scenario 1
+    python mod_forcing/climate/_1_pp_point_locations.py --source Product_B --scenario 1
+    python mod_forcing/climate/_1_pp_point_locations.py --source Historical
 """
 
+import argparse
+import glob
 import os
 import sys
-import glob
-import argparse
+from pathlib import Path
+
 import numpy as np
 import pandas as pd
-from pathlib import Path
 
 # Add repo root to path for utils imports
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
@@ -143,7 +144,7 @@ def calculate_monthly_precip(daily_data, product_b=False):
     pd.DataFrame with monthly precipitation totals
     """
     if product_b:
-        monthly_precip = daily_data['precip_mm'].resample('M').sum()
+        monthly_precip = daily_data['precip_mm'].resample('ME').sum()
         monthly_precip_inches = monthly_precip / 25.4
         monthly_df = pd.DataFrame({
             'year':          [p.year  for p in monthly_precip_inches.index],
@@ -211,15 +212,15 @@ def process_location(location_name, target_lat, target_lon, data_folder, output_
     dict : Summary information about the processing
     """
     print(f"\nProcessing {location_name}...")
-    print(f"  Target location: {target_lat}°N, {target_lon}°E")
+    print(f"  Target location: {target_lat}degN, {target_lon}degE")
     
     # Find nearest grid cell
     nearest_file, nearest_lat, nearest_lon, distance = find_nearest_grid_cell(
         target_lat, target_lon, data_folder
     )
     
-    print(f"  Nearest grid cell: {nearest_lat}°N, {nearest_lon}°E")
-    print(f"  Distance: {distance:.4f}° (~{distance * 111:.2f} km)")
+    print(f"  Nearest grid cell: {nearest_lat}degN, {nearest_lon}degE")
+    print(f"  Distance: {distance:.4f}deg (~{distance * 111:.2f} km)")
     
     # Read the meteo file
     daily_data = read_meteo_file(nearest_file, product_b=product_b)
@@ -290,12 +291,12 @@ def write_product_b_chunks(summaries: list, output_folder):
     """
     Compile all locations into 10 long-format chunk CSVs (100 WYs each).
     Skips first 9 months (Jan-Sep synthetic year 1) for WY alignment.
-    Template dates: Oct 1921 – Sep 2021 (WY1922–2021).
+    Template dates: Oct 1921 - Sep 2021 (WY1922-2021).
     Output: _pp_precip_productB_n01.csv ... _pp_precip_productB_n10.csv
     Format: Part B, Part C, Year, Month, Value
     """
     skip_months      = 9     # Jan-Sep of synthetic year 1
-    months_per_chunk = 1200  # 100 WYs × 12 months
+    months_per_chunk = 1200  # 100 WYs x 12 months
     total_chunks     = 10
     total_needed     = skip_months + months_per_chunk * total_chunks
 
@@ -319,7 +320,7 @@ def write_product_b_chunks(summaries: list, output_folder):
         print("  No valid locations for Product B chunk output.")
         return
 
-    print(f"\nWriting Product B chunk files ({total_chunks} chunks × {months_per_chunk} months)...")
+    print(f"\nWriting Product B chunk files ({total_chunks} chunks x {months_per_chunk} months)...")
     for i in range(total_chunks):
         rows = []
         for loc_name, vals in loc_data.items():
@@ -471,13 +472,13 @@ def main():
         summary_file = script_output_folder / "_summary.csv"
         summary_df.to_csv(summary_file, index=False)
         print(f"\n{'='*80}")
-        print(f"Processing complete!")
+        print("Processing complete!")
         print(f"Successfully processed {len(summaries)} out of {len(locations_df)} locations")
         print(f"Summary saved to: {summary_file}")
         print(f"{'='*80}")
         
         # Print summary statistics
-        print(f"\nSummary Statistics:")
+        print("\nSummary Statistics:")
         print(f"  Mean distance to grid cell: {summary_df['distance_km'].mean():.2f} km")
         print(f"  Max distance to grid cell: {summary_df['distance_km'].max():.2f} km")
         print(f"  Average monthly precip (across all locations): {summary_df['mean_monthly_precip_inches'].mean():.2f} inches")

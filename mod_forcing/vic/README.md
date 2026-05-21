@@ -54,12 +54,12 @@ python mod_forcing/vic/_2_compile_rim_inflows.py \
     --output_path data/GENERATED/mod_hydrology/vic/output/routed/Historical
 
 # Product A
-python mod_forcing/vic/_2_compile_rim_inflows.py \
+python mod_forcing/vic/_2_compile_rim_inflows.py --product A \
     --fluxes_path data/GENERATED/mod_hydrology/vic/output/fluxes/Product_A/1 \
     --output_path data/GENERATED/mod_hydrology/vic/output/routed/Product_A/1
 
-# Product B (10 × 100 water-year chunks)
-python mod_forcing/vic/_2_compile_rim_inflows.py --Product_B \
+# Product B (10 chunks of 100 water years)
+python mod_forcing/vic/_2_compile_rim_inflows.py --product B \
     --fluxes_path data/GENERATED/mod_hydrology/vic/output/fluxes/Product_B/1 \
     --output_path data/GENERATED/mod_hydrology/vic/output/routed/Product_B/1
 ```

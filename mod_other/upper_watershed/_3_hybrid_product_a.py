@@ -1,5 +1,7 @@
 """
-Build Product A hybrid terms: Hybrid = (WYT_avg + QMap) / 2.
+Build Product A Hybrid Terms (upper watershed)
+==============================================
+Hybrid = (WYT_avg + QMap) / 2.
 
 For each term in hybrid_terms_product_a_upper_watershed.csv, this script:
   1. Computes WYT monthly averages for Product A (1972-2018)
@@ -18,19 +20,18 @@ from pathlib import Path
 
 import pandas as pd
 
-# %%
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 from utils.paths import get_base_dir, get_module_generated_dir
 from utils.wyt_monthlyavg_framework import compute_wyt_pattern, compute_product_targets, water_year
 from utils.qmap_product_a_from_pairs import run_product_a_qmap_from_pairs
 
-# ── Paths ──────────────────────────────────────────────────────────────
+# -- Paths --------------------------------------------------------------
 _REPO_DIR = Path(__file__).resolve().parents[2]
 _gen = get_module_generated_dir("mod_other/upper_watershed")
 _wyt_gen = get_module_generated_dir("mod_hydrology/water_year_types")
 _rim_gen = get_module_generated_dir("mod_hydrology/rim_inflow")
 
-# ── Config ─────────────────────────────────────────────────────────────
+# -- Config -------------------------------------------------------------
 DSS_FILE = str(get_base_dir() / "CalSim3" / "__calsim_sv_default__.dss")
 HYBRID_TERMS_CSV = (
     _REPO_DIR / "mod_other" / "upper_watershed" / "reference"
@@ -54,32 +55,14 @@ SIM_END = "2018-09-30"
 PRODUCT_A_START_WY = 1972
 PRODUCT_A_END_WY = 2018
 
-# ── Output directories ────────────────────────────────────────────────
+# -- Output directories ------------------------------------------------
 BASE_RESULTS_DIR = _gen / "output" / "_3_hybrid_product_a"
 WYT_INTERMEDIATE_DIR = BASE_RESULTS_DIR / "hybrid_wyt_product_a"
 QMAP_INTERMEDIATE_DIR = BASE_RESULTS_DIR / "hybrid_qmap_product_a"    # CalSim-format CSVs (Part 3 input)
 FINAL_DIR = _gen / "output" / "_product_a_validation"
 
 
-# %% ── Helpers ─────────────────────────────────────────────────────────
-def _install_pandas_me_compat() -> None:
-    """Support newer 'ME' month-end alias on pandas < 2.2."""
-    try:
-        pd.date_range("2000-01-31", periods=1, freq="ME")
-        return
-    except Exception:
-        pass
-
-    original = pd.date_range
-
-    def _compat(*a, **kw):
-        if isinstance(kw.get("freq"), str) and kw["freq"].upper() == "ME":
-            kw["freq"] = "M"
-        return original(*a, **kw)
-
-    pd.date_range = _compat
-
-
+# -- Helpers ---------------------------------------------------------
 def prepare_hybrid_input_files(input_csv: Path) -> tuple[pd.DataFrame, pd.DataFrame]:
     """Split hybrid_terms CSV into WYT and QMap DataFrames."""
     df = pd.read_csv(input_csv)
@@ -123,7 +106,6 @@ def _to_sv_format(df: pd.DataFrame) -> pd.DataFrame:
     })
 
 
-# %%
 ####################################################################
 ### Part 1 - WYT Averaging (Product A) ###
 ####################################################################
@@ -175,7 +157,6 @@ def run_wyt_product_a(prefix: str, wyt_terms_df: pd.DataFrame) -> None:
     wyt_csv.unlink(missing_ok=True)
 
 
-# %%
 ####################################################################
 ### Part 2 - Quantile Mapping (Product A) ###
 ####################################################################
@@ -204,7 +185,6 @@ def run_qmap_product_a(qmap_pairs_df: pd.DataFrame) -> None:
     print(f"  QMap intermediates written to: {QMAP_INTERMEDIATE_DIR}")
 
 
-# %%
 ####################################################################
 ### Part 3 - Final Hybrid = (WYT + QMap) / 2 ###
 ####################################################################
@@ -271,13 +251,11 @@ def run_final_hybrid(prefix: str) -> None:
     print(f"  Final hybrid: {total} file(s) written to {FINAL_DIR}")
 
 
-# %%
 ####################################################################
 ### Main ###
 ####################################################################
 
 def main() -> None:
-    _install_pandas_me_compat()
     wyt_terms_df, qmap_pairs_df = prepare_hybrid_input_files(HYBRID_TERMS_CSV)
 
     print("\n=== Part 1: WYT Averaging (Product A) ===")

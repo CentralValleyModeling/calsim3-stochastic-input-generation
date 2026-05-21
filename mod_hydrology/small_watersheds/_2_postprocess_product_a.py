@@ -1,10 +1,24 @@
 """
-Postprocess Small Watersheds DSS runs.
-
-Extracts time series from historical and VIC-precip Small Watersheds DSS outputs,
-merges scenarios into a single CSV, computes summary statistics, generates
-boxplots comparing scenario distributions, and creates a CalSim validation CSV
+Postprocess Small Watersheds DSS Runs
+=====================================
+Extracts time series from historical and VIC-precip Small Watersheds DSS
+outputs, merges scenarios into a single CSV, computes summary statistics,
+generates scenario-comparison boxplots, and creates a CalSim validation CSV
 from the VIC_Precip (Product A) scenario.
+
+Inputs
+------
+- Small Watersheds DSS outputs (historical, VIC-precip scenarios)
+- Master inventory xlsx
+
+Outputs
+-------
+- <generated>/output/_2_postprocess_product_a/  (merged + summary CSVs, boxplots)
+- <generated>/output/_2_postprocess_product_a/_product_a_validation/  (CalSim-format CSV)
+
+Dependencies
+------------
+- utils/paths.py  (data-dir resolution)
 
 Usage
 -----
@@ -14,28 +28,26 @@ Default (runs postprocess + validation for WY 1972-2018):
 Custom validation period (SWS product A output is 1921-2018):
     python _2_postprocess_product_a.py 1922 2018
 """
-#%%
 
 import os
 import sys
-import subprocess
+from functools import reduce
 from pathlib import Path
+
 import numpy as np
 import pandas as pd
-from pydsstools.heclib.dss import HecDss
-from functools import reduce
-
 import seaborn as sns
 import matplotlib.pyplot as plt
 
 # Add repo root to path for utils imports
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
+from utils import dss_io
 from utils.paths import get_module_generated_dir, get_inventory_dir
 
 _GEN_DIR = get_module_generated_dir("mod_hydrology/small_watersheds")
 
 
-# %% ── CONSTANTS ────────────────────────────────────────────────────────
+# -- CONSTANTS --------------------------------------------------------
 OUTPUT_DIR = str(_GEN_DIR / "output" / "_2_postprocess_product_a")
 VALIDATION_DIR = str(_GEN_DIR / "output" / "_2_postprocess_product_a" / "_product_a_validation")
 
@@ -51,7 +63,7 @@ DSS_PATHS = [
 SCENARIO_LABELS = ['Historical_1921', 'ProductA']
 
 
-# %% ── HELPER FUNCTIONS ────────────────────────────────────────────────
+# -- HELPER FUNCTIONS ------------------------------------------------
 
 def load_master_inventory():
     """Load and filter SmallWatersheds entries from the master inventory."""
@@ -70,60 +82,20 @@ def load_master_inventory():
     return excel_partcs, desired_order
 
 
-# -- Junction helper for long DSS paths ---------------------------------------
-# The Fortran HEC-DSS library inside pydsstools limits path names to 256 chars.
-# The data directory may live on OneDrive with a very long path, so we create a
-# temporary Windows directory junction under the repo root to shorten it.
-
-_REPO_ROOT = Path(__file__).resolve().parents[2]
-_DSS_LINK = _REPO_ROOT / "_dss_link"
-_PATH_LIMIT = 200  # conservative limit vs Fortran's 256-char CNAME
-
-
-def _needs_junction(dss_path):
-    return len(str(dss_path)) > _PATH_LIMIT
-
-
-def _create_junction(target_dir):
-    """Create (or re-create) a directory junction at _DSS_LINK -> target_dir."""
-    if _DSS_LINK.exists():
-        subprocess.run(["cmd", "/c", "rmdir", str(_DSS_LINK)], capture_output=True)
-    subprocess.run(
-        ["cmd", "/c", "mklink", "/J", str(_DSS_LINK), str(target_dir)],
-        check=True, capture_output=True,
-    )
-
-
-def _remove_junction():
-    """Remove the _DSS_LINK junction (does not affect target directory)."""
-    if _DSS_LINK.exists():
-        subprocess.run(["cmd", "/c", "rmdir", str(_DSS_LINK)], capture_output=True)
-
-
 def extract_dss_data(dss_path, excel_partcs):
-    """Extract time series from a DSS file for SmallWatersheds variables."""
+    """Extract monthly time series from a DSS file for SmallWatersheds variables.
+
+    Opens via utils.dss_io (auto directory-junction for long paths,
+    version=6, catalog_flag=True -- identical _DSS_LINK / _PATH_LIMIT=200 as
+    the removed local helper). The bespoke read loop is preserved verbatim
+    (no-trailing-slash pattern, sort by Part C; differs from
+    dss_io.read_monthly_frame).
+    """
     dss_path = Path(dss_path).resolve()
     print(f"    Reading DSS: {dss_path.name}")
 
-    use_junction = _needs_junction(dss_path)
-    if use_junction:
-        _create_junction(dss_path.parent)
-        work_path = str(_DSS_LINK / dss_path.name)
-        print(f"    Using junction: {work_path} ({len(work_path)} chars)")
-    else:
-        work_path = str(dss_path)
-
-    try:
-        return _read_dss(work_path, excel_partcs)
-    finally:
-        if use_junction:
-            _remove_junction()
-
-
-def _read_dss(dss_path, excel_partcs):
-    """Read monthly time series from a DSS file using pydsstools."""
     data_dict = {}
-    with HecDss.Open(dss_path, version=6, catalog_flag=True) as dss:
+    with dss_io.open_dss(dss_path, version=6, catalog_flag=True) as dss:
         all_paths = dss.getPathnameList("/*/*/*/*/1MON/*")
         buckets = {}
         for p in all_paths:
@@ -157,7 +129,7 @@ def compute_summary(df, time_unit, agg_func, label, value_cols):
     return grouped
 
 
-# %% ── POSTPROCESS ──────────────────────────────────────────────────────
+# -- POSTPROCESS ------------------------------------------------------
 
 def run_postprocess():
     """Extract DSS data, merge scenarios, generate summary statistics and boxplots."""
@@ -198,7 +170,7 @@ def run_postprocess():
     merged_df.to_csv(merged_csv_path, index=False)
     print(f"Final CSV saved to: {merged_csv_path}")
 
-    # ── Summary Statistics by PartC ──────────────────────────────────────
+    # -- Summary Statistics by PartC --------------------------------------
     merged_df['Date'] = pd.to_datetime(merged_df['Date'])
     merged_df['Year'] = merged_df['Date'].dt.year
     merged_df['Month'] = merged_df['Date'].dt.month
@@ -219,7 +191,7 @@ def run_postprocess():
     summary_df.to_csv(summary_output_path, index=False)
     print(f"Summary statistics saved to: {summary_output_path}")
 
-    # ── Boxplots ─────────────────────────────────────────────────────────
+    # -- Boxplots ---------------------------------------------------------
     plot_df = merged_df[['PartC'] + value_cols].copy()
     plot_df_melted = plot_df.melt(
         id_vars='PartC', value_vars=value_cols,
@@ -231,7 +203,7 @@ def run_postprocess():
         partc_df = plot_df_melted[plot_df_melted['PartC'] == partc]
 
         plt.figure(figsize=(6, 6))
-        ax = sns.boxplot(
+        sns.boxplot(
             x='Scenario', y='Value', data=partc_df,
             width=0.6, showfliers=False,
             boxprops=dict(facecolor='skyblue', edgecolor='black'),
@@ -260,7 +232,7 @@ def run_postprocess():
     return merged_df
 
 
-# %% ── VALIDATION CSV ───────────────────────────────────────────────────
+# -- VALIDATION CSV ---------------------------------------------------
 
 def create_validation_csv(merged_df=None, output_dir=None, start_wy=1972, end_wy=2018):
     """
@@ -340,13 +312,13 @@ def create_validation_csv(merged_df=None, output_dir=None, start_wy=1972, end_wy
     print(f"\n  Written   : {output_file}")
     print(f"  Variables : {n_variables}")
     print(f"  Rows      : {len(val_df)}")
-    print(f"  Date range: "
+    print("  Date range: "
           f"{df_filtered['Date'].min().strftime('%Y-%m')} - "
           f"{df_filtered['Date'].max().strftime('%Y-%m')}")
     print("=" * 80)
 
 
-# %% ── CLI ENTRY POINT ─────────────────────────────────────────────────
+# -- CLI ENTRY POINT -------------------------------------------------
 
 def main():
     """Main entry point."""

@@ -30,8 +30,13 @@ Outputs are written under:
   <generated>/output/_product_b_final/              (Product B)
 
 Output CSV format: Part B, Part C, Year, Month, Value
+
+Usage
+-----
+    python mod_reservoir/storage_curves/_1_wyt_index_curves.py --product A
+    python mod_reservoir/storage_curves/_1_wyt_index_curves.py --product B
 """
-# %% -- IMPORTS ---------------------------------------------------------------
+# -- IMPORTS ---------------------------------------------------------------
 import argparse
 import sys
 from pathlib import Path
@@ -40,12 +45,12 @@ from typing import Dict, Tuple
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
-from pydsstools.heclib.dss import HecDss
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 from utils.paths import get_base_dir, get_module_generated_dir
+from utils import dss_io
 
-# %% -- CONSTANTS -------------------------------------------------------------
+# -- CONSTANTS -------------------------------------------------------------
 _SCRIPT_DIR = Path(__file__).resolve().parent
 _REPO_ROOT = Path(__file__).resolve().parents[2]
 _REF = _SCRIPT_DIR / "reference"
@@ -73,12 +78,11 @@ _BASIN_WYT_FILES = {
 }
 
 OUTPUT_PREFIX = "storage_curves"
-TARGET_PRODUCT = "both"
 
 _DEFAULT_DSS = get_base_dir() / "CalSim3" / "__calsim_sv_default__.dss"
 
 
-# %% -- DSS READER -------------------------------------------------------------
+# -- DSS READER -------------------------------------------------------------
 
 def read_dss_data(
     dss_path: Path,
@@ -110,7 +114,7 @@ def read_dss_data(
         return {}
 
     out: Dict[Tuple[str, str], pd.Series] = {}
-    with HecDss.Open(str(dss_path), version=6) as dss:
+    with dss_io.open_dss(str(dss_path), version=6, catalog_flag=False) as dss:
         all_paths = dss.getPathnameList("/*/*/*/*/1MON/*/")
         print(f"    Catalog: {len(all_paths)} monthly paths found")
 
@@ -142,7 +146,7 @@ def read_dss_data(
     return out
 
 
-# %% -- HELPERS ----------------------------------------------------------------
+# -- HELPERS ----------------------------------------------------------------
 
 def water_year(dt) -> int:
     """CA convention: WY N is Oct(N-1) - Sep(N)."""
@@ -161,7 +165,7 @@ def _make_monthly_index(wy_min: int, wy_max: int) -> pd.DataFrame:
     return out
 
 
-# %% -- SCHEDULE READERS -------------------------------------------------------
+# -- SCHEDULE READERS -------------------------------------------------------
 
 def read_monthly_schedule(csv_path: Path) -> pd.DataFrame:
     """Load reservoir_schedule_monthly.csv as raw long-form DataFrame."""
@@ -183,7 +187,7 @@ def _collect_partbc_specs(monthly_sched: pd.DataFrame, wyt_sched: pd.DataFrame) 
     return specs
 
 
-# %% -- WYT LOADERS ------------------------------------------------------------
+# -- WYT LOADERS ------------------------------------------------------------
 
 def _read_wyt_csv(path: Path) -> pd.DataFrame:
     """Read a WYT CSV, return DataFrame with columns [WY, WYT]."""
@@ -222,7 +226,7 @@ def _load_wyt(wyt_dir: Path, basins: set, product: str, ensemble: str = "") -> D
     return tables
 
 
-# %% -- CORE: GENERATE TARGET TIME SERIES -------------------------------------
+# -- CORE: GENERATE TARGET TIME SERIES -------------------------------------
 
 def generate_targets(
     monthly_sched: pd.DataFrame,
@@ -329,7 +333,7 @@ def generate_targets(
     return out
 
 
-# %% -- OUTPUT WRITERS ---------------------------------------------------------
+# -- OUTPUT WRITERS ---------------------------------------------------------
 
 def _write_product_a(df: pd.DataFrame, prefix: str) -> None:
     """Write Product A validation CSV."""
@@ -357,7 +361,7 @@ def _write_product_b(df: pd.DataFrame, ensemble: str) -> None:
         print(f"  [OK] {out_path.name}")
 
 
-# %% -- METRICS ----------------------------------------------------------------
+# -- METRICS ----------------------------------------------------------------
 
 def _calc_metrics(actual: pd.Series, reconstructed: pd.Series) -> dict:
     """Compute R-squared, NSE, and PBIAS between actual and reconstructed."""
@@ -423,7 +427,7 @@ def _plot_actual_vs_reconstructed(
     print(f"  [PLOT] {out_path.name}")
 
 
-# %% -- HISTORICAL VALIDATION --------------------------------------------------
+# -- HISTORICAL VALIDATION --------------------------------------------------
 
 def run_historical_validation(
     monthly_sched: pd.DataFrame,
@@ -520,22 +524,21 @@ def run_historical_validation(
         )
 
 
-# %% -- MAIN ------------------------------------------------------------------
+# -- MAIN ------------------------------------------------------------------
 
 def main():
     ap = argparse.ArgumentParser(
         description="Generate reservoir storage-level index curves for Product A and B."
     )
-    ap.add_argument("--product", type=str, choices=["A", "B", "both"], default=TARGET_PRODUCT,
-                    help="Which product to generate: A, B, or both (default: both)")
+    ap.add_argument("--product", type=str, choices=["A", "B"], required=True,
+                    help='Product to generate: A (historical 1921-2018) or B (stochastic 1000-yr chunks).')
     ap.add_argument("--yr-type-map", type=str, choices=["cy", "wy"], default=None,
                     help="Force all WYT series to map by Calendar Year (cy) or "
                          "Water Year (wy), ignoring per-series year_type_basis. "
                          "Default: use year_type_basis from CSV")
     args = ap.parse_args()
 
-    choice = args.product.strip().upper()
-    products = ["A", "B"] if choice == "BOTH" else [choice]
+    products = [args.product.strip().upper()]
 
     # Read schedule CSVs
     monthly_sched = read_monthly_schedule(_REF / "reservoir_schedule_monthly.csv")
@@ -580,9 +583,9 @@ def main():
         )
 
         # Allow DSS fills only in the first few months of each Part B/C series
-        boundary_months = 3  # corresponds to first Oct–Dec when using WY alignment
+        boundary_months = 3  # corresponds to first Oct-Dec when using WY alignment
 
-        nan_mask = df["Value"].isna()
+        df["Value"].isna()
 
         # First, validate that all NaNs are within the allowed boundary window
         invalid_nan_info = []

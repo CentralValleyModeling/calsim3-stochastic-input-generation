@@ -1,35 +1,43 @@
 """
-Calculate Water Year Types (WYTs) for Sacramento Valley and San Joaquin Valley.
+Calculate Water Year Types (WYTs)
+=================================
+Sacramento 40-30-30 Index and San Joaquin 60-20-20 Index calculations based
+on rim-inflow aggregations with recursive index formulas. Supports Product A
+(historical validation) and Product B (stochastic 1000-year).
 
-Sacramento 40-30-30 Index and San Joaquin 60-20-20 Index calculations
-based on rim inflow aggregations with recursive index formulas.
+Inputs
+------
+- Rim-inflow QM time series (rim_inflow calsim_qmap_validation_TS.csv)
 
-Supports both Product A (historical validation) and Product B (stochastic 1000-year).
+Outputs
+-------
+- <generated>/output/_1_calc_WYTs/Product_A/  (Sac + SJ WYT indices)
+- <generated>/output/_1_calc_WYTs/Product_B/  (with --product B)
 
-Examples
---------
-# Process both products with default paths:
-    cd ./water_year_types && python _1_calc_WYTs.py
+Dependencies
+------------
+- utils/paths.py  (data-dir resolution)
 
-# Process Product A only:
-    cd ./water_year_types && python _1_calc_WYTs.py --product A
+Usage
+-----
+# Process Product A:
+    python mod_hydrology/water_year_types/_1_calc_WYTs.py --product A
 
-# Process Product B only:
-    cd ./water_year_types && python _1_calc_WYTs.py --product B
+# Process Product B:
+    python mod_hydrology/water_year_types/_1_calc_WYTs.py --product B
 
 # Override input/output paths:
-    cd ./water_year_types && python _1_calc_WYTs.py \
+    python mod_hydrology/water_year_types/_1_calc_WYTs.py \
         --product A \
         --product_a_input path/to/calsim_qmap_validation_TS.csv \
         --product_a_output path/to/output
 """
 
+import argparse
 import sys
 from pathlib import Path
-import argparse
 
 import pandas as pd
-import numpy as np
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 from utils.paths import get_module_generated_dir
@@ -177,11 +185,11 @@ def classify_wyt(index_series, thresholds, valley):
     Classify water year types based on index values.
     
     Classification thresholds (lower index = drier):
-    - index < c → Critical (C, 5)
-    - c ≤ index < d → Dry (D, 4)
-    - d ≤ index < bn → Below Normal (BN, 3)
-    - bn ≤ index < an → Above Normal (AN, 2)
-    - index ≥ an → Wet (W, 1)
+    - index < c -> Critical (C, 5)
+    - c <= index < d -> Dry (D, 4)
+    - d <= index < bn -> Below Normal (BN, 3)
+    - bn <= index < an -> Above Normal (AN, 2)
+    - index >= an -> Wet (W, 1)
     
     Args:
         index_series: Series of flow indices
@@ -331,7 +339,7 @@ def process_product_a(input_path, output_dir, thresholds):
 def process_product_b(input_dir, output_dir, thresholds):
     """
     Process Product B (1000-year stochastic) data.
-    Processes 10 × 100-year chunks separately.
+    Processes 10 x 100-year chunks separately.
     
     Args:
         input_dir: Directory containing *_qmo_n01.csv through *_qmo_n10.csv files
@@ -408,8 +416,8 @@ def process_product_b(input_dir, output_dir, thresholds):
 
 def main():
     parser = argparse.ArgumentParser(description='Calculate Water Year Types for CalSim')
-    parser.add_argument('--product', choices=['A', 'B', 'both'], default='both',
-                        help='Which product to process (default: both)')
+    parser.add_argument('--product', choices=['A', 'B'], required=True,
+                        help='Product to generate: A (historical 1921-2018) or B (stochastic 1000-yr chunks).')
     parser.add_argument('--product_a_input', 
                         default=str(_rim_gen / 'output' / '_2_qmap_historical_validation' / 'calsim_qmap_validation_TS.csv'),
                         help='Path to Product A input CSV')
@@ -431,13 +439,10 @@ def main():
     print(f"  San Joaquin: {THRESHOLDS['san_joaquin']}")
     print()
     
-    # Process Product A
-    if args.product in ['A', 'both']:
+    if args.product == 'A':
         process_product_a(args.product_a_input, args.product_a_output, THRESHOLDS)
         print()
-    
-    # Process Product B
-    if args.product in ['B', 'both']:
+    else:
         process_product_b(args.product_b_input, args.product_b_output, THRESHOLDS)
         print()
     

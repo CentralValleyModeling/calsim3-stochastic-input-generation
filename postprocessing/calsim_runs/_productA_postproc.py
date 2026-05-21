@@ -1,8 +1,8 @@
 """
-_productA_postproc.py
-
-Product A validation post-processing using the shared CalView-style pickle cache
-(values.pkl / diffs.pkl / units.pkl / fields.pkl).
+Product A Validation Post-Processing
+====================================
+Product A validation post-processing using the shared CalView-style pickle
+cache (values.pkl / diffs.pkl / units.pkl / fields.pkl).
 
 Outputs:
 1) Annual Water Year summary tables for:
@@ -49,7 +49,7 @@ import matplotlib.dates as mdates
 import seaborn as sns
 
 
-# ── Report-quality Seaborn / Matplotlib theme ──
+# -- Report-quality Seaborn / Matplotlib theme --
 sns.set_theme(
     style="whitegrid",
     context="paper",
@@ -209,8 +209,8 @@ def nse_score(obs: np.ndarray, sim: np.ndarray) -> float:
 
 def pbias(obs: np.ndarray, sim: np.ndarray) -> float:
     """
-    Percent bias (positive means overestimation, negative underestimation),
-    common hydrology definition:
+    Percent bias (positive means model overestimation, negative
+    underestimation):
       PBIAS = 100 * sum(sim - obs) / sum(obs)
     """
     if len(obs) == 0:
@@ -367,7 +367,7 @@ def plot_timeseries_and_cdf(
         gridspec_kw={"width_ratios": [1.6, 1]},
     )
 
-    # ── Left panel: monthly time-series ──
+    # -- Left panel: monthly time-series --
     for scen in all_scenarios:
         sub = dfp[dfp["Scenario"] == scen].sort_values("Date")
         ax_ts.plot(
@@ -408,7 +408,7 @@ def plot_timeseries_and_cdf(
             ),
         )
 
-    # ── Right panel: monthly non-exceedance CDF ──
+    # -- Right panel: monthly non-exceedance CDF --
     for scen in all_scenarios:
         vals = dfp[dfp["Scenario"] == scen][metric_key].to_numpy(dtype=float)
         xs, p = empirical_cdf(vals)
@@ -423,7 +423,7 @@ def plot_timeseries_and_cdf(
     ax_cdf.set_ylabel("")
     ax_cdf.set_xlim(0, 100)
 
-    # ── Suptitle & layout ──
+    # -- Suptitle & layout --
     fig.suptitle(f"{metric_label} ({unit})", y=1.02)
     if "Full_Validation" not in period.name:
         period_pretty = re.sub(r'(\d{4})_(\d{4})', r'\1-\2', period.name).replace("_", " ")
@@ -435,7 +435,7 @@ def plot_timeseries_and_cdf(
         )
     fig.tight_layout()
 
-    # ── Shared figure legend — top left ──
+    # -- Shared figure legend - top left --
     handles, labels = ax_ts.get_legend_handles_labels()
     fig.legend(
         handles, labels,

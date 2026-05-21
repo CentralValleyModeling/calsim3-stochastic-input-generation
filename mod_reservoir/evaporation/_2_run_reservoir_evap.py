@@ -1,17 +1,27 @@
 """
 Reservoir Evaporation Processing Script (Product A & B)
-
+=======================================================
 Processes WGEN gridded climate data to calculate evaporation time series
 for CalSim 3.0 reservoirs using the Hargreaves-Samani method.
 Automatically finds the nearest weather file for each reservoir.
 
+Inputs
+------
+- WGEN gridded climate (Product_A / Product_B)
+- reference/reservoir_parameters.json (from _0_extract_reservoir_database)
+
+Dependencies
+------------
+- evaporation.py  (Hargreaves-Samani engine)
+- utils/paths.py  (data-dir resolution)
+
 Usage:
-    python _2_run_reservoir_evap.py --Product_A             # Product A, all reservoirs
-    python _2_run_reservoir_evap.py --Product_A FOLSM       # Product A, single reservoir
-    python _2_run_reservoir_evap.py --Product_A FOLSM SHSTA OROVL  # Product A, specific reservoirs
-    python _2_run_reservoir_evap.py --Product_B             # Product B, all reservoirs
-    python _2_run_reservoir_evap.py --Product_B FOLSM       # Product B, single reservoir
-    python _2_run_reservoir_evap.py --compare-a             # Compare B vs A (reads pre-generated outputs)
+    python mod_reservoir/evaporation/_2_run_reservoir_evap.py --product A             # Product A, all reservoirs
+    python mod_reservoir/evaporation/_2_run_reservoir_evap.py --product A FOLSM       # Product A, single reservoir
+    python mod_reservoir/evaporation/_2_run_reservoir_evap.py --product A FOLSM SHSTA OROVL  # Product A, specific reservoirs
+    python mod_reservoir/evaporation/_2_run_reservoir_evap.py --product B             # Product B, all reservoirs
+    python mod_reservoir/evaporation/_2_run_reservoir_evap.py --product B FOLSM       # Product B, single reservoir
+    python mod_reservoir/evaporation/_2_run_reservoir_evap.py --compare-a             # Compare B vs A (reads pre-generated outputs)
 
 Output (Product A):
     - Individual CSV files: output/_2_run_reservoir_evap/Product_A/individual_reservoirs/{Region}/{CODE}.csv
@@ -30,11 +40,12 @@ Output (--compare-a):
         Monthly mean evaporation per reservoir; Product A vs B.
 """
 
-import pandas as pd
-import numpy as np
-from pathlib import Path
 import sys
 import time
+from pathlib import Path
+
+import numpy as np
+import pandas as pd
 import matplotlib.pyplot as plt
 from matplotlib.patches import Patch
 
@@ -59,10 +70,10 @@ _MONTH_NAMES = {
 
 def _load_climate_data_product_b(file_path: str) -> pd.DataFrame:
     """
-    Load Product B WGEN climate data using a PeriodIndex — consistent with all
+    Load Product B WGEN climate data using a PeriodIndex - consistent with all
     other project scripts that handle the 1000-year stochastic sequence.
 
-    Product B WGEN files use years 1–1008 (below pandas Timestamp min ~1677),
+    Product B WGEN files use years 1-1008 (below pandas Timestamp min ~1677),
     so date construction into a DatetimeIndex fails.  A daily PeriodIndex
     anchored at 2025-01-01 (368,172 periods) spans the full 1000-year sequence
     and is compatible with pandas resample() for monthly aggregation.
@@ -203,7 +214,7 @@ def process_reservoirs(
             annual_avg = evap_df['evaporation_in'].mean() * 12
             print(f"OK {len(evap_df):4d} months | {annual_avg:5.1f} in/yr")
         else:
-            print(f"FAILED")
+            print("FAILED")
 
     elapsed = time.time() - start_time
 
@@ -247,7 +258,7 @@ def create_combined_output(
     combined.to_csv(output_file)
 
     print(f"\nCombined output: {output_file}")
-    print(f"  {combined.shape[0]} months × {combined.shape[1]} reservoirs")
+    print(f"  {combined.shape[0]} months x {combined.shape[1]} reservoirs")
 
 
 def create_summary_statistics(
@@ -294,7 +305,7 @@ def create_summary_statistics(
     print(f"\nSummary statistics: {output_file}")
 
     # Print summary
-    print(f"\nStatistics:")
+    print("\nStatistics:")
     print(f"  Mean annual evaporation: {summary_df['annual_total_in'].mean():.2f} in/yr")
     print(f"  Range: {summary_df['annual_total_in'].min():.2f} - {summary_df['annual_total_in'].max():.2f} in/yr")
 
@@ -415,7 +426,7 @@ def create_product_b_chunk_outputs(
     """
     if not results:
         return
-    months_per_chunk = 1200   # 100 WYs × 12 months
+    months_per_chunk = 1200   # 100 WYs x 12 months
     skip_months = 9            # Jan-Sep of synthetic year 1
     total_chunks = 10
     total_needed = skip_months + months_per_chunk * total_chunks
@@ -424,7 +435,7 @@ def create_product_b_chunk_outputs(
     output_path = Path(output_dir)
     output_path.mkdir(parents=True, exist_ok=True)
 
-    print(f"\nWriting Product B chunk files ({total_chunks} chunks × {months_per_chunk} months)...")
+    print(f"\nWriting Product B chunk files ({total_chunks} chunks x {months_per_chunk} months)...")
     for i in range(total_chunks):
         rows = []
         for code, df in results.items():
@@ -510,10 +521,7 @@ def create_temperature_range_boxplot(
                 daily = daily.loc['1921-10-01':'2018-09-30']
                 if len(daily) > 0:
                     # Aggregate to monthly means first, then compute range
-                    try:
-                        monthly = daily.resample('ME').mean()
-                    except ValueError:
-                        monthly = daily.resample('M').mean()
+                    monthly = daily.resample('ME').mean()
                     monthly_dtr = monthly['tmax_c'] - monthly['tmin_c']
                     pa_dtr_mean = monthly_dtr.mean()
                     dtr_data['Product A'][region].append(pa_dtr_mean)
@@ -582,10 +590,10 @@ def create_temperature_range_boxplot(
     ax.set_xticks(positions_list)
     ax.set_xticklabels(labels, fontsize=7)
     ax.tick_params(axis='y', labelsize=7)
-    ax.set_ylabel('Mean Monthly Temperature Range (°C)', fontsize=7, fontweight='bold')
+    ax.set_ylabel('Mean Monthly Temperature Range (degC)', fontsize=7, fontweight='bold')
     ax.set_title(
-        'Monthly Temperature Range (Tmax − Tmin) by Region\n'
-        'Average per Reservoir for Oct 1921 – Sep 2018',
+        'Monthly Temperature Range (Tmax - Tmin) by Region\n'
+        'Average per Reservoir for Oct 1921 - Sep 2018',
         fontsize=7, fontweight='bold', pad=10
     )
     ax.grid(True, alpha=0.3, axis='y')
@@ -595,9 +603,9 @@ def create_temperature_range_boxplot(
     all_pa = [v for vals in dtr_data['Product A'].values() for v in vals]
 
     stats_text = (
-        f"Original:   {np.min(all_orig):.1f} – {np.max(all_orig):.1f} °C  "
+        f"Original:   {np.min(all_orig):.1f} - {np.max(all_orig):.1f} degC  "
         f"(mean: {np.mean(all_orig):.1f})\n"
-        f"Product A:  {np.min(all_pa):.1f} – {np.max(all_pa):.1f} °C  "
+        f"Product A:  {np.min(all_pa):.1f} - {np.max(all_pa):.1f} degC  "
         f"(mean: {np.mean(all_pa):.1f})"
     )
     ax.text(
@@ -690,10 +698,7 @@ def create_climate_boxplots(
                 daily = load_climate_data(weather_file)
                 daily = daily.loc['1921-10-01':'2018-09-30']
                 if len(daily) > 0:
-                    try:
-                        monthly = daily.resample('ME').mean()
-                    except ValueError:
-                        monthly = daily.resample('M').mean()
+                    monthly = daily.resample('ME').mean()
                     for var in variables:
                         if var in monthly.columns:
                             climate_data[var]['Product A'][region].append(
@@ -702,7 +707,7 @@ def create_climate_boxplots(
         except Exception as e:
             print(f"    {res_code} climate load error: {e}")
 
-    # --- Create 1×2 figure ---
+    # --- Create 1x2 figure ---
     fig, axes = plt.subplots(1, 2, figsize=(6.5, 3.5))
     region_colors = ['#1f77b4', '#ff7f0e', '#2ca02c']
 
@@ -906,7 +911,7 @@ def create_annual_boxplot(
             pos_product_a = i * 4 + 1.4
             
             # Excel boxplot (lightest)
-            bp1 = ax.boxplot([excel_data], positions=[pos_excel], widths=0.6,
+            ax.boxplot([excel_data], positions=[pos_excel], widths=0.6,
                              patch_artist=True, showfliers=False,
                              boxprops=dict(facecolor=color, alpha=0.3, edgecolor=color, linewidth=1),
                              medianprops=dict(color='darkred', linewidth=1.5),
@@ -914,7 +919,7 @@ def create_annual_boxplot(
                              capprops=dict(color=color, linewidth=1))
             
             # Validation Python boxplot (medium)
-            bp2 = ax.boxplot([validation_data], positions=[pos_validation], widths=0.6,
+            ax.boxplot([validation_data], positions=[pos_validation], widths=0.6,
                              patch_artist=True, showfliers=False,
                              boxprops=dict(facecolor=color, alpha=0.6, edgecolor=color, linewidth=1),
                              medianprops=dict(color='darkred', linewidth=1.5),
@@ -922,7 +927,7 @@ def create_annual_boxplot(
                              capprops=dict(color=color, linewidth=1))
             
             # Product A boxplot (darkest)
-            bp3 = ax.boxplot([product_a_data], positions=[pos_product_a], widths=0.6,
+            ax.boxplot([product_a_data], positions=[pos_product_a], widths=0.6,
                              patch_artist=True, showfliers=False,
                              boxprops=dict(facecolor=color, alpha=0.95, edgecolor=color, linewidth=1),
                              medianprops=dict(color='darkred', linewidth=1.5),
@@ -1132,15 +1137,24 @@ def compare_product_b_with_a(
 
 def main():
     """Main entry point."""
-    product_a = '--Product_A' in sys.argv
-    product_b = '--Product_B' in sys.argv
-    compare_a = '--compare-a' in sys.argv
-    args = [a for a in sys.argv[1:] if not a.startswith('--')]
+    import argparse
+    parser = argparse.ArgumentParser(
+        description='Run reservoir evaporation for Product A or Product B '
+                    '(or compare Product B output to Product A baseline).')
+    group = parser.add_mutually_exclusive_group(required=True)
+    group.add_argument('--product', choices=['A', 'B'],
+                       help='Product to generate: A (historical 1921-2018) or B (stochastic 1000-yr chunks).')
+    group.add_argument('--compare-a', action='store_true',
+                       help='Compare existing Product B outputs against the Product A baseline (no new run).')
+    parser.add_argument('reservoirs', nargs='*',
+                        help='Optional reservoir codes to process (e.g., FOLSM SHSTA). If empty, all reservoirs.')
+    args = parser.parse_args()
 
-    if not product_a and not product_b and not compare_a:
-        print("No action specified. Use --Product_A, --Product_B, or --compare-a.")
+    if args.compare_a:
+        compare_product_b_with_a()
         return
 
+    product_b = args.product == 'B'
     if product_b:
         output_dir = str(_gen / 'output' / '_2_run_reservoir_evap' / '_product_b_final')
         weather_dir = str(get_base_dir() / 'WGEN' / 'Product_B' / '1')
@@ -1150,51 +1164,47 @@ def main():
         weather_dir = str(get_base_dir() / 'WGEN' / 'Product_A' / '1')
         product_label = "Product A (1921-2018)"
 
-    if product_a or product_b:
-        print(f"\n_2_run_reservoir_evap.py  |  {product_label}")
-        print(f"  weather : {weather_dir}")
-        print(f"  output  : {output_dir}\n")
+    print(f"\n_2_run_reservoir_evap.py  |  {product_label}")
+    print(f"  weather : {weather_dir}")
+    print(f"  output  : {output_dir}\n")
 
-        if args:
-            codes = [code.upper() for code in args]
-            print(f"\nProcessing {len(codes)} reservoir(s): {', '.join(codes)}\n")
-            results = process_reservoirs(
-                reservoir_codes=codes,
-                output_dir=output_dir,
-                weather_dir=weather_dir,
-                product_b=product_b,
-            )
+    if args.reservoirs:
+        codes = [code.upper() for code in args.reservoirs]
+        print(f"\nProcessing {len(codes)} reservoir(s): {', '.join(codes)}\n")
+        results = process_reservoirs(
+            reservoir_codes=codes,
+            output_dir=output_dir,
+            weather_dir=weather_dir,
+            product_b=product_b,
+        )
+    else:
+        print("\nProcessing all reservoirs...\n")
+        results = process_reservoirs(
+            output_dir=output_dir,
+            weather_dir=weather_dir,
+            product_b=product_b,
+        )
+
+    if len(results) > 0:
+        if product_b:
+            create_product_b_chunk_outputs(results, output_dir=output_dir)
         else:
-            print("\nProcessing all reservoirs...\n")
-            results = process_reservoirs(
-                output_dir=output_dir,
-                weather_dir=weather_dir,
-                product_b=product_b,
+            create_combined_output(
+                results,
+                output_file=str(Path(output_dir) / 'combined_evaporation.csv')
             )
+            create_summary_statistics(
+                results,
+                output_file=str(Path(output_dir) / 'summary_statistics.csv')
+            )
+            create_validation_csv(output_dir=output_dir)
+            create_annual_boxplot(output_dir=output_dir)
+            create_temperature_range_boxplot(output_dir=output_dir)
+            create_climate_boxplots(output_dir=output_dir)
 
-        if len(results) > 0:
-            if product_b:
-                create_product_b_chunk_outputs(results, output_dir=output_dir)
-            else:
-                create_combined_output(
-                    results,
-                    output_file=str(Path(output_dir) / 'combined_evaporation.csv')
-                )
-                create_summary_statistics(
-                    results,
-                    output_file=str(Path(output_dir) / 'summary_statistics.csv')
-                )
-                create_validation_csv(output_dir=output_dir)
-                create_annual_boxplot(output_dir=output_dir)
-                create_temperature_range_boxplot(output_dir=output_dir)
-                create_climate_boxplots(output_dir=output_dir)
-
-            print("\n" + "="*80)
-            print("Processing complete!")
-            print("="*80)
-
-    if compare_a:
-        compare_product_b_with_a()
+        print("\n" + "="*80)
+        print("Processing complete!")
+        print("="*80)
 
 
 if __name__ == '__main__':

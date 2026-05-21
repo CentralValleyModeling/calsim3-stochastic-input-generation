@@ -66,7 +66,7 @@ with HecDss.Open(str(dss_path), version=6, catalog_flag=True) as dss:
         buckets.setdefault(part_b, []).append(p)
 
     wanted = {b: buckets[b] for b in buckets if b in excel_partbs} or buckets
-    full_index = pd.date_range("1915-01-31", "2021-12-31", freq="M")
+    full_index = pd.date_range("1915-01-31", "2021-12-31", freq="ME")
 
     for part_b, plist in wanted.items():
         master = pd.Series(index=full_index, dtype="float64")
