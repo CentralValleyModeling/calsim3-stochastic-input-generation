@@ -34,16 +34,15 @@ Usage
 
 import sys
 import argparse
-import subprocess
 from pathlib import Path
 import numpy as np
 import pandas as pd
 import matplotlib
 import matplotlib.pyplot as plt
-from pydsstools.heclib.dss import HecDss
 
 # Add repo root to path for utils imports
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
+from utils import dss_io
 from utils.paths import get_module_generated_dir, get_inventory_dir
 
 
@@ -108,102 +107,62 @@ def load_inventory():
     return excel_partcs, desired_order
 
 
-# -- Junction helper for long DSS paths ---------------------------------------
-# The Fortran HEC-DSS library inside pydsstools limits path names to 256 chars.
-# The data directory may live on OneDrive with a very long path, so we create a
-# temporary Windows directory junction under the repo root to shorten it.
-
-_REPO_ROOT = Path(__file__).resolve().parents[2]
-_DSS_LINK = _REPO_ROOT / "_dss_link"
-_PATH_LIMIT = 200  # conservative limit vs Fortran's 256-char CNAME
-
-
-def _needs_junction(dss_path):
-    return len(str(dss_path)) > _PATH_LIMIT
-
-
-def _create_junction(target_dir):
-    """Create (or re-create) a directory junction at _DSS_LINK -> target_dir."""
-    if _DSS_LINK.exists():
-        subprocess.run(["cmd", "/c", "rmdir", str(_DSS_LINK)], capture_output=True)
-    subprocess.run(
-        ["cmd", "/c", "mklink", "/J", str(_DSS_LINK), str(target_dir)],
-        check=True, capture_output=True,
-    )
-
-
-def _remove_junction():
-    """Remove the _DSS_LINK junction (does not affect target directory)."""
-    if _DSS_LINK.exists():
-        subprocess.run(["cmd", "/c", "rmdir", str(_DSS_LINK)], capture_output=True)
-
-
 # -- DSS extraction via pydsstools ---------------------------------------------
 
 def extract_dss_data(dss_path, excel_partcs):
     """Extract monthly time series from a DSS file, filtered to inventory parts.
 
-    Creates a directory junction for paths exceeding the Fortran 256-char
-    limit, then reads all monthly pathnames and assembles a DataFrame.
+    Opens via utils.dss_io (Windows long-path junction lifecycle), then
+    delegates to the local _read_dss loop, which is kept bespoke because
+    SWS's pattern ``/*/*/*/*/1MON/*`` (no trailing slash) and sort key
+    ``parts[2]`` (C-part within group) differ from the calsimhydro variant
+    that dss_io.read_monthly_frame faithfully copied.
     """
     dss_path = Path(dss_path).resolve()
     print(f"    Reading DSS: {dss_path.name}")
-
-    use_junction = _needs_junction(dss_path)
-    if use_junction:
-        _create_junction(dss_path.parent)
-        work_path = str(_DSS_LINK / dss_path.name)
-        print(f"    Using junction: {work_path} ({len(work_path)} chars)")
-    else:
-        work_path = str(dss_path)
-
-    try:
-        return _read_dss(work_path, excel_partcs)
-    finally:
-        if use_junction:
-            _remove_junction()
+    with dss_io.open_dss(dss_path, version=6, catalog_flag=True) as dss:
+        return _read_dss(dss, excel_partcs)
 
 
-def _read_dss(dss_path, excel_partcs):
-    """Read monthly time series from a DSS file using pydsstools.
+def _read_dss(dss, excel_partcs):
+    """Read monthly time series from an open DSS handle using pydsstools.
 
     Groups pathnames by Part B/C, reads each path, concatenates date ranges,
     filters -901 sentinel values, and returns a wide DataFrame.
     """
     data_dict = {}
-    with HecDss.Open(dss_path, version=6, catalog_flag=True) as dss:
-        all_paths = dss.getPathnameList("/*/*/*/*/1MON/*")
-        print(f"    Catalog: {len(all_paths)} monthly paths found")
+    all_paths = dss.getPathnameList("/*/*/*/*/1MON/*")
+    print(f"    Catalog: {len(all_paths)} monthly paths found")
 
-        # Group pathnames by Part B / Part C
-        buckets = {}
-        for p in all_paths:
-            parts = p.strip("/").split("/")
-            key = parts[1].upper() + "/" + parts[2]
-            buckets.setdefault(key, []).append(p)
+    # Group pathnames by Part B / Part C
+    buckets = {}
+    for p in all_paths:
+        parts = p.strip("/").split("/")
+        key = parts[1].upper() + "/" + parts[2]
+        buckets.setdefault(key, []).append(p)
 
-        # Filter to inventory SVs; fall back to all if none match
-        wanted = {k: v for k, v in buckets.items() if k in excel_partcs}
-        if not wanted:
-            print("    No inventory match -- reading all paths")
-            wanted = buckets
-        else:
-            print(f"    Matched {len(wanted)} of {len(excel_partcs)} inventory SVs")
+    # Filter to inventory SVs; fall back to all if none match
+    wanted = {k: v for k, v in buckets.items() if k in excel_partcs}
+    if not wanted:
+        print("    No inventory match -- reading all paths")
+        wanted = buckets
+    else:
+        print(f"    Matched {len(wanted)} of {len(excel_partcs)} inventory SVs")
 
-        for part_BC, plist in wanted.items():
-            master = {}
-            for p in sorted(plist, key=lambda x: x.strip("/").split("/")[2]):
-                ts = dss.read_ts(p, trim_missing=True)
-                vals = np.asarray(ts.values, dtype=float)
-                vals[vals <= -900] = np.nan
-                # pydsstools dates are start-of-period; shift to end-of-month
-                idx = (pd.to_datetime(ts.pytimes).to_period("M") - 1).to_timestamp("M")
-                s = pd.Series(vals, index=idx)
-                master.update(s.to_dict())
-            if master:
-                series = pd.Series(master).sort_index()
-                series.name = excel_partcs.get(part_BC, part_BC)
-                data_dict[series.name] = series
+    for part_BC, plist in wanted.items():
+        master = {}
+        for p in sorted(plist, key=lambda x: x.strip("/").split("/")[2]):
+            ts = dss.read_ts(p, trim_missing=True)
+            vals = np.asarray(ts.values, dtype=float)
+            vals[vals <= -900] = np.nan
+            # pydsstools dates are start-of-period; shift to end-of-month
+            idx = (pd.to_datetime(ts.pytimes).to_period("M") - 1).to_timestamp("M")
+            s = pd.Series(vals, index=idx)
+            master.update(s.to_dict())
+        if master:
+            series = pd.Series(master).sort_index()
+            series.name = excel_partcs.get(part_BC, part_BC)
+            data_dict[series.name] = series
 
     df = pd.DataFrame(data_dict).sort_index()
     print(f"    Result: {df.shape[1]} variables, {len(df)} timesteps")
