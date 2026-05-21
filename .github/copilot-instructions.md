@@ -46,13 +46,14 @@ root/
 │
 ├── utils/                    Shared utilities
 │   ├── paths.py              Config & path resolution (data_dir, BASE, GENERATED dirs)
-│   ├── quantile_mapping.py   qmap_single(): empirical CDF quantile mapping
-│   ├── qmap_product_b_from_pairs.py  Reusable Product B QM driven by qmap_pairs.csv
-│   ├── flow_indices.py       flowAggregator(): seasonal flow aggs for WYT
+│   ├── dss_io.py             open_dss() context manager: Windows long-path junction + catalog_flag (THE canonical DSS open)
+│   ├── csv_io.py             SV-format CSV helpers (to_validation_df, read_sv_csv, load_sv_series)
+│   ├── quantile_mapping.py   qmap_single(): empirical CDF QM (deterministic via global QMAP_SEED)
+│   ├── qmap_product_a_from_pairs.py  Reusable Product A split-sample QM driven by qmap_pairs.csv
+│   ├── qmap_product_b_from_pairs.py  Reusable Product B chunked QM driven by qmap_pairs.csv
 │   ├── wyt_monthlyavg_framework.py  compute_wyt_monthlyavg(): WYT x month reconstruction
-│   ├── dss_pickle_builder.py CalView-style DSS cache (values/diffs/units pkl)
-│   ├── calculate_correlations_finder.py  R-squared between CalSim and VIC inflows
-│   └── extract_monthly_precip_for_point.py  WGEN precip for lat/lon point
+│   ├── dss_pickle_builder.py CalView-style DSS cache (values/diffs/units pkl); routes through dss_io
+│   └── calculate_correlations_finder.py  R-squared between CalSim and VIC inflows
 │
 ├── inventory/                Master CalSim SV inventory spreadsheet + screening
 ├── data/                     Large data (git-ignored): BASE/ (read-only) + GENERATED/ (outputs)
