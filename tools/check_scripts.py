@@ -3,7 +3,7 @@
 Single source of truth for the numbered-pipeline script convention,
 used both for a local pre-commit check and by CI
 (.github/workflows/lint.yml). For every script in the Product A and
-Product B pipelines it enforces four rules:
+Product B pipelines it enforces five rules:
 
   1. ASCII only        -- no byte >= 0x80 anywhere (CLAUDE.md hard rule).
   2. No Jupyter cells  -- no ``# %%`` / ``#%%`` cell markers (scripts are
@@ -12,14 +12,23 @@ Product B pipelines it enforces four rules:
                           standardized title underline.
   4. pyflakes-clean    -- no unused imports / undefined names, etc.
 
+Plus one cross-cutting check (only run during a full sweep):
+
+  5. Manifest-drift cross-check -- every pipeline-shaped .py file on disk
+     (numbered ``_N_*.py`` under mod_*/, all ``*.py`` under postprocessing/)
+     must be listed in PRODUCT_A_SCRIPTS, PRODUCT_B_SCRIPTS, or
+     EXEMPT_SCRIPTS; conversely, no listed entry may be missing from disk.
+
 Inputs       : the Product A + Product B script lists below
-               (or paths given as argv to check a subset).
+               (or paths given as argv to check a subset; subset runs skip
+               the manifest-drift cross-check).
 Outputs      : a report on stdout; exit code 0 (clean) or 1 (violations).
 Dependencies : pyflakes (see environment.yml pip section).
-Usage        : python tools/check_scripts.py            # both lists
-               python tools/check_scripts.py path ...   # subset
+Usage        : python tools/check_scripts.py            # both lists + drift
+               python tools/check_scripts.py path ...   # subset (no drift)
 """
 import ast
+import re
 import subprocess
 import sys
 from pathlib import Path
@@ -94,6 +103,38 @@ PRODUCT_B_SCRIPTS = [
 ]
 
 
+# Diagnostic / exploration / validation scripts tracked in the repo but NOT
+# part of either pipeline. Exempt from the convention checks (rules 1-4) and
+# accepted as "known" by the manifest-drift cross-check (rule 5) so they
+# don't trip the on-disk-but-unlisted detector.
+EXEMPT_SCRIPTS = [
+    "mod_forcing/vic/_1_append_wind_wgen_stochastic.py",            # alt stochastic variant; pipeline uses _1_append_wind_wgen_hist
+    "mod_hydrology/calsimhydro/_0_compare_et_cshydro_vic.py",       # diagnostic
+    "mod_hydrology/rim_inflow/_0_stochastic_inflow_explore.py",     # exploration
+    "mod_hydrology/rim_inflow/_0_stochastic_precipitation.py",      # exploration
+    "mod_hydrology/rim_inflow/_1_calc_correlations.py",             # diagnostic
+    "mod_hydrology/small_watersheds/_1b_check_precip_output.py",    # diagnostic
+    "mod_hydrology/water_year_types/_2_compare_wyts.py",            # diagnostic
+    "mod_other/day_volume_fractions/_1_vol_fractions_analysis.py",  # diagnostic
+    "mod_reservoir/evaporation/_1_excel_to_python_validation.py",   # validation tool
+    "postprocessing/calsim_runs/infeasibilities/n09.py",            # chunk-specific infeasibility debug
+    "postprocessing/calsim_runs/infeasibilities/n10.py",            # chunk-specific infeasibility debug
+    "postprocessing/calsim_runs/infeasibilities/n1_n4_n5_n6.py",    # chunk-specific infeasibility debug
+    "postprocessing/calsim_runs/infeasibilities/n3_n7.py",          # chunk-specific infeasibility debug
+]
+
+
+# Pipeline-script naming patterns the drift check uses to discover .py files
+# on disk and decide whether they should be in the manifest. Numbered scripts
+# under mod_*/ have the canonical ``_N_*.py`` shape (or ``_Nb_*.py`` for the
+# rare lettered variant); postprocessing scripts follow ad-hoc names so all
+# .py files under postprocessing/ (except __init__.py) are considered
+# pipeline-shaped.
+_NUMBERED_RE = re.compile(r"^_\d+[a-z]?_.+\.py$")
+_MODULE_ROOTS = ("mod_forcing", "mod_hydrology", "mod_reservoir", "mod_other")
+_PIPELINE_ROOTS = _MODULE_ROOTS + ("postprocessing",)
+
+
 def check_ascii(rel, text):
     bad = []
     for i, line in enumerate(text.splitlines(), 1):
@@ -134,9 +175,58 @@ def check_pyflakes(path):
     return [f"  pyflakes: {ln}" for ln in out] or ["  pyflakes: failed"]
 
 
+def check_drift():
+    """Cross-check on-disk pipeline-shaped .py files vs the manifest.
+
+    Walks ``mod_*/`` for ``_N_*.py`` (or ``_Nb_*.py``) and ``postprocessing/``
+    for all ``*.py`` (excluding ``__init__.py``). Reports drift in two
+    directions:
+      - on disk, not listed in PRODUCT_A_SCRIPTS / PRODUCT_B_SCRIPTS /
+        EXEMPT_SCRIPTS (potential missing entry; add to gate or exempt)
+      - listed but not on disk (stale gate entry; remove or move)
+    """
+    on_disk = set()
+    for module_root in _MODULE_ROOTS:
+        root = REPO / module_root
+        if not root.is_dir():
+            continue
+        for path in root.rglob("*.py"):
+            if "__pycache__" in path.parts:
+                continue
+            if _NUMBERED_RE.match(path.name):
+                on_disk.add(str(path.relative_to(REPO)).replace("\\", "/"))
+    pp_root = REPO / "postprocessing"
+    if pp_root.is_dir():
+        for path in pp_root.rglob("*.py"):
+            if "__pycache__" in path.parts or path.name == "__init__.py":
+                continue
+            on_disk.add(str(path.relative_to(REPO)).replace("\\", "/"))
+
+    known = {p.replace("\\", "/") for p in
+             PRODUCT_A_SCRIPTS + PRODUCT_B_SCRIPTS + EXEMPT_SCRIPTS}
+
+    bad = []
+    for rel in sorted(on_disk - known):
+        bad.append(
+            f"{rel}: on disk but not in PRODUCT_A_SCRIPTS / "
+            f"PRODUCT_B_SCRIPTS / EXEMPT_SCRIPTS (drift)"
+        )
+    for rel in sorted(known - on_disk):
+        # Only report stale entries that would have been discovered by the
+        # walk above; skip out-of-scope entries.
+        if rel.startswith(_PIPELINE_ROOTS) and not rel.endswith("/__init__.py"):
+            bad.append(
+                f"{rel}: listed in manifest but not on disk (stale entry)"
+            )
+    return bad
+
+
 def main(argv):
     rels = argv or (PRODUCT_A_SCRIPTS + PRODUCT_B_SCRIPTS)
     failures = []
+    if not argv:
+        # Full sweep: also run cross-cutting checks (manifest drift)
+        failures.extend(check_drift())
     checked = 0
     for rel in rels:
         rel = rel.replace("\\", "/")
@@ -162,7 +252,7 @@ def main(argv):
             print("  - " + f)
         return 1
     print("RESULT: PASS - all pipeline scripts conform "
-          "(ASCII / no-# %% / === header / pyflakes)")
+          "(ASCII / no-# %% / === header / pyflakes / no drift)")
     return 0
 
 
