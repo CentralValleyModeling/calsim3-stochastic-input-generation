@@ -67,6 +67,10 @@ PRODUCT_A_SCRIPTS = [
     "mod_other/upper_watershed/_5_dnp_evaporation.py",
     "mod_other/closure_terms/_1_ct_calculation.py",
     "postprocessing/sv_compile/product_a_historical_validation.py",
+    "postprocessing/calsim_runs/_productA_pickle_builder.py",
+    "postprocessing/calsim_runs/_productA_postproc.py",
+    "postprocessing/calsim_runs/_historical_modified_pickle_builder.py",
+    "postprocessing/calsim_runs/_historical_modified_postproc.py",
 ]
 
 
@@ -86,6 +90,7 @@ PRODUCT_B_SCRIPTS = [
     "mod_other/day_volume_fractions/_2_generate_product_b.py",
     "postprocessing/sv_compile/product_b_compilation.py",
     "postprocessing/calsim_runs/_productB_pickle_builder.py",
+    "postprocessing/calsim_runs/_productB_postproc.py",
 ]
 
 

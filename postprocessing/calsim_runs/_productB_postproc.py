@@ -1,82 +1,54 @@
-r"""
-Product B stochastic post-processing.
+"""
+Product B Stochastic Run Postprocessing
+=======================================
+Consumes the shared CalView-style pickle cache (values.pkl / diffs.pkl /
+units.pkl / fields.pkl) built by ``_productB_pickle_builder.py`` and
+produces block-vs-historical diagnostic tables and figures over the
+10 x 100-year Product B block structure. Optional Product A pickle cache
+adds a 10-year rolling overlay on the stitched 1000-year time series.
 
-This module is tailored to the 10 x 100-year Product B block structure:
-- one baseline scenario
-- ten stochastic block scenarios n01 ... n10
-- each block spans the same 100 water years
+Assumes: values.pkl metric columns are in TAF; block scenarios are named
+n01..n10 (or contain those tokens); non-storage metrics are monthly
+volumes summed to water years; storage metrics use end-of-September
+carryover.
 
-Outputs:
-1) heatmap_block_summary.xlsx
-   - % difference vs benchmark for mean annual, P5 annual,
-     worst 5-year rolling average, and worst 10-year rolling average
+Inputs
+------
+- Product B pickle cache: ``GENERATED/postprocessing/calsim_runs/product_b/
+  pickle_files/`` (values.pkl, diffs.pkl, units.pkl, fields.pkl)
+- (optional) Product A pickle cache for the historical-region overlay on
+  the stitched 1000-year time series:
+  ``GENERATED/postprocessing/calsim_runs/product_a/pickle_files/``
 
-2) annual_block_summary.xlsx
-   - historical_summary
-   - block_summary
-   - annual_values_long
+Outputs (all in ``GENERATED/postprocessing/calsim_runs/product_b/output/``)
+--------------------------------------------------------------------------
+- ``heatmap_block_summary.xlsx`` -- %-diff vs benchmark for mean annual,
+  P5 annual, worst 5-yr rolling, worst 10-yr rolling
+- ``annual_block_summary.xlsx`` -- historical_summary / block_summary /
+  annual_values_long
+- ``rolling_minima.xlsx`` -- historical + stochastic rolling minima
+- ``compact_summary.xlsx`` -- one-row-per-metric summary
+- ``rolling_minima_vs_historical_counts.xlsx``
+- ``figures/annual_cdf/<metric>.png`` -- annual WY CDFs
+- ``figures/monthly_cdf/<metric>.png`` -- monthly CDFs
+- ``figures/block_boxplots/<metric>.png`` -- per-block boxplots
+- ``figures/worst_window_sequences/<W>yr/<metric>_worst_<W>yr.png`` --
+  historical + per-block worst-window overlays (2-yr / 5-yr)
+- ``figures/timeseries_1000yr/<metric>.png`` -- historical + stitched
+  1000-year stochastic (with optional Product A 10-yr rolling overlay)
+- ``figures/rolling_minima_vs_historical_counts/*.png`` -- grouped bars
+- ``figures/annual_block_range/range_100yr_block_means_vs_historical.{png,svg}``
 
-3) rolling_minima.xlsx
-   - historical_rolling_minima
-   - stochastic_rolling_minima
+Dependencies
+------------
+- utils.paths
+- Python 3.10+ (PEP 604 ``X | None`` syntax)
+- pandas, numpy, matplotlib, openpyxl
 
-4) figures/annual_cdf/<metric>.png
-   - annual water-year CDFs, with one line for the benchmark and one line per Product B block
-
-5) figures/monthly_cdf/<metric>.png
-   - monthly CDFs, with all monthly values on one CDF for the benchmark and Product B blocks
-
-6) figures/block_boxplots/<metric>.png
-   - benchmark distribution plus one Product B box per block; historical mean shown as
-     the single horizontal reference line
-
-7) figures/worst_window_sequences/<window>yr/<metric>_worst_<window>yr.png
-   - overlays of the historical worst sequence and each block's own worst sequence for
-     2-year and 5-year rolling windows. The 2-year plot uses a 6-year frame;
-     the 5-year plot uses the default fixed 15-year frame.
-
-8) compact_summary.xlsx
-   - one-row-per-metric summary: historical annual avg, N1-10 block range, rolling minima
-
-9) figures/timeseries_1000yr/<metric>.png
-   - historical trace followed by stitched 1000-year stochastic sequence; optional
-     Product A 10-yr rolling overlay in the historical region
-
-10) rolling_minima_vs_historical_counts.xlsx
-    - counts_by_block: per-block count of metrics whose worst rolling average is
-      strictly worse than the historical worst rolling average
-    - details: per-metric breakdown
-
-11) figures/rolling_minima_vs_historical_counts/block_rolling_minima_below_historical_counts*.png
-    - grouped bar charts of below-historical rolling-minimum counts per block
-
-12) figures/annual_block_range/range_100yr_block_means_vs_historical.png / .svg
-    - lollipop/range chart of 100-year block means vs the historical mean
-      for key Delta, Delivery, and Storage metrics
-
-
-Dependencies:
-- Python 3.10+ (uses PEP 604 union syntax, e.g. ``int | None``)
-- pandas, numpy, matplotlib, and openpyxl
-- Repository utility ``utils.paths.get_generated_dir`` for default path resolution
-- Product B pickle cache containing ``values.pkl``, ``diffs.pkl``, ``units.pkl``,
-    and ``fields.pkl``
-- Optional Product A pickle cache with the same four files when using the
-    10-year rolling overlay on the stitched 1000-year time series
-
-
-Assumptions:
-- values.pkl metric columns are already in TAF
-- Product B block scenarios are named either n01..n10, or contain those tokens in the scenario name
-- Non-storage metrics are monthly volumes that should be summed to water years
-- Storage metrics are represented by end-of-September carryover values
-
-Typical usage:
-
-    python _productB_postproc.py ^
-        --pickle-dir "data\GENERATED\postprocessing\calsim_runs\product_b\pickle_files" ^
-        --benchmark-name Historical ^
-        --out-dir "data\GENERATED\postprocessing\calsim_runs\product_b\output"
+Usage
+-----
+    python postprocessing/calsim_runs/_productB_postproc.py
+    python postprocessing/calsim_runs/_productB_postproc.py --benchmark-name Historical
 """
 
 from __future__ import annotations
@@ -102,11 +74,7 @@ REPO_ROOT = RUN_DIR.parents[1]
 import sys as _sys
 
 _sys.path.insert(0, str(REPO_ROOT))
-try:
-    from utils.paths import get_generated_dir
-except ImportError:
-    def get_generated_dir() -> Path:
-        return RUN_DIR
+from utils.paths import get_generated_dir
 
 PICKLE_DIR = get_generated_dir() / "postprocessing" / "calsim_runs" / "product_b" / "pickle_files"
 OUT_DIR = get_generated_dir() / "postprocessing" / "calsim_runs" / "product_b" / "output"
@@ -114,7 +82,7 @@ PRODUCT_A_PICKLE_DIR = (
     get_generated_dir()
     / "postprocessing"
     / "calsim_runs"
-    / "product_a_modified"
+    / "product_a"
     / "pickle_files"
 )
 
@@ -1729,7 +1697,6 @@ def _build_centered_sequence_frame(
 
     window_start_pos = (frame_years - window_years) // 2 + 1  # 1-based within display frame
     before_slots = window_start_pos - 1
-    after_slots = frame_years - window_years - before_slots
 
     source_start_pos = int(best["Seq_Start"]) - before_slots
 
@@ -1970,7 +1937,6 @@ def plot_worst_window_sequences(
             #   - Driest block (crimson, label includes Yr range/avg)
             #   - Other blocks (n=N) (gray proxy line)
             #   - Critical window (light gray patch)
-            from matplotlib.lines import Line2D
             from matplotlib.patches import Patch
 
             handles, labels = ax.get_legend_handles_labels()

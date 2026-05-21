@@ -1,38 +1,35 @@
-r"""
-Product B Run Pickle Cache Builder
-==================================
-Builds the CalView-style DSS pickle cache (values, diffs, units) for one
-baseline / benchmark CalSim run plus the ten Product B block runs
-(n01 ... n10). Used by downstream Product B run postprocessing.
+"""
+Product B Stochastic Run Pickle Cache Builder
+=============================================
+11-scenario wrapper around the shared CalView-style DSS pickle builder
+(``utils.dss_pickle_builder``) that pairs the historical baseline DV DSS
+with the ten Product B block DV DSS files (n01 .. n10) produced by an
+external CalSim 3 run. Used as input to ``_productB_postproc.py``. The
+n01..n10 labels are auto-detected from the DSS filenames (case-insensitive).
 
 Inputs
 ------
-- One baseline / benchmark DSS (CLI: ``--baseline-dss``)
-- A root directory containing the ten Product B DV DSS files
-  (CLI: ``--product-b-root`` plus ``--glob`` to discover the chunked DSS
-  files; n01 ... n10 are auto-detected from the path names,
-  case-insensitive)
-- Shared metric definitions: ``reference/metrics.csv``
-- Shared builder: ``utils/dss_pickle_builder.py``
+- Historical baseline DV DSS:
+  ``BASE/CalSim3/Studies/9.3.1_danube_hist/DSS/output/
+  DCR2023_DV_9.3.1_Danube_Hist_v1.7.dss``
+- 10 Product B DV DSS (auto-discovered under ``--product-b-root`` by default):
+  ``GENERATED/postprocessing/calsim_runs/product_b/dv_out/
+  DCR2023_DV_9.3.1_Danube_Hist_v1.7_ProductB_n{01..10}.dss``
+- Metric definitions: ``reference/metrics.csv``
 
 Outputs
 -------
-- Pickle cache files in ``--out-dir`` (values / diffs / units pkls per
-  scenario, ready for postprocessing).
+- ``GENERATED/postprocessing/calsim_runs/product_b/pickle_files/``
+  (values.pkl, diffs.pkl, units.pkl, fields.pkl, meta.json)
 
 Dependencies
 ------------
-- utils.dss_pickle_builder
-- utils.paths
+- utils.dss_pickle_builder, utils.paths
+- pandas, numpy, pydsstools
 
 Usage
 -----
-    python postprocessing/calsim_runs/_productB_pickle_builder.py ^
-        --baseline-name Historical ^
-        --baseline-dss "..\benchmark\DSS\output\benchmark.dss" ^
-        --product-b-root "data\GENERATED\postprocessing\calsim_runs\product_b\dv_out" ^
-        --glob "**\*.dss" ^
-        --out-dir "data\GENERATED\postprocessing\calsim_runs\product_b\pickle_files"
+    python postprocessing/calsim_runs/_productB_pickle_builder.py
 """
 
 from __future__ import annotations
@@ -67,6 +64,14 @@ PRODUCT_B_DV_DIR = (
     / "calsim_runs"
     / "product_b"
     / "dv_out"
+)
+
+PRODUCT_B_PICKLE_DIR = (
+    get_generated_dir()
+    / "postprocessing"
+    / "calsim_runs"
+    / "product_b"
+    / "pickle_files"
 )
 
 
@@ -150,7 +155,7 @@ def main() -> None:
     )
     parser.add_argument(
         "--out-dir",
-        default=str(get_generated_dir() / "postprocessing" / "calsim_runs" / "product_b" / "pickle_files"),
+        default=str(PRODUCT_B_PICKLE_DIR),
         help="Output directory for pickle cache",
     )
     args = parser.parse_args()

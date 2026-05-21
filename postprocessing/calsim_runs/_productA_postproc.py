@@ -1,35 +1,34 @@
 """
-Product A Validation Post-Processing
-====================================
-Product A validation post-processing using the shared CalView-style pickle
-cache (values.pkl / diffs.pkl / units.pkl / fields.pkl).
+Product A Validation Run Postprocessing
+=======================================
+Consumes the shared CalView-style pickle cache (values.pkl / diffs.pkl /
+units.pkl / fields.pkl) built by ``_productA_pickle_builder.py`` and
+produces annual WY summary tables + per-metric two-panel figures
+(monthly time series + non-exceedance CDF, with R2 / NSE / PBIAS
+annotations vs the baseline). Default periods: full validation
+WY 1972-2021 and drought WY 1987-1992. Also reused by
+``_historical_modified_postproc.py`` via ``run_post_processing_package``.
 
-Outputs:
-1) Annual Water Year summary tables for:
-   - Full validation period: WY 1972-2021
-   - Drought period: WY 1987-1992
-   For each metric: baseline + scenario(s), absolute diff, percent diff.
+Inputs
+------
+- Pickle cache: ``GENERATED/postprocessing/calsim_runs/product_a/
+  pickle_files/`` (values.pkl, diffs.pkl, units.pkl, fields.pkl)
 
-2) For each metric and each period, a two-panel figure:
-   - Left: monthly timeseries in TAF
-   - Right: monthly non-exceedance CDF
-   - R2, NSE, and PBIAS on the timeseries panel versus the baseline.
+Outputs
+-------
+- ``GENERATED/postprocessing/calsim_runs/product_a/output/``
+  - ``annual_WY_summary.xlsx`` (one sheet per period)
+  - ``figures/<period>/<metric>.png`` (2-panel: monthly TS + non-exceedance CDF)
 
-Expected repository location:
-    calsim3-stochastic-input-generation/postprocessing/calsim_runs/_productA_postproc.py
+Dependencies
+------------
+- utils.paths
+- pandas, numpy, matplotlib, seaborn, openpyxl
 
-Default inputs:
-    data/GENERATED/postprocessing/calsim_runs/product_a/pickle_files
-
-Default outputs:
-    data/GENERATED/postprocessing/calsim_runs/product_a/output
-
-Typical usage:
-    python _productA_postproc.py --baseline-name Historical
-
-    python _productA_postproc.py ^
-        --pickle-dir "../../data/GENERATED/postprocessing/calsim_runs/product_a/pickle_files" ^
-        --out-dir "../../data/GENERATED/postprocessing/calsim_runs/product_a/output"
+Usage
+-----
+    python postprocessing/calsim_runs/_productA_postproc.py
+    python postprocessing/calsim_runs/_productA_postproc.py --baseline-name Historical
 """
 
 from __future__ import annotations
@@ -43,7 +42,6 @@ from typing import Dict, Optional, Sequence, Tuple
 
 import numpy as np
 import pandas as pd
-import matplotlib
 import matplotlib.pyplot as plt
 import matplotlib.dates as mdates
 import seaborn as sns
@@ -95,13 +93,7 @@ RUN_DIR = Path(__file__).resolve().parent
 REPO_ROOT = RUN_DIR.parents[1]
 
 _sys.path.insert(0, str(REPO_ROOT))
-try:
-    from utils.paths import get_generated_dir
-except Exception:
-    # Fallback is only for local testing outside the full repository.
-    # In the repository, utils.paths should be used.
-    def get_generated_dir() -> Path:
-        return REPO_ROOT / "data" / "GENERATED"
+from utils.paths import get_generated_dir
 
 PICKLE_DIR = (
     get_generated_dir()

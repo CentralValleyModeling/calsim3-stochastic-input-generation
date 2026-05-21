@@ -1,17 +1,31 @@
-r"""
-Postprocess the Historical vs Modified Historical paired comparison.
+"""
+Historical vs Modified Historical Postprocessing
+================================================
+Thin wrapper around the Product A postprocessing engine
+(``_productA_postproc.run_post_processing_package``). Only the input pickle
+dir, output dir, and default WY periods differ.
 
-Thin wrapper around the Product A postprocessing package; only the output
-directory, pickle directory, and default periods differ.
+Inputs
+------
+- Pickle cache: ``GENERATED/postprocessing/calsim_runs/historical_modified/
+  pickle_files/`` (values.pkl, diffs.pkl, units.pkl, fields.pkl)
 
-Usage from the repo root::
+Outputs
+-------
+- ``GENERATED/postprocessing/calsim_runs/historical_modified/output/``
+  - ``annual_WY_summary.xlsx``
+  - ``figures/<period>/<metric>.png`` (monthly time series + non-exceedance CDF)
 
-    python postprocessing\calsim_runs\_historical_modified_postproc.py
+Dependencies
+------------
+- ``_productA_postproc.run_post_processing_package`` (same module dir)
+- utils.paths
+- pandas, matplotlib, seaborn, openpyxl
 
-Dependencies:
-    Use the project environment from ``environment.yml``. This wrapper reuses
-    ``_productA_postproc.py``, which requires pandas, matplotlib, seaborn, and
-    openpyxl for summary tables and figures.
+Usage
+-----
+    python postprocessing/calsim_runs/_historical_modified_postproc.py
+    python postprocessing/calsim_runs/_historical_modified_postproc.py --skip-drought
 """
 
 from __future__ import annotations
