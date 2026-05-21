@@ -1,9 +1,9 @@
-"""Product A script-convention gate.
+"""Pipeline script-convention gate.
 
 Single source of truth for the numbered-pipeline script convention,
 used both for a local pre-commit check and by CI
-(.github/workflows/lint.yml). For every script in the Product A
-pipeline it enforces four rules:
+(.github/workflows/lint.yml). For every script in the Product A and
+Product B pipelines it enforces four rules:
 
   1. ASCII only        -- no byte >= 0x80 anywhere (CLAUDE.md hard rule).
   2. No Jupyter cells  -- no ``# %%`` / ``#%%`` cell markers (scripts are
@@ -12,10 +12,11 @@ pipeline it enforces four rules:
                           standardized title underline.
   4. pyflakes-clean    -- no unused imports / undefined names, etc.
 
-Inputs       : the Product A script list below (or paths given as argv).
+Inputs       : the Product A + Product B script lists below
+               (or paths given as argv to check a subset).
 Outputs      : a report on stdout; exit code 0 (clean) or 1 (violations).
 Dependencies : pyflakes (see environment.yml pip section).
-Usage        : python tools/check_scripts.py            # full set
+Usage        : python tools/check_scripts.py            # both lists
                python tools/check_scripts.py path ...   # subset
 """
 import ast
@@ -69,6 +70,28 @@ PRODUCT_A_SCRIPTS = [
 ]
 
 
+# Canonical Product B pipeline (Product_B_Production_Manifest.md section A
+# "End-to-end ordering"). Numbered pipeline scripts only -- shared utils/
+# library modules are exempt; scripts shared between A and B (compile_precip,
+# rim_inflow QM historical validation, water_year_types, etc.) live in the
+# Product A list above and are not duplicated here.
+PRODUCT_B_SCRIPTS = [
+    "mod_hydrology/rim_inflow/_3_qmap_productB.py",
+    "mod_hydrology/calsimhydro/_4_postprocess_product_b.py",
+    "mod_hydrology/calsimhydro_ee/_3_postprocess_product_b.py",
+    "mod_hydrology/delta_channel_depletion/_3_postprocess_product_b.py",
+    "mod_hydrology/small_watersheds/_3_postprocess_product_b.py",
+    "mod_reservoir/storage_curves/_2_qmap_product_b.py",
+    "mod_other/upper_watershed/_2_qmap_product_b.py",
+    "mod_other/upper_watershed/_3_hybrid_product_b.py",
+    "mod_other/miscellaneous/_3_hybrid_product_b.py",
+    "mod_other/miscellaneous/_4_qmap_product_b.py",
+    "mod_other/day_volume_fractions/_2_generate_product_b.py",
+    "postprocessing/sv_compile/product_b_compilation.py",
+    "postprocessing/calsim_runs/_productB_pickle_builder.py",
+]
+
+
 def check_ascii(rel, text):
     bad = []
     for i, line in enumerate(text.splitlines(), 1):
@@ -110,7 +133,7 @@ def check_pyflakes(path):
 
 
 def main(argv):
-    rels = argv or PRODUCT_A_SCRIPTS
+    rels = argv or (PRODUCT_A_SCRIPTS + PRODUCT_B_SCRIPTS)
     failures = []
     checked = 0
     for rel in rels:
@@ -136,7 +159,7 @@ def main(argv):
         for f in failures:
             print("  - " + f)
         return 1
-    print("RESULT: PASS - all Product A scripts conform "
+    print("RESULT: PASS - all pipeline scripts conform "
           "(ASCII / no-# %% / === header / pyflakes)")
     return 0
 

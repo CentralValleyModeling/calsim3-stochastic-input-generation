@@ -101,6 +101,7 @@ Sphinx site: `cd docs && make html` (output `docs/_build/html`).
 **Execution runbooks** (standalone, not part of the Sphinx build):
 
 - [Product A Validation Runbook](Product_A_Validation_Manifest.md)
+- [Product B Production Runbook](Product_B_Production_Manifest.md)
 
 The numbered-script convention (header docstring / ASCII / CLI / no `# %%`) is
 documented in [`.github/copilot-instructions.md`](.github/copilot-instructions.md#script-convention)
