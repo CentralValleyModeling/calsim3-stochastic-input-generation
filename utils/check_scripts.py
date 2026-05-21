@@ -24,8 +24,8 @@ Inputs       : the Product A + Product B script lists below
                the manifest-drift cross-check).
 Outputs      : a report on stdout; exit code 0 (clean) or 1 (violations).
 Dependencies : pyflakes (see environment.yml pip section).
-Usage        : python tools/check_scripts.py            # both lists + drift
-               python tools/check_scripts.py path ...   # subset (no drift)
+Usage        : python utils/check_scripts.py            # both lists + drift
+               python utils/check_scripts.py path ...   # subset (no drift)
 """
 import ast
 import re

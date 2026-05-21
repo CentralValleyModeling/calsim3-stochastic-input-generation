@@ -30,7 +30,7 @@
 >
 > **Per-script details** (CLI flags / methodology) live in each script's
 > standardized header docstring. Convention is enforced by
-> `tools/check_scripts.py` and CI.
+> `utils/check_scripts.py` and CI.
 
 ---
 
@@ -143,7 +143,7 @@ Rept pathway (`Constant_Rept = T` in the master inventory).
 - `BASE/WGEN/resampled.dates_Product_B_1000yr.csv` -- WGEN day-to-history
   mapping consumed by closure_terms and day_volume_fractions.
 - `.github/copilot-instructions.md` -- per-module script tables and the
-  numbered-script convention enforced by `tools/check_scripts.py`.
+  numbered-script convention enforced by `utils/check_scripts.py`.
 
 Quantile mapping is **deterministic / reproducible** (global `QMAP_SEED`
 in `utils/quantile_mapping.py`); the full Product B pipeline is

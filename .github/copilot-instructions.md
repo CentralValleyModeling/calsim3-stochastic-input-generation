@@ -109,7 +109,7 @@ directly -- it centralizes the long-path / Windows-junction handling and the
 ## Script Convention
 
 Numbered pipeline scripts (`_0_*.py`, `_1_*.py`, ...) run in numeric order and
-follow a uniform shape, enforced by `tools/check_scripts.py` (run locally and
+follow a uniform shape, enforced by `utils/check_scripts.py` (run locally and
 in CI on push/PR -- see `.github/workflows/lint.yml`):
 
 - **Header docstring**: a `Title` line, a `===` underline, then

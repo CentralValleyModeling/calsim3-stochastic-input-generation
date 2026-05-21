@@ -15,4 +15,4 @@ dependencies:
   - pip
   - pip:
     - pydsstools<3   # pin to 2.x; 3.0 made HecDss.Open(...) strict (rejects catalog_flag=True) and removed getPathnameList. Requires VS Build Tools with C++ workload on Windows.
-    - pyflakes       # dev/lint: used by tools/check_scripts.py and CI (.github/workflows/lint.yml)
+    - pyflakes       # dev/lint: used by utils/check_scripts.py and CI (.github/workflows/lint.yml)

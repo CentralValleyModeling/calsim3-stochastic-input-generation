@@ -105,4 +105,4 @@ Sphinx site: `cd docs && make html` (output `docs/_build/html`).
 
 The numbered-script convention (header docstring / ASCII / CLI / no `# %%`) is
 documented in [`.github/copilot-instructions.md`](.github/copilot-instructions.md#script-convention)
-and enforced by `tools/check_scripts.py` (run locally and in CI).
+and enforced by `utils/check_scripts.py` (run locally and in CI).
