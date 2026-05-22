@@ -42,10 +42,10 @@ import numpy as np
 import pandas as pd
 from pathlib import Path
 from concurrent.futures import ProcessPoolExecutor, as_completed
-from pydsstools.heclib.dss import HecDss
 
 # Add repo root to path for utils imports
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
+from utils import dss_io
 from utils.paths import get_base_dir, get_inventory_dir, get_module_generated_dir
 from utils.quantile_mapping import qmap_single
 
@@ -115,7 +115,7 @@ def excel_to_partB(name: str) -> str:
 def read_calsim_monthly_multi(dssfile, strList):
     """Read CalSim monthly inflows from DSS into wide DataFrame."""
     full_idx = pd.date_range("1915-01-31", f"{vic_end_year}-12-31", freq="ME")
-    with HecDss.Open(dssfile, version=6, catalog_flag=True) as dss:
+    with dss_io.open_dss(dssfile, version=6, catalog_flag=True) as dss:
         paths   = dss.getPathnameList("/*/*/*/*/1MON/*")
         bucket  = {}
         for p in paths:

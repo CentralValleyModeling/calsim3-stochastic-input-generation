@@ -20,6 +20,14 @@ import json
 import sys
 from pathlib import Path
 
+from utils.env_check import require_env
+
+# Fail fast if the running interpreter is missing pipeline dependencies (e.g.
+# user ran the script in the wrong shell). Every numbered pipeline script
+# imports from utils.paths, so the check fires once per script invocation.
+# See utils/env_check.py for the rationale.
+require_env()
+
 # ---------------------------------------------------------------------------
 # Locate the repo root (parent of the utils/ folder this file lives in)
 # ---------------------------------------------------------------------------

@@ -28,7 +28,7 @@
 >
 > **Per-script details** (CLI flags / methodology) live in each script's
 > standardized header docstring. Convention is enforced by
-> `tools/check_scripts.py` and CI.
+> `utils/check_scripts.py` and CI.
 
 ---
 
@@ -127,7 +127,7 @@ upper_watershed.
 - `mod_hydrology/rim_inflow/reference/CalSim3_VIC_name_mapping.csv`,
   `RimInflowAnchor.xlsx` -- rim QM pairing + anchor/tributary mass balance.
 - `.github/copilot-instructions.md` -- per-module script tables and the
-  numbered-script convention enforced by `tools/check_scripts.py`.
+  numbered-script convention enforced by `utils/check_scripts.py`.
 
 Quantile mapping is **deterministic / reproducible** (global `QMAP_SEED` in
 `utils/quantile_mapping.py`); the full Product A pipeline is byte-identical

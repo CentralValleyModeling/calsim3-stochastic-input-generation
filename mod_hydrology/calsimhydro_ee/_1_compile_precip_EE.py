@@ -42,11 +42,11 @@ from pathlib import Path
 
 import numpy as np
 import pandas as pd
-from pydsstools.heclib.dss import HecDss
 from pydsstools.core import TimeSeriesContainer
 
 # Add repo root to path for utils imports
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
+from utils import dss_io
 from utils.paths import get_base_dir, get_module_generated_dir
 
 
@@ -224,7 +224,7 @@ class CompileWBAPrecipEE:
             return
         dss_file = os.path.join(self.output_path, "CS3_DailyPrecipitation_EE.dss")
         print(f"Writing DSS: {dss_file}")
-        with HecDss.Open(dss_file) as dss:
+        with dss_io.open_dss(dss_file, catalog_flag=False) as dss:
             for wba, series in results.items():
                 data = series
                 start_for_path = self.start_date_vic
@@ -249,7 +249,7 @@ class CompileWBAPrecipEE:
         for i in range(total_chunks):
             dss_file = os.path.join(self.output_path, f"CS3_DailyPrecipitation_EE_n{i+1:02d}.dss")
             print(f"  Writing DSS chunk {i+1:02d}/10: {os.path.basename(dss_file)}")
-            with HecDss.Open(dss_file) as dss:
+            with dss_io.open_dss(dss_file, catalog_flag=False) as dss:
                 for wba, pcp_data in results.items():
                     chunk_values = self._build_product_b_chunk(pcp_data.values, i)
                     tsc = TimeSeriesContainer()

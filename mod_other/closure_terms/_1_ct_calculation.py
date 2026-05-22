@@ -54,8 +54,8 @@ import numpy as np
 import pandas as pd
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
+from utils import dss_io
 from utils.paths import get_base_dir, get_module_generated_dir
-from pydsstools.heclib.dss import HecDss
 
 # DSS read window (matches CalSim historical period)
 DEFAULT_DSS_READ_START = "1921-10-31"
@@ -119,7 +119,7 @@ def read_all_closure_terms_monthly(
     full_idx = pd.date_range(dss_read_start, dss_read_end, freq="ME")
     masters: dict[str, pd.Series] = {}
 
-    with HecDss.Open(str(dssfile), version=6, catalog_flag=True) as dss:
+    with dss_io.open_dss(dssfile, version=6, catalog_flag=True) as dss:
         paths = dss.getPathnameList("/*/*/*/*/1MON/*")
 
         # Bucket matching paths by B-part

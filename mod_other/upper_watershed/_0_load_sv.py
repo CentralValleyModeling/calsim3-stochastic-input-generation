@@ -13,10 +13,10 @@ import sys
 import pandas as pd
 import numpy as np
 from pathlib import Path
-from pydsstools.heclib.dss import HecDss
 
 # Add repo root to path for utils imports
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
+from utils import dss_io
 from utils.paths import get_inventory_dir, get_module_generated_dir
 
 
@@ -74,7 +74,7 @@ def main():
         print(f"\nProcessing: {dss_info['module']} / {dss_info['file_name']}")
 
         try:
-            with HecDss.Open(str(dss_info['file_path']), version=6, catalog_flag=True) as dss:
+            with dss_io.open_dss(dss_info['file_path'], version=6, catalog_flag=True) as dss:
                 all_paths = dss.getPathnameList("/*/*/*/*/*")
 
                 print(f"  Found {len(all_paths)} pathnames")

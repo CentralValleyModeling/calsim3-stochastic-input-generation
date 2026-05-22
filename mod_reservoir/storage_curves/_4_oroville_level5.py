@@ -66,9 +66,9 @@ import sys
 
 import numpy as np
 import pandas as pd
-from pydsstools.heclib.dss import HecDss
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
+from utils import dss_io
 from utils.paths import get_base_dir, get_module_generated_dir
 
 _gen = get_module_generated_dir("mod_reservoir/storage_curves")
@@ -96,7 +96,7 @@ def load_level5(dss_path: Path, part_b: str = "S_OROVLLEVEL5",
                 part_c: str = "STORAGE-LEVEL") -> pd.DataFrame:
     """Read S_OROVLLEVEL5 monthly series from a CalSim DSS file."""
     target_bc = (part_b.upper(), part_c.upper())
-    with HecDss.Open(str(dss_path), version=6) as dss:
+    with dss_io.open_dss(dss_path, version=6, catalog_flag=False) as dss:
         all_paths = dss.getPathnameList("/*/*/*/*/1MON/*/")
         matched = [
             p for p in all_paths

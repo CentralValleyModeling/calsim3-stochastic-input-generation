@@ -85,7 +85,6 @@ from utils.paths import get_base_dir, get_generated_dir, get_module_generated_di
 # Suppress noisy warnings from empty slices (e.g. all-NaN columns in stats)
 warnings.filterwarnings("ignore", message="Mean of empty slice")
 warnings.filterwarnings("ignore", message="All-NaN slice encountered")
-from pydsstools.heclib.dss import HecDss
 from pydsstools.core import TimeSeriesContainer
 
 
@@ -508,7 +507,7 @@ def generate_per_variable_plots(stats_csv: Path, cached_series: dict = None):
         }
 
     # -- Catalog baseline DSS ---------------------------------------------
-    with HecDss.Open(str(BASELINE_DSS), version=6, catalog_flag=True) as _dss:
+    with dss_io.open_dss(BASELINE_DSS, version=6, catalog_flag=True, use_junction=False) as _dss:
         _bp = _dss.getPathnameList(DSS_PATTERN)
     baseline_bucket = {}
     for p in _bp:
@@ -695,8 +694,8 @@ def generate_per_variable_plots(stats_csv: Path, cached_series: dict = None):
                 yield pk, entry["b_ser"], entry["m_ser"], entry["units"]
         else:
             # Fallback: open DSS and merge blocks (slow path)
-            with HecDss.Open(str(BASELINE_DSS), version=6, catalog_flag=True) as dss_base, \
-                 HecDss.Open(_dss_str(OUTPUT_DSS),   version=6, catalog_flag=True) as dss_mod:
+            with dss_io.open_dss(BASELINE_DSS, version=6, catalog_flag=True, use_junction=False) as dss_base, \
+                 dss_io.open_dss(_dss_str(OUTPUT_DSS), version=6, catalog_flag=True, use_junction=False) as dss_mod:
                 for pk in all_keys:
                     if pk not in baseline_bucket:
                         continue
@@ -1512,8 +1511,8 @@ def compute_modification_statistics(all_modified_keys, baseline_bucket):
     for _, _ir in _inv.iterrows():
         _cat_lookup[(_ir["Part_B"], _ir["Part_C"])] = _ir["Input_Category"]
 
-    with HecDss.Open(str(BASELINE_DSS), version=6, catalog_flag=True) as dss_base_r, \
-         HecDss.Open(_dss_str(OUTPUT_DSS), version=6, catalog_flag=True) as dss_mod_r:
+    with dss_io.open_dss(BASELINE_DSS, version=6, catalog_flag=True, use_junction=False) as dss_base_r, \
+         dss_io.open_dss(_dss_str(OUTPUT_DSS), version=6, catalog_flag=True, use_junction=False) as dss_mod_r:
 
         for pk in sorted(all_modified_keys):
             if pk not in baseline_bucket:
@@ -1686,7 +1685,7 @@ if CLI_ARGS.compute_stats:
 
     # Reconstruct baseline_bucket from the baseline DSS
     print("  Cataloging baseline DSS ...")
-    with HecDss.Open(str(BASELINE_DSS), version=6, catalog_flag=True) as _dss_b:
+    with dss_io.open_dss(BASELINE_DSS, version=6, catalog_flag=True, use_junction=False) as _dss_b:
         _bp = _dss_b.getPathnameList(DSS_PATTERN)
     baseline_bucket = {}
     for p in _bp:
@@ -1826,7 +1825,7 @@ print()
 # STEP 2 - Catalog baseline DSS
 # ------------------------------------------------------------------------------
 print("Step 2: Cataloging baseline DSS ...")
-with HecDss.Open(str(BASELINE_DSS), version=6, catalog_flag=True) as dss_base:
+with dss_io.open_dss(BASELINE_DSS, version=6, catalog_flag=True, use_junction=False) as dss_base:
     baseline_paths = dss_base.getPathnameList(DSS_PATTERN)
 
 baseline_keys = set()
@@ -1894,8 +1893,8 @@ for label, csvs in available_modules.items():
     mod_keys_modified = set()
     missing_parts = []
 
-    with HecDss.Open(str(BASELINE_DSS), version=6, catalog_flag=True) as dss_in, \
-         HecDss.Open(_dss_str(int_dss), version=6) as dss_out:
+    with dss_io.open_dss(BASELINE_DSS, version=6, catalog_flag=True, use_junction=False) as dss_in, \
+         dss_io.open_dss(_dss_str(int_dss), version=6, catalog_flag=False, use_junction=False) as dss_out:
 
         for part_key in sorted(override_dict):
             if part_key not in baseline_bucket:
@@ -2008,8 +2007,8 @@ n_const_written = 0
 const_rept_filled = set()
 
 if const_rept_to_fill:
-    with HecDss.Open(str(BASELINE_DSS), version=6, catalog_flag=True) as dss_in, \
-         HecDss.Open(_dss_str(const_rept_dss), version=6) as dss_out:
+    with dss_io.open_dss(BASELINE_DSS, version=6, catalog_flag=True, use_junction=False) as dss_in, \
+         dss_io.open_dss(_dss_str(const_rept_dss), version=6, catalog_flag=False, use_junction=False) as dss_out:
 
         for pk in sorted(const_rept_to_fill):
             overrides = build_constant_rept_overrides(
@@ -2064,8 +2063,8 @@ modified_records  = []
 all_modified_keys = set()
 
 for label, int_dss in module_dss_paths.items():
-    with HecDss.Open(_dss_str(int_dss), version=6, catalog_flag=True) as dss_mod, \
-         HecDss.Open(_dss_str(OUTPUT_DSS), version=6) as dss_out:
+    with dss_io.open_dss(_dss_str(int_dss), version=6, catalog_flag=True, use_junction=False) as dss_mod, \
+         dss_io.open_dss(_dss_str(OUTPUT_DSS), version=6, catalog_flag=False, use_junction=False) as dss_out:
 
         mod_paths = dss_mod.getPathnameList(DSS_PATTERN)
         for mp in mod_paths:

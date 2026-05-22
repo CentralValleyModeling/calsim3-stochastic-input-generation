@@ -85,7 +85,8 @@ def remove_junction():
 
 
 @contextmanager
-def open_dss(dss_path, *, version=6, catalog_flag=True, use_junction=None):
+def open_dss(dss_path, *, version=6, catalog_flag=True, use_junction=None,
+             **open_kwargs):
     """Open a DSS file, transparently handling the long-path junction.
 
     Parameters
@@ -104,6 +105,10 @@ def open_dss(dss_path, *, version=6, catalog_flag=True, use_junction=None):
         Pass ``False`` to force a direct open (preserves the qmap engine's
         historical behavior of opening the ``\\?\``-prefixed path directly),
         or ``True`` to force a junction.
+    **open_kwargs
+        Any additional keyword arguments are forwarded verbatim to
+        ``HecDss.Open`` (e.g. ``window=(start, end)`` to pre-restrict a read
+        to a time window).
 
     Yields
     ------
@@ -122,7 +127,7 @@ def open_dss(dss_path, *, version=6, catalog_flag=True, use_junction=None):
 
     try:
         with HecDss.Open(work_path, version=version,
-                         catalog_flag=catalog_flag) as dss:
+                         catalog_flag=catalog_flag, **open_kwargs) as dss:
             yield dss
     finally:
         if use_junction:
