@@ -46,9 +46,9 @@ from concurrent.futures import ProcessPoolExecutor, as_completed
 
 import numpy as np
 import pandas as pd
-from pydsstools.heclib.dss import HecDss
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
+from utils import dss_io
 from utils.paths import get_base_dir, get_module_generated_dir
 
 # Paths
@@ -85,7 +85,7 @@ def extract_vol_fractions(dss_path: Path) -> pd.DataFrame:
 
     dss_monthly = {}
     print(f"Opening DSS: {Path(dss_path).name}")
-    with HecDss.Open(str(dss_path), version=6, catalog_flag=True) as dss:
+    with dss_io.open_dss(dss_path, version=6, catalog_flag=True) as dss:
         all_paths = dss.getPathnameList("/*/*/*/*/1MON/*")
         print(f"  {len(all_paths)} monthly paths in catalog")
 
@@ -135,7 +135,7 @@ def build_historical_annual_index(dss_path: Path, ref_csv: Path) -> pd.Series:
     wanted = {(r["partb"].strip().upper(), r["partc"].strip().upper()) for _, r in ref.iterrows()}
 
     dss_monthly = {}
-    with HecDss.Open(str(dss_path), version=6, catalog_flag=True) as dss:
+    with dss_io.open_dss(dss_path, version=6, catalog_flag=True) as dss:
         all_paths = dss.getPathnameList("/*/*/*/*/1MON/*")
         buckets = {}
         for p in all_paths:

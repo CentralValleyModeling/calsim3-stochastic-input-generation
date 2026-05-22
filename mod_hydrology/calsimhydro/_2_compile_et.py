@@ -40,11 +40,11 @@ from typing import Dict, List, Optional
 
 import numpy as np
 import pandas as pd
-from pydsstools.heclib.dss import HecDss
 from pydsstools.core import TimeSeriesContainer
 
 # Add repo root to path for utils imports
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
+from utils import dss_io
 from utils.paths import get_module_generated_dir
 
 # Local quantile mapping utility
@@ -127,7 +127,7 @@ class CompileWBAET:
 
 	def _read_cshydro_monthly_et(self, wba: str, start: str, end: str) -> pd.DataFrame:
 		"""Read CS3 monthly ET from DSS for the given WBA. Returns a DataFrame indexed by month-end."""
-		with HecDss.Open(self.cshydro_dss, window=(start, end)) as dss:
+		with dss_io.open_dss(self.cshydro_dss, catalog_flag=False, window=(start, end)) as dss:
 			if self.et_type == 'RefET':
 				path = f"/CALSIM/{wba}/REF-ET//1MON/REFETO/"
 			elif self.et_type == 'CropET':
@@ -355,7 +355,7 @@ class CompileWBAET:
 		for i in range(total_chunks):
 			dss_out = os.path.join(self.output_path, f"{dss_stem}_n{i+1:02d}.dss")
 			print(f"  Writing DSS chunk {i+1:02d}/10: {os.path.basename(dss_out)}")
-			with HecDss.Open(dss_out, version=6) as dss:
+			with dss_io.open_dss(dss_out, version=6, catalog_flag=False) as dss:
 				for wba, series in results.items():
 					chunk = self._build_product_b_monthly_chunk(series.values, i)
 					tsc = TimeSeriesContainer()
@@ -379,7 +379,7 @@ class CompileWBAET:
 		"""Copy static CropET records (Part D = 01JAN4000) from reference DSS to output DSS.
 		These are repeating/constant values that are not modified by Product A or B.
 		"""
-		with HecDss.Open(self.cshydro_dss) as src:
+		with dss_io.open_dss(self.cshydro_dss, catalog_flag=False) as src:
 			all_paths = src.getPathnameList("/*/*/RATE_INCH/01JAN4000/1MON/EVAPOTRANSPIRATION/") or []
 			if not all_paths:
 				print("  No static CropET records (01JAN4000) found in reference DSS.")
@@ -390,7 +390,7 @@ class CompileWBAET:
 				ts = src.read_ts(path)
 				records.append((path, ts))
 
-		with HecDss.Open(dss_out_path, version=6) as dst:
+		with dss_io.open_dss(dss_out_path, version=6, catalog_flag=False) as dst:
 			for path, ts in records:
 				tsc = TimeSeriesContainer()
 				tsc.pathname = path
@@ -534,7 +534,7 @@ class CompileWBAET:
 			dss_out = self.output_path + "/CS3_RefET.dss"
 		if self.et_type == 'CropET':
 			self._copy_static_crop_et_records(dss_out)
-		with HecDss.Open(dss_out, version=6) as dss:
+		with dss_io.open_dss(dss_out, version=6, catalog_flag=False) as dss:
 			for wba, s in results.items():
 				# Ensure chronological order
 				s = s.sort_index()
