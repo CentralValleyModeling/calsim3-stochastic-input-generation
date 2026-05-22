@@ -11,10 +11,16 @@ Product B pipelines it enforces five rules:
   3. Header docstring  -- a module docstring containing the ``===``
                           standardized title underline.
   4. pyflakes-clean    -- no unused imports / undefined names, etc.
+  5. No raw HecDss.Open -- pipeline scripts must route DSS opens through
+                          ``utils.dss_io.open_dss`` (handles Windows
+                          long-path junction + the 256-char Fortran CNAME
+                          limit). Only ``utils/dss_io.py`` and
+                          ``utils/dss_pickle_builder.py`` are sanctioned
+                          callers of raw ``HecDss.Open``.
 
 Plus one cross-cutting check (only run during a full sweep):
 
-  5. Manifest-drift cross-check -- every pipeline-shaped .py file on disk
+  6. Manifest-drift cross-check -- every pipeline-shaped .py file on disk
      (numbered ``_N_*.py`` under mod_*/, all ``*.py`` under postprocessing/)
      must be listed in PRODUCT_A_SCRIPTS, PRODUCT_B_SCRIPTS, or
      EXEMPT_SCRIPTS; conversely, no listed entry may be missing from disk.
@@ -175,6 +181,33 @@ def check_pyflakes(path):
     return [f"  pyflakes: {ln}" for ln in out] or ["  pyflakes: failed"]
 
 
+def check_no_raw_hecdss(rel, text):
+    """Forbid raw ``HecDss.Open(`` in pipeline scripts; require ``utils.dss_io``.
+
+    AST-based so comments, docstrings, and string literals are naturally
+    ignored. Library modules ``utils/dss_io.py`` and ``utils/dss_pickle_builder.py``
+    are not in PRODUCT_A_SCRIPTS / PRODUCT_B_SCRIPTS / EXEMPT_SCRIPTS, so they
+    are never checked -- they remain the only sanctioned ``HecDss.Open`` sites.
+    """
+    try:
+        tree = ast.parse(text)
+    except SyntaxError:
+        return []  # parse errors are reported by check_header / check_pyflakes
+    bad = []
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.Call):
+            continue
+        func = node.func
+        if (isinstance(func, ast.Attribute) and func.attr == "Open"
+                and isinstance(func.value, ast.Name)
+                and func.value.id == "HecDss"):
+            bad.append(
+                f"{rel}:{func.lineno}: raw HecDss.Open(...) -- "
+                f"use utils.dss_io.open_dss() instead"
+            )
+    return bad
+
+
 def check_drift():
     """Cross-check on-disk pipeline-shaped .py files vs the manifest.
 
@@ -241,6 +274,7 @@ def main(argv):
         file_fail += check_no_cells(rel, text)
         file_fail += check_header(rel, text)
         file_fail += check_pyflakes(path)
+        file_fail += check_no_raw_hecdss(rel, text)
         if file_fail:
             failures.extend(file_fail)
 
@@ -252,7 +286,8 @@ def main(argv):
             print("  - " + f)
         return 1
     print("RESULT: PASS - all pipeline scripts conform "
-          "(ASCII / no-# %% / === header / pyflakes / no drift)")
+          "(ASCII / no-# %% / === header / pyflakes / no raw HecDss.Open / "
+          "no drift)")
     return 0
 
 
