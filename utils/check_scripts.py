@@ -5,22 +5,33 @@ used both for a local pre-commit check and by CI
 (.github/workflows/lint.yml). For every script in the Product A and
 Product B pipelines it enforces five rules:
 
-  1. ASCII only        -- no byte >= 0x80 anywhere (CLAUDE.md hard rule).
-  2. No Jupyter cells  -- no ``# %%`` / ``#%%`` cell markers (scripts are
-                          CLI, not notebooks).
-  3. Header docstring  -- a module docstring containing the ``===``
-                          standardized title underline.
-  4. pyflakes-clean    -- no unused imports / undefined names, etc.
-  5. No raw HecDss.Open -- pipeline scripts must route DSS opens through
-                          ``utils.dss_io.open_dss`` (handles Windows
-                          long-path junction + the 256-char Fortran CNAME
-                          limit). Only ``utils/dss_io.py`` and
-                          ``utils/dss_pickle_builder.py`` are sanctioned
-                          callers of raw ``HecDss.Open``.
+Per-file rules (run on every gated script):
+
+  1. ASCII only         -- no byte >= 0x80 anywhere (CLAUDE.md hard rule).
+  2. No Jupyter cells   -- no ``# %%`` / ``#%%`` cell markers (scripts are
+                           CLI, not notebooks).
+  3. Header docstring   -- a module docstring containing the ``===``
+                           standardized title underline.
+  4. pyflakes-clean     -- no unused imports / undefined names, etc.
+  5. No raw HecDss.Open -- route DSS opens through ``utils.dss_io.open_dss``
+                           (handles Windows long-path junction + the
+                           256-char Fortran CNAME limit). Only
+                           ``utils/dss_io.py`` + ``utils/dss_pickle_builder.py``
+                           are sanctioned raw callers (neither is gated).
+  6. No hard-coded data paths -- resolve data locations via utils.paths
+                           helpers, never a literal ``../../data/``.
+  7. Reference CSVs exist -- any ``"reference" / "X.csv"`` a script names
+                           must exist on disk under the script's reference/.
+  8. No deprecated pandas freq aliases -- use the pandas 2.2 forms
+                           ('ME','YE','QE','YS-OCT', ...) not 'M'/'A'/'AS-OCT'.
+  9. PBIAS sign         -- PBIAS must be 100 * sum(sim - obs) / sum(obs)
+                           (positive = overestimation); reject (obs - sim).
+ 10. No np.random.seed  -- QM determinism comes from the single QMAP_SEED
+                           in utils/quantile_mapping.py; do not re-seed.
 
 Plus one cross-cutting check (only run during a full sweep):
 
-  6. Manifest-drift cross-check -- every pipeline-shaped .py file on disk
+ 11. Manifest-drift cross-check -- every pipeline-shaped .py file on disk
      (numbered ``_N_*.py`` under mod_*/, all ``*.py`` under postprocessing/)
      must be listed in PRODUCT_A_SCRIPTS, PRODUCT_B_SCRIPTS, or
      EXEMPT_SCRIPTS; conversely, no listed entry may be missing from disk.
@@ -208,6 +219,137 @@ def check_no_raw_hecdss(rel, text):
     return bad
 
 
+_DATA_PATH_RE = re.compile(r"\.\.[\\/]+(?:\.\.[\\/]+)*data\b")
+
+
+def check_no_hardcoded_data_paths(rel, text):
+    """Forbid hard-coded relative ``../data`` paths; require utils.paths helpers.
+
+    Pipeline scripts must resolve data locations through
+    ``utils.paths.get_base_dir`` / ``get_generated_dir`` /
+    ``get_module_generated_dir`` (which honor config.json), never a literal
+    ``../../data/`` relative to the script. Matches both forward-slash and
+    escaped-backslash (``..\\..\\data``) literals. Comment-only lines are
+    skipped.
+    """
+    bad = []
+    for i, line in enumerate(text.splitlines(), 1):
+        if line.lstrip().startswith("#"):
+            continue
+        if _DATA_PATH_RE.search(line):
+            bad.append(
+                f"{rel}:{i}: hard-coded relative data/ path -- "
+                f"use utils.paths.get_base_dir() / get_generated_dir() / "
+                f"get_module_generated_dir()"
+            )
+    return bad
+
+
+_REF_CSV_RE = re.compile(r"""["']reference["']\s*/\s*["']([^"']+\.csv)["']""")
+
+
+def check_reference_csvs(rel, text):
+    """Verify each ``"reference" / "X.csv"`` a script names exists on disk.
+
+    Catches typos / missing reference files that otherwise only surface when
+    the script's pipeline actually runs. Only the ``"reference" / "X.csv"``
+    pathlib-join form is matched; scripts that build reference paths another
+    way are simply not checked (no false positives).
+    """
+    bad = []
+    ref_dir = (REPO / rel).parent / "reference"
+    for m in _REF_CSV_RE.finditer(text):
+        name = m.group(1)
+        if not (ref_dir / name).is_file():
+            bad.append(
+                f"{rel}: references reference/{name} which does not exist "
+                f"(expected at {ref_dir / name})"
+            )
+    return bad
+
+
+# Deprecated pandas offset aliases (pandas 2.2). Compared on the part before
+# any '-' anchor, so 'A-OCT' / 'AS-OCT' / 'Q-DEC' are caught via 'A'/'AS'/'Q'.
+_DEPRECATED_FREQ = {
+    "M", "A", "Q", "Y", "AS", "YS", "BM", "BA", "BAS", "BQ", "BY",
+    "H", "T", "S", "L", "U", "N",
+}
+# Only ``freq=`` and ``.resample(`` are checked. ``.asfreq()`` is deliberately
+# excluded: on a PeriodIndex, ``.asfreq('M')`` is a *Period* alias and remains
+# valid in pandas 2.2 -- only the *offset* aliases (resample / date_range /
+# freq=) were deprecated. We can't tell PeriodIndex from DatetimeIndex
+# statically, so checking .asfreq would false-positive on the (common, valid)
+# PeriodIndex.asfreq('M') pattern.
+_FREQ_CALL_RE = re.compile(
+    r"""(?:freq\s*=\s*|\.resample\(\s*)["']([A-Za-z][A-Za-z\-]*)["']"""
+)
+
+
+def check_pandas_freq_aliases(rel, text):
+    """Forbid deprecated pandas 2.2 offset aliases in ``freq=`` / ``.resample()``.
+
+    Matches a string alias used as ``freq=`` or as the first positional arg to
+    ``.resample(``, and flags it if the part before any '-' anchor is in the
+    deprecated set (e.g. 'M' -> 'ME', 'AS-OCT' -> 'YS-OCT'). ``.asfreq()`` is
+    intentionally not checked (see _FREQ_CALL_RE note).
+    """
+    bad = []
+    for i, line in enumerate(text.splitlines(), 1):
+        if line.lstrip().startswith("#"):
+            continue
+        for m in _FREQ_CALL_RE.finditer(line):
+            alias = m.group(1)
+            if alias.split("-")[0] in _DEPRECATED_FREQ:
+                bad.append(
+                    f"{rel}:{i}: deprecated pandas freq alias '{alias}' -- "
+                    f"use the pandas 2.2 form (e.g. 'ME','YE','QE','YS-OCT')"
+                )
+    return bad
+
+
+def check_pbias_sign(rel, text):
+    """Flag PBIAS computed with the inverted ``(obs - sim)`` convention.
+
+    The repo standard is ``100 * sum(sim - obs) / sum(obs)`` (positive means
+    overestimation). Heuristic: on any line assigning ``pbias`` (joined with
+    the next two lines to catch wrapped formulas), if an ``obs - sim`` term
+    appears without a ``sim - obs`` term, flag it.
+    """
+    bad = []
+    lines = text.splitlines()
+    for i, line in enumerate(lines, 1):
+        if not re.search(r"\bpbias\b\s*=", line, re.IGNORECASE):
+            continue
+        window = " ".join(lines[i - 1:i + 2])
+        has_obs_sim = re.search(r"\bobs\s*-\s*sim\b", window)
+        has_sim_obs = re.search(r"\bsim\s*-\s*obs\b", window)
+        if has_obs_sim and not has_sim_obs:
+            bad.append(
+                f"{rel}:{i}: PBIAS appears to use (obs - sim); the convention "
+                f"is 100 * sum(sim - obs) / sum(obs)"
+            )
+    return bad
+
+
+def check_no_random_seed(rel, text):
+    """Forbid ``np.random.seed(`` outside utils/quantile_mapping.py.
+
+    QM determinism is established by the single global ``QMAP_SEED`` in
+    utils/quantile_mapping.py; any other module re-seeding the global RNG
+    risks silently breaking reproducibility.
+    """
+    bad = []
+    for i, line in enumerate(text.splitlines(), 1):
+        if line.lstrip().startswith("#"):
+            continue
+        if "np.random.seed(" in line or "numpy.random.seed(" in line:
+            bad.append(
+                f"{rel}:{i}: np.random.seed(...) -- QM determinism is via "
+                f"utils.quantile_mapping QMAP_SEED; do not re-seed elsewhere"
+            )
+    return bad
+
+
 def check_drift():
     """Cross-check on-disk pipeline-shaped .py files vs the manifest.
 
@@ -275,6 +417,11 @@ def main(argv):
         file_fail += check_header(rel, text)
         file_fail += check_pyflakes(path)
         file_fail += check_no_raw_hecdss(rel, text)
+        file_fail += check_no_hardcoded_data_paths(rel, text)
+        file_fail += check_reference_csvs(rel, text)
+        file_fail += check_pandas_freq_aliases(rel, text)
+        file_fail += check_pbias_sign(rel, text)
+        file_fail += check_no_random_seed(rel, text)
         if file_fail:
             failures.extend(file_fail)
 
@@ -286,8 +433,7 @@ def main(argv):
             print("  - " + f)
         return 1
     print("RESULT: PASS - all pipeline scripts conform "
-          "(ASCII / no-# %% / === header / pyflakes / no raw HecDss.Open / "
-          "no drift)")
+          "(see module docstring for the full rule list)")
     return 0
 
 
