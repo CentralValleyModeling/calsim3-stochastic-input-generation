@@ -294,7 +294,7 @@ def _plot_product_a_vs_historical(dates, actual_vals, qmap_vals, target_b,
     _r2_str = f"{r2:.2f}" if np.isfinite(r2) else "N/A"
     _nse_str = f"{nse_val:.2f}" if np.isfinite(nse_val) else "N/A"
     _pbias_str = f"{pbias:.1f}%" if np.isfinite(pbias) else "N/A"
-    _metric_lbl = (f"R\u00b2={_r2_str}   "
+    _metric_lbl = (f"R2={_r2_str}   "
                    f"NSE={_nse_str}   PBIAS={_pbias_str}")
 
     clr_hist = palette[0]
