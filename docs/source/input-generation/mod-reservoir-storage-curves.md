@@ -22,8 +22,9 @@ Seven series are reconstructed and grouped by how they are generated:
 3. **WYT Based Storage levels**: constant per Sacramento Valley water year
    type class (`S_SHSTALEVEL2`, `S_TRNTYLEVEL2`, `S_TRNTYLEVEL3`,
    `S_FOLSMLEVEL2`)
-4. **Monthly Schedule Levels**: fixed 12-month seasonal pattern
-   (`S_PEDROLEVEL4`, `S_FOLSMLEVEL4`, `S_FOLSMLEVEL5`)
+4. **Monthly Schedule Levels**: fixed 12-month seasonal pattern. Only
+   `S_PEDROLEVEL4` is regenerated; `S_FOLSMLEVEL4` and `S_FOLSMLEVEL5`
+   are passed through directly from the DCR 2023 CalSim 3.
 
 
 ## Methodology
@@ -50,27 +51,9 @@ the Product A quantile-mapped Millerton inflow.
 
 Validation achieved $R^2 = 0.78$ with values predominantly aligned to actual inputs. Minor misalignments appear in two contexts: minimum storage values during September through February, and anomalous behavior during the 2012-2015 drought period where actual CalSim inputs maintain storage consistently higher than expected.
 
-```{figure} figures/s3-inputs_mammoth-pool-qm-validation.png
-:name: fig-mammoth-pool-qm-validation
-:alt: Mammoth Pool QM Validation
-:align: center
+![Mammoth Pool QM Validation](figures/s3-inputs_mammoth-pool-qm-validation.png)
 
-Mammoth Pool storage quantile mapping validation, WY 1972--2018
-($R^2 = 0.78$). Millerton inflow serves as basis ($R = 0.76$). Mammoth
-storage shows a seasonal pattern, with low-storage periods generally
-around 10--30 TAF and high-storage peaks of roughly 120--124 TAF during
-the spring--summer refill period, with the highest sustained peaks in
-wetter years. The reconstructed series generally follows the timing and
-magnitude of the historical CalSim input series, although some mid to
-high storage values are underestimated. A distinct departure is evident
-during the 2012--2015 drought, when the historical CalSim input storage
-remains higher than the reconstructed in many months. The drought
-anomaly likely reflects maintenance or operational constraints where
-actual operations deviated from typical patterns. Attempting to
-replicate such anomalies through algorithms may be counterproductive, as
-the systematic reconstruction based on hydrologic relationships provides
-more defensible projections for synthetic sequences.
-```
+*Mammoth Pool storage quantile mapping validation, WY 1972--2018 ($R^2 = 0.78$). Millerton inflow serves as basis ($R = 0.76$). Mammoth storage shows a seasonal pattern, with low-storage periods generally around 10--30 TAF and high-storage peaks of roughly 120--124 TAF during the spring--summer refill period, with the highest sustained peaks in wetter years. The reconstructed series generally follows the timing and magnitude of the historical CalSim input series, although some mid to high storage values are underestimated. A distinct departure is evident during the 2012--2015 drought, when the historical CalSim input storage remains higher than the reconstructed in many months. The drought anomaly likely reflects maintenance or operational constraints where actual operations deviated from typical patterns. Attempting to replicate such anomalies through algorithms may be counterproductive, as the systematic reconstruction based on hydrologic relationships provides more defensible projections for synthetic sequences.*
 
 :::{admonition} Suggested Plot
 :class: note
@@ -165,7 +148,8 @@ timing and basin mean precipitation representation.
 
 
 ![Oroville TOC Reconstruction](figures/s3-inputs_oroville-toc-reconstruction.png)
-*Oroville Level 5 (Top of Conservation / flood control) reconstruction, WY 1972--2018 (R^2 = 0.75). The wetness index approach translates precipitation-based antecedent wetness to flood pool requirements, producing seasonal drawdowns from the sedimentation-corrected maximum of approximately 3,425 TAF to troughs of 2,700--3,050 TAF depending on winter wetness. Reconstructed values (orange) generally track actual CalSim inputs (blue), with differences reflecting sensitivity of the wetness index to precipitation timing.*
+
+*Oroville Level 5 (top of conservation / flood-control) storage target reconstruction, shown as monthly time series and non-exceedance CDF. The historical CalSim input series is shown in blue and the Product A reconstruction is shown in orange. Product A closely reproduces the timing, magnitude, and distribution of the historical series, including the seasonal drawdown from the sedimentation-corrected maximum of approximately 3,425 TAF to winter flood-control levels of roughly 2,700--3,050 TAF. Agreement is strong across both the time series and distributional comparisons, with $R^2 = 0.98$, NSE = 0.98, and negligible bias (PBIAS approx. 0.0%). Remaining differences occur mainly during months when the rule curve transitions between conservation storage and flood-control drawdown, because the reconstruction estimates the required flood reservation from antecedent wetness derived from Product A precipitation over the Oroville/Feather River basin rather than reproducing the historical CalSim input series directly.*
 
 
 ### WYT Based Storage levels
@@ -179,7 +163,7 @@ For example, if WY 1924 is classified as Critical, Shasta Level 2 remains at the
 This calendar-year mapping follows the CalSim convention used for these series. It also avoids applying the next water year’s final Sacramento Valley 40-30-30 classification at the October 1 water year boundary, when that classification would not yet be known in real time operations.
 
 
-The five WYT based series and their fixed target storage values are (TAF) are:
+The four WYT based series and their fixed target storage values (TAF) are:
 
 | Series | W | AN | BN | D | C | WYT index |
 |--------|--:|---:|---:|--:|--:|-------|
@@ -198,12 +182,12 @@ The four WYT-based reservoir storage-level reconstructions reproduce the step-fu
 :::{tab-item} Folsom Level 2
 ![Reservoir Storage Curves Overview](figures/s3-inputs_reservoir-storage-curves.png)
 
-*Folsom Level 2 (minimum pool) storage reconstruction, 1921--2021. Actual CalSim input (blue) and WYT-based reconstruction (orange) show step-function behavior alternating between approximately 300 and 350 TAF depending on water year type. Agreement is near-perfect, with only brief departures visible in a few years (~1951, 1978, 1985, 1993)*
+*Folsom Level 2 (minimum pool) reconstruction, October 1921–September 2021. The historical CalSim input series (blue) and WYT-based reconstruction (orange) show step-function behavior, alternating primarily between approximately 300 and 350 TAF depending on water year type. Agreement is near perfect across both the monthly time series and non-exceedance CDF, with $R^2 = 0.993$, NSE = 0.993, and negligible bias (PBIAS ≈ 0.0%). Departures are limited to a few isolated months, Dec 1950–Feb 1951, Feb 1982, Dec 1983–Jan 1984, and Jan 1997, when the historical CalSim input includes intermediate values below the reconstructed 350 TAF level.*
 :::
 :::{tab-item} Shasta Level 2
 ![Reservoir Storage WYT Alignment](figures/s3-inputs_reservoir-storage-wyt-alignment.png)
 
-*Shasta Level 2 (S_SHASTA) storage-level reconstruction, 1921–2021. The reconstructed series applies the fixed Sacramento Valley WYT based target values of 650, 1,700, and 2,000 TAF. The benchmark CalSim input generally follows the same step-function structure, but visible departures occur during a few clustered periods, especially 1995 and 2009–2015. These departures are interpreted as operational exceptions associated with carryover storage, drought operations, cold water pool management, and Sacramento River temperature management requirements.*
+*Shasta Level 2 (S_SHASTA) storage-level reconstruction, 1921–2021. The reconstructed series applies the fixed Sacramento Valley WYT based target values of 650, 1,700, and 2,000 TAF. The benchmark CalSim 3 input generally follows the same step function structure, but visible departures occur during a few clustered periods, especially 1995 and 2009–2015. These departures are interpreted as operational exceptions associated with carryover storage, drought operations, cold water pool management, and Sacramento River temperature management requirements.*
 :::
 ::::
 
