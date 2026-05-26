@@ -265,7 +265,7 @@ def _setup_plot_style():
             "figure.dpi": 200,
             "savefig.dpi": 300,
             "font.family": "sans-serif",
-            "font.sans-serif": ["Arial", "Helvetica", "Calibri", "DejaVu Sans"],
+            "font.sans-serif": ["DejaVu Sans"],
             "font.size": 8,
             "axes.titlesize": 8,
             "axes.titleweight": "semibold",
