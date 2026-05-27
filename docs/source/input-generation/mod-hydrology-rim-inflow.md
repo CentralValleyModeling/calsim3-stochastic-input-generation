@@ -28,7 +28,7 @@ The procedure follows the framework described in [Quantile Mapping](../methods.m
 
 To ensure mass balance consistency across river basins after quantile mapping, an anchor watershed adjustment methodology is applied. The approach recognizes that VIC model outputs are more reliable at integrated watershed scales than for individual small tributaries. Major downstream locations serve as "anchor" control points quantile-mapped unimpaired watershed flows (e.g., UNIMP_FOLS), and upstream tributary flows (e.g., I_ALD002) are adjusted to ensure they sum correctly to the anchor totals.
 
-Six major anchor watersheds require adjustment: Folsom (FOLS, 46 tributaries and the largest anchor), Oroville (OROV), Sacramento River at Bend Bridge (SRBB), Yuba (YUBA), Stanislaus (ST), and Tuolumne (TU). A total of 116 of the 227 tributary flows are adjusted through this process. Four additional anchor watersheds (Shasta, Trinity, Merced, and San Joaquin) have no assigned sub-tributaries and require no adjustment.
+Six major anchor watersheds require adjustment: Folsom (FOLS, 46 tributaries and the largest anchor), Oroville (OROV), Sacramento River at Bend Bridge (SRBB), Yuba (YUBA), Stanislaus (ST), and Tuolumne (TU). A total of 116 of the 227 tributary flows are adjusted through this process. Four additional anchor watersheds (Shasta, Trinity, Merced, and San Joaquin) have no assigned subtributaries and require no adjustment.
 
 The adjustment formula distributes any discrepancy proportionally among tributaries based on their contribution to the total:
 
