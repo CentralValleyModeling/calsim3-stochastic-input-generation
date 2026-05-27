@@ -8,20 +8,46 @@ Upper watershed module preprocessing (Yuba, Don Pedro, etc.)
 ```
 
 
-Inputs for seven CalSim 3 upper watershed sub-models that run prior to main model execution. These modules include Yuba, American (two modules), Feather, Bear, McCloud, and Stanislaus/Don Pedro, each representing detailed operations for specific river systems. The modules execute first with outputs feeding into the main CalSim run, enabling more sophisticated representation of upstream reservoir management and hydropower operations.
+Inputs for seven CalSim 3 upper watershed sub-models that run prior to main model execution. These modules include Upper American, Upper Feather, Upper Yuba Bear, Lower Yuba, Upper Mokelumne, Upper Stanislaus and Upper Tuolumne Watersheds, each representing detailed operations for specific river systems. The modules execute first with outputs feeding into the main CalSim run, enabling more sophisticated representation of upstream reservoir management and hydropower operations.
 
-## Methodology
+## Scope Analysis
 
-### Scope Analysis
+Comprehensive analysis of all seven module DSS files identified 104 total terms across the modules. However, most of these terms already appear in the main CalSim inventory, having been generated through other input categories such as CalSimHydro demands, rim inflows, or external elements. After filtering for monthly repeating patterns, zero-value terms, and matches to existing inventory, only 13 terms from 5 modules require new generation: Lower Yuba, Upper Yuba Bear, Upper American, Upper Feather, and Upper Tuolumne Watersheds. The other two modules (Upper Stanislaus and Upper Mokelumne Watersheds) are fully covered by existing inventory.
 
-Comprehensive analysis of all seven module DSS files identified 104 total terms across the modules. However, most of these terms already appear in the main CalSim inventory, having been generated through other input categories such as CalSimHydro demands, rim inflows, or external elements. After filtering for monthly repeating patterns, zero-value terms, and matches to existing inventory, only 12 terms from 2 modules require new generation: Lower Yuba and Don Pedro/Stanislaus. The other five modules (both American modules, Feather, Bear, McCloud) are fully covered by existing inventory.
+This finding significantly reduces upper watershed module workload compared to initial expectations. The 13 remaining terms employ diverse methodologies spanning quantile mapping, water year type averaging, and threshold optimization logic.
 
-This finding significantly reduces upper watershed module workload compared to initial expectations. The 13 remaining terms employ diverse methodologies spanning quantile mapping, water year type averaging, threshold optimization, direct calculation, and change-in-storage approaches.
+| Term - Part B | Term - Part C | Methodology | Source Watershed Module |
+|---------------|:-------------:|:-----------:|:-----------------------:|
+| S_PEDRO_SV | STORAGE | Water Year Type Averaging | Upper Tuolumne |
+| E_PEDRO_SV | EVAPORATION |  | Upper Tuolumne |
+| UARPFORECASTRELEASE | STORAGE-FORECAST | Water Year Type Averaging | Upper American |
+| D_NFA016_ABT002_SV | DIVERSION | Water Year Type Averaging | Upper American |
+| MFPFORECASTRELEASE | STORAGE-FORECAST | Water Year Type Averaging | Upper American |
+| P184FORECASTRELEASE | STORAGE-FORECAST | Water Year Type Averaging | Upper American |
+| C_NFA048_SV | CHANNEL | Quantile Mapping | Upper American |
+| C_STH007_SV | CHANNEL | Water Year Type Averaging | Upper Yuba Bear |
+| PGE_WY_ALLOCATION_SV | RATIO | Threshold Optimization | Upper Yuba Bear |
+| C_SFY007_SV | CHANNEL | Quantile Mapping | Upper Yuba Bear |
+| C_MFY044_SV | CHANNEL | Hybrid (QM + WYT) | Upper Yuba Bear |
+| D_SLT009_SCT000_SV | DIVERSION | Water Year Type Averaging | Upper Feather |
+| C_DER001_SV | CHANNEL | Quantile Mapping | Lower Yuba |
 
 :::{admonition} Suggested Plot
 :class: note
 Stacked bar chart showing term counts by module with three segments: (1) matched to existing inventory (gray), (2) filtered out as repeating/constant (light gray), (3) requiring new generation (blue). Annotate total counts and highlight that only Lower Yuba and Don Pedro require new work.
 :::
+
+## Methodology
+Total of four different approaches are applied to reconstruct the studied upper watershed terms, including:
+
+**1- Water Year Type Monthly Averaging (WYT):** Groups historical months by water year type (Wet, Above Normal, Below Normal, Dry, Critical) and assigns the corresponding monthly mean to each synthetic year. This approach captures seasonal demand and operational patterns that vary with overall water availability but not with year-to-year flow variability. It is the preferred fallback when correlation with VIC outputs is too weak for quantile mapping.
+
+**2- Quantile Mapping (QM):** For the Upper_Watershed Modules terms (i.e., other terms), quantile mapping follows a three-stage chaining approach. First, the full CS3 input DSS file is screened to identify the CalSim 3 historical term with the highest R-squared correlation to the target upper watershed term; this becomes the matching term. In the second stage, VIC Product A output is quantile-mapped to the matching term (trained on 1921–1971, applied on 1972–2018), producing a QMAP Product A reconstruction of the matching term. 
+In the third stage, that reconstructed matching-term series serves as the simulation basis for a second QM step trained on the relationship between the matching term and the target term (again over 1921–1971), yielding the final QMAP Product A reconstruction of the upper watershed term for 1972–2018.
+
+**3- Hybrid (QM + WYT):** Averages the QM and WYT reconstructions to blend interannual variability with stable seasonal structure. This mitigates peak overshoot or noise that pure QM can introduce when predictor correlation is moderate. It is applied where QM alone is insufficient but the term still shows meaningful year-to-year signal.
+
+**4- Threshold Optimization:** Defines a step-function mapping from an annual flow index to a discrete output value, with threshold boundaries optimized to maximize correlation with historical observations. This technique generalizes to any CalSim input governed by threshold-triggered operational rules.
 
 ### Lower Yuba Module Terms
 
