@@ -382,9 +382,6 @@ def main():
     df_calsim_all = read_calsim_monthly_multi(dss_file, calsim_inflows)
     print(f"  {len(df_vic_hist.columns)} VIC inflows, {len(df_calsim_all.columns)} CalSim inflows loaded")
 
-    # Optional: Save df_calsim_all for inspection
-    df_calsim_all.to_csv(os.path.join(BASE_OUT_DIR, "df_calsim_all.csv"))
-
     # Precompute training data per (CalSim, VIC) pair, once
     training = {}  # key: (cal, vic) -> (b_train_df, t_train_df)
     for _, row in df_pairs.iterrows():
