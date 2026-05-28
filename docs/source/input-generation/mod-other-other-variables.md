@@ -56,19 +56,7 @@ Standard WYT averaging alone produces overly smooth patterns that miss peaks ent
 
 ### PG&E Water Year Allocation
 
-PG&E Water Year Allocation ratio determines contractual water allocation as a function of water availability, with values ranging from 0.40 (severe shortage) to 1.00 (full allocation). All allocation changes occur in May each year, with ratios transitioning from 1.0 down to some restricted level, then persisting through the following April before resetting.
-
-Initial analysis extracted monthly data, identified five distinct ratio categories (1.00, 0.90, 0.80, 0.60, and 0.40), and sought relationships between annual Folsom unimpaired flow and allocation level. Trial-and-error threshold selection achieved R^2 = 0.75. Excel Solver optimization using GRG Nonlinear algorithm refined the four threshold boundaries simultaneously, improving to R^2 = 0.90:
-
-| Annual Folsom Unimpaired (TAF) | Allocation Ratio |
-|-------------------------------|------------------|
-| <= 488 | 0.40 |
-| 489--801 | 0.60 |
-| 802--957 | 0.80 |
-| 958--1146 | 0.90 |
-| > 1146 | 1.00 |
-
-The exact Solver-optimized boundaries are 488.24, 800.72, 957.08, and 1146.02 TAF. The logic has been transferred to Python (`_4_pge_wy_allocation.py`) for production runs, with application extending from May of the triggering water year through April of the following year.
+PG&E Water Year Allocation (`PGE_WY_ALLOCATION_SV`) is documented in the Upper Watershed module section. See {doc}`/source/input-generation/mod-other-upper-watershed`.
 
 ### San Joaquin River Return Flows
 
