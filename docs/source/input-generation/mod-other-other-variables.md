@@ -21,7 +21,6 @@ The "Other" category encompasses 143 diverse variables requiring individualized 
 - **Water Year Type (WYT) Indexes**: Sacramento Valley Index (40-30-30) and San Joaquin Valley Index (60-20-20) classifications
 - **B120 Forecasts**: Bulletin 120 seasonal runoff predictions (8 variables for Goodyear and Smartville)
 - **Flow Terms**: NDOI accretion, Colusa Basin Drain, Knights Landing Ridge Cut
-- **Allocations**: PG&E water year allocation ratios
 - **Wetlands Indices**: Tule wetlands index for Tulare Basin
 
 Methodologies range from straightforward water year type averaging (R^2 > 0.95) to complex threshold optimization for allocation ratios, to direct physical calculations for accretion terms.
@@ -53,10 +52,6 @@ The hybrid quantile mapping approach proved highly effective, averaging quantile
 $$V_{hybrid} = \frac{V_{QM} + V_{WYT}}{2}$$
 
 Standard WYT averaging alone produces overly smooth patterns that miss peaks entirely. Standard QM alone overshoots peaks unrealistically. The hybrid approach balances both limitations, bringing reconstructed values within historical ranges while maintaining appropriate variability. Progress Meeting 3 slides demonstrated this improvement visually, with time series comparisons showing QM-only overshoots eliminated while WYT-only flatness was enhanced with realistic peak structure. The justification emphasizes lack of confidence in QM extrapolation alone, using WYT averages as a "post-correction second-pass adjustment" to constrain values within historical norms.
-
-### PG&E Water Year Allocation
-
-PG&E Water Year Allocation (`PGE_WY_ALLOCATION_SV`) is documented in the Upper Watershed module section. See {doc}`/source/input-generation/mod-other-upper-watershed`.
 
 ### San Joaquin River Return Flows
 
@@ -103,15 +98,6 @@ Performance improvements from the hybrid approach are substantial: Colusa Basin 
 :::{admonition} Suggested Plot
 :class: note
 Three-row comparison for Colusa Basin Drain: (1) Time series showing actual, QM-only (with overshoots), WYT-only (too smooth), and hybrid (balanced), (2) Scatter plot actual vs reconstructed for all three methods with R^2 values, (3) Monthly box plots by method showing how hybrid eliminates extreme tails while preserving median patterns.
-:::
-
-### PG&E Water Year Allocation
-
-The Solver-optimized thresholds achieved R^2 = 0.90, representing a 23% improvement over initial manual threshold selection (R^2 = 0.75). Validation shows good alignment between actual and reconstructed allocation ratios, with occasional mismatches explained by near-threshold years where small runoff differences cause discrete category shifts.
-
-:::{admonition} Suggested Plot
-:class: note
-Dual panels: (1) Time series WY 1972-2018 showing actual allocation ratio (black step function) and reconstructed (blue step function) with Folsom runoff (gray area) on secondary axis demonstrating threshold crossings. (2) Scatter plot of annual Folsom runoff vs allocation ratio with actual (gray points), threshold boundaries (red vertical lines), and reconstructed (blue points) showing how optimization places boundaries to maximize agreement.
 :::
 
 ### San Joaquin River Return Flows
