@@ -71,8 +71,7 @@ Tier 3  WATER YEAR TYPES (mod_hydrology)
         python mod_hydrology/water_year_types/_1_calc_WYTs.py --product B
 
 Tier 4  DEPENDENT MODULES
-    Reservoir Evaporation:
-        python mod_reservoir/evaporation/_0_extract_reservoir_database.py --extract   (setup; run once)
+    Reservoir Evaporation:=
         python mod_reservoir/evaporation/_2_run_reservoir_evap.py --product B
     Reservoir Storage Curves:
         python mod_reservoir/storage_curves/_2_qmap.py --product B
@@ -82,19 +81,16 @@ Tier 4  DEPENDENT MODULES
         python mod_other/instream_flows/_1_min_flow_feather.py --product B
         python mod_other/instream_flows/_2_sjr_rest_req.py --product B
     Upper Watershed Modules:
-        python mod_other/upper_watershed/_0_load_sv.py                               (setup; run once)
         python mod_other/upper_watershed/_1_wyt_monthlyavg.py --product B
         python mod_other/upper_watershed/_2_qmap.py --product B
         python mod_other/upper_watershed/_3_hybrid.py --product B
         python mod_other/upper_watershed/_4_pge_wy_allocation.py --product B
-        python mod_other/upper_watershed/_5_dnp_evaporation.py --calibrate           (setup; run once)
         python mod_other/upper_watershed/_5_dnp_evaporation.py --product B
     Closure Terms:
         python mod_other/closure_terms/_1_ct_calculation.py --product B
     Day Volume Fractions:
         python mod_other/day_volume_fractions/_2_generate_product_b.py
     Other Variables (Miscellaneous):
-        python mod_other/miscellaneous/_0_extract_others.py                          (setup; run once)
         python mod_other/miscellaneous/_1_wyt_monthlyavg.py --product B
         python mod_other/miscellaneous/_2_DeltaAccretionForNDOI.py --product B
         python mod_other/miscellaneous/_3_hybrid.py --product B
