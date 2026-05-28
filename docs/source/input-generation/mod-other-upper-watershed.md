@@ -169,7 +169,9 @@ One upper watershed term employs the hybrid methodology, blending quantile mappi
 
 #### C_MFY044_SV (Channel Flow, Upper Yuba Bear)
 
-Middle Fork Yuba minimum channel flow shows unusual peak patterns that neither pure quantile mapping nor pure WYT averaging captures fully on its own. Pure QM tends to overfit to extreme years and can introduce peak overshoot, while WYT averaging smooths out year-to-year variability that is physically meaningful in the Middle Fork system. The hybrid approach averages the QM and WYT reconstructions to blend interannual variability from QM with the stable seasonal structure from WYT, mitigating peak overshoot while preserving the year-to-year signal present in the historical record. This makes the hybrid particularly appropriate for minimum flow terms where both seasonal patterns and annual hydrologic conditions govern the observed values.
+Middle Fork Yuba minimum channel flow shows unusual peak patterns that neither pure quantile mapping nor pure WYT averaging captures fully on its own. Pure QM tends to overfit to extreme years and can introduce peak overshoot, while WYT averaging smooths out year-to-year variability that is physically meaningful in the Middle Fork system. The hybrid approach averages the two reconstructions to blend interannual variability from QM with the stable seasonal structure from WYT, mitigating peak overshoot while preserving the year-to-year signal present in the historical record.
+
+For the QM component, `I_SFA076` is used as the CalSim 3 matching term, identified through screening as the highest R-squared predictor for C_MFY044_SV, and the two-stage chaining approach is applied over the standard 1921-1971 training and 1972-2018 simulation split. For the WYT component, San Joaquin Water Year Type monthly averaging is used, computing the conditional monthly mean for each of the five WYT classes and assigning the corresponding class mean to each synthetic month. The final reconstruction is the arithmetic average of the two component series.
 
 ---
 
