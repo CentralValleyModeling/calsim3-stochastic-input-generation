@@ -39,7 +39,7 @@ Total of four different approaches are applied to reconstruct the studied upper 
 
 - **Water Year Type Monthly Averaging (WYT):** Groups historical months by water year type (Wet, Above Normal, Below Normal, Dry, Critical) and assigns the corresponding monthly mean to each synthetic year. This approach captures seasonal demand and operational patterns that vary with overall water availability but not with year-to-year flow variability. It is the preferred fallback when correlation with VIC outputs is too weak for quantile mapping.
 
-- **Quantile Mapping (QM):** For the Upper_Watershed Modules terms (i.e., other terms), quantile mapping follows a three-stage chaining approach. First, the full CS3 input DSS file is screened to identify the CalSim 3 historical term with the highest R-squared correlation to the target upper watershed term; this becomes the matching term. In the second stage, VIC Product A output is quantile-mapped to the matching term (trained on 1921-1971, applied on 1972-2018), producing a QMAP Product A reconstruction of the matching term. In the third stage, that reconstructed matching-term series serves as the simulation basis for a second QM step trained on the relationship between the matching term and the target term (again over 1921-1971), yielding the final QMAP Product A reconstruction of the upper watershed term for 1972-2018.
+- **Quantile Mapping (QM):** For the Upper_Watershed Modules terms (i.e., other terms), quantile mapping follows a two-stage chaining approach. As a prerequisite step, the full CS3 input DSS file is screened to identify the CalSim 3 historical term with the highest R-squared correlation to the target upper watershed term; this becomes the matching term. In the first QM stage, VIC Product A output is quantile-mapped to the matching term (trained on 1921-1971, applied on 1972-2018), producing a QMAP Product A reconstruction of the matching term. In the second QM stage, that reconstructed matching-term series serves as the simulation basis for a second QM step trained on the relationship between the matching term and the target term (again over 1921-1971), yielding the final QMAP Product A reconstruction of the upper watershed term for 1972-2018.
 
 - **Hybrid (QM + WYT):** Averages the QM and WYT reconstructions to blend interannual variability with stable seasonal structure. This mitigates peak overshoot or noise that pure QM can introduce when predictor correlation is moderate. It is applied where QM alone is insufficient but the term still shows meaningful year-to-year signal.
 
@@ -117,19 +117,49 @@ The validation time series shows the reconstructed series closely tracking the a
 
 ### 2. Quantile Mapping
 
-Three upper watershed channel flow terms are reconstructed using the three-stage chaining quantile mapping approach, covering the Upper American, Upper Yuba Bear, and Lower Yuba watershed modules.
+Three upper watershed channel flow terms are reconstructed using the two-stage chaining quantile mapping approach, covering the Upper American, Upper Yuba Bear, and Lower Yuba watershed modules.
 
 #### C_NFA048_SV (Channel Flow, Upper American)
 
-North Fork American channel flow exhibits year-to-year hydrologic variability with sufficient correlation to VIC outputs to support quantile mapping. The three-stage chaining approach first screens the full CS3 input DSS to identify the CalSim 3 historical term with the highest R-squared correlation to C_NFA048_SV as the matching term. VIC Product A output is then quantile-mapped to the matching term trained over 1921-1971 and applied over 1972-2018. A second QM step maps the reconstructed matching-term series to the target C_NFA048_SV over the same split-sample periods, yielding the final Product A reconstruction.
+North Fork American channel flow is reconstructed using the two-stage chaining quantile mapping approach for "other terms", with `I_NFA054` identified as the CalSim 3 matching term (highest R-squared correlation to C_NFA048_SV across the full CS3 input DSS screening). 
+
+In the first stage, VIC Product A output is quantile-mapped to `I_NFA054`, with the QM relationship trained on the 1921-1971 period and applied to the 1972-2018 simulation period, yielding a QMAP Product A reconstruction of the matching term. In the second stage, that reconstructed `I_NFA054` series (1972-2018) serves as the basis for a new QM step trained on the historical relationship between `I_NFA054` and `C_NFA048_SV` over 1921-1971, producing the final QMAP Product A reconstruction of the target term for 1972-2018.
+
+```{figure} ../figures/calsim-run-product-a/full-validation/C_NFA048_SV.png
+:name: fig-c-nfa048-sv
+:width: 100%
+Product A validation for C_NFA048_SV: monthly time series (left) and non-exceedance CDF (right) comparing reconstructed Product A against historical record over 1972-2018.
+```
+
+Product A validation over 1972-2018 yields $R^2 = 0.86$, $\text{NSE} = 0.85$, and $\text{PBIAS} = -11.5\%$. The monthly time series shows the reconstruction closely tracking the historical seasonal pattern and capturing near-zero dry-season base flows well. However, several prominent wet-season peaks in the historical record -- particularly the largest events exceeding 150-200 TAF visible in years such as 1983, 1997, and 2017 -- are not fully reproduced, with the reconstruction underestimating their magnitude. This is consistent with the negative percent bias of -11.5% and the upper-tail divergence in the non-exceedance CDF, where Product A falls below the historical curve above the 90th percentile. The chaining QM approach captures the overall flow regime and inter-annual variability well, but the smoothing inherent in the two-stage mapping limits its ability to reproduce the most extreme monthly flow events.
 
 #### C_SFY007_SV (Channel Flow, Upper Yuba Bear)
 
-South Fork Yuba channel flow shows year-to-year variability consistent with a runoff-driven response, enabling the quantile mapping approach. As with other QM terms, the best-correlated matching term in the CS3 input DSS is identified by maximum R-squared, and the three-stage chain maps VIC Product A through the intermediate matching term to produce the final reconstruction. The split-sample training (1921-1971) and validation (1972-2018) periods ensure the QM relationship is not overfit to the full historical record.
+South Fork Yuba channel flow is reconstructed using the two-stage chaining quantile mapping approach for "other terms", with `FOLSOM_INFLOW` identified as the CalSim 3 matching term (highest R-squared correlation to C_SFY007_SV across the full CS3 input DSS screening).
+
+In the first stage, VIC Product A output is quantile-mapped to `FOLSOM_INFLOW`, with the QM relationship trained on the 1921-1971 period and applied to the 1972-2018 simulation period, yielding a QMAP Product A reconstruction of the matching term. In the second stage, that reconstructed `FOLSOM_INFLOW` series (1972-2018) serves as the basis for a new QM step trained on the historical relationship between `FOLSOM_INFLOW` and `C_SFY007_SV` over 1921-1971, producing the final QMAP Product A reconstruction of the target term for 1972-2018.
+
+```{figure} ../figures/calsim-run-product-a/full-validation/C_SFY007_SV.png
+:name: fig-c-sfy007-sv
+:width: 100%
+Product A validation for C_SFY007_SV: monthly time series (left) and non-exceedance CDF (right) comparing reconstructed Product A against historical record over 1972-2018.
+```
+
+Product A validation over 1972-2018 yields $R^2 = 0.82$, $\text{NSE} = 0.82$, and $\text{PBIAS} = -4.2\%$. The monthly time series shows the reconstruction closely tracking the historical seasonal pattern, capturing both near-zero dry-season base flows and wet-season peaks across the 0-290 TAF range. The very low percent bias of -4.2% indicates near-neutral volume balance, and the non-exceedance CDF shows the two curves overlapping closely through most of the distribution. A small number of extreme peaks -- most notably the largest wet-season event near 2019 -- are not fully captured, with the reconstruction underestimating peak magnitude, which accounts for the slight upper-tail divergence visible in the CDF above the 95th percentile.
 
 #### C_DER001_SV (Channel Flow, Lower Yuba)
 
-Lower Yuba channel flow exhibits a clear hydrologic pattern, making quantile mapping the primary approach. The term shows correlation with Yuba River flows, enabling standard QM methodology with VIC output as basis. The three-stage chaining methodology applies: the highest-R-squared CalSim 3 matching term is identified from the full DSS screening, VIC Product A is mapped to that matching term over the training period, and a second QM step reconstructs the target Lower Yuba channel term from the intermediate matching-term series over the validation period.
+Lower Yuba channel flow is reconstructed using the two-stage chaining quantile mapping approach for "other terms", with `I_CSM035` identified as the CalSim 3 matching term (highest R-squared correlation to C_DER001_SV across the full CS3 input DSS screening).
+
+In the first stage, VIC Product A output is quantile-mapped to `I_CSM035`, with the QM relationship trained on the 1921-1971 period and applied to the 1972-2018 simulation period, yielding a QMAP Product A reconstruction of the matching term. In the second stage, that reconstructed `I_CSM035` series (1972-2018) serves as the basis for a new QM step trained on the historical relationship between `I_CSM035` and `C_DER001_SV` over 1921-1971, producing the final QMAP Product A reconstruction of the target term for 1972-2018.
+
+```{figure} ../figures/calsim-run-product-a/full-validation/C_DER001_SV.png
+:name: fig-c-der001-sv
+:width: 100%
+Product A validation for C_DER001_SV: monthly time series (left) and non-exceedance CDF (right) comparing reconstructed Product A against historical record over 1972-2018.
+```
+
+Product A validation over 1972-2018 yields $R^2 = 0.87$, $\text{NSE} = 0.86$, and $\text{PBIAS} = -2.3\%$. The monthly time series shows the reconstruction closely tracking the historical seasonal pattern of spiky wet-season peaks and near-zero dry-season base flows across the 0-90 TAF range. The near-neutral percent bias of -2.3% indicates very good volume balance overall, and the non-exceedance CDF shows the two curves closely aligned through most of the distribution. Some individual peak events are over- or underestimated in specific years, contributing to minor divergence at the very upper tail of the CDF above the 95th percentile, but the overall timing and magnitude agreement reflected in NSE = 0.86 represents strong reconstruction performance for this Lower Yuba channel term.
 
 ---
 
