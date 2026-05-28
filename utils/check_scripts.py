@@ -292,10 +292,15 @@ def check_pandas_freq_aliases(rel, text):
     ``.resample(``, and flags it if the part before any '-' anchor is in the
     deprecated set (e.g. 'M' -> 'ME', 'AS-OCT' -> 'YS-OCT'). ``.asfreq()`` is
     intentionally not checked (see _FREQ_CALL_RE note).
+
+    Add ``# period-resample`` at end of line to suppress: pandas period-based
+    resample (PeriodIndex) requires 'M' not 'ME', so those sites are correct.
     """
     bad = []
     for i, line in enumerate(text.splitlines(), 1):
         if line.lstrip().startswith("#"):
+            continue
+        if "# period-resample" in line:
             continue
         for m in _FREQ_CALL_RE.finditer(line):
             alias = m.group(1)

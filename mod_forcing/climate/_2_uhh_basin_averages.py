@@ -216,9 +216,9 @@ def calculate_basin_monthly_averages(grid_info_df, data_folder, date_index=None,
     daily_tavg_c = weighted_tavg_sum / weight_total
 
     if product_b:
-        # PeriodIndex: resample with 'ME' (month-end)
-        monthly_precip_mm = daily_precip_mm.resample('ME').sum()
-        monthly_tavg_c = daily_tavg_c.resample('ME').mean()
+        # PeriodIndex: period resample requires 'M', not 'ME'
+        monthly_precip_mm = daily_precip_mm.resample('M').sum()   # period-resample
+        monthly_tavg_c = daily_tavg_c.resample('M').mean()        # period-resample
         monthly_df = pd.DataFrame({
             'year':          [p.year  for p in monthly_precip_mm.index],
             'month':         [p.month for p in monthly_precip_mm.index],

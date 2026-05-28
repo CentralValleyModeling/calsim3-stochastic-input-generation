@@ -144,7 +144,7 @@ def calculate_monthly_precip(daily_data, product_b=False):
     pd.DataFrame with monthly precipitation totals
     """
     if product_b:
-        monthly_precip = daily_data['precip_mm'].resample('ME').sum()
+        monthly_precip = daily_data['precip_mm'].resample('M').sum()  # period-resample
         monthly_precip_inches = monthly_precip / 25.4
         monthly_df = pd.DataFrame({
             'year':          [p.year  for p in monthly_precip_inches.index],

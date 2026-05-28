@@ -230,8 +230,9 @@ class EvaporationCalculator:
         pd.DataFrame
             Monthly evaporation rates
         """
-        # Resample to monthly averages
-        monthly = daily_data.resample('ME').agg({
+        # PeriodIndex (Product B) requires 'M'; DatetimeIndex uses 'ME'
+        resample_freq = 'M' if isinstance(daily_data.index, pd.PeriodIndex) else 'ME'
+        monthly = daily_data.resample(resample_freq).agg({
             tmax_col: 'mean',
             tmin_col: 'mean'
         })

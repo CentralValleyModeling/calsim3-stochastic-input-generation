@@ -5,8 +5,8 @@ Consolidates every module's per-chunk ``_product_b_final/*.csv`` into ten
 unified ``ProductB_SV_n{01..10}.csv`` files and writes the corresponding
 ``ProductB_SV_n{01..10}.dss`` files by overlaying chunk values onto the
 CalSim baseline DSS template. Auto-fills inventory Constant/Rept SVs from
-the baseline 12-month pattern and runs Product A and CalSim baseline
-diagnostic comparisons.
+the baseline 12-month pattern and runs a CalSim baseline diagnostic
+comparison.
 
 Inputs
 ------
@@ -17,9 +17,6 @@ Inputs
   day_volume_fractions).
 - ``BASE/CalSim3/__calsim_sv_default__.dss`` (baseline template, Constant/Rept
   12-month repeat source, units extractor).
-- ``GENERATED/postprocessing/sv_compile/product_a_validation/
-  ProductA_Historical_Validation_SV.dss`` (optional Product A comparison
-  input; written by ``product_a_historical_validation.py``).
 - ``inventory/_MASTER_INVENTORY_FOR_STOCHASTIC_INPUT_GENERATION_.xlsx``.
 
 Outputs (all written to ``product_b_compilation/``)
@@ -29,10 +26,9 @@ Outputs (all written to ``product_b_compilation/``)
 - ``inventory_*`` cross-reference CSVs (expected/missing/constant_rept/
   skipped_missing/skipped_not_in_dcr/unexpected)
 - ``sv_coverage_by_chunk.csv``
-- ``product_b_vs_a_comparison.csv``,
-  ``product_b_vs_calsim_base_comparison.csv``
+- ``product_b_vs_calsim_base_comparison.csv``
 - ``compilation_summary.txt``
-- ``figures/vs_product_a/`` and ``figures/vs_calsim_base/`` PNGs
+- ``figures/`` PNGs
   (weighted/unweighted annual %diff per category, exceedance rank shift,
   monthly climatology, per-category chunk spread)
 
@@ -52,7 +48,7 @@ Usage
 
 CLI flags
 ---------
-- ``--skip-comparison`` Skip the Product A vs B comparison step.
+- ``--skip-comparison`` Skip the CalSim baseline comparison step.
 - ``--skip-dss``        Skip DSS file generation (CSV only).
 - ``--chunks N [N ...]`` Process only specific chunks (default: all 10).
 - ``--summary-figures`` Regenerate figures from a previous comparison CSV.
@@ -94,9 +90,6 @@ OUTPUT_DIR     = _gen / "product_b_compilation"
 COMPILED_DIR   = OUTPUT_DIR / "_product_b_compiled_sv"
 COMPILED_CSV   = OUTPUT_DIR / "compiled_input_files"
 
-# Product A compiled DSS (for comparison)
-PRODUCT_A_DSS  = _gen / "product_a_validation" / "ProductA_Historical_Validation_SV.dss"
-
 INVENTORY_XLSX = get_inventory_dir() / "_MASTER_INVENTORY_FOR_STOCHASTIC_INPUT_GENERATION_.xlsx"
 
 DSS_PATTERN = "/*/*/*/*/1MON/*"
@@ -106,10 +99,6 @@ N_CHUNKS     = 10
 CHUNK_TAGS   = [f"n{i:02d}" for i in range(1, N_CHUNKS + 1)]
 PB_START_YM  = (1921, 10)   # first data month
 PB_END_YM    = (2021,  9)   # last data month
-
-# Product A comparison window (WY 1972-2018)
-PA_START = pd.Timestamp(1971, 10, 31)
-PA_END   = pd.Timestamp(2018,  9, 30)
 
 # CalSim baseline comparison window (full period, WY 1922-2021)
 CB_START = pd.Timestamp(1921, 10, 31)
@@ -127,7 +116,7 @@ _parser = argparse.ArgumentParser(
 )
 _parser.add_argument(
     "--skip-comparison", action="store_true", default=False,
-    help="Skip the Product A vs B comparison step.",
+    help="Skip the CalSim baseline comparison step.",
 )
 _parser.add_argument(
     "--skip-dss", action="store_true", default=False,
@@ -479,83 +468,8 @@ def build_constant_rept_rows(dss_in, baseline_bucket, part_key):
 
 
 # ======================================================================
-# Step 3: Read Product A DSS for comparison
+# Step 3: Read CalSim baseline DSS for comparison
 # ======================================================================
-def read_product_a_monthly_means(product_a_dss: Path, baseline_bucket: dict,
-                                 keys_to_read: set) -> dict:
-    """Read Product A compiled DSS and compute monthly means per (Part B, Part C).
-
-    Returns dict: (Part_B, Part_C) -> {month: mean_value}
-    """
-    result = {}
-    with dss_io.open_dss(product_a_dss, version=6, catalog_flag=True) as dss:
-        pa_paths = dss.getPathnameList(DSS_PATTERN)
-        pa_bucket = {}
-        for p in pa_paths:
-            k = path_key(p)
-            pa_bucket.setdefault(k, []).append(p)
-
-        for pk in sorted(keys_to_read):
-            if pk not in pa_bucket:
-                continue
-
-            merged = {}
-            for pathname in pa_bucket[pk]:
-                try:
-                    ts = dss.read_ts(pathname, trim_missing=False)
-                except Exception:
-                    continue
-                eom = dss_eom(ts.pytimes)
-                vals = np.array(ts.values, dtype=float)
-                for i, dt in enumerate(eom):
-                    if vals[i] > -900 and PA_START <= dt <= PA_END:
-                        merged[dt] = vals[i]
-
-            if not merged:
-                continue
-
-            ser = pd.Series(merged)
-            monthly_means = {}
-            for m in range(1, 13):
-                mm = ser[ser.index.month == m]
-                if not mm.empty:
-                    monthly_means[m] = mm.mean()
-            result[pk] = monthly_means
-
-    return result
-
-
-def read_product_a_monthly_series(product_a_dss: Path,
-                                  keys_to_read: set) -> dict:
-    """Read Product A compiled DSS monthly series per (Part B, Part C)."""
-    result = {}
-    with dss_io.open_dss(product_a_dss, version=6, catalog_flag=True) as dss:
-        pa_paths = dss.getPathnameList(DSS_PATTERN)
-        pa_bucket = {}
-        for p in pa_paths:
-            k = path_key(p)
-            pa_bucket.setdefault(k, []).append(p)
-
-        for pk in sorted(keys_to_read):
-            if pk not in pa_bucket:
-                continue
-            merged = {}
-            for pathname in pa_bucket[pk]:
-                try:
-                    ts = dss.read_ts(pathname, trim_missing=False)
-                except Exception:
-                    continue
-                eom = dss_eom(ts.pytimes)
-                vals = np.array(ts.values, dtype=float)
-                for i, dt in enumerate(eom):
-                    if vals[i] > -900 and PA_START <= dt <= PA_END:
-                        merged[pd.Timestamp(dt)] = vals[i]
-            if merged:
-                result[pk] = pd.Series(merged).sort_index()
-
-    return result
-
-
 def read_calsim_base_monthly_means(baseline_bucket: dict,
                                    keys_to_read: set,
                                    start: pd.Timestamp,
@@ -911,16 +825,6 @@ def _generate_comparison_figures(cmp_df, fig_dir, ref_label, active_tags,
         annual_rows.append(row)
 
     annual_df = pd.DataFrame(annual_rows)
-
-    # Exclude CalSimHydro terms that are identical in historical and
-    # stochastic (constant repeating or water-demand/wastewater policy
-    # inputs that are unchanged by design).
-    _CALSIMHYDRO_PARTC_EXCL = {"URBAN-DEMAND", "WASTEWATER"}
-    _excl_mask = (
-        (annual_df["Input_Category"] == "CalSimHydro")
-        & (annual_df["Part_C"].isin(_CALSIMHYDRO_PARTC_EXCL))
-    )
-    annual_df = annual_df[~_excl_mask].copy()
 
     # -- Weighted all-category summary ---------------------------------
     summary_df = annual_df[~annual_df["Constant_Rept"]].copy()
@@ -1443,16 +1347,11 @@ def _generate_comparison_figures(cmp_df, fig_dir, ref_label, active_tags,
                 print(f"    Figure: {out_dir.name}/{op.name}")
 
         # -- Part-C-grouped sections ------------------------------------------
-        # Part C terms to exclude from CalSimHydro (unchanged by design).
-        _CALSIMHYDRO_PC_EXCL = {"URBAN-DEMAND", "WASTEWATER"}
-
         for cat_name, s_safe in _PARTC_SECTS:
             agg = "mean" if cat_name in _MEAN_CAT else "sum"
             pks_by_pc = {}
             for (pb, pc), cat in _cat_lk.items():
                 if cat == cat_name:
-                    if cat_name == "CalSimHydro" and pc in _CALSIMHYDRO_PC_EXCL:
-                        continue
                     pks_by_pc.setdefault(pc, set()).add((pb, pc))
             if not pks_by_pc:
                 continue
@@ -1666,7 +1565,7 @@ def _generate_comparison_figures(cmp_df, fig_dir, ref_label, active_tags,
         if any(len(d) > 0 for d in pct_data):
             bp = ax_top.boxplot(
                 pct_data, vert=True, patch_artist=True, widths=0.6,
-                labels=list(active_tags),
+                tick_labels=list(active_tags),
             )
             for patch in bp["boxes"]:
                 patch.set_facecolor("#5B9BD5")
@@ -1695,7 +1594,7 @@ def _generate_comparison_figures(cmp_df, fig_dir, ref_label, active_tags,
             if any(len(d) > 0 for d in abs_data):
                 bp = ax.boxplot(
                     abs_data, vert=True, patch_artist=True, widths=0.6,
-                    labels=list(active_tags),
+                    tick_labels=list(active_tags),
                 )
                 for patch in bp["boxes"]:
                     patch.set_facecolor("#E8A54B")
@@ -1820,27 +1719,12 @@ if CLI_ARGS.summary_figures:
         k = path_key(p)
         baseline_bucket.setdefault(k, []).append(p)
 
-    # Collect all SVs across available comparison CSVs
-    all_compiled_svs = set()
-    _comparisons_to_plot = []  # (csv_path, ref_col, ref_label, fig_subdir)
-
-    _cmp_a_csv = OUTPUT_DIR / "product_b_vs_a_comparison.csv"
-    if _cmp_a_csv.exists():
-        _comparisons_to_plot.append(
-            (_cmp_a_csv, "Product_A_mean", "Product A", "vs_product_a"))
-
     _cmp_b_csv = OUTPUT_DIR / "product_b_vs_calsim_base_comparison.csv"
-    if _cmp_b_csv.exists():
-        _comparisons_to_plot.append(
-            (_cmp_b_csv, "CalSim_Base_mean", "CalSim Base", "vs_calsim_base"))
+    if not _cmp_b_csv.exists():
+        sys.exit(f"ERROR: Comparison CSV not found from a previous run:\n  {_cmp_b_csv}")
 
-    if not _comparisons_to_plot:
-        sys.exit(f"ERROR: No comparison CSVs found from a previous run in:\n  {OUTPUT_DIR}")
-
-    # Extract units (once, for all SVs)
-    for _csv_path, _, _, _ in _comparisons_to_plot:
-        _df_tmp = pd.read_csv(_csv_path)
-        all_compiled_svs |= set(zip(_df_tmp["Part_B"], _df_tmp["Part_C"]))
+    cmp_df = pd.read_csv(_cmp_b_csv)
+    all_compiled_svs = set(zip(cmp_df["Part_B"], cmp_df["Part_C"]))
 
     units_map = {}
     with dss_io.open_dss(BASELINE_DSS, version=6, catalog_flag=False) as _dss_u:
@@ -1866,35 +1750,23 @@ if CLI_ARGS.summary_figures:
     else:
         print("  WARNING: No compiled chunk CSVs found; WY exceedance figures will be skipped.")
 
-    for _csv_path, _ref_col, _ref_label, _fig_subdir in _comparisons_to_plot:
-        cmp_df = pd.read_csv(_csv_path)
-        print(f"  Loaded {_csv_path.name} ({len(cmp_df):,} rows)")
+    print(f"  Loaded {_cmp_b_csv.name} ({len(cmp_df):,} rows)")
+    if "CalSim_Base_mean" in cmp_df.columns:
+        cmp_df = cmp_df.rename(columns={"CalSim_Base_mean": "Ref_mean"})
+    ref_series = read_calsim_base_monthly_series(
+        baseline_bucket, all_compiled_svs, CB_START, CB_END
+    )
 
-        # Rename reference column to Ref_mean for the figure function
-        if _ref_col in cmp_df.columns:
-            cmp_df = cmp_df.rename(columns={_ref_col: "Ref_mean"})
-
-        if _ref_label == "Product A" and PRODUCT_A_DSS.exists():
-            ref_series = read_product_a_monthly_series(
-                PRODUCT_A_DSS, all_compiled_svs
-            )
-        elif _ref_label == "CalSim Base":
-            ref_series = read_calsim_base_monthly_series(
-                baseline_bucket, all_compiled_svs, CB_START, CB_END
-            )
-        else:
-            ref_series = {}
-
-        print(f"  Generating {_ref_label} figures ...")
-        try:
-            _generate_comparison_figures(
-                cmp_df, fig_root / _fig_subdir, _ref_label,
-                ACTIVE_TAGS, units_map, skip_climatology=True,
-                ref_series_by_pk=ref_series,
-                compiled_chunks=_summary_compiled_chunks,
-            )
-        except ImportError:
-            print("  WARNING: matplotlib not available, skipping figures.")
+    print("  Generating CalSim Base figures ...")
+    try:
+        _generate_comparison_figures(
+            cmp_df, fig_root, "CalSim Base",
+            ACTIVE_TAGS, units_map, skip_climatology=True,
+            ref_series_by_pk=ref_series,
+            compiled_chunks=_summary_compiled_chunks,
+        )
+    except ImportError:
+        print("  WARNING: matplotlib not available, skipping figures.")
 
     print(f"\nDone (--summary-figures).  Output in: {OUTPUT_DIR}")
     sys.exit(0)
@@ -2426,13 +2298,13 @@ print()
 
 
 # ==================================================================
-# STEP 7 -- Product B comparisons (vs Product A & vs CalSim Base)
+# STEP 7 -- Product B comparison (vs CalSim Base)
 # ==================================================================
 if not CLI_ARGS.skip_comparison:
-    print("Step 7: Comparing Product B chunks against references ...")
+    print("Step 7: Comparing Product B chunks against CalSim baseline ...")
     t0_cmp = time.time()
 
-    # -- Extract SV units from baseline DSS (shared by both comparisons) --
+    # -- Extract SV units from baseline DSS --
     try:
         _bt_cache = baseline_ts_cache
     except NameError:
@@ -2460,51 +2332,9 @@ if not CLI_ARGS.skip_comparison:
     fig_root = OUTPUT_DIR / "figures"
     fig_root.mkdir(exist_ok=True)
 
-    # -- 7a: Product A comparison (WY 1972-2021) --
-    if not PRODUCT_A_DSS.exists():
-        print("  WARNING: Product A DSS not found, skipping Product A comparison.")
-        print(f"    Expected: {PRODUCT_A_DSS}")
-    else:
-        print()
-        print("  7a: Comparing against Product A (WY 1972-2021) ...")
-        pa_means = read_product_a_monthly_means(
-            PRODUCT_A_DSS, baseline_bucket, all_compiled_svs
-        )
-        print(f"    Product A: {len(pa_means):,} (B,C) with data in comparison window")
-        pa_series = read_product_a_monthly_series(
-            PRODUCT_A_DSS, all_compiled_svs
-        )
-
-        pb_means_pa = _compute_pb_chunk_means(
-            compiled_chunks, ACTIVE_TAGS,
-            start_ym=197110, end_ym=202109,
-        )
-
-        cmp_a = _build_comparison_df(
-            pa_means, pb_means_pa, all_compiled_svs, ACTIVE_TAGS
-        )
-
-        # Write CSV (rename Ref_mean -> Product_A_mean for backward compat)
-        cmp_a_out = cmp_a.rename(columns={"Ref_mean": "Product_A_mean"})
-        fp = OUTPUT_DIR / "product_b_vs_a_comparison.csv"
-        cmp_a_out.to_csv(fp, index=False)
-        n_svs_compared = cmp_a_out.groupby(["Part_B", "Part_C"]).ngroups
-        print(f"    {fp.name:45s}  {n_svs_compared:>6,} SVs compared")
-
-        print("    Generating Product A comparison figures ...")
-        try:
-            _generate_comparison_figures(
-                cmp_a, fig_root / "vs_product_a", "Product A",
-                ACTIVE_TAGS, units_map, skip_climatology=False,
-                ref_series_by_pk=pa_series,
-                compiled_chunks=compiled_chunks,
-            )
-        except ImportError:
-            print("    WARNING: matplotlib not available, skipping figures.")
-
-    # -- 7b: CalSim baseline comparison (full 1921-2021) --
+    # -- CalSim baseline comparison (full 1921-2021) --
     print()
-    print("  7b: Comparing against CalSim baseline (WY 1922-2021) ...")
+    print("  Comparing against CalSim baseline (WY 1922-2021) ...")
     cb_means = read_calsim_base_monthly_means(
         baseline_bucket, all_compiled_svs, CB_START, CB_END
     )
@@ -2532,7 +2362,7 @@ if not CLI_ARGS.skip_comparison:
     print("    Generating CalSim Base comparison figures ...")
     try:
         _generate_comparison_figures(
-            cmp_b, fig_root / "vs_calsim_base", "CalSim Base",
+            cmp_b, fig_root, "CalSim Base",
             ACTIVE_TAGS, units_map, skip_climatology=False,
             ref_series_by_pk=cb_series,
             compiled_chunks=compiled_chunks,
@@ -2540,7 +2370,7 @@ if not CLI_ARGS.skip_comparison:
     except ImportError:
         print("    WARNING: matplotlib not available, skipping figures.")
 
-    print(f"\n  Comparisons completed in {time.time()-t0_cmp:.1f}s")
+    print(f"\n  Comparison completed in {time.time()-t0_cmp:.1f}s")
     print()
 else:
     print("Step 7: Skipped (--skip-comparison)")
