@@ -185,6 +185,12 @@ PG&E Water Year Allocation determines hydropower generation water rights as a fu
 
 The Solver optimization approach was developed during the January progress meetings as a generalizable technique for any threshold-based CalSim input. By parameterizing the threshold boundaries and using a nonlinear solver to maximize correlation with historical values, the team established a repeatable workflow that avoids subjective manual threshold selection. Further detail on PGE_WY_ALLOCATION_SV is available in the {doc}`/source/input-generation/mod-other-other-variables` section.
 
+```{figure} ../figures/calsim-run-product-a/full-validation/PGE_WY_ALLOCATION_SV.png
+:name: fig-pge-wy-allocation-sv
+:width: 100%
+Validation of PGE_WY_ALLOCATION_SV: reconstructed (orange) vs. actual (blue) water year allocation ratio over 1921-2021, showing the step-function response to annual Folsom unimpaired flow thresholds.
+```
+
 ---
 
 ## Results
