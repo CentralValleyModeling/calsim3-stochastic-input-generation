@@ -25,6 +25,13 @@ Annotation-box behavior
 If both ``metric_lines`` and ``compute_metrics_from`` are supplied,
 ``metric_lines`` wins (manual override).
 
+Subtitle behavior
+-----------------
+- ``subtitle=None`` (default)  -> auto-generate ``(WY YYYY-YYYY)`` spanning all
+  series (water year = calendar year + 1 if month >= 10).
+- ``subtitle="..."``           -> render the caller's string verbatim.
+- ``subtitle=""``              -> no subtitle at all.
+
 Output formats
 --------------
 ``out_path`` suffix drives the writer. Raster suffixes (.png, .jpg, ...) honor
@@ -121,6 +128,43 @@ mpl.rcParams["pdf.fonttype"] = 42
 mpl.rcParams["ps.fonttype"] = 42
 
 
+# -- Canonical report theme --------------------------------------------------
+# Applied via _apply_theme() inside plot_ts_cdf so every figure has the same
+# look without polluting global rcParams at import time.
+_THEME_RC: dict = {
+    "figure.dpi": 200,
+    "savefig.dpi": 300,
+    "font.family": "sans-serif",
+    "font.sans-serif": ["Arial", "Helvetica", "Calibri", "DejaVu Sans"],
+    "font.size": 8,
+    "axes.titlesize": 8,
+    "axes.titleweight": "semibold",
+    "axes.labelsize": 8,
+    "axes.labelweight": "medium",
+    "axes.edgecolor": "0.25",
+    "axes.linewidth": 0.6,
+    "xtick.labelsize": 7,
+    "ytick.labelsize": 7,
+    "xtick.major.width": 0.5,
+    "ytick.major.width": 0.5,
+    "grid.linewidth": 0.35,
+    "grid.alpha": 0.40,
+    "lines.linewidth": 0.9,
+    "legend.fontsize": 7,
+    "legend.title_fontsize": 8,
+    "legend.framealpha": 0.90,
+    "legend.edgecolor": "0.55",
+    "figure.titlesize": 8,
+    "figure.titleweight": "bold",
+    "mathtext.default": "regular",
+}
+
+
+def _apply_theme() -> None:
+    """Apply the canonical theme (whitegrid + report-grade rcParams)."""
+    sns.set_theme(style="whitegrid", context="paper", font_scale=1.0, rc=_THEME_RC)
+
+
 # -- Defaults -----------------------------------------------------------------
 
 _DEFAULT_FIGSIZE = (6.5, 3.25)
@@ -187,6 +231,8 @@ def plot_ts_cdf(
     if not series_list:
         raise ValueError("plot_ts_cdf requires at least one Series.")
 
+    _apply_theme()
+
     palette = default_palette()
     for i, s in enumerate(series_list):
         if s.color is None:
@@ -250,6 +296,9 @@ def plot_ts_cdf(
     ax_cdf.set_xlim(0, 100)
 
     # -- Titles & legend --
+    # Auto WY-range subtitle when caller didn't provide one.
+    if subtitle is None:
+        subtitle = _wy_range_subtitle(series_list)
     fig.suptitle(title, y=1.02)
     if subtitle:
         fig.text(
@@ -295,6 +344,21 @@ def _date_span_years(dates: Sequence) -> int:
         return max(1, int((d1.astype("datetime64[Y]") - d0.astype("datetime64[Y]")).astype(int)) + 1)
     except Exception:
         return 100
+
+
+def _wy_range_subtitle(series_list: list[Series]) -> str | None:
+    """Return '(WY YYYY-YYYY)' covering all series, or None if undatable."""
+    try:
+        d = np.concatenate([np.asarray(s.dates, dtype="datetime64[D]")
+                            for s in series_list if len(s.dates)])
+        if d.size == 0:
+            return None
+        years = d.astype("datetime64[Y]").astype(int) + 1970
+        months = d.astype("datetime64[M]").astype(int) % 12 + 1
+        wy = years + (months >= 10).astype(int)
+        return f"(WY {int(wy.min())}-{int(wy.max())})"
+    except Exception:
+        return None
 
 
 def _paired_finite(obs: np.ndarray, sim: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
