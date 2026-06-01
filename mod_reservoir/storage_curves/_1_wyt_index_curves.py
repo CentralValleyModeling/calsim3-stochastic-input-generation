@@ -25,7 +25,7 @@ Inputs:
   - GENERATED/mod_hydrology/water_year_types/output/_1_calc_WYTs/Product_B/  (_SacWYT_{ens}.csv, _SJWYT_{ens}.csv)
 
 Outputs are written under:
-  <generated>/output/_1_wyt_index_curves/          (historical validation CSV + plots/)
+  <generated>/output/_1_wyt_index_curves/          (historical validation CSV + figures/ per-series TS+CDF with R2/NSE/PBIAS)
   <generated>/output/_product_a_validation/         (Product A)
   <generated>/output/_product_b_final/              (Product B)
 
@@ -42,13 +42,13 @@ import sys
 from pathlib import Path
 from typing import Dict, Tuple
 
-import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 from utils.paths import get_base_dir, get_module_generated_dir
 from utils import dss_io
+from utils.validation_plots import Series, plot_ts_cdf
 
 # -- CONSTANTS -------------------------------------------------------------
 _SCRIPT_DIR = Path(__file__).resolve().parent
@@ -57,7 +57,7 @@ _REF = _SCRIPT_DIR / "reference"
 _gen = get_module_generated_dir("mod_reservoir/storage_curves")
 BASE_RESULTS_DIR = _gen / "output"
 HIST_VALIDATION_DIR = BASE_RESULTS_DIR / "_1_wyt_index_curves"
-HIST_PLOT_DIR = HIST_VALIDATION_DIR / "plots"
+HIST_PLOT_DIR = HIST_VALIDATION_DIR / "figures"
 PRODUCT_A_DIR = BASE_RESULTS_DIR / "_product_a_validation"
 PRODUCT_B_DIR = BASE_RESULTS_DIR / "_product_b_final"
 
@@ -361,69 +361,34 @@ def _write_product_b(df: pd.DataFrame, ensemble: str) -> None:
         print(f"  [OK] {out_path.name}")
 
 
-# -- METRICS ----------------------------------------------------------------
-
-def _calc_metrics(actual: pd.Series, reconstructed: pd.Series) -> dict:
-    """Compute R-squared, NSE, and PBIAS between actual and reconstructed."""
-    mask = actual.notna() & reconstructed.notna()
-    a = actual[mask].values.astype(float)
-    r = reconstructed[mask].values.astype(float)
-    if len(a) < 2:
-        return {"R2": np.nan, "NSE": np.nan, "PBIAS": np.nan}
-    ss_res = np.sum((a - r) ** 2)
-    ss_tot = np.sum((a - np.mean(a)) ** 2)
-    nse = 1 - ss_res / ss_tot if ss_tot > 0 else np.nan
-    pbias = 100 * np.sum(r - a) / np.sum(a) if np.sum(np.abs(a)) > 0 else np.nan
-    corr = np.corrcoef(a, r)[0, 1]
-    r2 = corr ** 2 if not np.isnan(corr) else np.nan
-    return {"R2": r2, "NSE": nse, "PBIAS": pbias}
-
+# -- PLOTTING ---------------------------------------------------------------
 
 def _plot_actual_vs_reconstructed(
     dates: pd.Series,
     actual: pd.Series,
     reconstructed: pd.Series,
     partb: str,
-    metrics: dict,
     out_path: Path,
 ) -> None:
-    """Plot monthly time series + non-exceedance CDF for one series."""
-    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(14, 5),
-                                    gridspec_kw={"width_ratios": [2, 1]})
-    fig.suptitle(f"{partb} (TAF)", fontsize=13, fontweight="bold")
+    """Monthly time series + non-exceedance CDF for one series.
 
-    # -- Left: Monthly time series --
-    ax1.plot(dates, actual, color="#2196F3", linewidth=0.7, label="Historical")
-    ax1.plot(dates, reconstructed, color="#E64A19", linewidth=0.7, label="Reconstructed")
-    label_str = (f"R2={metrics['R2']:.3f}   "
-                 f"NSE={metrics['NSE']:.3f}   "
-                 f"PBIAS={metrics['PBIAS']:.1f}%")
-    ax1.set_title("Monthly Time Series")
-    ax1.set_ylabel("TAF")
-    ax1.set_xlabel("Date")
-    ax1.annotate(label_str, xy=(0.02, 0.97), xycoords="axes fraction",
-                 fontsize=8, va="top", ha="left",
-                 bbox=dict(boxstyle="round,pad=0.3", fc="white", ec="gray", alpha=0.8))
-
-    # -- Right: Non-exceedance CDF --
-    for vals, color, label in [
-        (actual.dropna(), "#2196F3", "Historical"),
-        (reconstructed.dropna(), "#E64A19", "Reconstructed"),
-    ]:
-        sorted_v = np.sort(vals.values.astype(float))
-        cdf = np.arange(1, len(sorted_v) + 1) / len(sorted_v) * 100
-        ax2.plot(cdf, sorted_v, color=color, linewidth=0.9, label=label)
-    ax2.set_title("Non-Exceedance CDF")
-    ax2.set_xlabel("Non-Exceedance Probability (%)")
-
-    # Single shared legend to the right of the title
-    handles, labels = ax1.get_legend_handles_labels()
-    fig.legend(handles, labels, loc="upper right", ncol=2, fontsize=9,
-               frameon=False)
-
-    plt.tight_layout()
-    fig.savefig(out_path, dpi=150, bbox_inches="tight")
-    plt.close(fig)
+    Thin wrapper over :func:`utils.validation_plots.plot_ts_cdf` that pairs the
+    historical DSS actual with the reconstructed schedule series and lets the
+    helper compute R2 / NSE / PBIAS from the Historical baseline
+    (``compute_metrics_from=0``).
+    """
+    plot_ts_cdf(
+        series=[
+            Series("Historical", dates, actual.to_numpy(dtype=float),
+                   linewidth=0.8),
+            Series("Reconstructed", dates,
+                   reconstructed.to_numpy(dtype=float)),
+        ],
+        title=f"{partb} (TAF)",
+        unit="TAF",
+        compute_metrics_from=0,
+        out_path=out_path,
+    )
     print(f"  [PLOT] {out_path.name}")
 
 
@@ -506,20 +471,21 @@ def run_historical_validation(
     out.to_csv(out_path, index=False)
     print(f"  [OK] {out_path}")
 
-    # Generate per-series plots
+    # Generate per-series plots (validation window: WY 1972-2018)
     HIST_PLOT_DIR.mkdir(parents=True, exist_ok=True)
+    plot_start = pd.Timestamp("1971-10-01")
+    plot_end = pd.Timestamp("2018-09-30")
     for partb in sorted(out["partb"].unique()):
         sub = out[out["partb"] == partb].copy()
         sub = sub.sort_values("date")
+        sub = sub[(sub["date"] >= plot_start) & (sub["date"] <= plot_end)]
         actual_s = pd.to_numeric(sub["actual"], errors="coerce")
         recon_s = pd.to_numeric(sub["reconstructed"], errors="coerce")
-        metrics = _calc_metrics(actual_s, recon_s)
         _plot_actual_vs_reconstructed(
             dates=sub["date"],
             actual=actual_s,
             reconstructed=recon_s,
             partb=partb,
-            metrics=metrics,
             out_path=HIST_PLOT_DIR / f"{partb}.png",
         )
 
