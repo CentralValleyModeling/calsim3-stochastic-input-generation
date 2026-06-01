@@ -244,7 +244,7 @@ def run_product_a_qmap_from_pairs(
     product_a_rim_csv : str or Path
         Path to Product A QMAP'd rim inflow CSV (simulation predictor source).
     output_dir : str or Path
-        Directory for detail CSVs and ``_figures/`` subdirectory.
+        Directory for detail CSVs and ``figures/`` subdirectory.
     validation_dir : str or Path
         Directory for CalSim-format validation CSVs.
     train_start, train_end : str
@@ -266,7 +266,7 @@ def run_product_a_qmap_from_pairs(
     product_a_rim_csv = Path(product_a_rim_csv)
     output_dir = str(output_dir)
     validation_dir = str(validation_dir)
-    plots_dir = os.path.join(output_dir, "_figures")
+    plots_dir = os.path.join(output_dir, "figures")
 
     _safe_makedirs(output_dir)
     _safe_makedirs(plots_dir)

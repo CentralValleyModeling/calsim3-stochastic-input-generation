@@ -6,10 +6,9 @@ Computes Oroville rule-curve Level 5 storage from the wetness index for
 Product A and/or Product B.
 
 Usage:
-    python _4_oroville_level5.py                        # Both Product A and B (default)
-    python _4_oroville_level5.py --product A            # Product A only
-    python _4_oroville_level5.py --product B            # Product B only
-    python _4_oroville_level5.py --product B --chunks 1 2 3  # Product B, specific chunks
+    python mod_reservoir/storage_curves/_4_oroville_level5.py --product A
+    python mod_reservoir/storage_curves/_4_oroville_level5.py --product B
+    python mod_reservoir/storage_curves/_4_oroville_level5.py --product B --chunks 1 2 3
 
 Inputs:
   Product A:
@@ -28,9 +27,13 @@ Outputs:
       columns: Part B, Part C, Year, Month, Value
     _4_oroville_level5/oroville_level5.xlsx
       sheets: daily, monthly, compare_level5
-    _4_oroville_level5/plots/S_OROVLLEVEL5_timeseries.png
+    _4_oroville_level5/figures/S_OROVLLEVEL5_timeseries.png
       Product A vs Historical: monthly time series + non-exceedance CDF
-      with R2 / NSE / PBIAS over the full overlapping period.
+      with R2 / NSE / PBIAS over WY 1972 - <wy_max>.
+    _4_oroville_level5/figures/S_OROVLLEVEL5_monthly_error.png
+      WY-ordered (Oct-Sep) monthly box plot of error (Product A - Historical, TAF).
+    _4_oroville_level5/figures/S_OROVLLEVEL5_monthly_pct_error.png
+      WY-ordered (Oct-Sep) monthly box plot of percent error.
   Product B:
     _product_b_final/S_OROVLLEVEL5_productB_n01.csv ... n10.csv
       columns: Part B, Part C, Year, Month, Value
@@ -67,15 +70,13 @@ from concurrent.futures import ProcessPoolExecutor, as_completed
 from pathlib import Path
 import sys
 
-import matplotlib.dates as mdates
-import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
-import seaborn as sns
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 from utils import dss_io
 from utils.paths import get_base_dir, get_module_generated_dir
+from utils.validation_plots import Series, plot_monthly_box, plot_ts_cdf
 
 _gen = get_module_generated_dir("mod_reservoir/storage_curves")
 INPUT_DIR = _gen / "output" / "_3_oroville_daily_precip"
@@ -228,119 +229,24 @@ def _process_one_chunk(csv_path: Path, smax: float, b_taf_per_day: float,
     return str(out_csv)
 
 
-def _nse(sim: np.ndarray, obs: np.ndarray) -> float:
-    """Nash-Sutcliffe efficiency."""
-    sim = np.asarray(sim, dtype=float)
-    obs = np.asarray(obs, dtype=float)
-    m = np.isfinite(sim) & np.isfinite(obs)
-    if m.sum() < 2:
-        return np.nan
-    sim, obs = sim[m], obs[m]
-    den = np.sum((obs - np.mean(obs)) ** 2)
-    if den == 0:
-        return np.nan
-    return 1 - np.sum((obs - sim) ** 2) / den
-
-
-def _pearson_r(a: np.ndarray, b: np.ndarray) -> float:
-    """Pearson correlation coefficient."""
-    a = np.asarray(a, dtype=float)
-    b = np.asarray(b, dtype=float)
-    m = np.isfinite(a) & np.isfinite(b)
-    if m.sum() < 2:
-        return np.nan
-    a, b = a[m], b[m]
-    if np.nanstd(a) == 0 or np.nanstd(b) == 0:
-        return np.nan
-    return float(np.corrcoef(a, b)[0, 1])
-
-
-def _setup_plot_style():
-    """Apply seaborn theme and return the colour palette."""
-    sns.set_theme(
-        style="whitegrid",
-        context="paper",
-        font_scale=1.0,
-        rc={
-            "figure.dpi": 200,
-            "savefig.dpi": 300,
-            "font.family": "sans-serif",
-            "font.sans-serif": ["DejaVu Sans"],
-            "font.size": 8,
-            "axes.titlesize": 8,
-            "axes.titleweight": "semibold",
-            "axes.labelsize": 8,
-            "axes.labelweight": "medium",
-            "axes.edgecolor": "0.25",
-            "axes.linewidth": 0.6,
-            "xtick.labelsize": 7,
-            "ytick.labelsize": 7,
-            "grid.linewidth": 0.35,
-            "grid.alpha": 0.40,
-            "lines.linewidth": 0.9,
-            "legend.fontsize": 7,
-            "figure.titlesize": 8,
-            "figure.titleweight": "bold",
-        },
-    )
-    cb = list(sns.color_palette("colorblind"))
-    cb[1] = (0.918, 0.341, 0.220)
-    return cb
-
-
 def _plot_product_a_vs_historical(dates, actual_vals, qmap_vals, target_b,
-                                  r2, nse_val, pbias, palette, out_path: Path) -> None:
-    """Two-panel figure: monthly time series (left) + non-exceedance CDF (right)."""
-    _r2_str = f"{r2:.2f}" if np.isfinite(r2) else "N/A"
-    _nse_str = f"{nse_val:.2f}" if np.isfinite(nse_val) else "N/A"
-    _pbias_str = f"{pbias:.1f}%" if np.isfinite(pbias) else "N/A"
-    _metric_lbl = (f"R2={_r2_str}   "
-                   f"NSE={_nse_str}   PBIAS={_pbias_str}")
+                                  out_path: Path) -> None:
+    """Two-panel monthly time series + non-exceedance CDF for Product A vs Historical.
 
-    clr_hist = palette[0]
-    clr_prod = palette[1]
-
-    fig, (ax_ts, ax_cdf) = plt.subplots(
-        nrows=1, ncols=2, figsize=(6.5, 3.25),
-        gridspec_kw={"width_ratios": [1.6, 1]},
+    Thin wrapper over :func:`utils.validation_plots.plot_ts_cdf` that supplies
+    the canonical Historical / Product A pairing and lets the helper compute
+    R2 / NSE / PBIAS from the Historical baseline (``compute_metrics_from=0``).
+    """
+    plot_ts_cdf(
+        series=[
+            Series("Historical", dates, actual_vals, linewidth=0.8),
+            Series("Product A", dates, qmap_vals),
+        ],
+        title=f"{target_b} (TAF)",
+        unit="TAF",
+        compute_metrics_from=0,
+        out_path=out_path,
     )
-
-    ax_ts.plot(dates, actual_vals, color=clr_hist, linewidth=0.8,
-               label="Historical", alpha=0.85)
-    ax_ts.plot(dates, qmap_vals, color=clr_prod, linewidth=0.9,
-               label="Product A", alpha=0.85)
-    ax_ts.set_title("Monthly Time Series")
-    ax_ts.set_xlabel("Date")
-    ax_ts.set_ylabel("TAF")
-    ax_ts.xaxis.set_major_locator(mdates.YearLocator(10))
-    ax_ts.xaxis.set_major_formatter(mdates.DateFormatter("%Y"))
-    fig.autofmt_xdate(rotation=35, ha="right")
-    ax_ts.text(
-        0.02, 0.97, _metric_lbl,
-        transform=ax_ts.transAxes,
-        va="top", ha="left", fontsize=7,
-        bbox=dict(boxstyle="round,pad=0.35",
-                  facecolor="white", edgecolor="0.7", alpha=0.88),
-    )
-
-    for vals_arr, color, lbl in [
-        (actual_vals, clr_hist, "Historical"),
-        (qmap_vals, clr_prod, "Product A"),
-    ]:
-        arr = np.sort(np.asarray(vals_arr, dtype=float))
-        cdf = np.arange(1, len(arr) + 1) / len(arr) * 100
-        ax_cdf.plot(cdf, arr, color=color, linewidth=0.9, alpha=0.9, label=lbl)
-    ax_cdf.set_title("Non-Exceedance CDF")
-    ax_cdf.set_xlabel("Non-Exceedance Probability (%)")
-    ax_cdf.set_xlim(0, 100)
-
-    fig.suptitle(f"{target_b} (TAF)", y=1.02)
-    fig.tight_layout()
-    handles, labels = ax_ts.get_legend_handles_labels()
-    fig.legend(handles, labels, loc="upper left",
-               bbox_to_anchor=(0.01, 0.99), ncol=2, fontsize=7, frameon=False)
-    fig.savefig(out_path, dpi=300, bbox_inches="tight", facecolor="white")
-    plt.close(fig)
 
 
 def main() -> None:
@@ -418,27 +324,41 @@ def main() -> None:
             compare.drop(columns=["WY"]).to_excel(writer, sheet_name="compare_level5", index=False)
 
         # Product A vs Historical comparison figure (timeseries + CDF)
-        plots_dir = output_dir / "plots"
-        plots_dir.mkdir(parents=True, exist_ok=True)
+        figures_dir = output_dir / "figures"
+        figures_dir.mkdir(parents=True, exist_ok=True)
         cmp = compare.dropna(subset=["S_OROVLLEVEL5", "S_target_eom_TAF"])
+        cmp = cmp.loc[cmp["WY"] >= start_wy]
         if not cmp.empty:
             dates = pd.DatetimeIndex(cmp["month_end"].values)
             actual_vals = cmp["S_OROVLLEVEL5"].to_numpy(dtype=float)
             qmap_vals = cmp["S_target_eom_TAF"].to_numpy(dtype=float)
-            r = _pearson_r(qmap_vals, actual_vals)
-            r2 = r ** 2 if np.isfinite(r) else np.nan
-            nse_val = _nse(qmap_vals, actual_vals)
-            obs_sum = np.nansum(actual_vals)
-            pbias = ((np.nansum(qmap_vals - actual_vals) / obs_sum * 100)
-                     if obs_sum != 0 else np.nan)
-            palette = _setup_plot_style()
-            fig_path = plots_dir / "S_OROVLLEVEL5_timeseries.png"
+            fig_path = figures_dir / "S_OROVLLEVEL5_timeseries.png"
             _plot_product_a_vs_historical(
-                dates, actual_vals, qmap_vals, "S_OROVLLEVEL5",
-                r2, nse_val, pbias, palette, fig_path,
+                dates, actual_vals, qmap_vals, "S_OROVLLEVEL5", fig_path,
             )
             print(f"Wrote: {fig_path}")
-            print(f"  R2 = {r2:.3f}, NSE = {nse_val:.3f}, PBIAS = {pbias:.1f}%")
+
+            detail = pd.DataFrame({
+                "month": cmp["month_end"].dt.month.astype(int).values,
+                "error": qmap_vals - actual_vals,
+                "error_pct": np.where(
+                    actual_vals != 0,
+                    (qmap_vals - actual_vals) / actual_vals * 100.0,
+                    np.nan,
+                ),
+            })
+            box_err_path = figures_dir / "S_OROVLLEVEL5_monthly_error.png"
+            plot_monthly_box(
+                detail, "error", "Error (TAF)",
+                "S_OROVLLEVEL5 - Monthly Error", box_err_path,
+            )
+            print(f"Wrote: {box_err_path}")
+            box_pct_path = figures_dir / "S_OROVLLEVEL5_monthly_pct_error.png"
+            plot_monthly_box(
+                detail, "error_pct", "Percent Error (%)",
+                "S_OROVLLEVEL5 - Monthly Percent Error", box_pct_path,
+            )
+            print(f"Wrote: {box_pct_path}")
 
         print(f"x_init_prevday used (only at start of record): {x_init}")
         print(f"Wrote: {out_csv}")
