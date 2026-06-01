@@ -52,10 +52,15 @@ Public API
                                                  falls back to ``default_palette``.
 - ``default_palette()``                       -- colorblind palette with
                                                  Vermillion+1 as the 2nd colour.
-- ``format_metric_line(r2, nse, pbias, label="")``
+- ``format_metric_line(r2_val, nse_val, pbias_val, label="")``
                                               -- format one
                                                  ``R2=...  NSE=...  PBIAS=...%``
                                                  string with N/A guards for NaN/inf.
+- ``r2(obs, sim)`` / ``nse(obs, sim)`` / ``pbias(obs, sim)``
+                                              -- public NaN-safe metrics shared
+                                                 with non-plot callers.
+- ``paired_finite(obs, sim)``                 -- masking convention used by all
+                                                 three metrics.
 
 Defaults
 --------
@@ -180,18 +185,64 @@ def default_palette() -> list[tuple]:
     return cb
 
 
-def format_metric_line(r2: float, nse: float, pbias: float, label: str = "") -> str:
+def format_metric_line(r2_val: float, nse_val: float, pbias_val: float, label: str = "") -> str:
     """Render 'R2=...  NSE=...  PBIAS=...%' with N/A guards.
 
     If ``label`` is non-empty, it is prepended as '<label>:  '. Use this when
     multiple comparison series share one annotation box; omit for single-series
     plots where the label would be redundant.
     """
-    r2_s = f"{r2:.2f}" if np.isfinite(r2) else "N/A"
-    nse_s = f"{nse:.2f}" if np.isfinite(nse) else "N/A"
-    pb_s = f"{pbias:.1f}%" if np.isfinite(pbias) else "N/A"
+    r2_s = f"{r2_val:.2f}" if np.isfinite(r2_val) else "N/A"
+    nse_s = f"{nse_val:.2f}" if np.isfinite(nse_val) else "N/A"
+    pb_s = f"{pbias_val:.1f}%" if np.isfinite(pbias_val) else "N/A"
     line = f"R\u00b2={r2_s}   NSE={nse_s}   PBIAS={pb_s}"
     return f"{label}:  {line}" if label else line
+
+
+# -- Goodness-of-fit metrics --------------------------------------------------
+# Public, NaN-safe metrics shared with non-plotting callers. All take
+# (obs, sim) -- the hydrology-literature convention; PBIAS sign depends on it.
+
+def paired_finite(obs, sim):
+    """Return (obs, sim) with rows where either value is NaN/inf removed."""
+    obs = np.asarray(obs, dtype=float)
+    sim = np.asarray(sim, dtype=float)
+    mask = np.isfinite(obs) & np.isfinite(sim)
+    return obs[mask], sim[mask]
+
+
+def r2(obs, sim) -> float:
+    """Pearson correlation coefficient squared. NaN if undefined."""
+    obs, sim = paired_finite(obs, sim)
+    if obs.size < 2 or np.std(obs) == 0 or np.std(sim) == 0:
+        return float("nan")
+    with np.errstate(invalid="ignore"):
+        c = np.corrcoef(obs, sim)[0, 1]
+    return float(c * c) if np.isfinite(c) else float("nan")
+
+
+def nse(obs, sim) -> float:
+    """Nash-Sutcliffe Efficiency. NaN if obs has zero variance."""
+    obs, sim = paired_finite(obs, sim)
+    if obs.size < 2:
+        return float("nan")
+    ss_tot = np.sum((obs - obs.mean()) ** 2)
+    if ss_tot <= 0:
+        return float("nan")
+    ss_res = np.sum((sim - obs) ** 2)
+    return float(1.0 - ss_res / ss_tot)
+
+
+def pbias(obs, sim) -> float:
+    """Percent bias = 100 * (sim.sum - obs.sum) / obs.sum. NaN if obs sums to 0.
+
+    Sign convention: positive means sim overestimates obs.
+    """
+    obs, sim = paired_finite(obs, sim)
+    denom = obs.sum()
+    if denom == 0:
+        return float("nan")
+    return float(100.0 * (sim.sum() - denom) / denom)
 
 
 # -- Data class ---------------------------------------------------------------
@@ -361,37 +412,6 @@ def _wy_range_subtitle(series_list: list[Series]) -> str | None:
         return None
 
 
-def _paired_finite(obs: np.ndarray, sim: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
-    """Drop indices where either obs or sim is NaN/inf."""
-    mask = np.isfinite(obs) & np.isfinite(sim)
-    return obs[mask], sim[mask]
-
-
-def _r2(obs: np.ndarray, sim: np.ndarray) -> float:
-    if obs.size < 2:
-        return float("nan")
-    with np.errstate(invalid="ignore"):
-        c = np.corrcoef(obs, sim)[0, 1]
-    return float(c * c) if np.isfinite(c) else float("nan")
-
-
-def _nse(obs: np.ndarray, sim: np.ndarray) -> float:
-    if obs.size < 2:
-        return float("nan")
-    ss_tot = np.sum((obs - obs.mean()) ** 2)
-    if ss_tot <= 0:
-        return float("nan")
-    ss_res = np.sum((sim - obs) ** 2)
-    return float(1.0 - ss_res / ss_tot)
-
-
-def _pbias(obs: np.ndarray, sim: np.ndarray) -> float:
-    denom = obs.sum()
-    if denom == 0:
-        return float("nan")
-    return float(100.0 * (sim.sum() - denom) / denom)
-
-
 def _auto_metric_lines(series_list: list[Series], baseline_idx: int) -> list[str]:
     """Compute R2/NSE/PBIAS for each non-baseline series vs the baseline."""
     if not (0 <= baseline_idx < len(series_list)):
@@ -408,9 +428,10 @@ def _auto_metric_lines(series_list: list[Series], baseline_idx: int) -> list[str
             raise ValueError(
                 f"Series '{s.label}' length {sim_vals.shape} != baseline length {base_vals.shape}"
             )
-        obs_c, sim_c = _paired_finite(base_vals, sim_vals)
         lines.append(format_metric_line(
-            _r2(obs_c, sim_c), _nse(obs_c, sim_c), _pbias(obs_c, sim_c),
+            r2(base_vals, sim_vals),
+            nse(base_vals, sim_vals),
+            pbias(base_vals, sim_vals),
             label=s.label if label_each else "",
         ))
     return lines
