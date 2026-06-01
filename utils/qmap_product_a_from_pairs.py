@@ -21,13 +21,12 @@ import os
 import re
 from pathlib import Path
 
-import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 
 from utils import csv_io, dss_io
 from utils.plot_ts_cdf import (
-    Series, format_metric_line, nse, pbias, plot_ts_cdf, r2,
+    Series, format_metric_line, nse, pbias, plot_monthly_box, plot_ts_cdf, r2,
 )
 from utils.quantile_mapping import qmap_single
 
@@ -43,17 +42,6 @@ SIM_END = "2018-09-30"
 DSS_READ_START = "1915-01-31"
 DSS_READ_END = "2018-12-31"
 ALLOW_NEGATIVE = False
-
-MONTH_LABELS = [
-    "Jan", "Feb", "Mar", "Apr", "May", "Jun",
-    "Jul", "Aug", "Sep", "Oct", "Nov", "Dec",
-]
-
-# -- Box-plot palette ---------------------------------------------------------
-_BLUE = "#003D6B"
-_LIGHT_BLUE = "#B0C4DE"
-_MEDIAN_RED = "#8B0000"
-_GRAY = "#5A5A5A"
 
 
 # -- Text helpers -------------------------------------------------------------
@@ -220,42 +208,12 @@ def _plot_timeseries_cdf(common_sim, actual_vals, qmap_vals, target_b,
 
 def _plot_monthly_box(detail, target_b, column, ylabel,
                       title_suffix, filename_suffix, plots_dir):
-    """Monthly box plot in water-year order (Oct-Sep)."""
-    months_list = list(range(10, 13)) + list(range(1, 10))
-    box_data = [
-        detail.loc[detail["month"] == m, column].dropna().values
-        for m in months_list
-    ]
-
-    fig, ax = plt.subplots(figsize=(10, 5))
-    positions = list(range(1, len(months_list) + 1))
-    ax.boxplot(
-        box_data, positions=positions, widths=0.5,
-        showfliers=False, patch_artist=True, showmeans=True,
-        boxprops=dict(facecolor=_LIGHT_BLUE, edgecolor=_BLUE, linewidth=1.0),
-        medianprops=dict(color=_MEDIAN_RED, linewidth=1.8),
-        meanprops=dict(marker="D", markerfacecolor=_BLUE,
-                       markeredgecolor=_BLUE, markersize=5),
-        whiskerprops=dict(color=_BLUE, linewidth=1.0),
-        capprops=dict(color=_BLUE, linewidth=1.0),
+    """Thin wrapper over ``utils.plot_ts_cdf.plot_monthly_box``."""
+    plot_monthly_box(
+        detail, value_col=column, ylabel=ylabel,
+        title=f"{target_b}: {title_suffix}",
+        out_path=os.path.join(plots_dir, f"{target_b}_{filename_suffix}.png"),
     )
-    ax.axhline(0, color=_GRAY, linestyle="--", linewidth=1.4)
-    ax.set_xticks(positions)
-    ax.set_xticklabels([MONTH_LABELS[m - 1] for m in months_list],
-                       fontsize=11, fontweight="medium")
-    ax.set_xlabel("Month", fontsize=12, fontweight="bold", labelpad=8)
-    ax.set_ylabel(ylabel, fontsize=12, fontweight="bold", labelpad=8)
-    ax.set_title(f"{target_b}: {title_suffix}",
-                 fontsize=14, fontweight="bold", pad=12)
-    ax.tick_params(axis="both", labelsize=11)
-    ax.grid(True, axis="y", linewidth=0.3, alpha=0.5, color="#CCCCCC")
-    ax.set_axisbelow(True)
-    ax.spines["top"].set_visible(False)
-    ax.spines["right"].set_visible(False)
-    fig.tight_layout()
-    fig.savefig(os.path.join(plots_dir, f"{target_b}_{filename_suffix}.png"),
-                dpi=300, bbox_inches="tight", facecolor="white")
-    plt.close(fig)
 
 
 # -- Main entry point ---------------------------------------------------------

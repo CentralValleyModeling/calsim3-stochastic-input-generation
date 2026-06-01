@@ -52,6 +52,10 @@ Public API
                                                  falls back to ``default_palette``.
 - ``default_palette()``                       -- colorblind palette with
                                                  Vermillion+1 as the 2nd colour.
+- ``plot_monthly_box(detail, value_col, ylabel, title, out_path, ...)``
+                                              -- WY-ordered (Oct-Sep) monthly
+                                                 box plot for residuals,
+                                                 ratios, errors, etc.
 - ``format_metric_line(r2_val, nse_val, pbias_val, label="")``
                                               -- format one
                                                  ``R2=...  NSE=...  PBIAS=...%``
@@ -245,6 +249,94 @@ def pbias(obs, sim) -> float:
     return float(100.0 * (sim.sum() - denom) / denom)
 
 
+# -- Monthly box plot ---------------------------------------------------------
+# Shared WY-ordered (Oct..Sep) monthly box plot, used for residuals / errors /
+# ratios in Product A validation scripts. Kept separate from plot_ts_cdf so it
+# can be called independently; reuses the same canonical theme.
+
+_WY_MONTH_ORDER = list(range(10, 13)) + list(range(1, 10))
+_MONTH_LABELS = [
+    "Jan", "Feb", "Mar", "Apr", "May", "Jun",
+    "Jul", "Aug", "Sep", "Oct", "Nov", "Dec",
+]
+
+
+def plot_monthly_box(
+    detail,
+    value_col: str,
+    ylabel: str,
+    title: str,
+    out_path: str | Path | None = None,
+    *,
+    month_col: str = "month",
+    show_zero_line: bool = True,
+    figsize: tuple[float, float] = _DEFAULT_FIGSIZE,
+    dpi: int = _DEFAULT_DPI,
+):
+    """Box plot of ``value_col`` grouped by month, ordered Oct..Sep.
+
+    ``detail`` is a DataFrame with an integer month column (1..12, named by
+    ``month_col``) and the value column ``value_col``. Defaults match
+    :func:`plot_ts_cdf` (single-column figure width, shared rcParams theme,
+    ``default_palette`` colors) so the two figures compose cleanly in the
+    same report. Override ``figsize`` for larger standalone outputs.
+
+    ``show_zero_line`` draws a dashed reference at y=0; use for residuals or
+    errors and disable for ratios or magnitudes. Output handling mirrors
+    :func:`plot_ts_cdf`: raster suffixes honor ``dpi``, vector suffixes
+    (.pdf/.svg/.eps/.ps) ignore it. Returns the Figure when ``out_path`` is
+    None; otherwise saves and closes.
+    """
+    _apply_theme()
+
+    palette = default_palette()
+    box_edge = palette[0]
+    box_face = (*box_edge[:3], 0.30) if isinstance(box_edge, tuple) else box_edge
+    median_color = palette[1]
+
+    box_data = [
+        detail.loc[detail[month_col] == m, value_col].dropna().values
+        for m in _WY_MONTH_ORDER
+    ]
+
+    fig, ax = plt.subplots(figsize=figsize)
+    positions = list(range(1, len(_WY_MONTH_ORDER) + 1))
+    ax.boxplot(
+        box_data, positions=positions, widths=0.55,
+        showfliers=False, patch_artist=True, showmeans=True,
+        boxprops=dict(facecolor=box_face, edgecolor=box_edge, linewidth=0.7),
+        medianprops=dict(color=median_color, linewidth=1.2),
+        meanprops=dict(marker="D", markerfacecolor=box_edge,
+                       markeredgecolor=box_edge, markersize=3),
+        whiskerprops=dict(color=box_edge, linewidth=0.7),
+        capprops=dict(color=box_edge, linewidth=0.7),
+        flierprops=dict(marker="o", markersize=2, markerfacecolor="0.5",
+                        markeredgecolor="none", alpha=0.5),
+    )
+    if show_zero_line:
+        ax.axhline(0, color="0.35", linestyle="--", linewidth=0.6)
+    ax.set_xticks(positions)
+    ax.set_xticklabels([_MONTH_LABELS[m - 1] for m in _WY_MONTH_ORDER])
+    ax.set_xlabel("Month")
+    ax.set_ylabel(ylabel)
+    ax.set_title(title, pad=4)
+    ax.grid(False, axis="x")
+    ax.spines["top"].set_visible(False)
+    ax.spines["right"].set_visible(False)
+    fig.tight_layout()
+
+    if out_path is None:
+        return fig
+    out_path = Path(out_path)
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+    save_kwargs = {"bbox_inches": "tight", "facecolor": "white"}
+    if out_path.suffix.lower() not in _VECTOR_SUFFIXES:
+        save_kwargs["dpi"] = dpi
+    fig.savefig(out_path, **save_kwargs)
+    plt.close(fig)
+    return None
+
+
 # -- Data class ---------------------------------------------------------------
 
 @dataclass
@@ -324,8 +416,9 @@ def plot_ts_cdf(
             va="top", ha="left", fontsize=7,
             fontfamily="sans-serif",
             bbox=dict(
-                boxstyle="round,pad=0.35",
-                facecolor="white", edgecolor="0.7", alpha=0.88,
+                boxstyle="square,pad=0.3",
+                facecolor="white", edgecolor="0.8", linewidth=0.5,
+                alpha=0.9,
             ),
         )
 
