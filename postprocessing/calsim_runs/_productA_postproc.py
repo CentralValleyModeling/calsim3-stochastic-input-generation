@@ -6,7 +6,7 @@ units.pkl / fields.pkl) built by ``_productA_pickle_builder.py`` and
 produces annual WY summary tables + per-metric two-panel figures
 (monthly time series + non-exceedance CDF, with R2 / NSE / PBIAS
 annotations vs the baseline). Default periods: full validation
-WY 1972-2021 and drought WY 1987-1992. Also reused by
+WY 1972-2018 and drought WY 1987-1992. Also reused by
 ``_historical_modified_postproc.py`` via ``run_post_processing_package``.
 
 Inputs
@@ -128,11 +128,11 @@ class Period:
 
 
 FULL_VALIDATION = Period(
-    name="Full_Validation_WY1972_2021",
+    name="Full_Validation_WY1972_2018",
     start=pd.Timestamp("1971-10-01"),
-    end=pd.Timestamp("2021-09-30"),
+    end=pd.Timestamp("2018-09-30"),
     wy_start=1972,
-    wy_end=2021,
+    wy_end=2018,
 )
 
 DROUGHT_878892 = Period(
