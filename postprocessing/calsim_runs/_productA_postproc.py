@@ -272,7 +272,7 @@ def plot_timeseries_and_cdf(
         ))
 
     subtitle = None
-    if "Full_Validation" not in period.name:
+    if not period.name.startswith("Full"):
         subtitle = f"(WY {period.wy_start}-{period.wy_end})"
 
     plot_ts_cdf(
