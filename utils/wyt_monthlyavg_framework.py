@@ -629,6 +629,74 @@ def plot_wyt_hist_validation(
 
 
 
+def plot_wyt_product_a_validation(
+    targets: Dict[str, pd.DataFrame],
+    hist_cmp_df: pd.DataFrame,
+    term_specs: List[TermSpec],
+    figures_dir: Path,
+    *,
+    plot_start: str | pd.Timestamp = "1971-10-01",
+    plot_end: str | pd.Timestamp = "2018-09-30",
+    unit: str = "",
+) -> List[Path]:
+    """Write one TS+CDF figure per term comparing historical actual vs Product A reconstructed.
+
+    Uses ``hist_cmp_df`` (historical actuals) and ``targets['product_a']``
+    (long-format Product A reconstruction driven by Product A WYTs).
+    Both are clipped to ``[plot_start, plot_end]``. Returns figure paths.
+    """
+    from utils.validation_plots import Series, plot_ts_cdf
+
+    if "product_a" not in targets:
+        return []
+
+    figures_dir = Path(figures_dir)
+    figures_dir.mkdir(parents=True, exist_ok=True)
+
+    start = pd.Timestamp(plot_start)
+    end = pd.Timestamp(plot_end)
+
+    prod_df = targets["product_a"].copy()
+    prod_df["date"] = pd.to_datetime(prod_df["date"])
+
+    hist_dates = pd.to_datetime(hist_cmp_df["date"])
+    hist_mask = (hist_dates >= start) & (hist_dates <= end)
+    hist_sub_dates = hist_dates[hist_mask].to_numpy()
+
+    written: List[Path] = []
+    for spec in term_specs:
+        actual_col = f"{spec.term_name}_actual"
+        if actual_col not in hist_cmp_df.columns:
+            continue
+        actual = pd.to_numeric(hist_cmp_df.loc[hist_mask, actual_col], errors="coerce").to_numpy(dtype=float)
+
+        sub = prod_df[
+            (prod_df["part_b"].astype(str).str.upper() == str(spec.b_part).upper())
+            & (prod_df["part_c"].astype(str).str.upper() == str(spec.c_part).upper())
+            & (prod_df["date"] >= start)
+            & (prod_df["date"] <= end)
+        ].sort_values("date")
+        if sub.empty:
+            continue
+        recon_dates = sub["date"].to_numpy()
+        recon = pd.to_numeric(sub["wyt_monthly_avg"], errors="coerce").to_numpy(dtype=float)
+
+        out_path = figures_dir / f"{spec.b_part}.png"
+        plot_ts_cdf(
+            series=[
+                Series("Historical", hist_sub_dates, actual),
+                Series("Product A", recon_dates, recon),
+            ],
+            title=spec.b_part,
+            unit=unit,
+            compute_metrics_from=0,
+            out_path=out_path,
+        )
+        written.append(out_path)
+    return written
+
+
+
 def compute_product_targets(
     *,
     product: str,
