@@ -25,7 +25,7 @@ import numpy as np
 import pandas as pd
 
 from utils import csv_io, dss_io
-from utils.plot_ts_cdf import (
+from utils.validation_plots import (
     Series, format_metric_line, nse, pbias, plot_monthly_box, plot_ts_cdf, r2,
 )
 from utils.quantile_mapping import qmap_single
@@ -192,7 +192,7 @@ def _plot_timeseries_cdf(common_sim, actual_vals, qmap_vals, target_b,
                          r2_val, nse_val, pbias_val, plots_dir):
     """Two-panel figure: monthly time series (left) + non-exceedance CDF (right).
 
-    Thin wrapper over ``utils.plot_ts_cdf.plot_ts_cdf`` that supplies the
+    Thin wrapper over ``utils.validation_plots.plot_ts_cdf`` that supplies the
     pre-computed Product A vs Historical metrics as a single annotation line.
     """
     plot_ts_cdf(
@@ -208,7 +208,7 @@ def _plot_timeseries_cdf(common_sim, actual_vals, qmap_vals, target_b,
 
 def _plot_monthly_box(detail, target_b, column, ylabel,
                       title_suffix, filename_suffix, plots_dir):
-    """Thin wrapper over ``utils.plot_ts_cdf.plot_monthly_box``."""
+    """Thin wrapper over ``utils.validation_plots.plot_monthly_box``."""
     plot_monthly_box(
         detail, value_col=column, ylabel=ylabel,
         title=f"{target_b}: {title_suffix}",

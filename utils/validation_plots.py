@@ -81,7 +81,7 @@ Usage
 -----
 ::
 
-    from utils.plot_ts_cdf import Series, plot_ts_cdf, format_metric_line
+    from utils.validation_plots import Series, plot_ts_cdf, format_metric_line
 
     # 1) Historical vs Product A, auto-computed metrics
     plot_ts_cdf(
