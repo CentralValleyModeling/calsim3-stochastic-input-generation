@@ -350,13 +350,13 @@ def main() -> None:
             box_err_path = figures_dir / "S_OROVLLEVEL5_monthly_error.png"
             plot_monthly_box(
                 detail, "error", "Error (TAF)",
-                "S_OROVLLEVEL5 - Monthly Error", box_err_path,
+                "S_OROVLLEVEL5: Monthly Error", box_err_path,
             )
             print(f"Wrote: {box_err_path}")
             box_pct_path = figures_dir / "S_OROVLLEVEL5_monthly_pct_error.png"
             plot_monthly_box(
                 detail, "error_pct", "Percent Error (%)",
-                "S_OROVLLEVEL5 - Monthly Percent Error", box_pct_path,
+                "S_OROVLLEVEL5: Monthly Percent Error", box_pct_path,
             )
             print(f"Wrote: {box_pct_path}")
 

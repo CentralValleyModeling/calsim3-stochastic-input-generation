@@ -47,7 +47,7 @@ When ``out_path is None`` the live ``matplotlib.figure.Figure`` is returned
 Public API
 ----------
 - ``plot_ts_cdf(series, title, ...)``         -- main entry point.
-- ``Series(label, dates, values, color=None, linewidth=0.9, alpha=0.85)``
+- ``Series(label, dates, values, color=None, linewidth=0.9, alpha=0.65)``
                                               -- per-series dataclass; ``color``
                                                  falls back to ``default_palette``.
 - ``default_palette()``                       -- colorblind palette with
@@ -347,7 +347,7 @@ class Series:
     values: Sequence
     color: tuple | str | None = None
     linewidth: float = 0.9
-    alpha: float = 0.85
+    alpha: float = 0.65
 
 
 # -- Main API -----------------------------------------------------------------
