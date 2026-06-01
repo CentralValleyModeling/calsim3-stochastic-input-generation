@@ -577,6 +577,57 @@ def compute_wyt_pattern(
 
 
 
+def plot_wyt_hist_validation(
+    hist_cmp_df: pd.DataFrame,
+    term_specs: List[TermSpec],
+    figures_dir: Path,
+    *,
+    plot_start: str | pd.Timestamp = "1971-10-01",
+    plot_end: str | pd.Timestamp = "2018-09-30",
+    unit: str = "",
+) -> List[Path]:
+    """Write one TS+CDF figure per term comparing actual vs reconstructed.
+
+    Uses the wide ``hist_cmp_df`` produced by :func:`compute_wyt_pattern`
+    (columns ``date``, ``<term>_actual``, ``<term>_reconstructed``). The
+    plot window is clipped to ``[plot_start, plot_end]``; the underlying
+    CSV is left untouched. Returns the list of figure paths written.
+    """
+    from utils.validation_plots import Series, plot_ts_cdf
+
+    figures_dir = Path(figures_dir)
+    figures_dir.mkdir(parents=True, exist_ok=True)
+
+    start = pd.Timestamp(plot_start)
+    end = pd.Timestamp(plot_end)
+
+    dates = pd.to_datetime(hist_cmp_df["date"])
+    mask = (dates >= start) & (dates <= end)
+    sub_dates = dates[mask].to_numpy()
+
+    written: List[Path] = []
+    for spec in term_specs:
+        actual_col = f"{spec.term_name}_actual"
+        recon_col = f"{spec.term_name}_reconstructed"
+        if actual_col not in hist_cmp_df.columns or recon_col not in hist_cmp_df.columns:
+            continue
+        actual = pd.to_numeric(hist_cmp_df.loc[mask, actual_col], errors="coerce").to_numpy(dtype=float)
+        recon = pd.to_numeric(hist_cmp_df.loc[mask, recon_col], errors="coerce").to_numpy(dtype=float)
+        out_path = figures_dir / f"{spec.b_part}.png"
+        plot_ts_cdf(
+            series=[
+                Series("Historical", sub_dates, actual),
+                Series("Reconstructed", sub_dates, recon),
+            ],
+            title=spec.b_part,
+            unit=unit,
+            compute_metrics_from=0,
+            out_path=out_path,
+        )
+        written.append(out_path)
+    return written
+
+
 
 def compute_product_targets(
     *,

@@ -38,7 +38,7 @@ import pandas as pd
 # Add repo root to path for utils imports
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 from utils.paths import get_base_dir, get_module_generated_dir
-from utils.wyt_monthlyavg_framework import compute_wyt_pattern, compute_product_targets, water_year
+from utils.wyt_monthlyavg_framework import compute_wyt_pattern, compute_product_targets, plot_wyt_hist_validation, water_year
 
 
 _SCRIPT_DIR = Path(__file__).resolve().parent
@@ -144,9 +144,13 @@ def main() -> None:
     hist_cmp_path = hist_dir / f"{prefix}_actual_vs_reconstructed.csv"
     hist_cmp_df.to_csv(hist_cmp_path, index=False)
 
+    figures_dir = hist_dir / "figures"
+    plot_wyt_hist_validation(hist_cmp_df, term_specs, figures_dir)
+
     print("\nHistorical outputs:")
     print(f"  - {pattern_path}")
     print(f"  - {hist_cmp_path}")
+    print(f"  - {figures_dir}/ (TS+CDF per term)")
 
     # Compute and write targets per product
     for prod_key in products:
