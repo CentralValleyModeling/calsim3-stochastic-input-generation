@@ -20,7 +20,8 @@ Dependencies
 ------------
 - ``_productA_postproc.run_post_processing_package`` (same module dir)
 - utils.paths
-- pandas, matplotlib, seaborn, openpyxl
+- utils.validation_plots (transitive, via _productA_postproc)
+- pandas, openpyxl
 
 Usage
 -----
