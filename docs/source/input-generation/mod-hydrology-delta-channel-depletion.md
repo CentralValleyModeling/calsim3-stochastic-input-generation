@@ -21,9 +21,11 @@ The master inventory requires 28 DCD variables, but direct model output contains
 
 The changes in Delta Channel Depletion (DCD) variables under the WGEN precipitation scenario relative to historical conditions are summarized in the following figure .The comparison highlights how reduced precipitation affects multiple hydrologic components, including drainage, deep percolation, groundwater flow, irrigation demand, and seepage throughout the Delta system.
 
-![Delta Channel Depletion Differences](figures/s3-inputs_delta-channel-depletion-differences.png)
-
-*Annual average difference from historical (TAF) for all 28 DCD variables, grouped by type: deep percolation flow (DP-FLOW), drainage (DRN), groundwater flow (GW-FLOW), irrigation (IRR), and seepage (SEEP). Percentage differences (purple, bottom) range from -8% to +10%. Drainage variables show the largest absolute differences, with DRN_SIR_EAST at -166 TAF and DP_DELTA_DCD at -101 TAF. Seepage variables are effectively unchanged (0%). All differences are driven by lower WGEN precipitation.*
+```{figure} figures/s3-inputs_delta-channel-depletion-differences.png
+:name: fig-dcd-differences
+:width: 100%
+Annual average difference from historical (TAF) for all 28 DCD variables, grouped by type: deep percolation flow (DP-FLOW), drainage (DRN), groundwater flow (GW-FLOW), irrigation (IRR), and seepage (SEEP). Percentage differences (purple, bottom) range from -8% to +10%. Drainage variables show the largest absolute differences, with DRN_SIR_EAST at -166 TAF and DP_DELTA_DCD at -101 TAF. Seepage variables are effectively unchanged (0%). All differences are driven by lower WGEN precipitation.
+```
 
 
 The maximum differences ranged from -166 TAF/yr to +6 TAF/yr across the suite of DCD variables. Percentage differences spanned -8% to +10%, with overall changes driven by lower WGEN precipitation relative to the historical baseline. The largest absolute difference (-166 TAF/yr) occurs in the deep percolation variable, reflecting the reduced precipitation available for recharge.
