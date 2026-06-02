@@ -16,8 +16,9 @@ Outputs
     pattern CSV, actual-vs-reconstructed CSV, and figures/ (TS+CDF +
     monthly error box per term)
 - <generated>/output/_1_wyt_monthlyavg/_product_a_validation/
-    final Product A SV CSVs (--product A) + product_a/figures/ (TS+CDF +
-    monthly error box per term)
+    final Product A SV CSVs (--product A)
+- <generated>/output/_1_wyt_monthlyavg/product_a/figures/
+    TS+CDF and monthly error box per term (--product A)
 - <generated>/output/_1_wyt_monthlyavg/_product_b_final/
     final Product B per-chunk SV CSVs (--product B)
 
