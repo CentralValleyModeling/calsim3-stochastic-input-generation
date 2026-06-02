@@ -13,12 +13,18 @@ Inputs
 Outputs
 -------
 - <generated>/output/_1_wyt_monthlyavg/monthly_avg_historical/
+    pattern CSV, actual-vs-reconstructed CSV, and figures/ (TS+CDF +
+    monthly residual box per term)
 - <generated>/output/_1_wyt_monthlyavg/_product_a_validation/
+    final Product A SV CSVs (--product A) + product_a/figures/ (TS+CDF +
+    monthly residual box per term)
 - <generated>/output/_1_wyt_monthlyavg/_product_b_final/
+    final Product B per-chunk SV CSVs (--product B)
 
 Dependencies
 ------------
 - utils/wyt_monthlyavg_framework.py  (WYT reconstruction engine)
+- utils/validation_plots.py          (TS+CDF and monthly box helpers; transitive)
 - utils/paths.py                     (data-dir resolution)
 
 Usage
