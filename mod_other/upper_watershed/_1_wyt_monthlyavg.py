@@ -38,7 +38,7 @@ import pandas as pd
 # Add repo root to path for utils imports
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 from utils.paths import get_base_dir, get_module_generated_dir
-from utils.wyt_monthlyavg_framework import compute_wyt_pattern, compute_product_targets, plot_wyt_hist_validation, plot_wyt_product_a_validation, water_year
+from utils.wyt_monthlyavg_framework import compute_wyt_pattern, compute_product_targets, plot_wyt_hist_validation, plot_actual_vs_recon_validation, water_year
 
 
 _SCRIPT_DIR = Path(__file__).resolve().parent
@@ -170,7 +170,7 @@ def main() -> None:
 
         if prod_key == "A":
             prod_a_fig_dir = BASE_RESULTS_DIR / "product_a" / "figures"
-            plot_wyt_product_a_validation(targets, hist_cmp_df, term_specs, prod_a_fig_dir)
+            plot_actual_vs_recon_validation(targets["product_a"], hist_cmp_df, term_specs, prod_a_fig_dir)
             print(f"  - {prod_a_fig_dir}/ (TS+CDF per term)")
 
 

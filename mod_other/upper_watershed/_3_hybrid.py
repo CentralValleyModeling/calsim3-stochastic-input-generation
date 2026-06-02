@@ -61,7 +61,7 @@ from utils.paths import get_base_dir, get_module_generated_dir
 from utils.wyt_monthlyavg_framework import (
     compute_wyt_pattern,
     compute_product_targets,
-    plot_wyt_product_a_validation,
+    plot_actual_vs_recon_validation,
     water_year,
 )
 from utils.qmap_product_a_from_pairs import run_product_a_qmap_from_pairs
@@ -160,7 +160,7 @@ def _to_sv_format(df: pd.DataFrame) -> pd.DataFrame:
 
 
 def _load_final_a_as_long(final_dir: Path) -> pd.DataFrame:
-    """Load *_product_a_*.csv SV files into long format compatible with plot_wyt_product_a_validation."""
+    """Load *_product_a_*.csv SV files into long format for plot_actual_vs_recon_validation."""
     frames = []
     for path in sorted(Path(final_dir).glob("*_product_a_*.csv")):
         df = pd.read_csv(path)
@@ -513,9 +513,9 @@ def main() -> None:
     if args.product == "A":
         run_final_hybrid_a(wyt_intermediate_dir, qmap_intermediate_dir, final_dir)
         figures_dir = base_dir / "figures"
-        targets = {"product_a": _load_final_a_as_long(final_dir)}
-        plot_wyt_product_a_validation(
-            targets, hist_cmp_df, term_specs, figures_dir, label="Product A",
+        recon_long = _load_final_a_as_long(final_dir)
+        plot_actual_vs_recon_validation(
+            recon_long, hist_cmp_df, term_specs, figures_dir, label="Product A",
         )
         print(f"  Figures: {figures_dir}/ (TS+CDF per term)")
     else:

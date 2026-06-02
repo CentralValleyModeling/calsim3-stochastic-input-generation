@@ -591,9 +591,11 @@ def plot_wyt_hist_validation(
     Uses the wide ``hist_cmp_df`` produced by :func:`compute_wyt_pattern`
     (columns ``date``, ``<term>_actual``, ``<term>_reconstructed``). The
     plot window is clipped to ``[plot_start, plot_end]``; the underlying
-    CSV is left untouched. Returns the list of figure paths written.
+    CSV is left untouched. A sibling ``<part_b>_monthly_box.png`` is also
+    written showing residual (reconstructed - historical) by month.
+    Returns the list of TS+CDF figure paths written.
     """
-    from utils.validation_plots import Series, plot_ts_cdf
+    from utils.validation_plots import Series, plot_ts_cdf, plot_monthly_box
 
     figures_dir = Path(figures_dir)
     figures_dir.mkdir(parents=True, exist_ok=True)
@@ -604,6 +606,7 @@ def plot_wyt_hist_validation(
     dates = pd.to_datetime(hist_cmp_df["date"])
     mask = (dates >= start) & (dates <= end)
     sub_dates = dates[mask].to_numpy()
+    sub_months = pd.DatetimeIndex(sub_dates).month
 
     written: List[Path] = []
     for spec in term_specs:
@@ -624,13 +627,20 @@ def plot_wyt_hist_validation(
             compute_metrics_from=0,
             out_path=out_path,
         )
+        box_df = pd.DataFrame({"month": sub_months, "residual": recon - actual})
+        plot_monthly_box(
+            box_df, value_col="residual",
+            ylabel=f"Reconstructed - Historical{(' (' + unit + ')') if unit else ''}",
+            title=f"{spec.b_part} - Monthly Residual",
+            out_path=figures_dir / f"{spec.b_part}_monthly_box.png",
+        )
         written.append(out_path)
     return written
 
 
 
-def plot_wyt_product_a_validation(
-    targets: Dict[str, pd.DataFrame],
+def plot_actual_vs_recon_validation(
+    recon_long_df: pd.DataFrame,
     hist_cmp_df: pd.DataFrame,
     term_specs: List[TermSpec],
     figures_dir: Path,
@@ -639,16 +649,31 @@ def plot_wyt_product_a_validation(
     plot_end: str | pd.Timestamp = "2018-09-30",
     unit: str = "",
     label: str = "Product A",
+    value_col: str = "wyt_monthly_avg",
 ) -> List[Path]:
-    """Write one TS+CDF figure per term comparing historical actual vs Product A reconstructed.
+    """Write per-term TS+CDF + monthly residual box plots comparing historical actuals vs a reconstruction.
 
-    Uses ``hist_cmp_df`` (historical actuals) and ``targets['product_a']``
-    (long-format Product A reconstruction driven by Product A WYTs).
-    Both are clipped to ``[plot_start, plot_end]``. Returns figure paths.
+    Parameters
+    ----------
+    recon_long_df : DataFrame
+        Long-format reconstruction with columns ``date``, ``part_b``,
+        ``part_c``, and ``value_col`` (default ``wyt_monthly_avg``).
+        Works for WYT-only, QM-only, or hybrid reconstructions.
+    hist_cmp_df : DataFrame
+        Wide-format historical comparison from
+        :func:`compute_wyt_pattern`, with ``date`` and ``<term>_actual``
+        columns per term.
+    term_specs : list of TermSpec
+        Term metadata (b_part / c_part / term_name) to iterate over.
+    figures_dir : Path
+        Output directory. Each term writes ``<part_b>.png`` (TS+CDF) and
+        ``<part_b>_monthly_box.png`` (residual = reconstruction - actual).
+    label : str
+        Legend / residual-axis label for the reconstruction series.
     """
-    from utils.validation_plots import Series, plot_ts_cdf
+    from utils.validation_plots import Series, plot_ts_cdf, plot_monthly_box
 
-    if "product_a" not in targets:
+    if recon_long_df is None or recon_long_df.empty:
         return []
 
     figures_dir = Path(figures_dir)
@@ -657,7 +682,7 @@ def plot_wyt_product_a_validation(
     start = pd.Timestamp(plot_start)
     end = pd.Timestamp(plot_end)
 
-    prod_df = targets["product_a"].copy()
+    prod_df = recon_long_df.copy()
     prod_df["date"] = pd.to_datetime(prod_df["date"])
 
     hist_dates = pd.to_datetime(hist_cmp_df["date"])
@@ -680,7 +705,7 @@ def plot_wyt_product_a_validation(
         if sub.empty:
             continue
         recon_dates = sub["date"].to_numpy()
-        recon = pd.to_numeric(sub["wyt_monthly_avg"], errors="coerce").to_numpy(dtype=float)
+        recon = pd.to_numeric(sub[value_col], errors="coerce").to_numpy(dtype=float)
 
         out_path = figures_dir / f"{spec.b_part}.png"
         plot_ts_cdf(
@@ -693,6 +718,30 @@ def plot_wyt_product_a_validation(
             compute_metrics_from=0,
             out_path=out_path,
         )
+
+        # Align on (year, month) for the residual box plot
+        hist_df = pd.DataFrame({
+            "date": pd.to_datetime(hist_sub_dates),
+            "actual": actual,
+        })
+        recon_df = pd.DataFrame({
+            "date": pd.to_datetime(recon_dates),
+            "recon": recon,
+        })
+        hist_df["ym"] = hist_df["date"].dt.to_period("M")
+        recon_df["ym"] = recon_df["date"].dt.to_period("M")
+        merged = hist_df.merge(recon_df[["ym", "recon"]], on="ym", how="inner")
+        if not merged.empty:
+            box_df = pd.DataFrame({
+                "month": merged["date"].dt.month,
+                "residual": merged["recon"] - merged["actual"],
+            })
+            plot_monthly_box(
+                box_df, value_col="residual",
+                ylabel=f"{label} - Historical{(' (' + unit + ')') if unit else ''}",
+                title=f"{spec.b_part} - Monthly Residual",
+                out_path=figures_dir / f"{spec.b_part}_monthly_box.png",
+            )
         written.append(out_path)
     return written
 
