@@ -14,6 +14,20 @@ Miscellaneous CalSim study variables spanning flow terms, return flows, allocati
 B120 Forecasts and Water Year Type Indexes were previously documented in separate files but are now consolidated here per the final CalSim SV inventory. See `__archive/` folder for historical documentation.
 :::
 
+## Scope Analysis
+
+| Term - Part B | Term - Part C | Methodology |
+|---------------|:-------------:|:-----------:|
+| TULE_WET_INDX | FLOW | Quantile Mapping |
+| DELTAACCRETIONFORNDOI | FLOW | Direct Calculation |
+| C_CBD001HIST | FLOW | Hybrid (QM + WYT) |
+| C_KLR005HIST | FLOW | Hybrid (QM + WYT) |
+| R_60N_NA4_SJR022_SV | RETURN-FLOW | Water Year Type Averaging |
+| R_RFS71A_OMR039_SV | RETURN-FLOW | Water Year Type Averaging |
+| EBTML_LOSS | LOSS | Water Year Type Averaging |
+| CAP_C_CAA238_CVC_F, CAP_C_CAA238_CVC_R | CAPACITY | Repeating Time Series |
+| YBA Transfers | -- | Dynamic WRESL Flag |
+
 ## Methodology Overview
 
 A total of five different approaches are applied to reconstruct the miscellaneous terms, plus one term governed by a dynamic WRESL flag that requires no pre-generation:
@@ -32,101 +46,132 @@ A total of five different approaches are applied to reconstruct the miscellaneou
 
 ---
 
-### TULE_WET_INDX (Tule Wetlands Index)
+## 1. Water Year Type Averaging
 
-The Tule Wetlands Index represents wetland conditions in the Tulare Basin, reconstructed through quantile mapping from VIC I_PEDRO (Lake Millerton inflow) with correlation R^2 = 0.71. While this correlation sits at the lower threshold for effective quantile mapping, the approach preserves the statistical relationship between Millerton inflows and wetland conditions.
+Three miscellaneous terms are reconstructed using WYT monthly averaging: two San Joaquin River return flow channels and the EBMUD terminal reservoir loss.
 
-Output format follows standard naming convention: `_tule_wet_indx_friant-indx_productA_1915_2019.csv` with monthly values covering the full historical reconstruction period through water year 2018.
+### R_60N_NA4_SJR022_SV (Return Flow, San Joaquin River)
 
-#### Validation
-
-Validation over 1,248 months (WY 1915-2018) achieved R = 0.86 with RMSE = 11.61 and mean difference of +0.30. The reconstructed time series maintains physical bounds, with bias differences comparable to other regional terms.
-
-:::{admonition} Suggested Plot
-:class: note
-Scatter plot of actual vs reconstructed TULE_WET_INDX colored by WYT, with 1:1 line, R^2 = 0.86 annotation, marginal histograms showing distribution alignment, and drought period highlighting (2012-2016) to assess whether extreme dry conditions are captured.
-:::
-
-### NDOI Precipitation Accretion
-
-NDOI (Net Delta Outflow Index) precipitation accretion represents direct precipitation onto Delta water surfaces used in Dayflow calculations. The methodology evolved through multiple attempts, ultimately succeeding through direct calculation rather than statistical mapping.
-
-The successful approach identifies correlation between Stockton gauge precipitation and Delta precipitation in source Excel files, then converts precipitation depth to volume with time-varying area adjustments. The formula computes monthly volume as precipitation depth (inches) divided by 12 and multiplied by Delta area with a watershed area ratio adjustment coefficient:
-
-$$V_{precip} = \frac{P_{Stockton}}{12} \times A_{Delta} \times C_{ratio}$$
-
-where $P_{Stockton}$ is monthly precipitation depth in inches, $A_{Delta}$ is the Delta water surface area in acres (which varies across three defined time periods covering 1930-2010 land use changes), and $C_{ratio}$ is a watershed area adjustment coefficient. Investigation into the original Dayflow calculation methodology revealed the term was extended approximately 3 years prior to this project, but complete documentation of the underlying calculation remained elusive. The December 2025 progress meeting confirmed the direct calculation approach as superior to statistical methods since it preserves the physical relationship between precipitation and accretion volume.
+SJR return flow at Woodbridge Irrigation District represents agricultural drainage returns to the San Joaquin River system, cycling seasonally between near-zero winter values and peak return flows of approximately 0.7 TAF in active irrigation months. San Joaquin Valley Water Year Type monthly averaging is the adopted methodology, computing the mean monthly return flow for each of the five WYT classes and assigning the corresponding class mean to each synthetic month.
 
 #### Validation
 
-The direct calculation approach achieved R^2 = 0.92. Mean actual value of 69.3 TAF compares to mean reconstructed value of 63.3 TAF, reflecting the slightly lower precipitation in Product A synthetic climate.
+```{figure} figures/s3-inputs_other-return-flows-r60n.png
+:name: fig-r60n-return-flow
+:width: 100%
+Product A validation for R_60N_NA4_SJR022_SV: WYT-based reconstruction (orange) vs. actual CalSim inputs (blue), 1921--2021. Values oscillate between 0 and approximately 0.7 TAF.
+```
 
-![NDOI Precipitation Accretion](figures/s3-inputs_other-ndoi-precip-accretion.png)
-*NDOI precipitation accretion (Delta Accretion for NDOI) validation, WY 1971--2018. Actual CalSim input DSS (blue) compared against reconstructed values (orange). Overall agreement is strong, though reconstructed values spike above actuals in a few wet years (notably ~720 TAF in 1993 and ~870 TAF in 1998). The earlier QM approach achieved R^2 = 0.87; the final direct calculation method improves to R^2 = 0.92.*
+The reconstruction achieves $R^2 = 0.97$, demonstrating that seasonal patterns conditional on water year type fully capture the dominant behavior of this highly regular irrigation district return flow.
 
-This difference is consistent with known weather generator behavior and Stockton gauge data quality issues during 1922-1926 and 1997-2000. Maximum reconstructed value of 5,300 TAF remains below 5,500 TAF threshold flagged in original analysis, indicating acceptable behavior without extreme outliers.
+### R_RFS71A_OMR039_SV (Return Flow, San Joaquin River)
 
-Some reconstructed values spike higher than historical actuals, raising questions about whether capping at historical 90th percentile would be appropriate. However, this would artificially limit larger precipitation events that might plausibly occur in extended synthetic sequences. The current approach preserves the full range of statistically plausible events, which aligns with stochastic planning objectives to explore tails of distributions.
+Westside SJR return flow at Byron Bethany Irrigation District represents a second category of miscellaneous agricultural and municipal return flows to the San Joaquin River, with historical values reaching approximately 0.20 TAF. San Joaquin Valley Water Year Type monthly averaging is the adopted methodology, identical in structure to the R_60N approach above.
 
-### Colusa Basin Drain and Knights Landing Ridge Cut
+#### Validation
 
-These two return flow terms presented a significant reconstruction challenge due to weak initial correlations and problematic quantile mapping overshoots. Both terms are approximately 95% correlated with each other, enabling derivation of one from the other if needed. The terms represent combined USGS gauge flows through drainage channels returning agricultural and flood waters to the Sacramento River system, with annual peaks sometimes reaching 500 TAF.
+```{figure} figures/s3-inputs_other-return-flows-rfs71a.png
+:name: fig-rrfs71a-return-flow
+:width: 100%
+Product A validation for R_RFS71A_OMR039_SV: WYT-based reconstruction (orange) vs. actual CalSim inputs (blue), 1921--2021. Reconstruction captures the seasonal timing but underestimates peak magnitudes reaching approximately 0.20 TAF.
+```
 
-VIC flow correlation testing across approximately 200 locations identified `IERC_003` as the best predictor, achieving $R^2 = 0.70$ for Colusa Basin Drain and $R^2 = 0.52$ for Knights Landing Ridge Cut. While CBD correlation approaches the 0.7 threshold for standard quantile mapping, KLR falls well below. More critically, quantile mapping for both terms produced extreme peak overshoots up to 900 TAF compared to actual maximum values around 500 TAF. These overshoots are physically unrealistic and would cause CalSim to simulate impossible drainage flows.
+The reconstruction achieves $R^2 = 0.55$, which is considered acceptable given the relatively low volumes involved and the absence of stronger predictive relationships across the VIC predictor library.
 
-The hybrid quantile mapping approach proved highly effective, averaging quantile-mapped values with water year type monthly averages:
+### EBTML_LOSS (Loss, EBMUD Terminal Reservoir Loss)
+
+East Bay Municipal Utility District terminal reservoir loss represents operational evaporation and seepage losses from EBMUD terminal storage facilities, exhibiting a highly consistent seasonal pattern between approximately 11 CFS in winter and 35 CFS in summer. Water year type averaging was selected for consistency with the broader project framework, though a repeating time series approach would also have been viable given the stable post-2009 behavior.
+
+#### Validation
+
+```{figure} figures/s3-inputs_other-ebtml-loss.png
+:name: fig-ebtml-loss
+:width: 100%
+Product A validation for EBTML_LOSS: WYT-based reconstruction (orange) closely overlaps actual CalSim inputs (blue), 1921--2021. Seasonal values oscillate between approximately 11 CFS in winter and 35 CFS in summer.
+```
+
+The reconstruction achieves $R^2 = 0.99$, an exceptionally strong fit reflecting the regularity of EBMUD's operational loss pattern. The near-perfect agreement confirms that WYT-conditioned monthly means fully capture the seasonal and inter-annual structure of this term.
+
+---
+
+## 2. Quantile Mapping
+
+One miscellaneous term is reconstructed using quantile mapping, with the predictor identified by screening the full VIC output library for the highest R-squared correlation to the target.
+
+### TULE_WET_INDX (Flow, Tulare Basin Wetlands Index)
+
+The Tule Wetlands Index represents wetland conditions in the Tulare Basin, reconstructed through quantile mapping using VIC I_PEDRO (Lake Millerton inflow) as the predictor -- the highest R-squared match identified across the full VIC output screening. The QM relationship is trained on 1921-1971 and applied to 1972-2018. While the predictor correlation of $R^2 = 0.71$ sits at the lower threshold for effective quantile mapping, the approach preserves the statistical relationship between Millerton inflows and wetland conditions that WYT averaging alone cannot capture.
+
+#### Validation
+
+Validation over 1,248 months (WY 1915-2018) achieved $R^2 = 0.86$ with RMSE = 11.61 and mean difference of +0.30. The reconstructed time series maintains physical bounds, with bias differences comparable to other regional terms.
+
+---
+
+## 3. Hybrid (QM + WYT)
+
+Two miscellaneous flow terms employ the hybrid methodology, combining quantile mapping and WYT averaging to handle cases where neither approach alone performs adequately without producing physically unrealistic peak overshoots. Both terms are approximately 95% correlated with each other and share the same VIC predictor.
+
+### C_CBD001HIST (Flow, Colusa Basin Drain)
+
+Colusa Basin Drain represents combined USGS gauge flows through a drainage channel returning agricultural and flood waters to the Sacramento River system, with annual peaks sometimes reaching 500 TAF. VIC flow correlation testing across approximately 200 locations identified `IERC_003` as the best predictor, achieving $R^2 = 0.70$. While this approaches the 0.7 threshold for standard quantile mapping, QM alone produced extreme peak overshoots up to 900 TAF -- physically unrealistic values that would cause CalSim to simulate impossible drainage flows. The hybrid approach averages the QM and WYT reconstructions to eliminate overshoots while preserving more realistic inter-annual variability than pure WYT averaging:
 
 $$V_{hybrid} = \frac{V_{QM} + V_{WYT}}{2}$$
 
-Standard WYT averaging alone produces overly smooth patterns that miss peaks entirely. Standard QM alone overshoots peaks unrealistically. The hybrid approach balances both limitations, bringing reconstructed values within historical ranges while maintaining appropriate variability. Progress Meeting 3 slides demonstrated this improvement visually, with time series comparisons showing QM-only overshoots eliminated while WYT-only flatness was enhanced with realistic peak structure. The justification emphasizes lack of confidence in QM extrapolation alone, using WYT averages as a "post-correction second-pass adjustment" to constrain values within historical norms.
+#### Validation
+
+The hybrid approach improved reconstruction performance from $R^2 = 0.70$ (QM only) to $R^2 = 0.78$. Nash-Sutcliffe Efficiency showed even more dramatic improvement as the squared deviation penalty in NSE heavily weights the eliminated extreme overshoots.
+
+### C_KLR005HIST (Flow, Knights Landing Ridge Cut)
+
+Knights Landing Ridge Cut represents a second Sacramento Valley drainage channel with approximately 95% correlation to Colusa Basin Drain. The same `IERC_003` predictor achieves $R^2 = 0.52$ for this term -- well below the quantile mapping threshold -- and QM alone produced the same category of extreme peak overshoots as for C_CBD001HIST. The hybrid methodology is applied identically, averaging QM and WYT reconstructions to constrain values within historical ranges while maintaining appropriate variability.
 
 #### Validation
 
-Performance improvements from the hybrid approach are substantial: Colusa Basin Drain improved from R^2 = 0.70 (QM only) to R^2 = 0.78 (hybrid), while Knights Landing Ridge Cut improved from R^2 = 0.52 to R^2 = 0.66. Nash-Sutcliffe Efficiency showed even more dramatic improvement as the squared deviation penalty in NSE heavily weights the eliminated extreme overshoots. The hybrid method demonstrates clear utility for terms with moderate correlation where peak preservation is important.
+The hybrid approach improved reconstruction performance from $R^2 = 0.52$ (QM only) to $R^2 = 0.66$. As with Colusa Basin Drain, NSE improvement was substantial due to elimination of the extreme QM overshoots.
 
-:::{admonition} Suggested Plot
-:class: note
-Three-row comparison for Colusa Basin Drain: (1) Time series showing actual, QM-only (with overshoots), WYT-only (too smooth), and hybrid (balanced), (2) Scatter plot actual vs reconstructed for all three methods with R^2 values, (3) Monthly box plots by method showing how hybrid eliminates extreme tails while preserving median patterns.
-:::
+---
 
-### San Joaquin River Return Flows
+## 4. Direct Calculation
 
-Two return flow terms represent agricultural and miscellaneous return flows to the San Joaquin River system, reconstructed using water year type averaging.
+One miscellaneous term is reconstructed through a direct physical formula derived from the governing source data, rather than through statistical mapping.
 
-#### Validation
+### DELTAACCRETIONFORNDOI (Flow, NDOI Precipitation Accretion)
 
-The irrigation district return flow (R_60N) achieves excellent R^2 = 0.97, demonstrating that seasonal patterns conditional on water year type capture the dominant behavior. The other return flow category (R_RFS71A) shows lower R^2 = 0.55, but this is considered acceptable given the relatively low volumes involved and absence of stronger predictive relationships.
+NDOI precipitation accretion represents direct precipitation onto Delta water surfaces used in Dayflow calculations. Multiple statistical approaches were evaluated and rejected before the direct calculation method was adopted. The formula computes monthly accretion volume as precipitation depth converted to volume with time-varying area adjustments:
 
-::::{tab-set}
-:::{tab-item} R_60N (R^2 = 0.97)
-![Return Flows R_60N](figures/s3-inputs_other-return-flows-r60n.png)
-*SJR return flow in Woodbridge Irrigation District (R_60N_NA4_SJR022_SV) validation, 1921--2021 (R^2 = 0.97). WYT-based average flows closely reproduce the seasonal pattern of actual CalSim inputs, with values oscillating between 0 and approximately 0.7 TAF.*
-:::
-:::{tab-item} R_RFS71A (R^2 = 0.55)
-![Return Flows R_RFS71A](figures/s3-inputs_other-return-flows-rfs71a.png)
-*Westside SJR return flow in Byron Bethany ID (R_RFS71A_OMR039_SV) validation, 1921--2021 (R^2 = 0.55). WYT-based reconstruction (orange) captures the seasonal timing but underestimates peak magnitudes compared to actual CalSim inputs (blue), which reach approximately 0.20 TAF.*
-:::
-::::
+$$V_{precip} = \frac{P_{Stockton}}{12} \times A_{Delta} \times C_{ratio}$$
 
-### EBMUD Terminal Reservoir Loss
-
-East Bay Municipal Utility District terminal reservoir loss could have used repeating pattern methodology since values post-2009 show consistent behavior. However, water year type averaging was selected for consistency with broader project framework.
+where $P_{Stockton}$ is monthly precipitation depth in inches from the Stockton gauge, $A_{Delta}$ is the Delta water surface area in acres varying across three defined time periods covering 1930-2010 land use changes, and $C_{ratio}$ is a watershed area adjustment coefficient. The December 2025 progress meeting confirmed this approach as superior to statistical methods since it preserves the physical relationship between precipitation and accretion volume.
 
 #### Validation
 
-Water year type averaging achieves R^2 = 0.99, providing excellent performance through established methodology.
+```{figure} figures/s3-inputs_other-ndoi-precip-accretion.png
+:name: fig-ndoi-precip-accretion
+:width: 100%
+Product A validation for DELTAACCRETIONFORNDOI: actual CalSim input DSS (blue) vs. reconstructed values (orange), WY 1971--2018. Overall agreement is strong; reconstructed values spike above actuals in a few wet years (notably ~720 TAF in 1993 and ~870 TAF in 1998).
+```
 
-![EBTML Loss](figures/s3-inputs_other-ebtml-loss.png)
-*EBMUD Terminal Reservoir Loss validation, 1921--2021 (R^2 = 0.99). WYT-based reconstruction (orange) closely overlaps actual CalSim inputs (blue), with seasonal values oscillating between approximately 11 CFS in winter and 35 CFS in summer.*
+The direct calculation approach achieves $R^2 = 0.92$, improving on the earlier QM approach ($R^2 = 0.87$). The mean reconstructed value of 63.3 TAF compares to a mean actual of 69.3 TAF, reflecting slightly lower precipitation in the Product A synthetic climate. Some reconstructed values spike above historical actuals in extreme wet years; the current approach preserves the full range of statistically plausible events consistent with stochastic planning objectives to explore distribution tails.
 
-This illustrates that multiple approaches may work for well-behaved variables, with WYT averaging selected for consistency with broader project framework.
+---
 
-### Cross Valley Canal Capacity
+## 5. Repeating Time Series
 
-Two Cross Valley Canal capacity terms employ repeating pattern methodology based on post-2009 values. These operational constraints do not vary with hydrology in historical record, suggesting fixed capacity based on infrastructure limits rather than dynamic allocation.
+Two Cross Valley Canal capacity terms employ a repeating time series, using the stable post-2009 period as the representative pattern repeated across the full synthetic sequence.
 
-### YBA Transfers
+### CAP_C_CAA238_CVC_F and CAP_C_CAA238_CVC_R (Capacity, Cross Valley Canal)
 
-Yuba Accord transfers are flagged as dynamic within DCR CalSim WRESL scripts, enabling simulation-time calculation based on operational rules rather than pre-specified input time series. This flag allows CalSim to adapt transfers based on synthetic sequence conditions, maintaining operational realism without requiring pre-generation of transfer patterns. The dynamic flag was confirmed during inventory review with MSO staff, who verified that CalSim's WRESL logic computes Yuba Accord transfers endogenously based on Yuba water availability and downstream demand conditions--making pre-generation both unnecessary and potentially conflicting with the model's internal logic.
+Forward and reverse conveyance capacity constraints on the Cross Valley Canal do not vary with hydrology in the historical record, reflecting fixed infrastructure limits rather than dynamic allocation. Post-2009 values exhibit consistent behavior indicative of operational capacity limits set by physical canal infrastructure. The repeating time series methodology uses this stable recent period as the representative pattern, applied across both the 1921-2018 historical reconstruction and all Product B synthetic sequences.
+
+---
+
+## 6. Dynamic WRESL Flag
+
+One miscellaneous term requires no pre-generation because it is computed endogenously by CalSim's WRESL scripts during simulation.
+
+### YBA Transfers (Dynamic, Yuba Accord)
+
+Yuba Accord transfers are flagged as dynamic within the DCR CalSim WRESL scripts, enabling simulation-time calculation based on operational rules rather than pre-specified input time series. The dynamic flag was confirmed during inventory review with MSO staff, who verified that CalSim's WRESL logic computes Yuba Accord transfers endogenously based on Yuba water availability and downstream demand conditions -- making pre-generation both unnecessary and potentially conflicting with the model's internal logic.
 
 
