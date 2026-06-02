@@ -22,8 +22,7 @@ Outputs
   - calsim_qmap_validation_TS.csv   (row-level qmap results)
   - quantile_mapping_validation_summary.csv
   - vic_all_rivers.csv, calsim_all_inflows.csv
-  - annual_sum_comparisons_*.csv
-  - _figures/  (monthly box plots, annual summaries)
+  - annual_sum_comparisons_vic.csv
 - _2_qmap_historical_validation/_product_a_validation/
   - _riminflow_productA_1972_2018.csv  (CalSim format for SV compiler)
 
@@ -32,7 +31,7 @@ Usage
     python mod_hydrology/rim_inflow/_2_qmap_historical_validation.py
 """
 
-import os, sys, numpy as np, pandas as pd, seaborn as sns, matplotlib.pyplot as plt
+import os, sys, numpy as np, pandas as pd
 from pathlib import Path
 
 # Add repo root to path for utils imports
@@ -48,10 +47,8 @@ _vic_gen = get_module_generated_dir("mod_forcing/vic")
 # RESULTS ROOT
 BASE_RESULTS_DIR = str(_gen / "output" / "_2_qmap_historical_validation")
 OUTPUT_DIR       = BASE_RESULTS_DIR
-PLOTS_DIR        = os.path.join(BASE_RESULTS_DIR, "_figures")
 VALIDATION_DIR   = str(_gen / "output" / "_2_qmap_historical_validation" / "_product_a_validation")
 os.makedirs(OUTPUT_DIR, exist_ok=True)
-os.makedirs(PLOTS_DIR,  exist_ok=True)
 os.makedirs(VALIDATION_DIR, exist_ok=True)
 
 # CONFIG
@@ -496,209 +493,7 @@ def main():
 
     df_annual_vic.to_csv(os.path.join(OUTPUT_DIR, "annual_sum_comparisons_vic.csv"), index=False)
 
-    # 7. (OPTIONAL) PLOTTING
-    RUN_PLOTS    = True          # <- set True to generate plots
-    PLOT_VARIANT = 'postAdj'     # 'preAdj' | 'postAdj' | 'both'
-
-    if RUN_PLOTS:
-        sns.set_theme(style="whitegrid", context="talk", font_scale=1.05)
-
-        # Shared styling (with caps at whisker ends)
-        _boxprops     = dict(linewidth=1.2)
-        _whiskerprops = dict(linewidth=1.2)
-        _capprops     = dict(linewidth=1.2)
-        _medianprops  = dict(linewidth=1.5)
-
-        # Sanitize titles/labels to avoid missing-glyph warnings
-        def _safe_text(s: str) -> str:
-            return (s.replace('\u2011','-')  # non-breaking hyphen
-                     .replace('\u2013','-')  # en dash
-                     .replace('\u2014','-')  # em dash
-                     .replace('\u2212','-')) # minus
-
-        # Professional, consistent titles:
-        #  - QMAP adds variant in parentheses: QMAP (Post-Adjustment)
-        #  - "for {Inflow Name}" phrasing
-        def _make_title(cal_name: str, value_col: str) -> str:
-            variant_label = None
-            if cal_name.endswith("__preAdj"):
-                variant_label = "Pre-Adjustment"
-            elif cal_name.endswith("__postAdj"):
-                variant_label = "Post-Adjustment"
-            title_name = cal_name.split("__")[0]
-
-            if value_col == "error_pct":
-                prefix = f"QMAP ({variant_label})" if variant_label else "QMAP"
-                return f"{prefix}: Monthly Percent Error for {title_name}"
-
-            if value_col == "Error":
-                prefix = f"QMAP ({variant_label})" if variant_label else "QMAP"
-                return f"{prefix}: Monthly Error (TAF) for {title_name}"
-
-            if value_col == "VIC_Error_pct":
-                return f"VIC: Monthly Percent Error for {title_name}"
-
-            if value_col == "VIC_Error":
-                return f"VIC: Monthly Error (TAF) for {title_name}"
-
-            return f"{title_name}"
-
-        # Per-location monthly box plots
-        # - QMAP percent  -> no outliers  -> _figures/Percentage_Error/
-        # - QMAP error    -> with outliers (+ mean line) -> _figures/Absolute_Error/
-        # - VIC percent   -> no outliers  -> _figures/Percentage_Error_VIC/
-        # - VIC error     -> with outliers (+ mean line) -> _figures/Absolute_Error_VIC/
-        def save_monthly_box_per_location_general(dloc: pd.DataFrame, cal_name: str, value_col: str):
-            if dloc.empty or value_col not in dloc.columns: return
-            d = dloc[np.isfinite(dloc[value_col])].copy()
-            if d.empty: return
-
-            if value_col == 'error_pct':
-                subfolder, show_outliers, ylabel = 'Percentage_Error', False, "Percent Error (%)"
-            elif value_col == 'Error':
-                subfolder, show_outliers, ylabel = 'Absolute_Error', True, "Error (TAF)"
-            elif value_col == 'VIC_Error_pct':
-                subfolder, show_outliers, ylabel = 'Percentage_Error_VIC', False, "Percent Error (%)"
-            elif value_col == 'VIC_Error':
-                subfolder, show_outliers, ylabel = 'Absolute_Error_VIC', True, "Error (TAF)"
-            else:
-                return
-
-            save_dir = os.path.join(PLOTS_DIR, subfolder)
-            os.makedirs(save_dir, exist_ok=True)
-
-            plt.figure(figsize=(12,6))
-            sns.boxplot(
-                data=d, x='Month', y=value_col,
-                order=list(range(1,13)),
-                whis=(5,95),
-                showfliers=show_outliers,
-                showcaps=True,
-                boxprops=_boxprops,
-                whiskerprops=_whiskerprops,
-                capprops=_capprops,
-                medianprops=_medianprops,
-                linewidth=1.2,
-            )
-
-            # Mean line ONLY for signed error plots
-            if value_col in ('Error', 'VIC_Error'):
-                means = d.groupby("Month", as_index=True)[value_col].mean().reindex(range(1,13))
-                plt.plot(range(12), means.values, marker='o', linewidth=2, label='Mean')
-
-            if 'Percent' in ylabel:
-                plt.axhline(0, ls='--', c='gray', lw=1)
-
-            plt.title(_safe_text(_make_title(cal_name, value_col)), loc='left', fontweight='bold', pad=14)
-            plt.xlabel(_safe_text("Month")); plt.ylabel(_safe_text(ylabel))
-            plt.xticks(ticks=range(12), labels=range(1,13))
-            plt.tight_layout()
-            plt.savefig(os.path.join(save_dir, f"{cal_name}.png"), dpi=300)
-            plt.close()
-
-        # Annual plot helpers (no outliers)
-        def save_annual_boxes(df: pd.DataFrame, value_col: str, title: str, fname: str, ylabel: str):
-            d = df[np.isfinite(df[value_col])].copy()
-            if d.empty: return
-            plt.figure(figsize=(8,5))
-            sns.boxplot(
-                data=d, y=value_col, whis=(5,95),
-                showfliers=False, showcaps=True,
-                boxprops=_boxprops, whiskerprops=_whiskerprops,
-                capprops=_capprops, medianprops=_medianprops, linewidth=1.2
-            )
-            plt.axhline(0, ls='--', c='gray', lw=1)
-            plt.title(_safe_text(title), loc='left', fontweight='bold', pad=14, fontsize=12)
-            plt.ylabel(_safe_text(ylabel)); plt.xlabel("")
-            plt.tight_layout()
-            plt.savefig(os.path.join(PLOTS_DIR, fname + ".png"), dpi=300)
-            plt.close()
-
-        def save_annual_mean_boxes(df: pd.DataFrame, value_col: str, title: str, fname: str, ylabel: str):
-            d = df[np.isfinite(df[value_col])].copy()
-            if d.empty: return
-            d = d.groupby('CalSim', as_index=False, observed=True).mean(numeric_only=True)
-            plt.figure(figsize=(8,5))
-            sns.boxplot(
-                data=d, y=value_col, whis=(5,95),
-                showfliers=False, showcaps=True,
-                boxprops=_boxprops, whiskerprops=_whiskerprops,
-                capprops=_capprops, medianprops=_medianprops, linewidth=1.2
-            )
-            plt.axhline(0, ls='--', c='gray', lw=1)
-            plt.title(_safe_text(title), loc='left', fontweight='bold', pad=14, fontsize=12)
-            plt.ylabel(_safe_text(ylabel)); plt.xlabel("")
-            plt.tight_layout()
-            plt.savefig(os.path.join(PLOTS_DIR, fname + ".png"), dpi=300)
-            plt.close()
-
-        def _plot_for_variant(variant: str):
-            assert variant in ('preAdj', 'postAdj')
-            err_pct_col = 'error_pct_preAdj'  if variant == 'preAdj' else 'error_pct_postAdj'
-            err_abs_col = 'Error_preAdj'      if variant == 'preAdj' else 'Error_postAdj'
-            flow_col    = 'qmap_preAdj'       if variant == 'preAdj' else 'qmap_postAdj'
-            tag         = f"__{variant}"
-            vlabel      = "Pre-Adjustment" if variant == 'preAdj' else "Post-Adjustment"
-
-            # Per-location monthly plots (QMAP)
-            for cal_name, grp in detail_df.groupby('CalSim', observed=True):
-                g = grp.copy()
-                g['error_pct'] = g[err_pct_col]
-                g['Error']     = g[err_abs_col]
-                fname_stub = f"{cal_name}{tag}"
-                save_monthly_box_per_location_general(g, fname_stub, value_col='error_pct')
-                save_monthly_box_per_location_general(g, fname_stub, value_col='Error')
-
-            # Annual (Water Year) - sums & plots for this variant
-            wy = detail_df.copy()
-            if 'WaterYear' not in wy.columns:
-                wy['WaterYear'] = np.where(wy['Month'] >= 10, wy['Year'] + 1, wy['Year']).astype(int)
-            df_annual_qmap = (wy.groupby(['CalSim','WaterYear'], as_index=False, observed=True)
-                                .agg(cs3_sum=('cs3_val','sum'),
-                                     qmap_sum=(flow_col, 'sum')))
-            with np.errstate(divide='ignore', invalid='ignore'):
-                df_annual_qmap['Annual_Pct_Error'] = pct_error(
-                    df_annual_qmap['qmap_sum'] - df_annual_qmap['cs3_sum'],
-                    df_annual_qmap['cs3_sum']
-                )
-            df_annual_qmap['Annual_Error'] = df_annual_qmap['qmap_sum'] - df_annual_qmap['cs3_sum']
-            df_annual_qmap.to_csv(os.path.join(OUTPUT_DIR, f"annual_sum_comparisons_qmap{tag}.csv"), index=False)
-
-            ttl_pct_all  = f"QMAP ({vlabel}): Annual Percent Error across Locations and Water Years"
-            ttl_pct_mean = f"QMAP ({vlabel}): Mean Annual Percent Error across Locations"
-            ttl_err_all  = f"QMAP ({vlabel}): Annual Error (TAF) across Locations and Water Years"
-            ttl_err_mean = f"QMAP ({vlabel}): Mean Annual Error (TAF) across Locations"
-
-            save_annual_boxes(df_annual_qmap, "Annual_Pct_Error",
-                              ttl_pct_all,
-                              f"annual_percent_error_all_locations_QMAP{tag}",
-                              ylabel="Percent Error (%)")
-            save_annual_mean_boxes(df_annual_qmap, "Annual_Pct_Error",
-                              ttl_pct_mean,
-                              f"mean_annual_percent_error_all_locations_QMAP{tag}",
-                              ylabel="Percent Error (%)")
-
-            save_annual_boxes(df_annual_qmap, "Annual_Error",
-                              ttl_err_all,
-                              f"annual_error_all_locations_QMAP{tag}",
-                              ylabel="Error (TAF)")
-            save_annual_mean_boxes(df_annual_qmap, "Annual_Error",
-                              ttl_err_mean,
-                              f"mean_annual_error_all_locations_QMAP{tag}",
-                              ylabel="Error (TAF)")
-
-        if PLOT_VARIANT == 'both':
-            for _v in ('preAdj','postAdj'):
-                _plot_for_variant(_v)
-        else:
-            _plot_for_variant(PLOT_VARIANT)
-
-        # VIC monthly (whole overlap)
-        for cal_name, grp in vic_detail_df.groupby('CalSim', observed=True):
-            save_monthly_box_per_location_general(grp, cal_name, value_col='VIC_Error_pct')
-            save_monthly_box_per_location_general(grp, cal_name, value_col='VIC_Error')
-
-    # -- 8. PRODUCT A VALIDATION CSV (for SV compiler) --------------------
+    # -- 7. PRODUCT A VALIDATION CSV (for SV compiler) --------------------
     # Write final CalSim-format CSV (Part B, Part C, Year, Month, Value) to
     # _product_a_validation/ for consumption by the SV compiler.
 
