@@ -25,7 +25,7 @@ Inputs:
   - GENERATED/mod_hydrology/water_year_types/output/_1_calc_WYTs/Product_B/  (_SacWYT_{ens}.csv, _SJWYT_{ens}.csv)
 
 Outputs are written under:
-  <generated>/output/_1_wyt_index_curves/          (historical validation CSV + figures/ per-series TS+CDF with R2/NSE/PBIAS)
+  <generated>/output/_1_wyt_index_curves/          (historical validation CSV + figures/historical/ per-series TS+CDF with R2/NSE/PBIAS)
   <generated>/output/_product_a_validation/         (Product A)
   <generated>/output/_product_b_final/              (Product B)
 
@@ -57,7 +57,7 @@ _REF = _SCRIPT_DIR / "reference"
 _gen = get_module_generated_dir("mod_reservoir/storage_curves")
 BASE_RESULTS_DIR = _gen / "output"
 HIST_VALIDATION_DIR = BASE_RESULTS_DIR / "_1_wyt_index_curves"
-HIST_PLOT_DIR = HIST_VALIDATION_DIR / "figures"
+HIST_PLOT_DIR = HIST_VALIDATION_DIR / "figures" / "historical"
 PRODUCT_A_DIR = BASE_RESULTS_DIR / "_product_a_validation"
 PRODUCT_B_DIR = BASE_RESULTS_DIR / "_product_b_final"
 

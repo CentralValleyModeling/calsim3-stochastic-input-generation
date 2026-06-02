@@ -27,12 +27,12 @@ Outputs:
       columns: Part B, Part C, Year, Month, Value
     _4_oroville_level5/oroville_level5.xlsx
       sheets: daily, monthly, compare_level5
-    _4_oroville_level5/figures/S_OROVLLEVEL5_timeseries.png
+    _4_oroville_level5/figures/product_a/S_OROVLLEVEL5_timeseries.png
       Product A vs Historical: monthly time series + non-exceedance CDF
       with R2 / NSE / PBIAS over WY 1972 - <wy_max>.
-    _4_oroville_level5/figures/S_OROVLLEVEL5_monthly_error.png
+    _4_oroville_level5/figures/product_a/S_OROVLLEVEL5_monthly_error.png
       WY-ordered (Oct-Sep) monthly box plot of error (Product A - Historical, TAF).
-    _4_oroville_level5/figures/S_OROVLLEVEL5_monthly_pct_error.png
+    _4_oroville_level5/figures/product_a/S_OROVLLEVEL5_monthly_pct_error.png
       WY-ordered (Oct-Sep) monthly box plot of percent error.
   Product B:
     _product_b_final/S_OROVLLEVEL5_productB_n01.csv ... n10.csv
@@ -324,7 +324,7 @@ def main() -> None:
             compare.drop(columns=["WY"]).to_excel(writer, sheet_name="compare_level5", index=False)
 
         # Product A vs Historical comparison figure (timeseries + CDF)
-        figures_dir = output_dir / "figures"
+        figures_dir = output_dir / "figures" / "product_a"
         figures_dir.mkdir(parents=True, exist_ok=True)
         cmp = compare.dropna(subset=["S_OROVLLEVEL5", "S_target_eom_TAF"])
         cmp = cmp.loc[cmp["WY"] >= start_wy]

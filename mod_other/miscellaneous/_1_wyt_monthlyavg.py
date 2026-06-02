@@ -13,9 +13,10 @@ Inputs
 Outputs
 -------
 - <generated>/output/_1_wyt_monthlyavg/monthly_avg_historical/
-    pattern CSV, actual-vs-reconstructed CSV, and figures/ (TS+CDF +
-    monthly error box per term)
-- <generated>/output/_1_wyt_monthlyavg/product_a/figures/
+    pattern CSV and actual-vs-reconstructed CSV
+- <generated>/output/_1_wyt_monthlyavg/figures/historical/
+    TS+CDF and monthly error box per term (historical method check)
+- <generated>/output/_1_wyt_monthlyavg/figures/product_a/
     TS+CDF and monthly error box per term (--product A)
 - <generated>/output/_product_a_validation/
     final Product A SV CSVs (--product A)
@@ -153,7 +154,7 @@ def main() -> None:
     hist_cmp_path = hist_dir / f"{prefix}_actual_vs_reconstructed.csv"
     hist_cmp_df.to_csv(hist_cmp_path, index=False)
 
-    figures_dir = hist_dir / "figures"
+    figures_dir = BASE_RESULTS_DIR / "figures" / "historical"
     plot_wyt_hist_validation(hist_cmp_df, term_specs, figures_dir)
 
     print("\nHistorical outputs:")
@@ -176,7 +177,7 @@ def main() -> None:
         _write_targets(prod_key, prefix, targets)
 
         if prod_key == "A":
-            prod_a_fig_dir = BASE_RESULTS_DIR / "product_a" / "figures"
+            prod_a_fig_dir = BASE_RESULTS_DIR / "figures" / "product_a"
             plot_actual_vs_recon_validation(targets["product_a"], hist_cmp_df, term_specs, prod_a_fig_dir)
             print(f"  - {prod_a_fig_dir}/ (TS+CDF per term)")
 

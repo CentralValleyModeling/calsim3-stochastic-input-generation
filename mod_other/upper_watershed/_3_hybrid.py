@@ -29,7 +29,7 @@ Outputs
 - ``output/_3_hybrid/product_a/`` (--product A) or
   ``output/_3_hybrid/product_b/`` (--product B): intermediates
   (``hybrid_wyt/``, ``hybrid_qmap/``, ``hybrid_wyt_monthly_avg_historical/``)
-- ``output/_3_hybrid/product_a/figures/`` -- per-term TS+CDF and monthly
+- ``output/_3_hybrid/figures/product_a/`` -- per-term TS+CDF and monthly
   error box (--product A)
 - ``output/_product_a_validation/<part_b>_product_a_<wy>_<wy>.csv``
   (--product A) -- final hybrid SV
@@ -515,7 +515,7 @@ def main() -> None:
     print(f"\n=== Part 3: Final Hybrid (Product {args.product}) ===")
     if args.product == "A":
         run_final_hybrid_a(wyt_intermediate_dir, qmap_intermediate_dir, final_dir)
-        figures_dir = base_dir / "figures"
+        figures_dir = _gen / "output" / "_3_hybrid" / "figures" / "product_a"
         recon_long = _load_final_a_as_long(final_dir)
         plot_actual_vs_recon_validation(
             recon_long, hist_cmp_df, term_specs, figures_dir, label="Product A",
