@@ -16,14 +16,21 @@ B120 Forecasts and Water Year Type Indexes were previously documented in separat
 
 ## Methodology Overview
 
-The "miscellaneous" category encompasses 143 diverse variables requiring individualized methodologies. These include:
+A total of five different approaches are applied to reconstruct the miscellaneous terms, plus one term governed by a dynamic WRESL flag that requires no pre-generation:
 
-- **Water Year Type (WYT) Indexes**: Sacramento Valley Index (40-30-30) and San Joaquin Valley Index (60-20-20) classifications
-- **B120 Forecasts**: Bulletin 120 seasonal runoff predictions (8 variables for Goodyear and Smartville)
-- **Flow Terms**: NDOI accretion, Colusa Basin Drain, Knights Landing Ridge Cut
-- **Wetlands Indices**: Tule wetlands index for Tulare Basin
+**1- Water Year Type Monthly Averaging (WYT):** Groups historical months by water year type (Wet, Above Normal, Below Normal, Dry, Critical) and assigns the corresponding monthly mean to each synthetic year. This approach captures seasonal demand and operational patterns that vary with overall water availability but not with year-to-year flow variability. It is the preferred fallback when correlation with VIC outputs is too weak for quantile mapping, and is applied here to SJR return flows and EBMUD terminal reservoir loss.
 
-Methodologies range from straightforward water year type averaging (R^2 > 0.95) to complex threshold optimization for allocation ratios, to direct physical calculations for accretion terms.
+**2- Quantile Mapping (QM):** Maps the empirical CDF of a VIC-derived predictor series to the empirical CDF of the target CalSim term, trained on 1921-1971 and applied to 1972-2018. For miscellaneous terms, the predictor is selected by screening the full VIC output library for the highest R-squared correlation to the target. This approach is applied to the Tule Wetlands Index using VIC I_PEDRO (Lake Millerton inflow) as the predictor.
+
+**3- Hybrid (QM + WYT):** Averages the QM and WYT reconstructions to blend interannual variability with stable seasonal structure. This mitigates peak overshoot or noise that pure QM can introduce when predictor correlation is moderate, while avoiding the overly smooth patterns of pure WYT averaging. It is applied to Colusa Basin Drain and Knights Landing Ridge Cut, where QM alone produced physically unrealistic peak overshoots up to 900 TAF against a historical maximum near 500 TAF.
+
+**4- Direct Calculation:** Applies a physical formula derived from the governing source data rather than statistical mapping. This is used for NDOI precipitation accretion, where monthly volume is computed directly from Stockton gauge precipitation depth, Delta water surface area, and a watershed area ratio coefficient -- preserving the physical relationship between precipitation and accretion volume that statistical approaches failed to reproduce.
+
+**5- Repeating Time Series:** Identifies a representative recent period exhibiting stable, infrastructure-constrained behavior and repeats it across the full synthetic sequence. This is applied to Cross Valley Canal capacity terms whose post-2009 values reflect fixed operational limits rather than hydrology-driven variability, making statistical reconstruction unnecessary.
+
+**6- Dynamic WRESL Flag (no pre-generation required):** Some CalSim inputs are computed endogenously by the model's WRESL scripts during simulation rather than supplied as pre-generated time series. Yuba Accord transfers fall into this category: the dynamic flag is set in the CalSim configuration so the model calculates transfers at runtime based on synthetic sequence conditions, eliminating the need for and risk of pre-specifying transfer patterns.
+
+---
 
 ### TULE_WET_INDX (Tule Wetlands Index)
 
