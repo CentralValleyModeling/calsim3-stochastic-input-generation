@@ -638,6 +638,7 @@ def plot_wyt_product_a_validation(
     plot_start: str | pd.Timestamp = "1971-10-01",
     plot_end: str | pd.Timestamp = "2018-09-30",
     unit: str = "",
+    label: str = "Product A",
 ) -> List[Path]:
     """Write one TS+CDF figure per term comparing historical actual vs Product A reconstructed.
 
@@ -685,7 +686,7 @@ def plot_wyt_product_a_validation(
         plot_ts_cdf(
             series=[
                 Series("Historical", hist_sub_dates, actual),
-                Series("Product A", recon_dates, recon),
+                Series(label, recon_dates, recon),
             ],
             title=spec.b_part,
             unit=unit,
