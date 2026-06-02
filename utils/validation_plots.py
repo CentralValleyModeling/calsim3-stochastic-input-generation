@@ -517,14 +517,21 @@ def _auto_metric_lines(series_list: list[Series], baseline_idx: int) -> list[str
     lines: list[str] = []
     for s in others:
         sim_vals = np.asarray(s.values, dtype=float)
+        base_cmp, sim_cmp = base_vals, sim_vals
         if sim_vals.shape != base_vals.shape:
-            raise ValueError(
-                f"Series '{s.label}' length {sim_vals.shape} != baseline length {base_vals.shape}"
-            )
+            try:
+                base_dates = np.asarray(series_list[baseline_idx].dates, dtype="datetime64[ns]")
+                sim_dates = np.asarray(s.dates, dtype="datetime64[ns]")
+                _, base_i, sim_i = np.intersect1d(base_dates, sim_dates, return_indices=True)
+                base_cmp, sim_cmp = base_vals[base_i], sim_vals[sim_i]
+            except Exception as e:
+                raise ValueError(
+                    f"Series '{s.label}' length {sim_vals.shape} != baseline length {base_vals.shape} and dates could not be aligned"
+                ) from e
         lines.append(format_metric_line(
-            r2(base_vals, sim_vals),
-            nse(base_vals, sim_vals),
-            pbias(base_vals, sim_vals),
+            r2(base_cmp, sim_cmp),
+            nse(base_cmp, sim_cmp),
+            pbias(base_cmp, sim_cmp),
             label=s.label if label_each else "",
         ))
     return lines
