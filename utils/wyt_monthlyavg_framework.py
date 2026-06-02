@@ -591,8 +591,8 @@ def plot_wyt_hist_validation(
     Uses the wide ``hist_cmp_df`` produced by :func:`compute_wyt_pattern`
     (columns ``date``, ``<term>_actual``, ``<term>_reconstructed``). The
     plot window is clipped to ``[plot_start, plot_end]``; the underlying
-    CSV is left untouched. A sibling ``<part_b>_monthly_box.png`` is also
-    written showing residual (reconstructed - historical) by month.
+    CSV is left untouched. A sibling ``<part_b>_monthly_error.png`` is also
+    written showing signed error (reconstructed - historical) by month.
     Returns the list of TS+CDF figure paths written.
     """
     from utils.validation_plots import Series, plot_ts_cdf, plot_monthly_box
@@ -627,12 +627,12 @@ def plot_wyt_hist_validation(
             compute_metrics_from=0,
             out_path=out_path,
         )
-        box_df = pd.DataFrame({"month": sub_months, "residual": recon - actual})
+        box_df = pd.DataFrame({"month": sub_months, "error": recon - actual})
         plot_monthly_box(
-            box_df, value_col="residual",
-            ylabel=f"Reconstructed - Historical{(' (' + unit + ')') if unit else ''}",
-            title=f"{spec.b_part} - Monthly Residual",
-            out_path=figures_dir / f"{spec.b_part}_monthly_box.png",
+            box_df, value_col="error",
+            ylabel=f"Error (Reconstructed - Historical){(' [' + unit + ']') if unit else ''}",
+            title=f"{spec.b_part} - Monthly Error",
+            out_path=figures_dir / f"{spec.b_part}_monthly_error.png",
         )
         written.append(out_path)
     return written
@@ -651,7 +651,7 @@ def plot_actual_vs_recon_validation(
     label: str = "Product A",
     value_col: str = "wyt_monthly_avg",
 ) -> List[Path]:
-    """Write per-term TS+CDF + monthly residual box plots comparing historical actuals vs a reconstruction.
+    """Write per-term TS+CDF + monthly error box plots comparing historical actuals vs a reconstruction.
 
     Parameters
     ----------
@@ -667,9 +667,9 @@ def plot_actual_vs_recon_validation(
         Term metadata (b_part / c_part / term_name) to iterate over.
     figures_dir : Path
         Output directory. Each term writes ``<part_b>.png`` (TS+CDF) and
-        ``<part_b>_monthly_box.png`` (residual = reconstruction - actual).
+        ``<part_b>_monthly_error.png`` (signed error = reconstruction - actual).
     label : str
-        Legend / residual-axis label for the reconstruction series.
+        Legend / error-axis label for the reconstruction series.
     """
     from utils.validation_plots import Series, plot_ts_cdf, plot_monthly_box
 
@@ -719,7 +719,7 @@ def plot_actual_vs_recon_validation(
             out_path=out_path,
         )
 
-        # Align on (year, month) for the residual box plot
+        # Align on (year, month) for the monthly error box plot
         hist_df = pd.DataFrame({
             "date": pd.to_datetime(hist_sub_dates),
             "actual": actual,
@@ -734,13 +734,13 @@ def plot_actual_vs_recon_validation(
         if not merged.empty:
             box_df = pd.DataFrame({
                 "month": merged["date"].dt.month,
-                "residual": merged["recon"] - merged["actual"],
+                "error": merged["recon"] - merged["actual"],
             })
             plot_monthly_box(
-                box_df, value_col="residual",
-                ylabel=f"{label} - Historical{(' (' + unit + ')') if unit else ''}",
-                title=f"{spec.b_part} - Monthly Residual",
-                out_path=figures_dir / f"{spec.b_part}_monthly_box.png",
+                box_df, value_col="error",
+                ylabel=f"Error ({label} - Historical){(' [' + unit + ']') if unit else ''}",
+                title=f"{spec.b_part} - Monthly Error",
+                out_path=figures_dir / f"{spec.b_part}_monthly_error.png",
             )
         written.append(out_path)
     return written

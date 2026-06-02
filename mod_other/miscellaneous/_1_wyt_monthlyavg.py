@@ -14,9 +14,9 @@ Outputs
 -------
 - <generated>/output/_1_wyt_monthlyavg/monthly_avg_historical/
     pattern CSV, actual-vs-reconstructed CSV, and figures/ (TS+CDF +
-    monthly residual box per term)
+    monthly error box per term)
 - <generated>/output/_1_wyt_monthlyavg/product_a/figures/
-    TS+CDF and monthly residual box per term (--product A)
+    TS+CDF and monthly error box per term (--product A)
 - <generated>/output/_product_a_validation/
     final Product A SV CSVs (--product A)
 - <generated>/output/_product_b_final/

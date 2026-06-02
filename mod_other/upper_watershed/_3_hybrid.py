@@ -30,7 +30,7 @@ Outputs
   ``output/_3_hybrid/product_b/`` (--product B): intermediates
   (``hybrid_wyt/``, ``hybrid_qmap/``, ``hybrid_wyt_monthly_avg_historical/``)
 - ``output/_3_hybrid/product_a/figures/`` -- per-term TS+CDF and monthly
-  residual box (--product A)
+  error box (--product A)
 - ``output/_product_a_validation/<part_b>_product_a_<wy>_<wy>.csv``
   (--product A) -- final hybrid SV
 - ``output/_product_b_final/<part_b>_product_b_n{01..10}.csv``
