@@ -199,7 +199,7 @@ def format_metric_line(r2_val: float, nse_val: float, pbias_val: float, label: s
     r2_s = f"{r2_val:.2f}" if np.isfinite(r2_val) else "N/A"
     nse_s = f"{nse_val:.2f}" if np.isfinite(nse_val) else "N/A"
     pb_s = f"{pbias_val:.1f}%" if np.isfinite(pbias_val) else "N/A"
-    line = f"R\u00b2={r2_s}   NSE={nse_s}   PBIAS={pb_s}"
+    line = f"R2={r2_s}   NSE={nse_s}   PBIAS={pb_s}"
     return f"{label}:  {line}" if label else line
 
 
