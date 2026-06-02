@@ -57,7 +57,13 @@ San Joaquin Water Year Type (WYT) monthly averaging was ultimately adopted as th
 
 #### Validation
 
-The reconstruction achieves $R^2 = 0.53$ against the historical record -- moderate, but the best result among all approaches tested. It captures the seasonal fill-and-drawdown cycle and broad inter-annual contrasts between wet and dry years, but underestimates the depth of severe multi-year droughts such as 1976-1977 and 2014-2015, where actual storage dropped below 500 TAF. This is an inherent limitation of WYT averaging: class means smooth out the tail of observed variability, keeping the reconstructed series generally in the 1,000-1,700 TAF range throughout the historical period.
+```{figure} ../figures/calsim-run-product-a/full-validation/S_PEDRO_SV.png
+:name: fig-s-pedro-sv
+:width: 100%
+Product A validation for S_PEDRO_SV: monthly time series (left) and non-exceedance CDF (right) comparing WYT-reconstructed Product A against historical record over 1972-2018.
+```
+
+The reconstruction achieves $R^2 = 0.39$ against the historical record -- moderate, but the best result among all approaches tested. It captures the seasonal fill-and-drawdown cycle and broad inter-annual contrasts between wet and dry years, but underestimates the depth of severe multi-year droughts such as 1976-1977 and 2014-2015, where actual storage dropped below 500 TAF. This is an inherent limitation of WYT averaging: class means smooth out the tail of observed variability, keeping the reconstructed series generally in the 1,000-1,700 TAF range throughout the historical period.
 
 ### E_PEDRO_SV (Evaporation, Upper Tuolumne)
 
@@ -73,7 +79,13 @@ Sacramento Valley Water Year Type monthly averaging is the adopted methodology, 
 
 #### Validation
 
-The reconstruction achieves $R^2 = 0.78$, indicating a strong fit that captures both the seasonal sign reversal and the WYT-dependent magnitude of the release signal. As visible in the validation time series, the reconstructed series closely tracks the seasonal oscillation of the actual record throughout the 1921-2021 period, with the WYT conditioning accounting for the inter-annual variation in release magnitudes between wet and dry years.
+```{figure} ../figures/calsim-run-product-a/full-validation/UARPFORECASTRELEASE.png
+:name: fig-uarpforecastrelease
+:width: 100%
+Product A validation for UARPFORECASTRELEASE: monthly time series (left) and non-exceedance CDF (right) comparing WYT-reconstructed Product A against historical record over 1972-2018.
+```
+
+The reconstruction achieves $R^2 = 0.76$, indicating a strong fit that captures both the seasonal sign reversal and the WYT-dependent magnitude of the release signal. As visible in the validation time series, the reconstructed series closely tracks the seasonal oscillation of the actual record throughout the 1921-2021 period, with the WYT conditioning accounting for the inter-annual variation in release magnitudes between wet and dry years.
 
 ### MFPFORECASTRELEASE (Storage-Forecast, Upper American)
 
@@ -81,7 +93,15 @@ Middle Fork Pit forecast release is a storage-forecast signal for the Middle For
 
 #### Validation
 
-The reconstruction achieves $R^2 = 0.75$, reflecting a strong fit between the WYT-conditioned monthly means and the historical record. The validation time series confirms that the reconstructed series captures the seasonal sign reversal and the inter-annual variation in release magnitude driven by annual water supply classification, though the WYT averaging smooths out some of the more extreme negative excursions seen in the actual record.
+```{figure} ../figures/calsim-run-product-a/full-validation/MFPFORECASTRELEASE.png
+:name: fig-mfpforecastrelease
+:width: 100%
+Product A validation for MFPFORECASTRELEASE: monthly time series (left) and non-exceedance CDF (right) comparing WYT-reconstructed Product A against historical record over 1972-2018.
+```
+
+The reconstruction achieves $R^2 = 0.70$, reflecting a strong fit between the WYT-conditioned monthly means and the historical record. The validation time series confirms that the reconstructed series captures the seasonal sign reversal and the inter-annual variation in release magnitude driven by annual water supply classification, though the WYT averaging smooths out some of the more extreme negative excursions seen in the actual record.
+
+The PBIAS of -967.7% is a numerical artifact rather than a meaningful bias indicator: because positive and negative monthly values nearly cancel when summed, the historical mean approaches zero, causing PBIAS (which normalizes by the observed sum) to amplify even small absolute differences into extreme percentages. The strong agreement visible in both the monthly time series and the non-exceedance CDF, together with NSE = 0.70, confirms that the reconstruction captures the seasonal pattern and distributional shape well despite the misleading PBIAS value.
 
 ### P184FORECASTRELEASE (Storage-Forecast, Upper American)
 
@@ -89,7 +109,15 @@ P184 forecast release is the third American River storage forecast term exhibiti
  
  #### Validation
 
- The reconstruction achieves $R^2 = 0.78$, consistent with the other American River forecast terms. The validation time series shows that the reconstructed series closely follows the seasonal oscillation of the actual record, with values ranging from approximately -10 to +7 TAF. The WYT conditioning captures inter-annual differences in release magnitude, though the class-mean averaging moderates the more extreme negative excursions present in the actual record.
+```{figure} ../figures/calsim-run-product-a/full-validation/P184FORECASTRELEASE.png
+:name: fig-p184forecastrelease
+:width: 100%
+Product A validation for P184FORECASTRELEASE: monthly time series (left) and non-exceedance CDF (right) comparing WYT-reconstructed Product A against historical record over 1972-2018.
+```
+
+ The reconstruction achieves $R^2 = 0.77$, consistent with the other American River forecast terms. The validation time series shows that the reconstructed series closely follows the seasonal oscillation of the actual record, with values ranging from approximately -10 to +7 TAF. The WYT conditioning captures inter-annual differences in release magnitude, though the class-mean averaging moderates the more extreme negative excursions present in the actual record.
+ 
+ The PBIAS of -252.4% is a near-zero-denominator artifact: the positive and negative monthly values of this signed forecast term nearly cancel in the historical sum, so the PBIAS denominator approaches zero and small absolute differences are amplified into extreme percentages. The close alignment of the two curves in both the monthly time series and the non-exceedance CDF, together with NSE = 0.77, confirms that the reconstruction is a good match to the historical record despite the misleading PBIAS value.
 
 ### D_NFA016_ABT002_SV (Diversion, Upper American)
 
@@ -97,13 +125,25 @@ North Fork American River at Auburn Tunnel Pump Station diversion follows a high
 
 #### Validation
 
-The reconstruction achieves $R^2 = 0.98$, an exceptionally strong fit reflecting the regularity of this operational diversion. As visible in the validation time series, the reconstructed series is nearly indistinguishable from the actual record across the full 1921-2021 period, with only rare episodic deviations in severe drought years where actual diversions dropped below the WYT class mean.
+```{figure} ../figures/calsim-run-product-a/full-validation/D_NFA016_ABT002_SV.png
+:name: fig-d-nfa016-abt002-sv
+:width: 100%
+Product A validation for D_NFA016_ABT002_SV: monthly time series (left) and non-exceedance CDF (right) comparing WYT-reconstructed Product A against historical record over 1972-2018.
+```
+
+The reconstruction achieves $R^2 = 0.97$, an exceptionally strong fit reflecting the regularity of this operational diversion. As visible in the validation time series, the reconstructed series is nearly indistinguishable from the actual record across the full 1921-2021 period, with only rare episodic deviations in severe drought years where actual diversions dropped below the WYT class mean.
 
 ### C_STH007_SV (Channel Flow, Upper Yuba Bear)
 
 Newcastle Powerplant near Newcastle channel flow exhibits a seasonal pattern governed by operational releases and inter-basin transfers that correlate more strongly with overall water year conditions than with individual monthly flows. Sacramento Valley Water Year Type monthly averaging is the adopted methodology for this term. 
 
 #### Validation
+
+```{figure} ../figures/calsim-run-product-a/full-validation/C_STH007_SV.png
+:name: fig-c-sth007-sv
+:width: 100%
+Product A validation for C_STH007_SV: monthly time series (left) and non-exceedance CDF (right) comparing WYT-reconstructed Product A against historical record over 1972-2018.
+```
 
 The reconstruction achieves $R^2 = 0.88$, indicating a strong fit. The validation time series shows the reconstructed series closely tracking the seasonal oscillation of the actual record, with values cycling between near-zero winter lows and approximately 14 TAF summer peaks. The WYT conditioning captures inter-annual variability in flow magnitude, though occasional extreme peaks above 14 TAF and rare near-zero summer values in severe drought years fall outside the range of WYT class means.
 
@@ -113,7 +153,13 @@ Diversion at Slate Creek Tunnel in the Upper Feather watershed follows a consist
 
 #### Validation
 
-The reconstruction achieves $R^2 = 0.88$, reflecting a strong fit between the WYT-conditioned monthly means and the historical record. The validation time series shows the reconstructed series closely tracking the actual seasonal pattern throughout the 1921-2021 period, with WYT conditioning capturing inter-annual differences in diversion magnitude between wet and dry years. Rare near-zero diversions during severe drought years such as 1976-1977 fall below the WYT class means and are not fully captured by the averaging approach.
+```{figure} ../figures/calsim-run-product-a/full-validation/D_SLT009_SCT000_SV.png
+:name: fig-d-slt009-sct000-sv
+:width: 100%
+Product A validation for D_SLT009_SCT000_SV: monthly time series (left) and non-exceedance CDF (right) comparing WYT-reconstructed Product A against historical record over 1972-2018.
+```
+
+The reconstruction achieves $R^2 = 0.85$, reflecting a strong fit between the WYT-conditioned monthly means and the historical record. The validation time series shows the reconstructed series closely tracking the actual seasonal pattern throughout the 1921-2021 period, with WYT conditioning capturing inter-annual differences in diversion magnitude between wet and dry years. Rare near-zero diversions during severe drought years such as 1976-1977 fall below the WYT class means and are not fully captured by the averaging approach.
 
 ---
 
