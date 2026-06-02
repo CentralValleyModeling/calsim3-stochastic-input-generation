@@ -13,12 +13,20 @@ Inputs
 Outputs
 -------
 - <generated>/output/_1_wyt_monthlyavg/monthly_avg_historical/
+    pattern CSV and actual-vs-reconstructed CSV
+- <generated>/output/_1_wyt_monthlyavg/figures/historical/
+    TS+CDF and monthly error box per term (historical method check)
 - <generated>/output/_1_wyt_monthlyavg/_product_a_validation/
+    final Product A SV CSVs (--product A)
+- <generated>/output/_1_wyt_monthlyavg/figures/product_a/
+    TS+CDF and monthly error box per term (--product A)
 - <generated>/output/_1_wyt_monthlyavg/_product_b_final/
+    final Product B per-chunk SV CSVs (--product B)
 
 Dependencies
 ------------
 - utils/wyt_monthlyavg_framework.py  (WYT reconstruction engine)
+- utils/validation_plots.py          (TS+CDF and monthly box helpers; transitive)
 - utils/paths.py                     (data-dir resolution)
 
 Usage
@@ -38,7 +46,7 @@ import pandas as pd
 # Add repo root to path for utils imports
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 from utils.paths import get_base_dir, get_module_generated_dir
-from utils.wyt_monthlyavg_framework import compute_wyt_pattern, compute_product_targets, water_year
+from utils.wyt_monthlyavg_framework import compute_wyt_pattern, compute_product_targets, plot_wyt_hist_validation, plot_actual_vs_recon_validation, water_year
 
 
 _SCRIPT_DIR = Path(__file__).resolve().parent
@@ -144,9 +152,13 @@ def main() -> None:
     hist_cmp_path = hist_dir / f"{prefix}_actual_vs_reconstructed.csv"
     hist_cmp_df.to_csv(hist_cmp_path, index=False)
 
+    figures_dir = BASE_RESULTS_DIR / "figures" / "historical"
+    plot_wyt_hist_validation(hist_cmp_df, term_specs, figures_dir)
+
     print("\nHistorical outputs:")
     print(f"  - {pattern_path}")
     print(f"  - {hist_cmp_path}")
+    print(f"  - {figures_dir}/ (TS+CDF per term)")
 
     # Compute and write targets per product
     for prod_key in products:
@@ -161,6 +173,11 @@ def main() -> None:
             term_specs=term_specs,
         )
         _write_targets(prod_key, prefix, targets)
+
+        if prod_key == "A":
+            prod_a_fig_dir = BASE_RESULTS_DIR / "figures" / "product_a"
+            plot_actual_vs_recon_validation(targets["product_a"], hist_cmp_df, term_specs, prod_a_fig_dir)
+            print(f"  - {prod_a_fig_dir}/ (TS+CDF per term)")
 
 
 if __name__ == "__main__":

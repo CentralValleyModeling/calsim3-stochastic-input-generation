@@ -29,6 +29,8 @@ Outputs
 - ``output/_3_hybrid/product_a/`` (--product A) or
   ``output/_3_hybrid/product_b/`` (--product B): intermediates
   (``hybrid_wyt/``, ``hybrid_qmap/``, ``hybrid_wyt_monthly_avg_historical/``)
+- ``output/_3_hybrid/figures/product_a/`` -- per-term TS+CDF and monthly
+  error box (--product A)
 - ``output/_product_a_validation/<part_b>_product_a_<wy>_<wy>.csv``
   (--product A) -- final hybrid SV
 - ``output/_product_b_final/<part_b>_product_b_n{01..10}.csv``
@@ -39,6 +41,7 @@ Dependencies
 - utils.wyt_monthlyavg_framework
 - utils.qmap_product_a_from_pairs
 - utils.qmap_product_b_from_pairs
+- utils.validation_plots (transitive)
 - utils.paths
 
 Usage
@@ -61,6 +64,7 @@ from utils.paths import get_base_dir, get_module_generated_dir
 from utils.wyt_monthlyavg_framework import (
     compute_wyt_pattern,
     compute_product_targets,
+    plot_actual_vs_recon_validation,
     water_year,
 )
 from utils.qmap_product_a_from_pairs import run_product_a_qmap_from_pairs
@@ -158,12 +162,32 @@ def _to_sv_format(df: pd.DataFrame) -> pd.DataFrame:
     })
 
 
+def _load_final_a_as_long(final_dir: Path) -> pd.DataFrame:
+    """Load *_product_a_*.csv SV files into long format for plot_actual_vs_recon_validation."""
+    frames = []
+    for path in sorted(Path(final_dir).glob("*_product_a_*.csv")):
+        df = pd.read_csv(path)
+        df.columns = [str(c).strip() for c in df.columns]
+        date = pd.to_datetime(
+            dict(year=df["Year"].astype(int), month=df["Month"].astype(int), day=1)
+        ) + pd.offsets.MonthEnd(0)
+        frames.append(pd.DataFrame({
+            "date": date,
+            "part_b": df["Part B"].astype(str),
+            "part_c": df["Part C"].astype(str),
+            "wyt_monthly_avg": pd.to_numeric(df["Value"], errors="coerce"),
+        }))
+    if not frames:
+        return pd.DataFrame(columns=["date", "part_b", "part_c", "wyt_monthly_avg"])
+    return pd.concat(frames, ignore_index=True)
+
+
 ####################################################################
 ### Part 1 - WYT Averaging ###
 ####################################################################
 
 def run_wyt(product: str, prefix: str, wyt_terms_df: pd.DataFrame,
-            base_dir: Path, wyt_intermediate_dir: Path) -> None:
+            base_dir: Path, wyt_intermediate_dir: Path):
     """Compute WYT monthly averages and write intermediate per-product CSVs.
 
     Naming convention for the per-term WYT intermediate file:
@@ -219,6 +243,7 @@ def run_wyt(product: str, prefix: str, wyt_terms_df: pd.DataFrame,
                 print(f"  - {out}")
 
     wyt_csv.unlink(missing_ok=True)
+    return hist_cmp_df, term_specs
 
 
 ####################################################################
@@ -476,8 +501,10 @@ def main() -> None:
     wyt_terms_df, qmap_pairs_df = prepare_hybrid_input_files(HYBRID_TERMS_CSV)
 
     print(f"\n=== Part 1: WYT Averaging (Product {args.product}) ===")
-    run_wyt(args.product, OUTPUT_PREFIX, wyt_terms_df,
-            base_dir, wyt_intermediate_dir)
+    hist_cmp_df, term_specs = run_wyt(
+        args.product, OUTPUT_PREFIX, wyt_terms_df,
+        base_dir, wyt_intermediate_dir,
+    )
 
     print(f"\n=== Part 2: Quantile Mapping (Product {args.product}) ===")
     if args.product == "A":
@@ -488,6 +515,12 @@ def main() -> None:
     print(f"\n=== Part 3: Final Hybrid (Product {args.product}) ===")
     if args.product == "A":
         run_final_hybrid_a(wyt_intermediate_dir, qmap_intermediate_dir, final_dir)
+        figures_dir = _gen / "output" / "_3_hybrid" / "figures" / "product_a"
+        recon_long = _load_final_a_as_long(final_dir)
+        plot_actual_vs_recon_validation(
+            recon_long, hist_cmp_df, term_specs, figures_dir, label="Product A",
+        )
+        print(f"  Figures: {figures_dir}/ (TS+CDF per term)")
     else:
         run_final_hybrid_b(wyt_intermediate_dir, qmap_intermediate_dir, final_dir)
 

@@ -21,13 +21,13 @@ import os
 import re
 from pathlib import Path
 
-import matplotlib.dates as mdates
-import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
-import seaborn as sns
 
 from utils import csv_io, dss_io
+from utils.validation_plots import (
+    Series, format_metric_line, nse, pbias, plot_monthly_box, plot_ts_cdf, r2,
+)
 from utils.quantile_mapping import qmap_single
 
 _REQUIRED_COLS = ["target_part_b", "target_part_c",
@@ -42,17 +42,6 @@ SIM_END = "2018-09-30"
 DSS_READ_START = "1915-01-31"
 DSS_READ_END = "2018-12-31"
 ALLOW_NEGATIVE = False
-
-MONTH_LABELS = [
-    "Jan", "Feb", "Mar", "Apr", "May", "Jun",
-    "Jul", "Aug", "Sep", "Oct", "Nov", "Dec",
-]
-
-# -- Box-plot palette ---------------------------------------------------------
-_BLUE = "#003D6B"
-_LIGHT_BLUE = "#B0C4DE"
-_MEDIAN_RED = "#8B0000"
-_GRAY = "#5A5A5A"
 
 
 # -- Text helpers -------------------------------------------------------------
@@ -186,33 +175,6 @@ def _safe_makedirs(path):
     dss_io.safe_makedirs(path)
 
 
-def nse(sim, obs):
-    """Nash-Sutcliffe efficiency."""
-    sim = np.asarray(sim, dtype=float)
-    obs = np.asarray(obs, dtype=float)
-    m = np.isfinite(sim) & np.isfinite(obs)
-    if m.sum() < 2:
-        return np.nan
-    sim, obs = sim[m], obs[m]
-    den = np.sum((obs - np.mean(obs)) ** 2)
-    if den == 0:
-        return np.nan
-    return 1 - np.sum((obs - sim) ** 2) / den
-
-
-def pearson_r(a, b):
-    """Pearson correlation coefficient."""
-    a = np.asarray(a, dtype=float)
-    b = np.asarray(b, dtype=float)
-    m = np.isfinite(a) & np.isfinite(b)
-    if m.sum() < 2:
-        return np.nan
-    a, b = a[m], b[m]
-    if np.nanstd(a) == 0 or np.nanstd(b) == 0:
-        return np.nan
-    return float(np.corrcoef(a, b)[0, 1])
-
-
 # -- Data loading -------------------------------------------------------------
 
 def load_product_a_rim_series(csv_path, part_b, part_c):
@@ -224,160 +186,34 @@ def load_product_a_rim_series(csv_path, part_b, part_c):
     return csv_io.load_sv_series(csv_path, part_b, part_c)
 
 
-# -- Plot styling -------------------------------------------------------------
-
-def _setup_plot_style():
-    """Apply seaborn theme and return the colour palette."""
-    sns.set_theme(
-        style="whitegrid",
-        context="paper",
-        font_scale=1.0,
-        rc={
-            "figure.dpi": 200,
-            "savefig.dpi": 300,
-            "font.family": "sans-serif",
-            "font.sans-serif": ["Arial", "Helvetica", "Calibri", "DejaVu Sans"],
-            "font.size": 8,
-            "axes.titlesize": 8,
-            "axes.titleweight": "semibold",
-            "axes.labelsize": 8,
-            "axes.labelweight": "medium",
-            "axes.edgecolor": "0.25",
-            "axes.linewidth": 0.6,
-            "xtick.labelsize": 7,
-            "ytick.labelsize": 7,
-            "xtick.major.width": 0.5,
-            "ytick.major.width": 0.5,
-            "grid.linewidth": 0.35,
-            "grid.alpha": 0.40,
-            "lines.linewidth": 0.9,
-            "legend.fontsize": 7,
-            "legend.title_fontsize": 8,
-            "legend.framealpha": 0.90,
-            "legend.edgecolor": "0.55",
-            "figure.titlesize": 8,
-            "figure.titleweight": "bold",
-            "mathtext.default": "regular",
-        },
-    )
-    cb = list(sns.color_palette("colorblind"))
-    cb[1] = (0.918, 0.341, 0.220)  # Vermillion+1 ~#EB5738
-    return cb
-
-
 # -- Plotting -----------------------------------------------------------------
 
 def _plot_timeseries_cdf(common_sim, actual_vals, qmap_vals, target_b,
-                         r2, nse_val, pbias, palette, plots_dir):
-    """Two-panel figure: monthly time series (left) + non-exceedance CDF (right)."""
-    _r2_str = f"{r2:.2f}" if np.isfinite(r2) else "N/A"
-    _nse_str = f"{nse_val:.2f}" if np.isfinite(nse_val) else "N/A"
-    _pbias_str = f"{pbias:.1f}%" if np.isfinite(pbias) else "N/A"
-    _metric_lbl = (f"Product A:  R\u00b2={_r2_str}   "
-                   f"NSE={_nse_str}   PBIAS={_pbias_str}")
+                         r2_val, nse_val, pbias_val, plots_dir):
+    """Two-panel figure: monthly time series (left) + non-exceedance CDF (right).
 
-    clr_hist = palette[0]
-    clr_prod = palette[1]
-
-    fig, (ax_ts, ax_cdf) = plt.subplots(
-        nrows=1, ncols=2, figsize=(6.5, 3.25),
-        gridspec_kw={"width_ratios": [1.6, 1]},
+    Thin wrapper over ``utils.validation_plots.plot_ts_cdf`` that supplies the
+    pre-computed Product A vs Historical metrics as a single annotation line.
+    """
+    plot_ts_cdf(
+        series=[
+            Series("Historical", common_sim, actual_vals, linewidth=0.8),
+            Series("Product A", common_sim, qmap_vals),
+        ],
+        title=f"{target_b} (TAF)",
+        metric_lines=[format_metric_line(r2_val, nse_val, pbias_val)],
+        out_path=os.path.join(plots_dir, f"{target_b}_timeseries.png"),
     )
-
-    # -- Left: time series --
-    ax_ts.plot(common_sim, actual_vals, color=clr_hist, linewidth=0.8,
-               label="Historical", alpha=0.85)
-    ax_ts.plot(common_sim, qmap_vals, color=clr_prod, linewidth=0.9,
-               label="Product A", alpha=0.85)
-    ax_ts.set_title("Monthly Time Series")
-    ax_ts.set_xlabel("Date")
-    ax_ts.set_ylabel("TAF")
-    ax_ts.xaxis.set_major_locator(mdates.YearLocator(10))
-    ax_ts.xaxis.set_major_formatter(mdates.DateFormatter("%Y"))
-    fig.autofmt_xdate(rotation=35, ha="right")
-    ax_ts.text(
-        0.02, 0.97, _metric_lbl,
-        transform=ax_ts.transAxes,
-        va="top", ha="left", fontsize=7,
-        fontfamily="sans-serif",
-        bbox=dict(
-            boxstyle="round,pad=0.35",
-            facecolor="white", edgecolor="0.7",
-            alpha=0.88,
-        ),
-    )
-
-    # -- Right: CDF --
-    for vals_arr, color, lbl in [
-        (actual_vals, clr_hist, "Historical"),
-        (qmap_vals, clr_prod, "Product A"),
-    ]:
-        arr = np.sort(np.asarray(vals_arr, dtype=float))
-        cdf = np.arange(1, len(arr) + 1) / len(arr) * 100
-        ax_cdf.plot(cdf, arr, color=color, linewidth=0.9, alpha=0.9,
-                    label=lbl)
-    ax_cdf.set_title("Non-Exceedance CDF")
-    ax_cdf.set_xlabel("Non-Exceedance Probability (%)")
-    ax_cdf.set_ylabel("")
-    ax_cdf.set_xlim(0, 100)
-
-    fig.suptitle(f"{target_b} (TAF)", y=1.02)
-    fig.tight_layout()
-    handles, labels = ax_ts.get_legend_handles_labels()
-    fig.legend(
-        handles, labels,
-        loc="upper left",
-        bbox_to_anchor=(0.01, 0.99),
-        ncol=2,
-        fontsize=7,
-        frameon=False,
-        handlelength=2.0,
-        handletextpad=0.6,
-        borderpad=0.7,
-    )
-    fig.savefig(os.path.join(plots_dir, f"{target_b}_timeseries.png"),
-                dpi=300, bbox_inches="tight", facecolor="white")
-    plt.close(fig)
 
 
 def _plot_monthly_box(detail, target_b, column, ylabel,
                       title_suffix, filename_suffix, plots_dir):
-    """Monthly box plot in water-year order (Oct-Sep)."""
-    months_list = list(range(10, 13)) + list(range(1, 10))
-    box_data = [
-        detail.loc[detail["month"] == m, column].dropna().values
-        for m in months_list
-    ]
-
-    fig, ax = plt.subplots(figsize=(10, 5))
-    positions = list(range(1, len(months_list) + 1))
-    ax.boxplot(
-        box_data, positions=positions, widths=0.5,
-        showfliers=False, patch_artist=True, showmeans=True,
-        boxprops=dict(facecolor=_LIGHT_BLUE, edgecolor=_BLUE, linewidth=1.0),
-        medianprops=dict(color=_MEDIAN_RED, linewidth=1.8),
-        meanprops=dict(marker="D", markerfacecolor=_BLUE,
-                       markeredgecolor=_BLUE, markersize=5),
-        whiskerprops=dict(color=_BLUE, linewidth=1.0),
-        capprops=dict(color=_BLUE, linewidth=1.0),
+    """Thin wrapper over ``utils.validation_plots.plot_monthly_box``."""
+    plot_monthly_box(
+        detail, value_col=column, ylabel=ylabel,
+        title=f"{target_b} - {title_suffix}",
+        out_path=os.path.join(plots_dir, f"{target_b}_{filename_suffix}.png"),
     )
-    ax.axhline(0, color=_GRAY, linestyle="--", linewidth=1.4)
-    ax.set_xticks(positions)
-    ax.set_xticklabels([MONTH_LABELS[m - 1] for m in months_list],
-                       fontsize=11, fontweight="medium")
-    ax.set_xlabel("Month", fontsize=12, fontweight="bold", labelpad=8)
-    ax.set_ylabel(ylabel, fontsize=12, fontweight="bold", labelpad=8)
-    ax.set_title(f"{target_b}: {title_suffix}",
-                 fontsize=14, fontweight="bold", pad=12)
-    ax.tick_params(axis="both", labelsize=11)
-    ax.grid(True, axis="y", linewidth=0.3, alpha=0.5, color="#CCCCCC")
-    ax.set_axisbelow(True)
-    ax.spines["top"].set_visible(False)
-    ax.spines["right"].set_visible(False)
-    fig.tight_layout()
-    fig.savefig(os.path.join(plots_dir, f"{target_b}_{filename_suffix}.png"),
-                dpi=300, bbox_inches="tight", facecolor="white")
-    plt.close(fig)
 
 
 # -- Main entry point ---------------------------------------------------------
@@ -408,7 +244,9 @@ def run_product_a_qmap_from_pairs(
     product_a_rim_csv : str or Path
         Path to Product A QMAP'd rim inflow CSV (simulation predictor source).
     output_dir : str or Path
-        Directory for detail CSVs and ``_figures/`` subdirectory.
+        Per-context directory (caller is expected to encode the context, e.g.
+        ``.../_2_qmap/product_a``). Detail CSVs and a ``figures/`` subdir are
+        written here.
     validation_dir : str or Path
         Directory for CalSim-format validation CSVs.
     train_start, train_end : str
@@ -430,13 +268,11 @@ def run_product_a_qmap_from_pairs(
     product_a_rim_csv = Path(product_a_rim_csv)
     output_dir = str(output_dir)
     validation_dir = str(validation_dir)
-    plots_dir = os.path.join(output_dir, "_figures")
+    plots_dir = os.path.join(output_dir, "figures")
 
     _safe_makedirs(output_dir)
     _safe_makedirs(plots_dir)
     _safe_makedirs(validation_dir)
-
-    palette = _setup_plot_style()
 
     # -- Derive WY labels for output filenames --------------------------------
     _sim_start_dt = pd.Timestamp(sim_start)
@@ -555,14 +391,11 @@ def run_product_a_qmap_from_pairs(
 
         # 6) Metrics
         actual_vals = tgt_actual.values.astype(float)
-        r = pearson_r(qmap_vals, actual_vals)
-        r2 = r ** 2 if np.isfinite(r) else np.nan
-        nse_val = nse(qmap_vals, actual_vals)
-        obs_sum = np.nansum(actual_vals)
-        pbias = ((np.nansum(qmap_vals - actual_vals) / obs_sum * 100)
-                 if obs_sum != 0 else np.nan)
+        r2_val = r2(actual_vals, qmap_vals)
+        nse_val = nse(actual_vals, qmap_vals)
+        pbias_val = pbias(actual_vals, qmap_vals)
 
-        print(f"  R2 = {r2:.3f}, NSE = {nse_val:.3f}, PBIAS = {pbias:.1f}%")
+        print(f"  R2 = {r2_val:.3f}, NSE = {nse_val:.3f}, PBIAS = {pbias_val:.1f}%")
 
         # 7) Detail dataframe
         detail = pd.DataFrame({
@@ -605,7 +438,7 @@ def run_product_a_qmap_from_pairs(
         # 10-12) Plots
         _plot_timeseries_cdf(
             common_sim, actual_vals, qmap_vals, target_b,
-            r2, nse_val, pbias, palette, plots_dir,
+            r2_val, nse_val, pbias_val, plots_dir,
         )
         _plot_monthly_box(
             detail, target_b, "error", "Error (TAF)",

@@ -577,6 +577,175 @@ def compute_wyt_pattern(
 
 
 
+def plot_wyt_hist_validation(
+    hist_cmp_df: pd.DataFrame,
+    term_specs: List[TermSpec],
+    figures_dir: Path,
+    *,
+    plot_start: str | pd.Timestamp = "1971-10-01",
+    plot_end: str | pd.Timestamp = "2018-09-30",
+    unit: str = "",
+) -> List[Path]:
+    """Write one TS+CDF figure per term comparing actual vs reconstructed.
+
+    Uses the wide ``hist_cmp_df`` produced by :func:`compute_wyt_pattern`
+    (columns ``date``, ``<term>_actual``, ``<term>_reconstructed``). The
+    plot window is clipped to ``[plot_start, plot_end]``; the underlying
+    CSV is left untouched. A sibling ``<part_b>_monthly_error.png`` is also
+    written showing signed error (reconstructed - historical) by month.
+    Returns the list of TS+CDF figure paths written.
+    """
+    from utils.validation_plots import Series, plot_ts_cdf, plot_monthly_box
+
+    figures_dir = Path(figures_dir)
+    figures_dir.mkdir(parents=True, exist_ok=True)
+
+    start = pd.Timestamp(plot_start)
+    end = pd.Timestamp(plot_end)
+
+    dates = pd.to_datetime(hist_cmp_df["date"])
+    mask = (dates >= start) & (dates <= end)
+    sub_dates = dates[mask].to_numpy()
+    sub_months = pd.DatetimeIndex(sub_dates).month
+
+    written: List[Path] = []
+    for spec in term_specs:
+        actual_col = f"{spec.term_name}_actual"
+        recon_col = f"{spec.term_name}_reconstructed"
+        if actual_col not in hist_cmp_df.columns or recon_col not in hist_cmp_df.columns:
+            continue
+        actual = pd.to_numeric(hist_cmp_df.loc[mask, actual_col], errors="coerce").to_numpy(dtype=float)
+        recon = pd.to_numeric(hist_cmp_df.loc[mask, recon_col], errors="coerce").to_numpy(dtype=float)
+        out_path = figures_dir / f"{spec.b_part}.png"
+        plot_ts_cdf(
+            series=[
+                Series("Historical", sub_dates, actual),
+                Series("Reconstructed", sub_dates, recon),
+            ],
+            title=spec.b_part,
+            unit=unit,
+            compute_metrics_from=0,
+            out_path=out_path,
+        )
+        box_df = pd.DataFrame({"month": sub_months, "error": recon - actual})
+        plot_monthly_box(
+            box_df, value_col="error",
+            ylabel=f"Error (Reconstructed - Historical){(' [' + unit + ']') if unit else ''}",
+            title=f"{spec.b_part} - Monthly Error",
+            out_path=figures_dir / f"{spec.b_part}_monthly_error.png",
+        )
+        written.append(out_path)
+    return written
+
+
+
+def plot_actual_vs_recon_validation(
+    recon_long_df: pd.DataFrame,
+    hist_cmp_df: pd.DataFrame,
+    term_specs: List[TermSpec],
+    figures_dir: Path,
+    *,
+    plot_start: str | pd.Timestamp = "1971-10-01",
+    plot_end: str | pd.Timestamp = "2018-09-30",
+    unit: str = "",
+    label: str = "Product A",
+    value_col: str = "wyt_monthly_avg",
+) -> List[Path]:
+    """Write per-term TS+CDF + monthly error box plots comparing historical actuals vs a reconstruction.
+
+    Parameters
+    ----------
+    recon_long_df : DataFrame
+        Long-format reconstruction with columns ``date``, ``part_b``,
+        ``part_c``, and ``value_col`` (default ``wyt_monthly_avg``).
+        Works for WYT-only, QM-only, or hybrid reconstructions.
+    hist_cmp_df : DataFrame
+        Wide-format historical comparison from
+        :func:`compute_wyt_pattern`, with ``date`` and ``<term>_actual``
+        columns per term.
+    term_specs : list of TermSpec
+        Term metadata (b_part / c_part / term_name) to iterate over.
+    figures_dir : Path
+        Output directory. Each term writes ``<part_b>.png`` (TS+CDF) and
+        ``<part_b>_monthly_error.png`` (signed error = reconstruction - actual).
+    label : str
+        Legend / error-axis label for the reconstruction series.
+    """
+    from utils.validation_plots import Series, plot_ts_cdf, plot_monthly_box
+
+    if recon_long_df is None or recon_long_df.empty:
+        return []
+
+    figures_dir = Path(figures_dir)
+    figures_dir.mkdir(parents=True, exist_ok=True)
+
+    start = pd.Timestamp(plot_start)
+    end = pd.Timestamp(plot_end)
+
+    prod_df = recon_long_df.copy()
+    prod_df["date"] = pd.to_datetime(prod_df["date"])
+
+    hist_dates = pd.to_datetime(hist_cmp_df["date"])
+    hist_mask = (hist_dates >= start) & (hist_dates <= end)
+    hist_sub_dates = hist_dates[hist_mask].to_numpy()
+
+    written: List[Path] = []
+    for spec in term_specs:
+        actual_col = f"{spec.term_name}_actual"
+        if actual_col not in hist_cmp_df.columns:
+            continue
+        actual = pd.to_numeric(hist_cmp_df.loc[hist_mask, actual_col], errors="coerce").to_numpy(dtype=float)
+
+        sub = prod_df[
+            (prod_df["part_b"].astype(str).str.upper() == str(spec.b_part).upper())
+            & (prod_df["part_c"].astype(str).str.upper() == str(spec.c_part).upper())
+            & (prod_df["date"] >= start)
+            & (prod_df["date"] <= end)
+        ].sort_values("date")
+        if sub.empty:
+            continue
+        recon_dates = sub["date"].to_numpy()
+        recon = pd.to_numeric(sub[value_col], errors="coerce").to_numpy(dtype=float)
+
+        out_path = figures_dir / f"{spec.b_part}.png"
+        plot_ts_cdf(
+            series=[
+                Series("Historical", hist_sub_dates, actual),
+                Series(label, recon_dates, recon),
+            ],
+            title=spec.b_part,
+            unit=unit,
+            compute_metrics_from=0,
+            out_path=out_path,
+        )
+
+        # Align on (year, month) for the monthly error box plot
+        hist_df = pd.DataFrame({
+            "date": pd.to_datetime(hist_sub_dates),
+            "actual": actual,
+        })
+        recon_df = pd.DataFrame({
+            "date": pd.to_datetime(recon_dates),
+            "recon": recon,
+        })
+        hist_df["ym"] = hist_df["date"].dt.to_period("M")
+        recon_df["ym"] = recon_df["date"].dt.to_period("M")
+        merged = hist_df.merge(recon_df[["ym", "recon"]], on="ym", how="inner")
+        if not merged.empty:
+            box_df = pd.DataFrame({
+                "month": merged["date"].dt.month,
+                "error": merged["recon"] - merged["actual"],
+            })
+            plot_monthly_box(
+                box_df, value_col="error",
+                ylabel=f"Error ({label} - Historical){(' [' + unit + ']') if unit else ''}",
+                title=f"{spec.b_part} - Monthly Error",
+                out_path=figures_dir / f"{spec.b_part}_monthly_error.png",
+            )
+        written.append(out_path)
+    return written
+
+
 
 def compute_product_targets(
     *,

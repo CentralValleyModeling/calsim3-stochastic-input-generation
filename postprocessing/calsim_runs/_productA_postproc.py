@@ -6,7 +6,7 @@ units.pkl / fields.pkl) built by ``_productA_pickle_builder.py`` and
 produces annual WY summary tables + per-metric two-panel figures
 (monthly time series + non-exceedance CDF, with R2 / NSE / PBIAS
 annotations vs the baseline). Default periods: full validation
-WY 1972-2021 and drought WY 1987-1992. Also reused by
+WY 1972-2018 and drought WY 1987-1992. Also reused by
 ``_historical_modified_postproc.py`` via ``run_post_processing_package``.
 
 Inputs
@@ -23,7 +23,8 @@ Outputs
 Dependencies
 ------------
 - utils.paths
-- pandas, numpy, matplotlib, seaborn, openpyxl
+- utils.validation_plots
+- pandas, numpy, openpyxl
 
 Usage
 -----
@@ -36,54 +37,11 @@ from __future__ import annotations
 from dataclasses import dataclass
 from pathlib import Path
 import pickle
-import re
 import sys as _sys
 from typing import Dict, Optional, Sequence, Tuple
 
 import numpy as np
 import pandas as pd
-import matplotlib.pyplot as plt
-import matplotlib.dates as mdates
-import seaborn as sns
-
-
-# -- Report-quality Seaborn / Matplotlib theme --
-sns.set_theme(
-    style="whitegrid",
-    context="paper",
-    font_scale=1.0,
-    rc={
-        "figure.dpi": 200,
-        "savefig.dpi": 300,
-        # Professional font stack (tries each in order)
-        "font.family": "sans-serif",
-        "font.sans-serif": ["Arial", "Helvetica", "Calibri", "DejaVu Sans"],
-        "font.size": 8,
-        "axes.titlesize": 8,
-        "axes.titleweight": "semibold",
-        "axes.labelsize": 8,
-        "axes.labelweight": "medium",
-        "axes.edgecolor": "0.25",
-        "axes.linewidth": 0.6,
-        "xtick.labelsize": 7,
-        "ytick.labelsize": 7,
-        "xtick.major.width": 0.5,
-        "ytick.major.width": 0.5,
-        "grid.linewidth": 0.35,
-        "grid.alpha": 0.40,
-        "lines.linewidth": 0.9,
-        "legend.fontsize": 7,
-        "legend.title_fontsize": 8,
-        "legend.framealpha": 0.90,
-        "legend.edgecolor": "0.55",
-        "figure.titlesize": 8,
-        "figure.titleweight": "bold",
-        "mathtext.default": "regular",
-    },
-)
-_cb = list(sns.color_palette("colorblind"))
-_cb[1] = (0.918, 0.341, 0.220)   # Vermillion+1 ~#EB5738
-_PALETTE = _cb
 
 
 # =============================
@@ -94,6 +52,7 @@ REPO_ROOT = RUN_DIR.parents[1]
 
 _sys.path.insert(0, str(REPO_ROOT))
 from utils.paths import get_generated_dir
+from utils.validation_plots import Series, plot_ts_cdf
 
 PICKLE_DIR = (
     get_generated_dir()
@@ -128,11 +87,11 @@ class Period:
 
 
 FULL_VALIDATION = Period(
-    name="Full_Validation_WY1972_2021",
+    name="Full_Validation_WY1972_2018",
     start=pd.Timestamp("1971-10-01"),
-    end=pd.Timestamp("2021-09-30"),
+    end=pd.Timestamp("2018-09-30"),
     wy_start=1972,
-    wy_end=2021,
+    wy_end=2018,
 )
 
 DROUGHT_878892 = Period(
@@ -177,52 +136,6 @@ def metric_groups_from_fields(fields: Dict[str, str]) -> Dict[str, str]:
         else:
             out[k] = ""
     return out
-
-
-# -----------------------------
-# Metrics (R2, NSE, PBIAS)
-# -----------------------------
-
-def r2_score(obs: np.ndarray, sim: np.ndarray) -> float:
-    if len(obs) < 2:
-        return np.nan
-    r = np.corrcoef(obs, sim)[0, 1]
-    return float(r * r)
-
-
-def nse_score(obs: np.ndarray, sim: np.ndarray) -> float:
-    if len(obs) < 2:
-        return np.nan
-    denom = np.sum((obs - np.mean(obs)) ** 2)
-    if denom == 0:
-        return np.nan
-    return float(1.0 - (np.sum((sim - obs) ** 2) / denom))
-
-
-def pbias(obs: np.ndarray, sim: np.ndarray) -> float:
-    """
-    Percent bias (positive means model overestimation, negative
-    underestimation):
-      PBIAS = 100 * sum(sim - obs) / sum(obs)
-    """
-    if len(obs) == 0:
-        return np.nan
-    denom = np.sum(obs)
-    if denom == 0:
-        return np.nan
-    return float(100.0 * np.sum(sim - obs) / denom)
-
-
-def compute_metrics(obs_series: pd.Series, sim_series: pd.Series) -> Dict[str, float]:
-    df = pd.concat([obs_series.rename("obs"), sim_series.rename("sim")], axis=1).dropna()
-    obs = df["obs"].to_numpy(dtype=float)
-    sim = df["sim"].to_numpy(dtype=float)
-    return {
-        "R2": r2_score(obs, sim),
-        "NSE": nse_score(obs, sim),
-        "PBIAS": pbias(obs, sim),
-        "n": float(len(obs)),
-    }
 
 
 # -----------------------------
@@ -327,16 +240,6 @@ def annual_summary_table(
 # Plotting (timeseries + CDF)
 # -----------------------------
 
-def empirical_cdf(x: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
-    x = np.asarray(x, dtype=float)
-    x = x[np.isfinite(x)]
-    if x.size == 0:
-        return np.array([]), np.array([])
-    xs = np.sort(x)
-    p = np.arange(1, xs.size + 1) / xs.size
-    return xs, p
-
-
 def plot_timeseries_and_cdf(
     df_values: pd.DataFrame,
     metric_key: str,
@@ -347,104 +250,39 @@ def plot_timeseries_and_cdf(
     out_png: str,
     unit: str = "TAF",
 ):
+    """Two-panel monthly time series + non-exceedance CDF for baseline vs
+    one-or-more scenarios. Thin wrapper over
+    :func:`utils.validation_plots.plot_ts_cdf` that builds the per-scenario
+    :class:`Series` list and lets the helper auto-compute R2 / NSE / PBIAS
+    against the baseline (``compute_metrics_from=0``).
+    """
     dfp = df_values[
         (df_values["Date"] >= period.start) & (df_values["Date"] <= period.end)
     ].copy()
 
     all_scenarios = [baseline_name] + list(compare_scenarios)
-    colors = {s: _PALETTE[i % len(_PALETTE)] for i, s in enumerate(all_scenarios)}
-
-    fig, (ax_ts, ax_cdf) = plt.subplots(
-        nrows=1, ncols=2, figsize=(6.5, 3.25),
-        gridspec_kw={"width_ratios": [1.6, 1]},
-    )
-
-    # -- Left panel: monthly time-series --
-    for scen in all_scenarios:
+    series_list = []
+    for i, scen in enumerate(all_scenarios):
         sub = dfp[dfp["Scenario"] == scen].sort_values("Date")
-        ax_ts.plot(
-            sub["Date"], sub[metric_key],
-            label=scen, color=colors[scen],
-            linewidth=0.8 if scen == baseline_name else 0.9,
-            alpha=0.85,
-        )
+        series_list.append(Series(
+            label=scen,
+            dates=sub["Date"].to_numpy(),
+            values=sub[metric_key].to_numpy(dtype=float),
+            linewidth=0.8 if i == 0 else 0.9,
+        ))
 
-    ax_ts.set_title("Monthly Time Series")
-    ax_ts.set_xlabel("Date")
-    ax_ts.set_ylabel("TAF")
-    span_years = period.wy_end - period.wy_start + 1
-    tick_interval = 1 if span_years <= 10 else 5 if span_years <= 30 else 10
-    ax_ts.xaxis.set_major_locator(mdates.YearLocator(tick_interval))
-    ax_ts.xaxis.set_major_formatter(mdates.DateFormatter("%Y"))
-    fig.autofmt_xdate(rotation=35, ha="right")
+    subtitle = None
+    if not period.name.startswith("Full"):
+        subtitle = f"(WY {period.wy_start}-{period.wy_end})"
 
-    # Metrics annotation (vs baseline)
-    base = dfp[dfp["Scenario"] == baseline_name].set_index("Date")[metric_key]
-    metric_lines = []
-    for scen in compare_scenarios:
-        sim = dfp[dfp["Scenario"] == scen].set_index("Date")[metric_key]
-        m = compute_metrics(base, sim)
-        metric_lines.append(
-            f"{scen}:  R\u00b2={m['R2']:.3f}   NSE={m['NSE']:.3f}   PBIAS={m['PBIAS']:.1f}%"
-        )
-    if metric_lines:
-        ax_ts.text(
-            0.02, 0.97, "\n".join(metric_lines),
-            transform=ax_ts.transAxes,
-            va="top", ha="left", fontsize=7,
-            fontfamily="sans-serif",
-            bbox=dict(
-                boxstyle="round,pad=0.35",
-                facecolor="white", edgecolor="0.7",
-                alpha=0.88,
-            ),
-        )
-
-    # -- Right panel: monthly non-exceedance CDF --
-    for scen in all_scenarios:
-        vals = dfp[dfp["Scenario"] == scen][metric_key].to_numpy(dtype=float)
-        xs, p = empirical_cdf(vals)
-        ax_cdf.plot(
-            p * 100.0, xs,
-            label=scen, color=colors[scen],
-            linewidth=0.9, alpha=0.9,
-        )
-
-    ax_cdf.set_title("Non-Exceedance CDF")
-    ax_cdf.set_xlabel("Non-Exceedance Probability (%)")
-    ax_cdf.set_ylabel("")
-    ax_cdf.set_xlim(0, 100)
-
-    # -- Suptitle & layout --
-    fig.suptitle(f"{metric_label} ({unit})", y=1.02)
-    if "Full_Validation" not in period.name:
-        period_pretty = re.sub(r'(\d{4})_(\d{4})', r'\1-\2', period.name).replace("_", " ")
-        fig.text(
-            0.5, 0.97, f"({period_pretty})",
-            ha="center", va="top",
-            fontsize=8, fontstyle="italic", color="0.35",
-            transform=fig.transFigure,
-        )
-    fig.tight_layout()
-
-    # -- Shared figure legend - top left --
-    handles, labels = ax_ts.get_legend_handles_labels()
-    fig.legend(
-        handles, labels,
-        loc="upper left",
-        bbox_to_anchor=(0.01, 0.99),
-        ncol=len(all_scenarios),
-        fontsize=7,
-        frameon=False,
-        handlelength=2.0,
-        handletextpad=0.6,
-        borderpad=0.7,
+    plot_ts_cdf(
+        series=series_list,
+        title=f"{metric_label} ({unit})",
+        unit=unit,
+        compute_metrics_from=0,
+        subtitle=subtitle,
+        out_path=out_png,
     )
-
-    out_path = Path(out_png)
-    out_path.parent.mkdir(parents=True, exist_ok=True)
-    fig.savefig(out_path, dpi=300, bbox_inches="tight", facecolor="white")
-    plt.close(fig)
 
 
 # -----------------------------
