@@ -20,9 +20,7 @@ Outputs
 -------
 - _2_qmap_historical_validation/
   - calsim_qmap_validation_TS.csv   (row-level qmap results)
-  - quantile_mapping_validation_summary.csv
-  - vic_all_rivers.csv, calsim_all_inflows.csv
-  - annual_sum_comparisons_vic.csv
+  - calsim_VIC_TS.csv               (VIC baseline diagnostics, full overlap)
 - _2_qmap_historical_validation/_product_a_validation/
   - _riminflow_productA_1972_2018.csv  (CalSim format for SV compiler)
 
@@ -150,16 +148,6 @@ def read_calsim_monthly_multi(dssfile, strList):
 def ser_to_df(s:pd.Series):
     return pd.DataFrame({'year':s.index.year,'month':s.index.month,'value':s.values})
 
-def _mean_of_individual_pct_errors(d: pd.DataFrame) -> float:
-    # mean of ((q - a)/a*100) over valid rows in a month group
-    a = d['actual'].to_numpy(dtype=float)
-    q = d['quantile_mapped_value'].to_numpy(dtype=float)
-    valid = np.isfinite(a) & np.isfinite(q) & (a != 0)
-    if not np.any(valid): return np.nan
-    err = (q[valid] - a[valid]) / a[valid] * 100.0
-    if not np.any(np.isfinite(err)): return np.nan
-    return float(np.mean(err))
-
 # Mass-balance enforcement
 def enforce_anchor_mass_balance(qdf: pd.DataFrame, mapping_cal: pd.DataFrame):
     if mapping_cal.empty:
@@ -217,15 +205,9 @@ def _nse_safe(sim, obs):
 
 
 def main():
-    df_vic_all = load_vic_dir(vic_dir)
-    df_vic_all.index.name='date'
-    df_vic_all.to_csv(os.path.join(OUTPUT_DIR, "vic_all_rivers.csv"))
-
+    df_vic_all    = load_vic_dir(vic_dir)
     df_calsim_all = read_calsim_monthly_multi(dss_file, calsim_names)
-    df_calsim_all.index.name='date'
-    df_calsim_all.to_csv(os.path.join(OUTPUT_DIR, "calsim_all_inflows.csv"))
 
-    results=[]      # monthly mean % errors by month (preAdj QMAP)
     detail_rows=[]  # row-wise test-period details (preAdj values)
     vic_detail_rows=[]  # VIC diagnostics over full overlap
 
@@ -283,13 +265,6 @@ def main():
         qmap_r2_pre  = (qmap_r_pre**2) if np.isfinite(qmap_r_pre) else np.nan
         qmap_nse_pre = nse(q_q, q_a)
 
-        # Monthly mean % errors for summary table (preAdj)
-        m_err = (qmap.groupby('month')[['actual','quantile_mapped_value']]
-                      .apply(_mean_of_individual_pct_errors)
-                      .round(2))
-        results.append({'CalSim':cal, 'VIC':vic,
-                        **{f'Err_M{m}': m_err.get(m,np.nan) for m in range(1,13)}})
-
         # Row-wise preAdj values + naive % error (we will overwrite with robust later)
         with np.errstate(divide='ignore', invalid='ignore'):
             q_pct = (q_q - q_a) / q_a * 100.0
@@ -322,13 +297,6 @@ def main():
             })
 
     # 5. BUILD DATAFRAMES
-    # Summary (monthly mean % errors)
-    df_results = pd.DataFrame(results)
-    template   = df_pairs.rename(columns={'CalSim_Inflow':'CalSim','VIC_Inflow':'VIC'})
-    df_final   = pd.merge(template, df_results, on=['CalSim','VIC'], how='left')
-    df_final['CalSim'] = pd.Categorical(df_final['CalSim'], categories=master_order, ordered=True)
-    df_final.to_csv(os.path.join(OUTPUT_DIR, "quantile_mapping_validation_summary.csv"), index=False)
-
     # Detail (QMAP test-period rows)
     detail_df = pd.DataFrame(detail_rows)
     detail_df['CalSim'] = pd.Categorical(detail_df['CalSim'], categories=master_order, ordered=True)
@@ -471,29 +439,7 @@ def main():
     # VIC CSV (full overlap; standardized cs3_val)
     vic_detail_df.to_csv(os.path.join(OUTPUT_DIR, "calsim_VIC_TS.csv"), index=False)
 
-    # ---- VIC annual sum comparisons (full overlap) ----
-    if not vic_detail_df.empty:
-        v = vic_detail_df.copy()
-        v["WaterYear"] = np.where(v["Month"] >= 10, v["Year"] + 1, v["Year"]).astype(int)
-        v["CalSim"]    = v["CalSim"].astype(str)
-
-        df_annual_vic = (
-            v.groupby(["CalSim", "WaterYear"], observed=True)[["cs3_val", "VIC_val"]]
-             .sum()
-             .reset_index()
-             .rename(columns={"cs3_val": "cs3_sum", "VIC_val": "vic_sum"})
-        )
-
-        num = (df_annual_vic["vic_sum"] - df_annual_vic["cs3_sum"]).to_numpy(float)
-        den =  df_annual_vic["cs3_sum"].to_numpy(float)
-        df_annual_vic["Annual_Pct_Error"] = pct_error(num, den)
-        df_annual_vic["Annual_Error"]     = num
-    else:
-        df_annual_vic = pd.DataFrame(columns=["CalSim","WaterYear","cs3_sum","vic_sum","Annual_Pct_Error","Annual_Error"])
-
-    df_annual_vic.to_csv(os.path.join(OUTPUT_DIR, "annual_sum_comparisons_vic.csv"), index=False)
-
-    # -- 7. PRODUCT A VALIDATION CSV (for SV compiler) --------------------
+    # -- 6. PRODUCT A VALIDATION CSV (for SV compiler) --------------------
     # Write final CalSim-format CSV (Part B, Part C, Year, Month, Value) to
     # _product_a_validation/ for consumption by the SV compiler.
 
