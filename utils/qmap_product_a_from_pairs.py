@@ -211,7 +211,7 @@ def _plot_monthly_box(detail, target_b, column, ylabel,
     """Thin wrapper over ``utils.validation_plots.plot_monthly_box``."""
     plot_monthly_box(
         detail, value_col=column, ylabel=ylabel,
-        title=f"{target_b}: {title_suffix}",
+        title=f"{target_b} - {title_suffix}",
         out_path=os.path.join(plots_dir, f"{target_b}_{filename_suffix}.png"),
     )
 
