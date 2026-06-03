@@ -24,6 +24,9 @@ Outputs
   - figures/
     - TotalInflow_Bar_Normalized_NSE.png       (VIC vs QMAP normalized-NSE skill curves)
     - TotalInflow_Bar_Normalized_NSE_data.csv  (plotted data for QA/QC)
+    - Monthly_Avg_Err_VIC.png                  (VIC avg monthly error; fixed major-reservoir set)
+    - Monthly_Avg_Err_VIC-QM.png               (VIC-QM avg monthly error; fixed major-reservoir set)
+    - Monthly_Avg_Err_Annual.png               (clustered annual avg error: VIC vs VIC-QM)
   - figures/monthly_avg/   (only when --locations is passed)
     - Monthly_Avg_<loc>.png                 (CS3 vs VIC vs Q-MAP monthly means)
 - _2_qmap_historical_validation/_product_a_validation/
@@ -37,7 +40,7 @@ Usage
     # Also write per-location monthly-average comparison figures:
     python mod_hydrology/rim_inflow/_2_qmap_historical_validation.py --locations UNIMP_OROV
     python mod_hydrology/rim_inflow/_2_qmap_historical_validation.py --locations UNIMP_OROV FOLSM_INFLOW
-    python mod_hydrology/rim_inflow/_2_qmap_historical_validation.py --locations UNIMP_OROV,FOLSM_INFLOW
+    python mod_hydrology/rim_inflow/_2_qmap_historical_validation.py --locations UNIMP_OROV,I_MLRTN_IMP
     python mod_hydrology/rim_inflow/_2_qmap_historical_validation.py --locations ALL
 
     # Major reservoir unimpaired inflows:
@@ -311,6 +314,13 @@ _MONTHLY_AVG_SERIES = [
     ("VIC-QMAP Product A", None,   "#2E75B6"),     # VIC-QMAP (blue; col filled in per call)
 ]
 
+# Fixed location set always shown in the Monthly_Avg_Err validation figures
+# (independent of --locations). Missing entries are warned and skipped.
+_MONTHLY_AVG_ERR_LOCATIONS = [
+    "I_SHSTA", "UNIMP_OROV", "UNIMP_FOLS", "UNIMP_YUBA", "UNIMP_TU",
+    "UNIMP_SJ", "UNIMP_TRIN", "UNIMP_ST", "UNIMP_ME",
+]
+
 
 def sanitize_filename(name: str) -> str:
     """Make a string safe for use as a filename: replace spaces and unsafe
@@ -436,6 +446,105 @@ def make_monthly_avg_location_figure(detail_df: pd.DataFrame, location: str, out
 
     print(f"Monthly-avg figure: {fig_path}  (complete WYs: {n_wy})")
     return {"location": canonical, "status": "ok", "n_complete_wy": n_wy, "figure_path": fig_path}
+
+
+def make_monthly_avg_err_figure(detail_df: pd.DataFrame, requested_locations, output_dir: str,
+                                qmap_col: str = "qmap_postAdj") -> dict:
+    """`Monthly_Avg_Err` figures for the selected inflows, written as THREE
+    separate images:
+
+      - Monthly_Avg_Err_VIC.png      VIC average monthly error (TAF/month)
+      - Monthly_Avg_Err_VIC-QM.png   VIC-QM average monthly error (TAF/month)
+      - Monthly_Avg_Err_Annual.png   clustered annual average error (TAF/yr), VIC vs VIC-QM
+
+    Error sign convention is product - CS3 (positive = product higher than CS3):
+    VIC error = vic_val - cs3_val; QMAP error = <qmap_col> - cs3_val. Uses complete
+    water years only, filtered per location; requested order is preserved. Returns
+    a status dict {status, locations, figure_paths}.
+    """
+    if not requested_locations:
+        return {"status": "no_locations", "locations": [], "figure_paths": {}}
+
+    # Resolve requested names case-insensitively to canonical CalSim names.
+    names = detail_df["CalSim"].astype(str)
+    lower_map = {}
+    for nm in names.unique():
+        lower_map.setdefault(nm.lower(), nm)
+
+    vic_monthly, qm_monthly, vic_annual, qm_annual, used = {}, {}, {}, {}, []
+    for req in requested_locations:
+        canon = lower_map.get(str(req).strip().lower())
+        if canon is None:
+            print(f"[WARN] Monthly_Avg_Err: '{req}' not found in results; skipping.")
+            continue
+        if canon in used:
+            continue
+        d = complete_water_year_filter(detail_df[names == canon].copy())
+        if d.empty:
+            print(f"[WARN] Monthly_Avg_Err: '{canon}' has no complete water years "
+                  f"(WY1972-{vic_end_year}); skipping.")
+            continue
+        cs3 = pd.to_numeric(d["cs3_val"], errors="coerce")
+        d["VIC_Error"]  = pd.to_numeric(d["vic_val"], errors="coerce") - cs3
+        d["QMAP_Error"] = pd.to_numeric(d[qmap_col],  errors="coerce") - cs3
+        vic_monthly[canon] = d.groupby("Month")["VIC_Error"].mean().reindex(_WY_MONTH_ORDER).to_numpy(float)
+        qm_monthly[canon]  = d.groupby("Month")["QMAP_Error"].mean().reindex(_WY_MONTH_ORDER).to_numpy(float)
+        vic_annual[canon]  = float(d.groupby("WY")["VIC_Error"].sum().mean())   # TAF/yr
+        qm_annual[canon]   = float(d.groupby("WY")["QMAP_Error"].sum().mean())
+        used.append(canon)
+
+    if not used:
+        print("[WARN] Monthly_Avg_Err: no valid locations; figures not produced.")
+        return {"status": "no_locations", "locations": [], "figure_paths": {}}
+
+    os.makedirs(output_dir, exist_ok=True)
+    month_labels = [calendar.month_abbr[m] for m in _WY_MONTH_ORDER]
+    x = np.arange(len(_WY_MONTH_ORDER))
+    cmap = plt.get_cmap("tab10")
+    loc_colors = {loc: cmap(i % 10) for i, loc in enumerate(used)}
+
+    # ---- Monthly average-error line charts (one image each) ----
+    def _monthly_chart(series_by_loc, title, fname):
+        fig, ax = plt.subplots(figsize=(7, 4.5))
+        for loc in used:
+            ax.plot(x, series_by_loc[loc], marker="o", markersize=4, linewidth=1.3,
+                    color=loc_colors[loc], label=loc)
+        ax.axhline(0, color="0.5", linewidth=0.8)
+        ax.set_xticks(x); ax.set_xticklabels(month_labels)
+        ax.set_xlabel("Month", fontsize=11)
+        ax.set_ylabel("Average Monthly Error (TAF/month)", fontsize=11)
+        ax.set_title(title, fontsize=12, fontweight="bold")
+        ax.tick_params(labelsize=9)
+        ax.grid(True, color="0.88", linewidth=0.6); ax.set_axisbelow(True)
+        ax.legend(loc="center left", bbox_to_anchor=(1.02, 0.5), frameon=False, fontsize=8)
+        path = os.path.join(output_dir, fname)
+        fig.savefig(path, dpi=300, bbox_inches="tight"); plt.close(fig)
+        return path
+
+    p_vic = _monthly_chart(vic_monthly, "VIC", "Monthly_Avg_Err_VIC.png")
+    p_qm  = _monthly_chart(qm_monthly, "VIC-QM", "Monthly_Avg_Err_VIC-QM.png")
+
+    # ---- Clustered annual average-error bar chart (one image) ----
+    fig, ax = plt.subplots(figsize=(max(7.0, 0.85 * len(used) + 3.0), 4.5))
+    xb = np.arange(len(used)); w = 0.4
+    ax.bar(xb - w / 2, [vic_annual[loc] for loc in used], w, label="VIC", color="#C00000")
+    ax.bar(xb + w / 2, [qm_annual[loc] for loc in used], w, label="VIC-QM", color="#4F81BD")
+    ax.axhline(0, color="0.4", linewidth=0.8)
+    ax.set_xticks(xb)
+    ax.set_xticklabels(used, rotation=30, ha="right", fontsize=9)
+    ax.set_ylabel("Average Annual Error (TAF/yr)", fontsize=11)
+    ax.set_title(f"Annual Error with CS3 Inflow (1972-{vic_end_year})",
+                 fontsize=12, fontweight="bold")
+    ax.legend(frameon=False, ncol=2, fontsize=9)
+    ax.grid(True, axis="y", color="0.88", linewidth=0.6); ax.set_axisbelow(True)
+    ax.tick_params(axis="y", labelsize=9)
+    p_ann = os.path.join(output_dir, "Monthly_Avg_Err_Annual.png")
+    fig.savefig(p_ann, dpi=300, bbox_inches="tight"); plt.close(fig)
+
+    paths = {"vic": p_vic, "vic_qm": p_qm, "annual": p_ann}
+    print(f"Monthly_Avg_Err figures ({len(used)} location(s)): "
+          f"{p_vic}, {p_qm}, {p_ann}")
+    return {"status": "ok", "locations": used, "figure_paths": paths}
 
 
 def parse_locations(loc_args, available, master_order=None):
@@ -687,6 +796,11 @@ def main(locations=None, qmap_col="qmap_postAdj"):
 
     # TotalInflow_Bar figure: normalized NSE skill curves (VIC vs QMAP postAdj)
     make_total_inflow_bar_figure(detail_df, FIGURES_DIR)
+
+    # Monthly_Avg_Err figures (VIC, VIC-QM, annual): always over the fixed
+    # major-reservoir set, regardless of --locations.
+    make_monthly_avg_err_figure(detail_df, _MONTHLY_AVG_ERR_LOCATIONS, FIGURES_DIR,
+                                qmap_col=qmap_col)
 
     # Optional per-location monthly-average comparison figures (--locations).
     # Additive only: does not alter any existing output above.
