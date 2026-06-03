@@ -267,11 +267,12 @@ def make_total_inflow_bar_figure(detail_df: pd.DataFrame, output_dir: str) -> No
     fig, ax = plt.subplots(figsize=(8, 5))
     ax.plot(x_vic,  vic_norm,  color="#C00000", linewidth=1.5, label="VIC")
     ax.plot(x_qmap, qmap_norm, color="#4F81BD", linewidth=1.5, label="VIC-QMAP")
-    ax.set_xlabel("CS3 Rim Inflows (idx)")
-    ax.set_ylabel("Normalize NSE (1/(2-NSE))")
+    ax.set_xlabel("CS3 Rim Inflows (idx)", fontsize=11)
+    ax.set_ylabel("Normalize NSE (1/(2-NSE))", fontsize=11)
     ax.set_xlim(0, n + 1)
     ax.set_ylim(0, 1)
     ax.set_yticks(np.arange(0.0, 1.0 + 1e-9, 0.1))   # gridlines every 0.1
+    ax.tick_params(labelsize=10)
     ax.grid(True, which="major", color="0.85", linewidth=0.6)
     ax.set_axisbelow(True)
     ax.legend(loc="upper center", ncol=2, frameon=False, bbox_to_anchor=(0.5, 1.08))
@@ -303,11 +304,11 @@ def make_total_inflow_bar_figure(detail_df: pd.DataFrame, output_dir: str) -> No
 # Water-year month order (Oct -> Sep) for monthly-average plots.
 _WY_MONTH_ORDER = [10, 11, 12, 1, 2, 3, 4, 5, 6, 7, 8, 9]
 
-# Monthly_Avg series colors: matplotlib default cycle (tab10).
+# Monthly_Avg series colors.
 _MONTHLY_AVG_SERIES = [
-    ("CS3 Historical",  "cs3_val", "tab:blue"),     # C0
-    ("VIC Product A",   "vic_val", "tab:orange"),   # C1
-    ("Q-MAP Product A", None,      "tab:green"),     # C2 (col filled in per call)
+    ("CS3 Historical",  "cs3_val", "black"),       # CS3
+    ("VIC Product A",   "vic_val", "#C00000"),     # VIC (red)
+    ("VIC-QMAP Product A", None,   "#2E75B6"),     # VIC-QMAP (blue; col filled in per call)
 ]
 
 
@@ -376,10 +377,10 @@ def make_monthly_avg_location_figure(detail_df: pd.DataFrame, location: str, out
     # ---- Figure: monthly hydrograph (left) + optional annual box panel (right) ----
     if include_annual_box:
         fig, (ax, ax_box) = plt.subplots(
-            1, 2, figsize=(12, 6),
+            1, 2, figsize=(9, 4.5),
             gridspec_kw={"width_ratios": [3.5, 1], "wspace": 0.22})
     else:
-        fig, ax = plt.subplots(figsize=(10, 6))
+        fig, ax = plt.subplots(figsize=(7, 4.5))
         ax_box = None
 
     x = np.arange(len(_WY_MONTH_ORDER))
@@ -388,17 +389,25 @@ def make_monthly_avg_location_figure(detail_df: pd.DataFrame, location: str, out
                 linewidth=1.5, color=color, label=label)
     ax.set_xticks(x)
     ax.set_xticklabels([calendar.month_abbr[m] for m in _WY_MONTH_ORDER])
-    ax.set_xlabel("Month")
-    ax.set_ylabel("Flow (TAF)")
-    ax.set_title(str(canonical), loc="left", fontweight="bold")
+    ax.set_xlabel("Month", fontsize=11)
+    ax.set_ylabel("Flow (TAF)", fontsize=11)
+    ax.set_ylim(bottom=0)                              # use the vertical space (flows >= 0)
+    ax.tick_params(labelsize=9)
     ax.grid(True, which="major", color="0.85", linewidth=0.6)
     ax.yaxis.set_minor_locator(AutoMinorLocator(4))   # small dividers between major y ticks
     ax.tick_params(axis="y", which="minor", length=3)
     ax.set_axisbelow(True)
-    # Shared legend across the top (the series colors apply to BOTH panels).
+
+    # Compact header: title, sim-period subtitle, and shared legend stacked
+    # above the plots (the series colors apply to BOTH panels).
+    fig.subplots_adjust(top=0.76)
     _handles, _labels = ax.get_legend_handles_labels()
     fig.legend(_handles, _labels, loc="upper center", ncol=3, frameon=False,
-               bbox_to_anchor=(0.5, 1.02))
+               bbox_to_anchor=(0.5, 0.84))
+    wy_lo, wy_hi = int(loc_df["WY"].min()), int(loc_df["WY"].max())
+    fig.suptitle(str(canonical), fontsize=13, fontweight="bold", y=1.0)
+    fig.text(0.5, 0.91, f"(Sim Period {wy_lo}-{wy_hi})",
+             ha="center", va="center", fontsize=9, fontweight="bold")
 
     # ---- Annual WY-total box panel (side-by-side): CS3 / VIC / QMAP ----
     if ax_box is not None:
@@ -412,8 +421,10 @@ def make_monthly_avg_location_figure(detail_df: pd.DataFrame, location: str, out
         for med in bp["medians"]:
             med.set_color("black")
         ax_box.set_xticks([])
-        ax_box.set_xlabel("Annual (WY)")
+        ax_box.set_xlabel("Annual (WY)", fontsize=10)
+        ax_box.set_ylabel("Annual total (TAF)", fontsize=9)
         ax_box.set_ylim(bottom=0)
+        ax_box.tick_params(axis="y", labelsize=8)
         ax_box.grid(True, axis="y", color="0.9", linewidth=0.6)
         ax_box.yaxis.set_minor_locator(AutoMinorLocator(4))   # small dividers between major y ticks
         ax_box.tick_params(axis="y", which="minor", length=3)
