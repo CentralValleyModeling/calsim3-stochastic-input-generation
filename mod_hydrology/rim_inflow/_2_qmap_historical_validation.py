@@ -24,16 +24,31 @@ Outputs
   - figures/
     - TotalInflow_Bar_Normalized_NSE.png       (VIC vs QMAP normalized-NSE skill curves)
     - TotalInflow_Bar_Normalized_NSE_data.csv  (plotted data for QA/QC)
+  - figures/monthly_avg/   (only when --locations is passed)
+    - Monthly_Avg_<loc>.png                 (CS3 vs VIC vs Q-MAP monthly means)
 - _2_qmap_historical_validation/_product_a_validation/
   - _riminflow_productA_1972_2018.csv  (CalSim format for SV compiler)
 
 Usage
 -----
+    # Full validation run (default behavior / outputs):
     python mod_hydrology/rim_inflow/_2_qmap_historical_validation.py
+
+    # Also write per-location monthly-average comparison figures:
+    python mod_hydrology/rim_inflow/_2_qmap_historical_validation.py --locations UNIMP_OROV
+    python mod_hydrology/rim_inflow/_2_qmap_historical_validation.py --locations UNIMP_OROV FOLSM_INFLOW
+    python mod_hydrology/rim_inflow/_2_qmap_historical_validation.py --locations UNIMP_OROV,FOLSM_INFLOW
+    python mod_hydrology/rim_inflow/_2_qmap_historical_validation.py --locations ALL
+
+    # Major reservoir unimpaired inflows:
+    python mod_hydrology/rim_inflow/_2_qmap_historical_validation.py --locations \
+        I_SHSTA UNIMP_OROV UNIMP_FOLS UNIMP_YUBA UNIMP_TU \
+        UNIMP_SJ UNIMP_TRIN UNIMP_ST UNIMP_ME
 """
 
-import os, sys, numpy as np, pandas as pd
+import os, sys, re, argparse, calendar, numpy as np, pandas as pd
 import matplotlib.pyplot as plt
+from matplotlib.ticker import AutoMinorLocator
 from pathlib import Path
 
 # Add repo root to path for utils imports
@@ -211,7 +226,7 @@ def _nse_safe(sim, obs):
 
 
 def normalized_nse(values):
-    # Excel `TotalInflow_Bar` normalization: 1/(2 - NSE). Negative NSE stays
+    # TotalInflow_Bar normalization: 1/(2 - NSE). Negative NSE stays
     # valid (maps to a low positive value); no min-max scaling, no clipping.
     # Non-finite results (incl. denominator non-finite/zero) -> NaN.
     values = np.asarray(values, dtype=float)
@@ -222,7 +237,7 @@ def normalized_nse(values):
 
 
 def make_total_inflow_bar_figure(detail_df: pd.DataFrame, output_dir: str) -> None:
-    """Reproduce the Excel `TotalInflow_Bar` sheet figure: independently sorted,
+    """`TotalInflow_Bar` figure: independently sorted,
     normalized NSE curves comparing VIC vs post-adjusted QMAP skill across CS3
     rim inflows. Smooth XY line chart (no markers), not a bar chart.
     """
@@ -248,7 +263,7 @@ def make_total_inflow_bar_figure(detail_df: pd.DataFrame, output_dir: str) -> No
     x_qmap = np.arange(1, len(qmap_norm) + 1)
     n = max(len(vic_norm), len(qmap_norm))
 
-    # ---- Figure (styled to match the Excel TotalInflow_Bar chart) ----
+    # ---- Figure (TotalInflow_Bar chart) ----
     fig, ax = plt.subplots(figsize=(8, 5))
     ax.plot(x_vic,  vic_norm,  color="#C00000", linewidth=1.5, label="VIC")
     ax.plot(x_qmap, qmap_norm, color="#4F81BD", linewidth=1.5, label="VIC-QMAP")
@@ -285,7 +300,169 @@ def make_total_inflow_bar_figure(detail_df: pd.DataFrame, output_dir: str) -> No
     print(f"  plotted {len(vic_norm)} VIC / {len(qmap_norm)} QMAP inflows; data: {qa_path}")
 
 
-def main():
+# Water-year month order (Oct -> Sep) for monthly-average plots.
+_WY_MONTH_ORDER = [10, 11, 12, 1, 2, 3, 4, 5, 6, 7, 8, 9]
+
+# Monthly_Avg series colors: matplotlib default cycle (tab10).
+_MONTHLY_AVG_SERIES = [
+    ("CS3 Historical",  "cs3_val", "tab:blue"),     # C0
+    ("VIC Product A",   "vic_val", "tab:orange"),   # C1
+    ("Q-MAP Product A", None,      "tab:green"),     # C2 (col filled in per call)
+]
+
+
+def sanitize_filename(name: str) -> str:
+    """Make a string safe for use as a filename: replace spaces and unsafe
+    characters (/ \\ : * ? " < > | and similar) with underscores."""
+    cleaned = re.sub(r'[^A-Za-z0-9._-]+', "_", str(name)).strip("_")
+    return cleaned or "unnamed"
+
+
+def complete_water_year_filter(df: pd.DataFrame, wy_start: int = 1972,
+                               wy_end: int = vic_end_year) -> pd.DataFrame:
+    """Return rows within complete water years only.
+
+    Adds a `WY` column (WY = Year+1 for Oct-Dec, else Year), keeps
+    wy_start <= WY <= wy_end, then drops any WY that is missing months
+    (keeps only WYs where all 12 calendar months are present).
+    """
+    out = df.copy()
+    out["Year"]  = out["Year"].astype(int)
+    out["Month"] = out["Month"].astype(int)
+    out["WY"]    = np.where(out["Month"] >= 10, out["Year"] + 1, out["Year"]).astype(int)
+    out = out[(out["WY"] >= wy_start) & (out["WY"] <= wy_end)]
+    if out.empty:
+        return out
+    month_counts = out.groupby("WY")["Month"].nunique()
+    complete_wys = month_counts[month_counts == 12].index
+    return out[out["WY"].isin(complete_wys)]
+
+
+def make_monthly_avg_location_figure(detail_df: pd.DataFrame, location: str, output_dir: str,
+                                     qmap_col: str = "qmap_postAdj",
+                                     include_annual_box: bool = True) -> dict:
+    """`Monthly_Avg` figure for one inflow: 12-point average monthly
+    hydrograph (CS3 Historical vs VIC Product A vs Q-MAP Product A) in water-year
+    month order (Oct -> Sep), optionally with an annual WY-total box inset.
+
+    Returns a dict: {location, status, n_complete_wy, figure_path}. status is one
+    of "ok", "missing" (location absent), or "no_complete_wy".
+    """
+    names = detail_df["CalSim"].astype(str)
+    mask  = names.str.lower() == str(location).strip().lower()
+    if not mask.any():
+        print(f"[WARN] --locations: '{location}' not found in results; skipping.")
+        return {"location": location, "status": "missing", "n_complete_wy": 0, "figure_path": None}
+    canonical = names[mask].iloc[0]
+
+    loc_df = complete_water_year_filter(detail_df[mask].copy())
+    if loc_df.empty:
+        print(f"[WARN] --locations: '{canonical}' has no complete water years "
+              f"(WY1972-{vic_end_year}); skipping.")
+        return {"location": canonical, "status": "no_complete_wy", "n_complete_wy": 0, "figure_path": None}
+    n_wy = int(loc_df["WY"].nunique())
+
+    series = [(lbl, (qmap_col if col is None else col), color)
+              for lbl, col, color in _MONTHLY_AVG_SERIES]
+    value_cols = [col for _, col, _ in series]
+    for c in value_cols:
+        loc_df[c] = pd.to_numeric(loc_df[c], errors="coerce")
+
+    monthly = (loc_df.groupby("Month")[value_cols].mean().reindex(_WY_MONTH_ORDER))
+    annual  = (loc_df.groupby("WY")[value_cols].sum(min_count=12))
+
+    os.makedirs(output_dir, exist_ok=True)
+
+    # ---- Figure: monthly hydrograph (left) + optional annual box panel (right) ----
+    if include_annual_box:
+        fig, (ax, ax_box) = plt.subplots(
+            1, 2, figsize=(12, 6),
+            gridspec_kw={"width_ratios": [3.5, 1], "wspace": 0.22})
+    else:
+        fig, ax = plt.subplots(figsize=(10, 6))
+        ax_box = None
+
+    x = np.arange(len(_WY_MONTH_ORDER))
+    for label, col, color in series:
+        ax.plot(x, monthly[col].to_numpy(float), marker="o", markersize=5,
+                linewidth=1.5, color=color, label=label)
+    ax.set_xticks(x)
+    ax.set_xticklabels([calendar.month_abbr[m] for m in _WY_MONTH_ORDER])
+    ax.set_xlabel("Month")
+    ax.set_ylabel("Flow (TAF)")
+    ax.set_title(str(canonical), loc="left", fontweight="bold")
+    ax.grid(True, which="major", color="0.85", linewidth=0.6)
+    ax.yaxis.set_minor_locator(AutoMinorLocator(4))   # small dividers between major y ticks
+    ax.tick_params(axis="y", which="minor", length=3)
+    ax.set_axisbelow(True)
+    # Shared legend across the top (the series colors apply to BOTH panels).
+    _handles, _labels = ax.get_legend_handles_labels()
+    fig.legend(_handles, _labels, loc="upper center", ncol=3, frameon=False,
+               bbox_to_anchor=(0.5, 1.02))
+
+    # ---- Annual WY-total box panel (side-by-side): CS3 / VIC / QMAP ----
+    if ax_box is not None:
+        box_data = [annual[col].dropna().to_numpy(float) for _, col, _ in series]
+        bp = ax_box.boxplot(box_data, showfliers=False, patch_artist=True, widths=0.6,
+                            showmeans=True,
+                            meanprops=dict(marker="x", markeredgecolor="black",
+                                           markerfacecolor="black", markersize=7))
+        for patch, (_, _, color) in zip(bp["boxes"], series):
+            patch.set_facecolor(color); patch.set_alpha(0.75)
+        for med in bp["medians"]:
+            med.set_color("black")
+        ax_box.set_xticks([])
+        ax_box.set_xlabel("Annual (WY)")
+        ax_box.set_ylim(bottom=0)
+        ax_box.grid(True, axis="y", color="0.9", linewidth=0.6)
+        ax_box.yaxis.set_minor_locator(AutoMinorLocator(4))   # small dividers between major y ticks
+        ax_box.tick_params(axis="y", which="minor", length=3)
+        ax_box.set_axisbelow(True)
+
+    fig_path = os.path.join(output_dir, f"Monthly_Avg_{sanitize_filename(canonical)}.png")
+    fig.savefig(fig_path, dpi=300, bbox_inches="tight")
+    plt.close(fig)
+
+    print(f"Monthly-avg figure: {fig_path}  (complete WYs: {n_wy})")
+    return {"location": canonical, "status": "ok", "n_complete_wy": n_wy, "figure_path": fig_path}
+
+
+def parse_locations(loc_args, available, master_order=None):
+    """Resolve the raw --locations tokens into an ordered list of CalSim names.
+
+    Accepts space- and/or comma-separated tokens. 'ALL' or '*' expands to every
+    available location (ordered by master_order when given). Other tokens are
+    matched case-insensitively to canonical names; unmatched tokens are passed
+    through unchanged so the figure builder can warn about them. Returns [] when
+    no tokens are supplied.
+    """
+    if not loc_args:
+        return []
+    tokens = []
+    for t in loc_args:
+        tokens.extend(s for s in re.split(r"[,\s]+", str(t)) if s)
+    if not tokens:
+        return []
+
+    avail_list = [str(a) for a in available]
+    if any(t.upper() in ("ALL", "*") for t in tokens):
+        avail_set = set(avail_list)
+        if master_order:
+            ordered = [str(n) for n in master_order if str(n) in avail_set]
+            extra   = [a for a in avail_list if a not in set(ordered)]
+            return ordered + extra
+        return avail_list
+
+    lower_map = {a.lower(): a for a in avail_list}
+    seen, out = set(), []
+    for t in tokens:
+        canon = lower_map.get(t.lower(), t)   # unknown -> keep token (figure warns)
+        if canon not in seen:
+            seen.add(canon); out.append(canon)
+    return out
+
+
+def main(locations=None, qmap_col="qmap_postAdj"):
     df_vic_all    = load_vic_dir(vic_dir)
     df_calsim_all = read_calsim_monthly_multi(dss_file, calsim_names)
 
@@ -500,6 +677,23 @@ def main():
     # TotalInflow_Bar figure: normalized NSE skill curves (VIC vs QMAP postAdj)
     make_total_inflow_bar_figure(detail_df, FIGURES_DIR)
 
+    # Optional per-location monthly-average comparison figures (--locations).
+    # Additive only: does not alter any existing output above.
+    if locations is not None:
+        available = list(pd.unique(detail_df["CalSim"].dropna().astype(str)))
+        requested = parse_locations(locations, available, master_order)
+        monthly_dir = os.path.join(FIGURES_DIR, "monthly_avg")
+        if not requested:
+            print("[WARN] --locations supplied but no locations resolved; "
+                  "no monthly-average figures produced.")
+        else:
+            results = [make_monthly_avg_location_figure(detail_df, loc, monthly_dir,
+                                                        qmap_col=qmap_col)
+                       for loc in requested]
+            n_ok = sum(1 for r in results if r["status"] == "ok")
+            print(f"\nMonthly-avg: produced {n_ok}/{len(requested)} requested location "
+                  f"figure(s) in {monthly_dir}")
+
     # 6. WRITE ORGANIZED CSVs
     export_cols = [
         # IDs
@@ -556,5 +750,31 @@ def main():
     print(f"  {len(df_val_csv):,} rows, {df_val_csv['Part B'].nunique()} inflows")
 
 
+def parse_args():
+    p = argparse.ArgumentParser(
+        description="Quantile-mapping historical validation (Product A). Without "
+                    "--locations, runs the full validation and writes the usual "
+                    "outputs. With --locations, additionally writes per-location "
+                    "Monthly_Avg comparison figures.",
+        epilog="examples:\n"
+               "  --locations UNIMP_OROV\n"
+               "  --locations UNIMP_OROV,FOLSM_INFLOW\n"
+               "  --locations ALL          (or: --locations *)\n"
+               "  --locations I_SHSTA UNIMP_OROV UNIMP_FOLS UNIMP_YUBA UNIMP_TU "
+               "UNIMP_SJ UNIMP_TRIN UNIMP_ST UNIMP_ME   (major reservoir unimpaired inflows)",
+        formatter_class=argparse.RawDescriptionHelpFormatter)
+    p.add_argument("--locations", nargs="*", default=None, metavar="LOC",
+                   help="One or more CalSim inflow names (space and/or comma "
+                        "separated), or ALL / * for every processed inflow. "
+                        "Matched case-insensitively. "
+                        "Example: --locations UNIMP_OROV,FOLSM_INFLOW")
+    p.add_argument("--qmap-col", choices=["qmap_preAdj", "qmap_postAdj"],
+                   default="qmap_postAdj",
+                   help="Which QMAP column to plot as 'Q-MAP Product A' "
+                        "(default: qmap_postAdj).")
+    return p.parse_args()
+
+
 if __name__ == "__main__":
-    main()
+    _args = parse_args()
+    main(locations=_args.locations, qmap_col=_args.qmap_col)
