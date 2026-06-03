@@ -256,6 +256,7 @@ def make_total_inflow_bar_figure(detail_df: pd.DataFrame, output_dir: str) -> No
     ax.set_ylabel("Normalize NSE (1/(2-NSE))")
     ax.set_xlim(0, n + 1)
     ax.set_ylim(0, 1)
+    ax.set_yticks(np.arange(0.0, 1.0 + 1e-9, 0.1))   # gridlines every 0.1
     ax.grid(True, which="major", color="0.85", linewidth=0.6)
     ax.set_axisbelow(True)
     ax.legend(loc="upper center", ncol=2, frameon=False, bbox_to_anchor=(0.5, 1.08))
