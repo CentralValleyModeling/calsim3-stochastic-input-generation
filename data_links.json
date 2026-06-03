@@ -1,0 +1,41 @@
+{
+    "_comment": "Box shared file links for each data zip.",
+
+    "_BASE": "---- BASE (read-only reference data) ----",
+    "BASE/CalSim3": "https://cadwr.box.com/s/v6hj59oj6g2yvvdq3b3t37t327lwbpgp",
+    "BASE/Historical_Climate": "https://cadwr.box.com/s/t91v6o3f3eq73ckph5odx7x4qtoqzwol",
+    "BASE/WGEN/Product_A/1": "https://cadwr.box.com/s/am4f7dmn3mplmf5go5ydkq38rtdlq2nv",
+    "BASE/WGEN/Product_B/1": "https://cadwr.box.com/s/6i7hs5pl65w2coheehig56agzbaqa9gg",
+
+    "_GENERATED_forcing": "---- GENERATED: mod_forcing ----",
+    "GENERATED/mod_forcing/climate": "https://cadwr.box.com/s/f4x373r92taqrzsrd8ejkcpwuxh1gqay",
+    "GENERATED/mod_forcing/vic/input/Product_A": "https://cadwr.box.com/s/6ygv26qn0cqw95dp75b7h73x6nhuwndr",
+    "GENERATED/mod_forcing/vic/input/Product_B": "https://cadwr.box.com/s/vj8u9xmcc7vxkgf2jing8fwvkqtli56s",
+    "GENERATED/mod_forcing/vic/output/fluxes": "https://cadwr.box.com/s/wzcj4j85kep7phcddvlw90xd8hr2b5tx",
+    "GENERATED/mod_forcing/vic/output/routed": "https://cadwr.box.com/s/1dymur24n149dfpfag5i2s2f1gr3tukk",
+    "GENERATED/mod_forcing/vic/VIC_Support_4.2.d": "https://cadwr.box.com/s/jaiecqc4s9jl6s1he1iumaqqfza2dksd",
+
+    "_GENERATED_hydrology": "---- GENERATED: mod_hydrology ----",
+    "GENERATED/mod_hydrology/calsimhydro": "https://cadwr.box.com/s/j55b5qhw4tqsjnn7hyem9ivpw7fn30k2",
+    "GENERATED/mod_hydrology/calsimhydro_ee": "https://cadwr.box.com/s/llvqe01jdr34p6c7br276xb4nc7iqsjt",
+    "GENERATED/mod_hydrology/delta_channel_depletion": "https://cadwr.box.com/s/shb5uznpp9fdbnzvgg17fn5vf93zmqt7",
+    "GENERATED/mod_hydrology/rim_inflow": "https://cadwr.box.com/s/y35qageyndn94jr027szcqvxjdxco6ah",
+    "GENERATED/mod_hydrology/small_watersheds": "https://cadwr.box.com/s/d1xa7yioelhhdjjcwjtdpms11nhe9hxc",
+    "GENERATED/mod_hydrology/tulare_gw_terms": "https://cadwr.box.com/s/vabn59w2d4u6fxtx7s0425n8sul8e1o1",
+    "GENERATED/mod_hydrology/water_year_types": "https://cadwr.box.com/s/f72j8pd5ffx1soyaauu462xplhjtmbei",
+
+    "_GENERATED_reservoir": "---- GENERATED: mod_reservoir ----",
+    "GENERATED/mod_reservoir/evaporation": "https://cadwr.box.com/s/mowmudo08o23y8c6doanuor842meo49q",
+    "GENERATED/mod_reservoir/storage_curves": "https://cadwr.box.com/s/tz7vuympdt1cvywpvoza9x5d0mxy1eld",
+
+    "_GENERATED_other": "---- GENERATED: mod_other ----",
+    "GENERATED/mod_other/closure_terms": "https://cadwr.box.com/s/nxdg5awl9epl50df2krvdlglaaox4jiz",
+    "GENERATED/mod_other/day_volume_fractions": "https://cadwr.box.com/s/kb2ezqi7k5t1rwvw5xssdrmmc4hpdvlp",
+    "GENERATED/mod_other/instream_flows": "https://cadwr.box.com/s/wv54tv0fb53pk0yfu5ykagwq6fp2d4l9",
+    "GENERATED/mod_other/miscellaneous": "https://cadwr.box.com/s/c8taw9fhnrj8kxey2y5ib1i31dmzai0j",
+    "GENERATED/mod_other/upper_watershed": "https://cadwr.box.com/s/9h1gqedloas34vp6uhjpr38unt3zoi9k",
+
+    "_GENERATED_postprocessing": "---- GENERATED: postprocessing ----",
+    "GENERATED/postprocessing/sv_compile": "https://cadwr.box.com/s/zvle7kga717iulglb0sexve2xgc1hbsj",
+    "GENERATED/postprocessing/calsim_runs": "https://cadwr.box.com/s/wad3zvrbm9ay1jlqei5q52pcau5wrdli"
+}

@@ -107,7 +107,8 @@ Tier 5  FINAL COMPILATION (postprocessing)
           --summary-figures    Regenerate figures from a previous compare CSV.
 
         (optional, post external CalSim 3.0 run consuming the SV DSS files:
-         python postprocessing/calsim_runs/_productB_pickle_builder.py)
+         python postprocessing/calsim_runs/_productB_pickle_builder.py
+         python postprocessing/calsim_runs/_productB_postproc.py)
 ```
 
 Final-compiler module scan order (authoritative -- `MODULE_CONFIG_B` in
@@ -349,7 +350,7 @@ patterns auto-filled by the final compiler from the CalSim baseline
 | Script | Command | Inputs | Outputs |
 |---|---|---|---|
 | sv_compile (final) | `python postprocessing/sv_compile/product_b_compilation.py` (`--chunks N`; `--skip-comparison`; `--skip-dss`; `--summary-figures`) | every module's `_product_b_final/*.csv`; CS3 baseline DSS; master inventory; optional Product A compiled DSS for comparison | `ProductB_SV_n{01..10}.dss` (10 chunks; canonical window Oct 1921 - Sep 2021 / WY 1922-2021; first 9 months of each chunk skipped for water-year alignment); inventory cross-reference CSVs; `product_b_vs_a_comparison.csv` and `product_b_vs_calsim_base_comparison.csv` + per-category `figures/` |
-| (optional) calsim_runs | `python postprocessing/calsim_runs/_productB_pickle_builder.py` | external CalSim 3.0 run results consuming `ProductB_SV_n{01..10}.dss` | Product B run pickle cache (per-chunk values / diffs / units pkls) |
+| (optional) calsim_runs | `python postprocessing/calsim_runs/_productB_pickle_builder.py`; `python postprocessing/calsim_runs/_productB_postproc.py` | external CalSim 3.0 run results consuming `ProductB_SV_n{01..10}.dss` | Product B run pickle cache (per-chunk values / diffs / units pkls) |
 
 The final compiler auto-fills inventory "Constant/Rept" SVs from the
 baseline 12-month repeat (same logic as the Product A compiler).
