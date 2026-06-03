@@ -104,7 +104,15 @@ The Tule Wetlands Index represents wetland conditions in the Tulare Basin, recon
 
 #### Validation
 
-Validation over 1,248 months (WY 1915-2018) achieved $R^2 = 0.86$ with RMSE = 11.61 and mean difference of +0.30. The reconstructed time series maintains physical bounds, with bias differences comparable to other regional terms.
+```{figure} ../figures/calsim-run-product-a/full-validation/TULE_WET_INDX_timeseries.png
+:name: fig-tule-wet-indx
+:width: 100%
+Product A validation for TULE_WET_INDX: monthly time series (left) and non-exceedance CDF (right) comparing QM-reconstructed Product A against historical record over 1972-2018.
+```
+
+Product A validation over 1972-2018 yields $R^2 = 0.70$, $\text{NSE} = 0.52$, and $\text{PBIAS} = 5.0\%$. The monthly time series captures the spiky pulse pattern of the wetlands index -- near-zero base values punctuated by sharp wet-season peaks reaching 50-175 TAF -- and the inter-annual alternation between high- and low-flow years is broadly reproduced. The non-exceedance CDF shows close alignment through most of the distribution, with the two curves overlapping well from the 10th through approximately the 90th percentile.
+
+The moderate NSE of 0.52 reflects the difficulty QM faces in reproducing the timing and precise magnitude of individual peak events: the reconstruction over- and under-estimates specific peaks throughout the record, leading to the squared-deviation penalties that suppress NSE relative to $R^2$. The slight positive PBIAS of 5.0% indicates the reconstruction runs marginally high on average across the 1972-2018 period. Despite these limitations, $R^2 = 0.70$ -- matching the predictor correlation -- confirms the QM approach preserves the statistical relationship between Millerton inflows and wetland conditions that WYT averaging alone could not capture.
 
 ---
 
@@ -120,7 +128,15 @@ $$V_{hybrid} = \frac{V_{QM} + V_{WYT}}{2}$$
 
 #### Validation
 
-The hybrid approach improved reconstruction performance from $R^2 = 0.70$ (QM only) to $R^2 = 0.78$. Nash-Sutcliffe Efficiency showed even more dramatic improvement as the squared deviation penalty in NSE heavily weights the eliminated extreme overshoots.
+```{figure} ../figures/calsim-run-product-a/full-validation/C_CBD001HIST.png
+:name: fig-c-cbd001hist
+:width: 100%
+Product A validation for C_CBD001HIST: monthly time series (left) and non-exceedance CDF (right) comparing hybrid-reconstructed Product A against historical record over 1972-2018.
+```
+
+Product A validation over 1972-2018 yields $R^2 = 0.68$, $\text{NSE} = 0.66$, and $\text{PBIAS} = -11.5\%$. The monthly time series shows the reconstruction broadly tracking the inter-annual variability of the Colusa Basin Drain record -- capturing the seasonal pulse pattern and the contrast between wet and dry years -- with the hybrid averaging successfully constraining peak values within physically plausible bounds below 600 TAF. The non-exceedance CDF shows good agreement through the lower 90% of the distribution, with the two curves closely aligned across the moderate-flow range that dominates the record.
+
+The PBIAS of -11.5% reflects a systematic underestimation of the largest historical peaks: the reconstruction tends to underestimate events above 200 TAF, visible as the slight divergence of the Product A CDF below the historical curve in the upper tail above the 95th percentile. The largest historical peaks (approaching 600 TAF in 1997 and 2019) are partially captured but not fully reproduced, consistent with the smoothing inherent in the hybrid approach. Overall, the hybrid reconstruction represents a major improvement over QM alone, which produced physically unrealistic peak overshoots up to 900 TAF, and the combination of $R^2 = 0.68$ and NSE = 0.66 confirms that the approach successfully captures the dominant inter-annual variability of this drainage channel.
 
 ### C_KLR005HIST (Flow, Knights Landing Ridge Cut)
 
@@ -128,7 +144,15 @@ Knights Landing Ridge Cut represents a second Sacramento Valley drainage channel
 
 #### Validation
 
-The hybrid approach improved reconstruction performance from $R^2 = 0.52$ (QM only) to $R^2 = 0.66$. As with Colusa Basin Drain, NSE improvement was substantial due to elimination of the extreme QM overshoots.
+```{figure} ../figures/calsim-run-product-a/full-validation/C_KLR005HIST.png
+:name: fig-c-klr005hist
+:width: 100%
+Product A validation for C_KLR005HIST: monthly time series (left) and non-exceedance CDF (right) comparing hybrid-reconstructed Product A against historical record over 1972-2018.
+```
+
+Product A validation over 1972-2018 yields $R^2 = 0.75$, $\text{NSE} = 0.75$, and $\text{PBIAS} = -4.5\%$. The monthly time series shows the reconstruction closely tracking the inter-annual variability of the Knights Landing Ridge Cut record, with the hybrid approach again constraining peak values within physical bounds while preserving meaningful year-to-year flow signal. The non-exceedance CDF demonstrates notably strong agreement: the two curves remain closely aligned from the 0th through approximately the 97th percentile, with divergence only at the very extreme upper tail where the largest historical peaks (approaching 600 TAF) are partially underestimated.
+
+The near-neutral PBIAS of -4.5% confirms negligible long-term volume bias -- a marked improvement over C_CBD001HIST -- consistent with the higher $R^2 = 0.75$ that reflects the stronger response of this channel to the shared `IERC_003` predictor after hybrid blending. The substantially better performance relative to the pre-hybrid QM-only result, combined with elimination of the extreme peak overshoots, confirms that the hybrid methodology is the appropriate reconstruction approach for this term.
 
 ---
 
