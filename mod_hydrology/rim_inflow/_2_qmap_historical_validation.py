@@ -21,6 +21,9 @@ Outputs
 - _2_qmap_historical_validation/
   - calsim_qmap_validation_TS.csv   (row-level qmap results)
   - calsim_VIC_TS.csv               (VIC baseline diagnostics, full overlap)
+  - figures/
+    - TotalInflow_Bar_Normalized_NSE.png       (VIC vs QMAP normalized-NSE skill curves)
+    - TotalInflow_Bar_Normalized_NSE_data.csv  (plotted data for QA/QC)
 - _2_qmap_historical_validation/_product_a_validation/
   - _riminflow_productA_1972_2018.csv  (CalSim format for SV compiler)
 
@@ -30,6 +33,7 @@ Usage
 """
 
 import os, sys, numpy as np, pandas as pd
+import matplotlib.pyplot as plt
 from pathlib import Path
 
 # Add repo root to path for utils imports
@@ -45,8 +49,10 @@ _vic_gen = get_module_generated_dir("mod_forcing/vic")
 # RESULTS ROOT
 BASE_RESULTS_DIR = str(_gen / "output" / "_2_qmap_historical_validation")
 OUTPUT_DIR       = BASE_RESULTS_DIR
+FIGURES_DIR      = os.path.join(BASE_RESULTS_DIR, "figures")
 VALIDATION_DIR   = str(_gen / "output" / "_2_qmap_historical_validation" / "_product_a_validation")
 os.makedirs(OUTPUT_DIR, exist_ok=True)
+os.makedirs(FIGURES_DIR, exist_ok=True)
 os.makedirs(VALIDATION_DIR, exist_ok=True)
 
 # CONFIG
@@ -202,6 +208,80 @@ def _nse_safe(sim, obs):
     den = np.sum((obs - np.mean(obs))**2)
     if den == 0: return np.nan
     return 1 - np.sum((obs - sim)**2) / den
+
+
+def normalized_nse(values):
+    # Excel `TotalInflow_Bar` normalization: 1/(2 - NSE). Negative NSE stays
+    # valid (maps to a low positive value); no min-max scaling, no clipping.
+    # Non-finite results (incl. denominator non-finite/zero) -> NaN.
+    values = np.asarray(values, dtype=float)
+    with np.errstate(divide="ignore", invalid="ignore"):
+        out = 1.0 / (2.0 - values)
+    out[~np.isfinite(out)] = np.nan
+    return out
+
+
+def make_total_inflow_bar_figure(detail_df: pd.DataFrame, output_dir: str) -> None:
+    """Reproduce the Excel `TotalInflow_Bar` sheet figure: independently sorted,
+    normalized NSE curves comparing VIC vs post-adjusted QMAP skill across CS3
+    rim inflows. Smooth XY line chart (no markers), not a bar chart.
+    """
+    # One row per inflow: skill metrics are repeated monthly, so take the first.
+    per_inflow = (detail_df.groupby("CalSim", observed=True)
+                           .agg(vic_nse=("vic_NSE_TestPeriod", "first"),
+                                qmap_nse=("qmap_NSE_TestPeriod_postAdj", "first")))
+    vic_nse  = pd.to_numeric(per_inflow["vic_nse"],  errors="coerce")
+    qmap_nse = pd.to_numeric(per_inflow["qmap_nse"], errors="coerce")
+
+    # Sort each series ascending, independently.
+    vic_sorted  = np.sort(vic_nse.dropna().to_numpy(float))
+    qmap_sorted = np.sort(qmap_nse.dropna().to_numpy(float))
+
+    # Normalize via 1/(2 - NSE); drop only non-finite normalized values.
+    vic_norm  = normalized_nse(vic_sorted)
+    qmap_norm = normalized_nse(qmap_sorted)
+    vm = np.isfinite(vic_norm);  vic_sorted  = vic_sorted[vm];  vic_norm  = vic_norm[vm]
+    qm = np.isfinite(qmap_norm); qmap_sorted = qmap_sorted[qm]; qmap_norm = qmap_norm[qm]
+
+    # x-index 1..N for each curve.
+    x_vic  = np.arange(1, len(vic_norm) + 1)
+    x_qmap = np.arange(1, len(qmap_norm) + 1)
+    n = max(len(vic_norm), len(qmap_norm))
+
+    # ---- Figure (styled to match the Excel TotalInflow_Bar chart) ----
+    fig, ax = plt.subplots(figsize=(8, 5))
+    ax.plot(x_vic,  vic_norm,  color="#C00000", linewidth=1.5, label="VIC")
+    ax.plot(x_qmap, qmap_norm, color="#4F81BD", linewidth=1.5, label="VIC-QMAP")
+    ax.set_xlabel("CS3 Rim Inflows (idx)")
+    ax.set_ylabel("Normalize NSE (1/(2-NSE))")
+    ax.set_xlim(0, n + 1)
+    ax.set_ylim(0, 1)
+    ax.grid(True, which="major", color="0.85", linewidth=0.6)
+    ax.set_axisbelow(True)
+    ax.legend(loc="upper center", ncol=2, frameon=False, bbox_to_anchor=(0.5, 1.08))
+
+    fig_path = os.path.join(output_dir, "TotalInflow_Bar_Normalized_NSE.png")
+    fig.savefig(fig_path, dpi=300, bbox_inches="tight")
+    plt.close(fig)
+
+    # ---- QA/QC data CSV (pad shorter array with NaN) ----
+    rows = max(len(vic_sorted), len(qmap_sorted))
+    def _pad(arr):
+        out = np.full(rows, np.nan, dtype=float)
+        out[:len(arr)] = arr
+        return out
+    qa = pd.DataFrame({
+        "idx":                 np.arange(1, rows + 1),
+        "VIC_NSE_sorted":      _pad(vic_sorted),
+        "QMAP_NSE_sorted":     _pad(qmap_sorted),
+        "VIC_Normalized_NSE":  _pad(vic_norm),
+        "QMAP_Normalized_NSE": _pad(qmap_norm),
+    })
+    qa_path = os.path.join(output_dir, "TotalInflow_Bar_Normalized_NSE_data.csv")
+    qa.to_csv(qa_path, index=False)
+
+    print(f"\nTotalInflow_Bar figure: {fig_path}")
+    print(f"  plotted {len(vic_norm)} VIC / {len(qmap_norm)} QMAP inflows; data: {qa_path}")
 
 
 def main():
@@ -415,6 +495,9 @@ def main():
                  .reset_index(drop=True)
     )
     detail_df = detail_df.merge(post_metrics, on="CalSim", how="left")
+
+    # TotalInflow_Bar figure: normalized NSE skill curves (VIC vs QMAP postAdj)
+    make_total_inflow_bar_figure(detail_df, FIGURES_DIR)
 
     # 6. WRITE ORGANIZED CSVs
     export_cols = [
