@@ -56,13 +56,13 @@ SJR return flow at Woodbridge Irrigation District represents agricultural draina
 
 #### Validation
 
-```{figure} figures/s3-inputs_other-return-flows-r60n.png
-:name: fig-r60n-return-flow
+```{figure} ../figures/calsim-run-product-a/full-validation/R_60N_NA4_SJR022_SV.png
+:name: fig-r60n-na4-sjr022-sv
 :width: 100%
-Product A validation for R_60N_NA4_SJR022_SV: WYT-based reconstruction (orange) vs. actual CalSim inputs (blue), 1921--2021. Values oscillate between 0 and approximately 0.7 TAF.
+Product A validation for R_60N_NA4_SJR022_SV: monthly time series (left) and non-exceedance CDF (right) comparing WYT-reconstructed Product A against historical record over 1972-2018.
 ```
 
-The reconstruction achieves $R^2 = 0.97$, demonstrating that seasonal patterns conditional on water year type fully capture the dominant behavior of this highly regular irrigation district return flow.
+The reconstruction achieves $R^2 = 0.95$, $\text{NSE} = 0.95$, and $\text{PBIAS} = -1.4\%$. The monthly time series shows the reconstructed series closely tracking the seasonal oscillation of the actual record throughout the 1972-2018 period, with values cycling between near-zero winter lows and peaks of approximately 0.7 TAF in active irrigation months. The WYT conditioning captures the inter-annual differences in return flow magnitude, and the non-exceedance CDF shows close agreement across the full distribution, with only minor divergence at the very upper tail above the 95th percentile. The near-neutral percent bias of -1.4% confirms negligible long-term volume difference, and NSE = 0.95 indicates the WYT monthly averages fully capture the dominant seasonal and inter-annual structure of this highly regular irrigation district return flow.
 
 ### R_RFS71A_OMR039_SV (Return Flow, San Joaquin River)
 
@@ -70,13 +70,13 @@ Westside SJR return flow at Byron Bethany Irrigation District represents a secon
 
 #### Validation
 
-```{figure} figures/s3-inputs_other-return-flows-rfs71a.png
-:name: fig-rrfs71a-return-flow
+```{figure} ../figures/calsim-run-product-a/full-validation/R_RFS71A_OMR039_SV.png
+:name: fig-r-rfs71a-omr039-sv
 :width: 100%
-Product A validation for R_RFS71A_OMR039_SV: WYT-based reconstruction (orange) vs. actual CalSim inputs (blue), 1921--2021. Reconstruction captures the seasonal timing but underestimates peak magnitudes reaching approximately 0.20 TAF.
+Product A validation for R_RFS71A_OMR039_SV: monthly time series (left) and non-exceedance CDF (right) comparing WYT-reconstructed Product A against historical record over 1972-2018.
 ```
 
-The reconstruction achieves $R^2 = 0.55$, which is considered acceptable given the relatively low volumes involved and the absence of stronger predictive relationships across the VIC predictor library.
+The reconstruction achieves $R^2 = 0.50$, $\text{NSE} = 0.49$, and $\text{PBIAS} = -7.3\%$. The monthly time series shows the reconstruction capturing the seasonal timing of peak return flows, but the WYT class means consistently underestimate the magnitude of the larger historical peaks, which reach approximately 0.20 TAF in active months. The non-exceedance CDF reflects this systematic underestimation: Product A falls substantially below the historical curve across the upper 40% of the distribution, indicating the reconstruction compresses the upper tail of the return flow distribution. The moderate $R^2$ reflects the episodic, event-driven nature of this agricultural return flow, where individual peak events driven by storm runoff and irrigation scheduling cannot be captured by WYT-conditioned monthly means. The PBIAS of -7.3% confirms the modest low-side volume bias. Given the absence of a stronger predictive relationship across the VIC predictor library and the relatively low volumes involved, the WYT reconstruction is accepted as the best available approach for this term.
 
 ### EBTML_LOSS (Loss, EBMUD Terminal Reservoir Loss)
 
@@ -84,13 +84,13 @@ East Bay Municipal Utility District terminal reservoir loss represents operation
 
 #### Validation
 
-```{figure} figures/s3-inputs_other-ebtml-loss.png
+```{figure} ../figures/calsim-run-product-a/full-validation/EBTML_LOSS.png
 :name: fig-ebtml-loss
 :width: 100%
-Product A validation for EBTML_LOSS: WYT-based reconstruction (orange) closely overlaps actual CalSim inputs (blue), 1921--2021. Seasonal values oscillate between approximately 11 CFS in winter and 35 CFS in summer.
+Product A validation for EBTML_LOSS: monthly time series (left) and non-exceedance CDF (right) comparing WYT-reconstructed Product A against historical record over 1972-2018.
 ```
 
-The reconstruction achieves $R^2 = 0.99$, an exceptionally strong fit reflecting the regularity of EBMUD's operational loss pattern. The near-perfect agreement confirms that WYT-conditioned monthly means fully capture the seasonal and inter-annual structure of this term.
+The reconstruction achieves $R^2 = 0.99$, $\text{NSE} = 0.99$, and $\text{PBIAS} = -0.8\%$. The monthly time series shows the reconstructed series nearly indistinguishable from the actual record throughout the 1972-2018 period, with values cycling between approximately 0.7 TAF in winter and 2.2 TAF in summer. The non-exceedance CDF shows the two curves overlapping almost exactly across the full distribution. The near-neutral percent bias of -0.8% confirms negligible long-term volume difference. The exceptionally strong fit reflects the high regularity of EBMUD's operational loss pattern: because terminal reservoir losses are governed primarily by season and infrastructure capacity rather than year-to-year hydrologic variability, WYT-conditioned monthly means fully capture both the seasonal and inter-annual structure of this term.
 
 ---
 
