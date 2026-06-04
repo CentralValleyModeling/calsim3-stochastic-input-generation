@@ -26,11 +26,10 @@ B120 Forecasts and Water Year Type Indexes were previously documented in separat
 | R_RFS71A_OMR039_SV | RETURN-FLOW | Water Year Type Averaging |
 | EBTML_LOSS | LOSS | Water Year Type Averaging |
 | CAP_C_CAA238_CVC_F, CAP_C_CAA238_CVC_R | CAPACITY | Repeating Time Series |
-| YBA Transfers | -- | Dynamic WRESL Flag |
 
 ## Methodology Overview
 
-A total of five different approaches are applied to reconstruct the miscellaneous terms, plus one term governed by a dynamic WRESL flag that requires no pre-generation:
+A total of five different approaches are applied to reconstruct the miscellaneous terms:
 
 **1- Water Year Type Monthly Averaging (WYT):** Groups historical months by water year type (Wet, Above Normal, Below Normal, Dry, Critical) and assigns the corresponding monthly mean to each synthetic year. This approach captures seasonal demand and operational patterns that vary with overall water availability but not with year-to-year flow variability. It is the preferred fallback when correlation with VIC outputs is too weak for quantile mapping, and is applied here to SJR return flows and EBMUD terminal reservoir loss.
 
@@ -41,8 +40,6 @@ A total of five different approaches are applied to reconstruct the miscellaneou
 **4- Direct Calculation:** Applies a physical formula derived from the governing source data rather than statistical mapping. This is used for NDOI precipitation accretion, where monthly volume is computed directly from Stockton gauge precipitation depth, Delta water surface area, and a watershed area ratio coefficient -- preserving the physical relationship between precipitation and accretion volume that statistical approaches failed to reproduce.
 
 **5- Repeating Time Series:** Identifies a representative recent period exhibiting stable, infrastructure-constrained behavior and repeats it across the full synthetic sequence. This is applied to Cross Valley Canal capacity terms whose post-2009 values reflect fixed operational limits rather than hydrology-driven variability, making statistical reconstruction unnecessary.
-
-**6- Dynamic WRESL Flag (no pre-generation required):** Some CalSim inputs are computed endogenously by the model's WRESL scripts during simulation rather than supplied as pre-generated time series. Yuba Accord transfers fall into this category: the dynamic flag is set in the CalSim configuration so the model calculates transfers at runtime based on synthetic sequence conditions, eliminating the need for and risk of pre-specifying transfer patterns.
 
 ---
 
@@ -187,15 +184,5 @@ Two Cross Valley Canal capacity terms employ a repeating time series, using the 
 ### CAP_C_CAA238_CVC_F and CAP_C_CAA238_CVC_R (Capacity, Cross Valley Canal)
 
 Forward and reverse conveyance capacity constraints on the Cross Valley Canal do not vary with hydrology in the historical record, reflecting fixed infrastructure limits rather than dynamic allocation. Post-2009 values exhibit consistent behavior indicative of operational capacity limits set by physical canal infrastructure. The repeating time series methodology uses this stable recent period as the representative pattern, applied across both the 1921-2018 historical reconstruction and all Product B synthetic sequences.
-
----
-
-## 6. Dynamic WRESL Flag
-
-One miscellaneous term requires no pre-generation because it is computed endogenously by CalSim's WRESL scripts during simulation.
-
-### YBA Transfers (Dynamic, Yuba Accord)
-
-Yuba Accord transfers are flagged as dynamic within the DCR CalSim WRESL scripts, enabling simulation-time calculation based on operational rules rather than pre-specified input time series. The dynamic flag was confirmed during inventory review with MSO staff, who verified that CalSim's WRESL logic computes Yuba Accord transfers endogenously based on Yuba water availability and downstream demand conditions -- making pre-generation both unnecessary and potentially conflicting with the model's internal logic.
 
 
