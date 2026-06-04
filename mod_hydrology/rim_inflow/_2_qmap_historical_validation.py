@@ -52,7 +52,7 @@ Usage
 
     # Pick month(s) for the non-exceedance plot (one figure per month per
     # location); accepts 1-12, month names, comma/space lists, 'all', or 'auto':
-    python mod_hydrology/rim_inflow/_2_qmap_historical_validation.py --locations FOLSM_INFLOW --nonexceed-month 1
+    python mod_hydrology/rim_inflow/_2_qmap_historical_validation.py --locations FOLSM_INFLOW,I_SHSTA --nonexceed-month 1
     python mod_hydrology/rim_inflow/_2_qmap_historical_validation.py --locations I_MLRTN_IMP --nonexceed-month May
     python mod_hydrology/rim_inflow/_2_qmap_historical_validation.py --locations UNIMP_OROV --nonexceed-month 1,5,9
     python mod_hydrology/rim_inflow/_2_qmap_historical_validation.py --locations UNIMP_OROV --nonexceed-month all
@@ -328,7 +328,12 @@ def make_total_inflow_bar_figure(detail_df: pd.DataFrame, output_dir: str) -> No
     ax.tick_params(labelsize=10)
     ax.grid(True, which="major", color="0.85", linewidth=0.6)
     ax.set_axisbelow(True)
-    ax.legend(loc="upper center", ncol=2, frameon=False, bbox_to_anchor=(0.5, 1.08))
+    fig.subplots_adjust(top=0.82)
+    _h, _l = ax.get_legend_handles_labels()
+    fig.legend(_h, _l, loc="upper center", ncol=2, frameon=False,
+               bbox_to_anchor=(0.5, 0.90), fontsize=9)
+    fig.suptitle("Rim Inflow Skill (Normalized NSE)", fontsize=13,
+                 fontweight="bold", y=0.99)
 
     fig_path = os.path.join(output_dir, "TotalInflow_Bar_Normalized_NSE.png")
     fig.savefig(fig_path, dpi=300, bbox_inches="tight")
@@ -450,7 +455,7 @@ def make_monthly_avg_location_figure(detail_df: pd.DataFrame, location: str, out
     if include_annual_box:
         fig, (ax, ax_box) = plt.subplots(
             1, 2, figsize=(8, 4.5),
-            gridspec_kw={"width_ratios": [3.5, 1], "wspace": 0.22})
+            gridspec_kw={"width_ratios": [3.5, 1], "wspace": 0.34})
     else:
         fig, ax = plt.subplots(figsize=(7, 4.5))
         ax_box = None
@@ -475,11 +480,12 @@ def make_monthly_avg_location_figure(detail_df: pd.DataFrame, location: str, out
     fig.subplots_adjust(top=0.76)
     _handles, _labels = ax.get_legend_handles_labels()
     fig.legend(_handles, _labels, loc="upper center", ncol=3, frameon=False,
-               bbox_to_anchor=(0.5, 0.84))
+               bbox_to_anchor=(0.5, 0.87), fontsize=9, handlelength=1.6,
+               columnspacing=1.4, handletextpad=0.5)
     wy_lo, wy_hi = int(loc_df["WY"].min()), int(loc_df["WY"].max())
     fig.suptitle(str(canonical), fontsize=13, fontweight="bold", y=1.0)
-    fig.text(0.5, 0.91, f"(Sim Period {wy_lo}-{wy_hi})",
-             ha="center", va="center", fontsize=9, fontweight="bold")
+    fig.text(0.5, 0.91, f"(WY {wy_lo}-{wy_hi})",
+             ha="center", va="center", fontsize=9, fontstyle="italic", color="0.35")
 
     # ---- Annual WY-total box panel (side-by-side): CS3 / VIC / QMAP ----
     if ax_box is not None:
@@ -571,7 +577,7 @@ def make_monthly_avg_pcterr_location_figure(detail_df: pd.DataFrame, location: s
     os.makedirs(output_dir, exist_ok=True)
     fig, (ax, ax_box) = plt.subplots(
         1, 2, figsize=(8, 4.5),
-        gridspec_kw={"width_ratios": [3.5, 1], "wspace": 0.22})
+        gridspec_kw={"width_ratios": [3.5, 1], "wspace": 0.34})
 
     # ---- Main: monthly median percent-error lines ----
     x = np.arange(len(_WY_MONTH_ORDER))
@@ -581,7 +587,7 @@ def make_monthly_avg_pcterr_location_figure(detail_df: pd.DataFrame, location: s
     ax.axhline(0, color="0.5", linewidth=0.8)
     ax.set_xticks(x); ax.set_xticklabels([calendar.month_abbr[m] for m in _WY_MONTH_ORDER])
     ax.set_xlabel("Month", fontsize=11)
-    ax.set_ylabel(f"Median Percent Error with CS3 ({wy_lo}-{wy_hi})", fontsize=11)
+    ax.set_ylabel("Median Monthly Error (%)", fontsize=11)
     ax.tick_params(labelsize=9)
     ax.grid(True, which="major", color="0.85", linewidth=0.6)
     ax.yaxis.set_minor_locator(AutoMinorLocator(4))
@@ -593,8 +599,8 @@ def make_monthly_avg_pcterr_location_figure(detail_df: pd.DataFrame, location: s
     _h, _l = ax.get_legend_handles_labels()
     fig.legend(_h, _l, loc="upper center", ncol=2, frameon=False, bbox_to_anchor=(0.5, 0.84))
     fig.suptitle(str(canonical), fontsize=13, fontweight="bold", y=1.0)
-    fig.text(0.5, 0.91, f"(Sim Period {wy_lo}-{wy_hi})",
-             ha="center", va="center", fontsize=9, fontweight="bold")
+    fig.text(0.5, 0.91, f"(WY {wy_lo}-{wy_hi})",
+             ha="center", va="center", fontsize=9, fontstyle="italic", color="0.35")
 
     # ---- Side: annual WY percent-error box-and-whisker (VIC vs VIC-QMAP) ----
     bp = ax_box.boxplot(box_data, showfliers=False, patch_artist=True, widths=0.6,
@@ -607,7 +613,7 @@ def make_monthly_avg_pcterr_location_figure(detail_df: pd.DataFrame, location: s
         med.set_color("black")
     ax_box.axhline(0, color="0.5", linewidth=0.8)
     ax_box.set_xticks([])
-    ax_box.set_xlabel("Annual (WY)", fontsize=10)
+    ax_box.set_xlabel("Annual (Water Year)", fontsize=10)
     ax_box.set_ylabel("Annual Percent Error (%)", fontsize=9)
     ax_box.tick_params(axis="y", labelsize=8)
     ax_box.grid(True, axis="y", color="0.9", linewidth=0.6)
@@ -691,13 +697,22 @@ def make_annual_timeseries_location_figure(vic_detail_df: pd.DataFrame,
     wy = annual.index.to_numpy(float)
     safe = sanitize_filename(canonical)
 
-    def _ts_chart(data, ylabel, title_suffix, fname):
+    x_hi = 2020
+    def _ts_chart(data, ylabel, title_suffix, fname, note=None):
         fig, ax = plt.subplots(figsize=(8, 4.5))
+
+        # Shade the simulation/validation window (QMAP only exists here) and
+        # mark its WY1972 start with a dashed boundary line.
+        ax.axvspan(_ANNUAL_TS_SIM_START, x_hi, color="#4488CC", alpha=0.07, zorder=0)
+        ax.axvline(_ANNUAL_TS_SIM_START, color="0.5", linestyle="--",
+                   linewidth=1.0, zorder=1)
+
         for label, col, color in _ANNUAL_TS_SERIES:
-            ax.plot(wy, data[col].to_numpy(float), linewidth=1.4, color=color, label=label)
+            ax.plot(wy, data[col].to_numpy(float), linewidth=1.4, color=color,
+                    label=label, zorder=3)
         ax.set_xlabel("Water Year", fontsize=11)
         ax.set_ylabel(ylabel, fontsize=11)
-        ax.set_xlim(1920, 2020)
+        ax.set_xlim(1920, x_hi)
         ax.set_ylim(bottom=0)
         # Frequent water-year ticks: labelled every 10 years, minor every 5.
         ax.xaxis.set_major_locator(MultipleLocator(10))
@@ -708,6 +723,11 @@ def make_annual_timeseries_location_figure(vic_detail_df: pd.DataFrame,
         ax.set_axisbelow(True)
         for spine in ("top", "right"):
             ax.spines[spine].set_visible(False)
+
+        # Label the shaded window (x in data coords, y in axes fraction).
+        ax.text(_ANNUAL_TS_SIM_START + 1.5, 0.99, "Validation period",
+                transform=ax.get_xaxis_transform(), va="top", ha="left",
+                fontsize=9, color="0.4")
 
         # No skill-metric box here: these are annual / 5-year-smoothed views, so
         # R2/NSE on them would differ from (and inflate vs) the repo's monthly
@@ -721,6 +741,9 @@ def make_annual_timeseries_location_figure(vic_detail_df: pd.DataFrame,
                    bbox_to_anchor=(0.5, 0.93), fontsize=9)
         fig.suptitle(f"{canonical} - {title_suffix}", fontsize=13,
                      fontweight="bold", y=1.0)
+        if note:
+            fig.text(0.01, 0.005, note, ha="left", va="bottom",
+                     fontsize=8, color="0.45")
         path = os.path.join(output_dir, fname)
         fig.savefig(path, dpi=300, bbox_inches="tight")
         plt.close(fig)
@@ -729,7 +752,8 @@ def make_annual_timeseries_location_figure(vic_detail_df: pd.DataFrame,
     p_annual = _ts_chart(annual, "Annual Flow (TAF)", "Annual Flow",
                          f"Annual_TS_{safe}.png")
     p_5y = _ts_chart(rolling, "5-Y Mean Annual Flow (TAF)", "5-Y Mean Annual Flow",
-                     f"Annual_5Y_Mean_TS_{safe}.png")
+                     f"Annual_5Y_Mean_TS_{safe}.png",
+                     note="Note: each 5-year mean is labeled by middle water year.")
 
     print(f"Annual time-series figures: {p_annual}, {p_5y}  (complete CS3/VIC WYs: {n_wy})")
     return {"location": canonical, "status": "ok", "n_complete_wy": n_wy,
@@ -814,9 +838,9 @@ def make_nonexceedance_location_figure(vic_detail_df: pd.DataFrame,
 
       - CS3-Hist        cs3_val, WY1922-1971
       - VIC-Hist        vic_val, WY1922-1971
-      - CS3-Sim (truth) cs3_val, WY1972-2018
+      - CS3-Sim         cs3_val, WY1972-2018
       - VIC-Sim         vic_val, WY1972-2018
-      - QMAP-Sim        <qmap_col>, WY1972-2018
+      - VIC-QMAP-Sim    <qmap_col>, WY1972-2018
 
     CS3/VIC come from `vic_detail_df` (full overlap); QMAP from `detail_df`.
     Complete water years only. `month` is an int 1-12 or "auto" (auto picks the
@@ -849,26 +873,28 @@ def make_nonexceedance_location_figure(vic_detail_df: pd.DataFrame,
     else:
         m = int(month)
 
+    # (label, source, column, color, linestyle, linewidth): historical solid,
+    # simulation dashed, VIC-QMAP-Sim solid red and slightly heavier.
     series = [
-        ("CS3-Hist",        vic_hist, "cs3_val", "black",   "-"),
-        ("VIC-Hist",        vic_hist, "vic_val", "#2E75B6", "-"),
-        ("CS3-Sim (truth)", vic_sim,  "cs3_val", "black",   "--"),
-        ("VIC-Sim",         vic_sim,  "vic_val", "#2E75B6", "--"),
-        ("QMAP-Sim",        qmap_sim, qmap_col,  "#C00000", "-"),
+        ("CS3-Hist",     vic_hist, "cs3_val", "black",   "-",  1.5),
+        ("VIC-Hist",     vic_hist, "vic_val", "#2E75B6", "-",  1.5),
+        ("CS3-Sim",      vic_sim,  "cs3_val", "black",   "--", 1.5),
+        ("VIC-Sim",      vic_sim,  "vic_val", "#2E75B6", "--", 1.5),
+        ("VIC-QMAP-Sim", qmap_sim, qmap_col,  "#C00000", "-",  2.0),
     ]
 
     os.makedirs(output_dir, exist_ok=True)
     fig, ax = plt.subplots(figsize=(7, 4.5))
     plotted = 0
-    for label, src, col, color, ls in series:
+    for label, src, col, color, ls, lw in series:
         if src.empty or col not in src.columns:
             continue
         vals = pd.to_numeric(src.loc[src["Month"] == m, col], errors="coerce").to_numpy(float)
         vals = np.sort(vals[np.isfinite(vals)])
         if vals.size == 0:
             continue
-        pp = np.arange(1, vals.size + 1) / (vals.size + 1) * 100.0   # rank/(n+1)
-        ax.plot(pp, vals, linewidth=1.5, color=color, linestyle=ls, label=label)
+        pp = np.arange(1, vals.size + 1) / (vals.size + 1)   # rank/(n+1), 0-1
+        ax.plot(pp, vals, linewidth=lw, color=color, linestyle=ls, label=label)
         plotted += 1
 
     if plotted == 0:
@@ -877,17 +903,19 @@ def make_nonexceedance_location_figure(vic_detail_df: pd.DataFrame,
         return {"location": canonical, "status": "no_data", "month": m, "figure_path": None}
 
     ax.set_yscale("log")
-    ax.set_xlim(0, 100)
-    ax.xaxis.set_major_formatter(PercentFormatter(xmax=100, decimals=0))
-    ax.set_xlabel("Non-Exceedance", fontsize=11)
+    ax.set_xlim(0, 1)
+    ax.xaxis.set_major_formatter(PercentFormatter(xmax=1.0))
+    ax.set_xlabel("Non-Exceedance Probability", fontsize=11)
     ax.set_ylabel("Flow (TAF)", fontsize=11)
     ax.tick_params(labelsize=9)
+    # Major gridlines light; minor y-gridlines (log decades) lighter still.
     ax.grid(True, which="major", color="0.85", linewidth=0.6)
+    ax.grid(True, which="minor", axis="y", color="0.93", linewidth=0.4)
     ax.set_axisbelow(True)
     for spine in ("top", "right"):
         ax.spines[spine].set_visible(False)
     ax.legend(frameon=False, fontsize=9, loc="upper left")
-    fig.suptitle(f"{canonical} - Non-Exceedance ({calendar.month_abbr[m]})",
+    fig.suptitle(f"{canonical} - Non-Exceedance ({calendar.month_name[m]})",
                  fontsize=13, fontweight="bold")
     fig.tight_layout()
 
@@ -978,7 +1006,7 @@ def make_monthly_avg_err_figure(detail_df: pd.DataFrame, requested_locations, ou
         ax.set_xlabel("Month", fontsize=11)
         if ylabel:
             ax.set_ylabel("Average Monthly Error (TAF/month)", fontsize=11)
-        ax.set_title(title, fontsize=12.5, fontweight="bold", pad=10)
+        ax.set_title(title, fontsize=12.5, fontweight="normal", pad=4)
         if shared_ylim is not None:
             ax.set_ylim(shared_ylim)
         ax.tick_params(labelsize=9)
@@ -987,33 +1015,63 @@ def make_monthly_avg_err_figure(detail_df: pd.DataFrame, requested_locations, ou
             ax.spines[spine].set_visible(False)
 
     # ---- Combined side-by-side figure (VIC | VIC-QMAP), shared y-axis ----
-    fig, (axL, axR) = plt.subplots(1, 2, figsize=(10, 4.5), sharey=True)
+    fig, (axL, axR) = plt.subplots(1, 2, figsize=(10, 5.2), sharey=True)
     _draw_monthly(axL, vic_monthly, "VIC Product A", ylabel=True)
     _draw_monthly(axR, qm_monthly, "VIC-QMAP Product A", ylabel=False)
     handles, labels = axL.get_legend_handles_labels()
-    fig.legend(handles, labels, loc="center left", bbox_to_anchor=(0.92, 0.5),
-               frameon=False, fontsize=8.5, handlelength=1.6, labelspacing=0.6)
-    fig.tight_layout(rect=(0, 0, 0.9, 1))
+    fig.legend(handles, labels, title="Location", loc="center left",
+               bbox_to_anchor=(0.90, 0.5), frameon=False, fontsize=8.5,
+               title_fontsize=9, handlelength=1.6, labelspacing=0.6)
+    # Stretch panels vertically, then place the title just above them so the
+    # gap to the panel sub-titles stays small (suptitle drawn after tight_layout
+    # so it is not allotted extra reserved space).
+    fig.tight_layout(rect=(0, 0, 0.89, 0.91))
+    fig.suptitle("Average Monthly Error Relative to CS3",
+                 fontsize=13, fontweight="bold", y=0.99)
+    fig.text(0.5, 0.935, f"(WY {_ANNUAL_TS_SIM_START}-{vic_end_year})",
+             ha="center", va="center", fontsize=9, fontstyle="italic", color="0.35")
     p_side = os.path.join(output_dir, "Monthly_Avg_Err_SideBySide.png")
     fig.savefig(p_side, dpi=300, bbox_inches="tight"); plt.close(fig)
 
-    # ---- Clustered annual average-error bar chart (one image) ----
-    fig, ax = plt.subplots(figsize=(max(7.0, 0.7 * len(used) + 2.5), 4.5))
-    xb = np.arange(len(used)); w = 0.4
-    ax.bar(xb - w / 2, [vic_annual[loc] for loc in used], w, label="VIC Product A", color="#2E75B6")
-    ax.bar(xb + w / 2, [qm_annual[loc] for loc in used], w, label="VIC-QMAP Product A", color="#C00000")
-    ax.axhline(0, color="0.4", linewidth=0.8)
-    ax.set_xticks(xb)
-    ax.set_xticklabels(used, rotation=30, ha="right", fontsize=9)
-    ax.set_ylabel("Average Annual Error (TAF/yr)", fontsize=11)
-    ax.set_title(f"Annual Error with CS3 Inflow (1972-{vic_end_year})",
-                 fontsize=12, fontweight="bold")
-    ax.legend(frameon=False, ncol=2, fontsize=9, loc="best")
-    ax.grid(True, axis="y", color="0.90", linewidth=0.6); ax.set_axisbelow(True)
-    ax.tick_params(axis="y", labelsize=9)
+    # ---- Clustered annual average-error horizontal bar chart (one image) ----
+    fig, ax = plt.subplots(figsize=(8, max(4.5, 0.55 * len(used) + 1.8)))
+    yb = np.arange(len(used)); h = 0.4
+    # VIC on the lower bar, VIC-QMAP on the upper bar (after invert_yaxis).
+    ax.barh(yb + h / 2, [vic_annual[loc] for loc in used], h,
+            label="VIC Product A", color="#2E75B6")
+    ax.barh(yb - h / 2, [qm_annual[loc] for loc in used], h,
+            label="VIC-QMAP Product A", color="#C00000")
+    ax.axvline(0, color="0.2", linewidth=1.0)   # darker zero reference
+    ax.set_yticks(yb)
+    ax.set_yticklabels(used, fontsize=9)
+    ax.invert_yaxis()   # first location at the top
+    ax.set_xlabel("Average Annual Error (TAF/year)", fontsize=11)
+    ax.grid(True, axis="x", color="0.90", linewidth=0.6); ax.set_axisbelow(True)
+    ax.tick_params(labelsize=9)
     for spine in ("top", "right"):
         ax.spines[spine].set_visible(False)
-    fig.tight_layout()
+
+    # Symmetric error axis when the positive and negative ranges are comparable;
+    # otherwise let matplotlib scale naturally (zero stays visible: bars start
+    # at 0). Error is on the x-axis here (horizontal bars).
+    _vals = np.array([vic_annual[loc] for loc in used]
+                     + [qm_annual[loc] for loc in used], float)
+    _vals = _vals[np.isfinite(_vals)]
+    if _vals.size:
+        pos = _vals[_vals > 0].max(initial=0.0)
+        neg = -_vals[_vals < 0].min(initial=0.0)
+        if pos > 0 and neg > 0 and min(pos, neg) >= 0.5 * max(pos, neg):
+            xmax = float(np.nanmax(np.abs(_vals))) * 1.10
+            ax.set_xlim(-xmax, xmax)
+
+    fig.subplots_adjust(top=0.84)
+    _h, _l = ax.get_legend_handles_labels()
+    fig.legend(_h, _l, loc="upper center", ncol=2, frameon=False,
+               bbox_to_anchor=(0.5, 0.89), fontsize=9)
+    fig.suptitle("Average Annual Error Relative to CS3 Inflow",
+                 fontsize=13, fontweight="bold", y=0.99)
+    fig.text(0.5, 0.935, f"(WY {_ANNUAL_TS_SIM_START}-{vic_end_year})",
+             ha="center", va="center", fontsize=9, fontstyle="italic", color="0.35")
     p_ann = os.path.join(output_dir, "Monthly_Avg_Err_Annual.png")
     fig.savefig(p_ann, dpi=300, bbox_inches="tight"); plt.close(fig)
 
