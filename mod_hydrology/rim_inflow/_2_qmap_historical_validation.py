@@ -51,7 +51,7 @@ Usage
 
 import os, sys, re, shutil, argparse, calendar, numpy as np, pandas as pd
 import matplotlib.pyplot as plt
-from matplotlib.ticker import AutoMinorLocator
+from matplotlib.ticker import AutoMinorLocator, MultipleLocator
 
 # Report-quality categorical palette 
 _REPORT_PALETTE = [
@@ -577,6 +577,164 @@ def make_monthly_avg_pcterr_location_figure(detail_df: pd.DataFrame, location: s
     return {"location": canonical, "status": "ok", "n_complete_wy": n_wy, "figure_path": fig_path}
 
 
+# Annual time-series plots span the full CS3/VIC overlap; QMAP exists only in
+# the simulation/validation window. Colours match the rest of the report
+# (CS3 black, VIC blue, QMAP red).
+_ANNUAL_TS_HIST_START = 1922          # first complete water year for CS3/VIC
+_ANNUAL_TS_SIM_START  = 1972          # first complete water year for QMAP
+_ANNUAL_TS_SERIES = [
+    ("CS3 Historical",     "CS3",  "black"),
+    ("VIC Product A",      "VIC",  "#2E75B6"),
+    ("VIC-QMAP Product A", "QMAP", "#C00000"),
+]
+
+
+def pbias(sim, obs) -> float:
+    """Percent bias = 100 * (sum(sim) - sum(obs)) / sum(obs); positive = sim
+    overestimates obs. NaN if obs sums to ~0. Matches utils.validation_plots."""
+    sim = np.asarray(sim, float); obs = np.asarray(obs, float)
+    m = np.isfinite(sim) & np.isfinite(obs)
+    if m.sum() < 1:
+        return np.nan
+    sim = sim[m]; obs = obs[m]
+    denom = obs.sum()
+    if abs(denom) < 1e-12:
+        return np.nan
+    return float(100.0 * (sim.sum() - denom) / denom)
+
+
+def format_metric_line(r2_val, nse_val, pbias_val, label="") -> str:
+    """Render 'R2=..  NSE=..  PBIAS=..%' with N/A guards (repo-standard format,
+    see utils.validation_plots.format_metric_line)."""
+    r2_s = f"{r2_val:.2f}" if np.isfinite(r2_val) else "N/A"
+    nse_s = f"{nse_val:.2f}" if np.isfinite(nse_val) else "N/A"
+    pb_s = f"{pbias_val:.1f}%" if np.isfinite(pbias_val) else "N/A"
+    line = f"R2={r2_s}   NSE={nse_s}   PBIAS={pb_s}"
+    return f"{label}:  {line}" if label else line
+
+
+def _annual_ts_metric_lines(data: pd.DataFrame) -> list:
+    """R2/NSE/PBIAS lines for CS3 (obs) vs VIC and vs QMAP, computed over the
+    common simulation window (WY _ANNUAL_TS_SIM_START..vic_end_year) only, so
+    both series are scored on the same period. One line per comparison, prefixed
+    by series label; a header line states the period."""
+    win = data.loc[(data.index >= _ANNUAL_TS_SIM_START) & (data.index <= vic_end_year)]
+    obs = win["CS3"].to_numpy(float)
+    lines = [f"Skill vs CS3 (WY {_ANNUAL_TS_SIM_START}-{vic_end_year}):"]
+    for label, col in (("VIC Product A", "VIC"), ("VIC-QMAP Product A", "QMAP")):
+        sim = win[col].to_numpy(float)
+        r = pearson_r(sim, obs)
+        r2_val = r * r if np.isfinite(r) else np.nan
+        lines.append(format_metric_line(r2_val, nse(sim, obs), pbias(sim, obs), label=label))
+    return lines
+
+
+def make_annual_timeseries_location_figure(vic_detail_df: pd.DataFrame,
+                                           detail_df: pd.DataFrame,
+                                           location: str, output_dir: str,
+                                           qmap_col: str = "qmap_postAdj") -> dict:
+    """Per-location annual water-year time-series figure (two stacked panels):
+
+      - Top:    Annual Flow (TAF)             — CS3, VIC, QMAP per water year
+      - Bottom: 5-Y Mean Annual Flow (TAF)    — 5-year centered rolling mean
+
+    CS3 and VIC come from `vic_detail_df` (full overlap, complete WY1922-2018);
+    QMAP comes from `detail_df` (`qmap_col`, complete WY1972-2018) so it appears
+    only in the simulation period. Annual flow is the sum of the 12 monthly TAF
+    values within each complete water year (incomplete years are dropped, so
+    partial WY2019 / Oct-Dec 2018 never contributes). The 5-year mean is a
+    centered rolling mean labeled at the middle year (WY1922-1926 -> WY1924).
+
+    Returns {location, status, n_complete_wy, figure_path}.
+    """
+    vic_names = vic_detail_df["CalSim"].astype(str)
+    vmask = vic_names.str.lower() == str(location).strip().lower()
+    if not vmask.any():
+        print(f"[WARN] --locations: '{location}' not found in VIC results; skipping annual TS.")
+        return {"location": location, "status": "missing", "n_complete_wy": 0, "figure_path": None}
+    canonical = vic_names[vmask].iloc[0]
+
+    # CS3 + VIC annual totals over the full overlap (complete WY1922-2018).
+    vdf = vic_detail_df[vmask].rename(columns={"VIC_val": "vic_val"}).copy()
+    vdf = complete_water_year_filter(vdf, wy_start=_ANNUAL_TS_HIST_START, wy_end=vic_end_year)
+    if vdf.empty:
+        print(f"[WARN] --locations: '{canonical}' has no complete water years "
+              f"(WY{_ANNUAL_TS_HIST_START}-{vic_end_year}); skipping annual TS.")
+        return {"location": canonical, "status": "no_complete_wy", "n_complete_wy": 0, "figure_path": None}
+    cs3_annual = pd.to_numeric(vdf["cs3_val"], errors="coerce").groupby(vdf["WY"]).sum(min_count=12)
+    vic_annual = pd.to_numeric(vdf["vic_val"], errors="coerce").groupby(vdf["WY"]).sum(min_count=12)
+
+    # QMAP annual totals over the simulation window only (complete WY1972-2018).
+    qmask = detail_df["CalSim"].astype(str).str.lower() == str(location).strip().lower()
+    qdf = complete_water_year_filter(detail_df[qmask].copy(),
+                                     wy_start=_ANNUAL_TS_SIM_START, wy_end=vic_end_year)
+    if qdf.empty:
+        qmap_annual = pd.Series(dtype=float)
+    else:
+        qmap_annual = pd.to_numeric(qdf[qmap_col], errors="coerce").groupby(qdf["WY"]).sum(min_count=12)
+
+    # Assemble a continuous WY index so incomplete/absent years render as gaps
+    # (QMAP is NaN outside the simulation period and never draws there).
+    annual = pd.DataFrame({"CS3": cs3_annual, "VIC": vic_annual, "QMAP": qmap_annual}).sort_index()
+    full_idx = pd.RangeIndex(int(annual.index.min()), int(annual.index.max()) + 1)
+    annual = annual.reindex(full_idx)
+    n_wy = int(cs3_annual.notna().sum())
+
+    # 5-year centered rolling mean (label at middle year: WY1922-26 -> WY1924).
+    rolling = annual.rolling(window=5, min_periods=5).mean().shift(-2)
+
+    os.makedirs(output_dir, exist_ok=True)
+    wy = annual.index.to_numpy(float)
+    safe = sanitize_filename(canonical)
+
+    def _ts_chart(data, ylabel, title_suffix, fname):
+        fig, ax = plt.subplots(figsize=(10, 4.5))
+        for label, col, color in _ANNUAL_TS_SERIES:
+            ax.plot(wy, data[col].to_numpy(float), linewidth=1.4, color=color, label=label)
+        ax.set_xlabel("Water Year", fontsize=11)
+        ax.set_ylabel(ylabel, fontsize=11)
+        ax.set_xlim(1920, 2020)
+        ax.set_ylim(bottom=0)
+        # Frequent water-year ticks: labelled every 10 years, minor every 5.
+        ax.xaxis.set_major_locator(MultipleLocator(10))
+        ax.xaxis.set_minor_locator(MultipleLocator(5))
+        ax.tick_params(axis="x", which="minor", length=3)
+        ax.tick_params(labelsize=9)
+        ax.grid(True, which="major", color="0.85", linewidth=0.6)
+        ax.set_axisbelow(True)
+        for spine in ("top", "right"):
+            ax.spines[spine].set_visible(False)
+
+        # Goodness-of-fit box (CS3 vs VIC and CS3 vs VIC-QMAP), repo-standard
+        # R2 / NSE / PBIAS format, computed over the plotted pairwise-finite data.
+        ax.text(0.015, 0.97, "\n".join(_annual_ts_metric_lines(data)),
+                transform=ax.transAxes, va="top", ha="left", fontsize=8,
+                family="monospace",
+                bbox=dict(boxstyle="square,pad=0.4", facecolor="white",
+                          edgecolor="0.8", linewidth=0.5, alpha=0.9))
+
+        # Legend above the plot, matching the repo's time-series figures.
+        fig.subplots_adjust(top=0.86)
+        _h, _l = ax.get_legend_handles_labels()
+        fig.legend(_h, _l, loc="upper center", ncol=3, frameon=False,
+                   bbox_to_anchor=(0.5, 0.93), fontsize=9)
+        fig.suptitle(f"{canonical} — {title_suffix}", fontsize=13,
+                     fontweight="bold", y=1.0)
+        path = os.path.join(output_dir, fname)
+        fig.savefig(path, dpi=300, bbox_inches="tight")
+        plt.close(fig)
+        return path
+
+    p_annual = _ts_chart(annual, "Annual Flow (TAF)", "Annual Flow",
+                         f"Annual_TS_{safe}.png")
+    p_5y = _ts_chart(rolling, "5-Y Mean Annual Flow (TAF)", "5-Y Mean Annual Flow",
+                     f"Annual_5Y_Mean_TS_{safe}.png")
+
+    print(f"Annual time-series figures: {p_annual}, {p_5y}  (complete CS3/VIC WYs: {n_wy})")
+    return {"location": canonical, "status": "ok", "n_complete_wy": n_wy,
+            "figure_path": p_annual, "figure_paths": {"annual": p_annual, "mean5y": p_5y}}
+
+
 def make_monthly_avg_err_figure(detail_df: pd.DataFrame, requested_locations, output_dir: str,
                                 qmap_col: str = "qmap_postAdj") -> dict:
     """`Monthly_Avg_Err` figures for the selected inflows, written as THREE
@@ -644,9 +802,8 @@ def make_monthly_avg_err_figure(detail_df: pd.DataFrame, requested_locations, ou
     else:
         shared_ylim = None
 
-    # ---- Monthly average-error line charts (one image each) ----
-    def _monthly_chart(series_by_loc, title, fname):
-        fig, ax = plt.subplots(figsize=(7.6, 4.5))
+    # ---- Monthly average-error line charts ----
+    def _draw_monthly(ax, series_by_loc, title, ylabel=True):
         for loc in used:
             ax.plot(x, series_by_loc[loc], marker="o", markersize=3.5,
                     linewidth=1.6, color=loc_colors[loc], alpha=0.95,
@@ -654,7 +811,8 @@ def make_monthly_avg_err_figure(detail_df: pd.DataFrame, requested_locations, ou
         ax.axhline(0, color="0.35", linewidth=0.9, zorder=1)
         ax.set_xticks(x); ax.set_xticklabels(month_labels)
         ax.set_xlabel("Month", fontsize=11)
-        ax.set_ylabel("Average Monthly Error (TAF/month)", fontsize=11)
+        if ylabel:
+            ax.set_ylabel("Average Monthly Error (TAF/month)", fontsize=11)
         ax.set_title(title, fontsize=12.5, fontweight="bold", pad=10)
         if shared_ylim is not None:
             ax.set_ylim(shared_ylim)
@@ -663,11 +821,13 @@ def make_monthly_avg_err_figure(detail_df: pd.DataFrame, requested_locations, ou
         for spine in ("top", "right"):
             ax.spines[spine].set_visible(False)
 
+    def _monthly_chart(series_by_loc, title, fname):
+        fig, ax = plt.subplots(figsize=(7.6, 4.5))
+        _draw_monthly(ax, series_by_loc, title)
         # Report-style legend outside the plot, on the right.
         ax.legend(loc="center left", bbox_to_anchor=(1.02, 0.5),
                   frameon=False, fontsize=8.5, handlelength=1.6,
                   borderaxespad=0.0, labelspacing=0.6)
-
         fig.tight_layout()
         path = os.path.join(output_dir, fname)
         fig.savefig(path, dpi=300, bbox_inches="tight"); plt.close(fig)
@@ -675,6 +835,17 @@ def make_monthly_avg_err_figure(detail_df: pd.DataFrame, requested_locations, ou
 
     p_vic = _monthly_chart(vic_monthly, "VIC Product A", "Monthly_Avg_Err_VIC.png")
     p_qm  = _monthly_chart(qm_monthly, "VIC-QMAP Product A", "Monthly_Avg_Err_VIC-QM.png")
+
+    # ---- Combined side-by-side figure (VIC | VIC-QMAP), shared y-axis ----
+    fig, (axL, axR) = plt.subplots(1, 2, figsize=(13, 4.8), sharey=True)
+    _draw_monthly(axL, vic_monthly, "VIC Product A", ylabel=True)
+    _draw_monthly(axR, qm_monthly, "VIC-QMAP Product A", ylabel=False)
+    handles, labels = axL.get_legend_handles_labels()
+    fig.legend(handles, labels, loc="center left", bbox_to_anchor=(0.92, 0.5),
+               frameon=False, fontsize=8.5, handlelength=1.6, labelspacing=0.6)
+    fig.tight_layout(rect=(0, 0, 0.9, 1))
+    p_side = os.path.join(output_dir, "Monthly_Avg_Err_SideBySide.png")
+    fig.savefig(p_side, dpi=300, bbox_inches="tight"); plt.close(fig)
 
     # ---- Clustered annual average-error bar chart (one image) ----
     fig, ax = plt.subplots(figsize=(max(7.0, 0.85 * len(used) + 3.0), 4.5))
@@ -696,9 +867,9 @@ def make_monthly_avg_err_figure(detail_df: pd.DataFrame, requested_locations, ou
     p_ann = os.path.join(output_dir, "Monthly_Avg_Err_Annual.png")
     fig.savefig(p_ann, dpi=300, bbox_inches="tight"); plt.close(fig)
 
-    paths = {"vic": p_vic, "vic_qm": p_qm, "annual": p_ann}
+    paths = {"vic": p_vic, "vic_qm": p_qm, "side_by_side": p_side, "annual": p_ann}
     print(f"Monthly_Avg_Err figures ({len(used)} location(s)): "
-          f"{p_vic}, {p_qm}, {p_ann}")
+          f"{p_vic}, {p_qm}, {p_side}, {p_ann}")
     return {"status": "ok", "locations": used, "figure_paths": paths}
 
 
@@ -978,6 +1149,9 @@ def main(locations=None, qmap_col="qmap_postAdj"):
             for loc in requested:
                 make_monthly_avg_pcterr_location_figure(detail_df, loc, monthly_dir,
                                                         qmap_col=qmap_col)
+            for loc in requested:
+                make_annual_timeseries_location_figure(vic_detail_df, detail_df, loc,
+                                                       monthly_dir, qmap_col=qmap_col)
             n_ok = sum(1 for r in results if r["status"] == "ok")
             print(f"\nMonthly-avg: produced {n_ok}/{len(requested)} requested location "
                   f"figure(s) in {monthly_dir}")
