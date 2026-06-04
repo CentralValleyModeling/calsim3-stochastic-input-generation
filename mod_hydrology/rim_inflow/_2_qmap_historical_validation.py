@@ -21,11 +21,13 @@ Outputs
 - _2_qmap_historical_validation/
   - calsim_qmap_validation_TS.csv   (row-level qmap results)
   - calsim_VIC_TS.csv               (VIC baseline diagnostics, full overlap)
+  - qmap_skill_summary_monthly.csv  (per-inflow monthly NSE/R2/PBIAS: VIC vs CS3
+                                     and QMAP vs CS3)
   - figures/
     - TotalInflow_Bar_Normalized_NSE.png       (VIC vs QMAP normalized-NSE skill curves)
     - TotalInflow_Bar_Normalized_NSE_data.csv  (plotted data for QA/QC)
     - Monthly_Avg_Err_SideBySide.png           (VIC vs VIC-QMAP avg monthly error, shared y-axis; fixed major-reservoir set)
-    - Monthly_Avg_Err_Annual.png               (clustered annual avg error: VIC vs VIC-QMAP)
+    - Annual_Avg_Err.png                       (clustered annual avg error: VIC vs VIC-QMAP)
     - Monthly_Avg_<loc>.png                    (CS3 vs VIC vs VIC-QMAP monthly means; only when --locations is passed)
     - Monthly_Avg_PctErr_<loc>.png             (monthly median % error + annual WY % error box; only when --locations is passed)
     - Annual_TS_<loc>.png                      (annual WY flow time series: CS3/VIC/QMAP; only when --locations is passed)
@@ -372,11 +374,8 @@ _MONTHLY_AVG_SERIES = [
 # Fixed location set always shown in the Monthly_Avg_Err validation figures
 # (independent of --locations). Missing entries are warned and skipped.
 _MONTHLY_AVG_ERR_LOCATIONS = [
-    "UNIMP_OROV", "UNIMP_FOLS", "UNIMP_YUBA", "UNIMP_TU",
-    "UNIMP_SJ", "UNIMP_TRIN", "UNIMP_ST", "UNIMP_ME", "UNIMP_SRBB",
-]
-
-
+    "UNIMP_OROV", "UNIMP_SRBB", "UNIMP_FOLS", "UNIMP_YUBA", "UNIMP_TU",
+    "UNIMP_SJ", "UNIMP_TRIN", "UNIMP_ST", "UNIMP_ME"]
 def sanitize_filename(name: str) -> str:
     """Make a string safe for use as a filename: replace spaces and unsafe
     characters (/ \\ : * ? " < > | and similar) with underscores."""
@@ -613,7 +612,7 @@ def make_monthly_avg_pcterr_location_figure(detail_df: pd.DataFrame, location: s
         med.set_color("black")
     ax_box.axhline(0, color="0.5", linewidth=0.8)
     ax_box.set_xticks([])
-    ax_box.set_xlabel("Annual (Water Year)", fontsize=10)
+    ax_box.set_xlabel("Annual (WY)", fontsize=10)
     ax_box.set_ylabel("Annual Percent Error (%)", fontsize=9)
     ax_box.tick_params(axis="y", labelsize=8)
     ax_box.grid(True, axis="y", color="0.9", linewidth=0.6)
@@ -739,7 +738,7 @@ def make_annual_timeseries_location_figure(vic_detail_df: pd.DataFrame,
         _h, _l = ax.get_legend_handles_labels()
         fig.legend(_h, _l, loc="upper center", ncol=3, frameon=False,
                    bbox_to_anchor=(0.5, 0.93), fontsize=9)
-        fig.suptitle(f"{canonical} - {title_suffix}", fontsize=13,
+        fig.suptitle(f"{canonical}: {title_suffix}", fontsize=13,
                      fontweight="bold", y=1.0)
         if note:
             fig.text(0.01, 0.005, note, ha="left", va="bottom",
@@ -915,7 +914,7 @@ def make_nonexceedance_location_figure(vic_detail_df: pd.DataFrame,
     for spine in ("top", "right"):
         ax.spines[spine].set_visible(False)
     ax.legend(frameon=False, fontsize=9, loc="upper left")
-    fig.suptitle(f"{canonical} - Non-Exceedance ({calendar.month_name[m]})",
+    fig.suptitle(f"{canonical}: Non-Exceedance ({calendar.month_name[m]})",
                  fontsize=13, fontweight="bold")
     fig.tight_layout()
 
@@ -934,7 +933,7 @@ def make_monthly_avg_err_figure(detail_df: pd.DataFrame, requested_locations, ou
 
       - Monthly_Avg_Err_SideBySide.png  VIC vs VIC-QMAP average monthly error
                                         (TAF/month), shared y-axis
-      - Monthly_Avg_Err_Annual.png      clustered annual average error (TAF/yr),
+      - Annual_Avg_Err.png              clustered annual average error (TAF/yr),
                                         VIC vs VIC-QMAP
 
     Error sign convention is product - CS3 (positive = product higher than CS3):
@@ -1029,7 +1028,7 @@ def make_monthly_avg_err_figure(detail_df: pd.DataFrame, requested_locations, ou
     fig.suptitle("Average Monthly Error Relative to CS3",
                  fontsize=13, fontweight="bold", y=0.99)
     fig.text(0.5, 0.935, f"(WY {_ANNUAL_TS_SIM_START}-{vic_end_year})",
-             ha="center", va="center", fontsize=9, fontstyle="italic", color="0.35")
+             ha="center", va="center", fontsize=11, fontstyle="italic", color="0.35")
     p_side = os.path.join(output_dir, "Monthly_Avg_Err_SideBySide.png")
     fig.savefig(p_side, dpi=300, bbox_inches="tight"); plt.close(fig)
 
@@ -1071,8 +1070,8 @@ def make_monthly_avg_err_figure(detail_df: pd.DataFrame, requested_locations, ou
     fig.suptitle("Average Annual Error Relative to CS3 Inflow",
                  fontsize=13, fontweight="bold", y=0.99)
     fig.text(0.5, 0.935, f"(WY {_ANNUAL_TS_SIM_START}-{vic_end_year})",
-             ha="center", va="center", fontsize=9, fontstyle="italic", color="0.35")
-    p_ann = os.path.join(output_dir, "Monthly_Avg_Err_Annual.png")
+             ha="center", va="center", fontsize=11, fontstyle="italic", color="0.35")
+    p_ann = os.path.join(output_dir, "Annual_Avg_Err.png")
     fig.savefig(p_ann, dpi=300, bbox_inches="tight"); plt.close(fig)
 
     paths = {"side_by_side": p_side, "annual": p_ann}
@@ -1120,6 +1119,50 @@ def parse_locations(loc_args, available, master_order=None):
         if canon not in seen:
             seen.add(canon); out.append(canon)
     return out
+
+
+def write_monthly_skill_summary(detail_df: pd.DataFrame, output_dir: str,
+                                qmap_col: str = "qmap_postAdj",
+                                wy_start: int = 1972, wy_end: int = vic_end_year):
+    """Per-inflow monthly skill summary (VIC vs CS3 and QMAP vs CS3) over the
+    complete validation water years, written as a CSV (one row per inflow).
+
+    Metrics are computed on monthly values using the repo-standard
+    utils.validation_plots functions (R2 = Pearson^2, NSE, and
+    PBIAS = 100*sum(sim-obs)/sum(obs); positive PBIAS = product overestimates
+    CS3). CS3 is the observed series; VIC and QMAP are the simulated series.
+    """
+    # Reuse the repo's shared metric implementations (signature is obs, sim).
+    from utils.validation_plots import r2 as vp_r2, nse as vp_nse, pbias as vp_pbias
+
+    d = complete_water_year_filter(detail_df.copy(), wy_start=wy_start, wy_end=wy_end)
+    if d.empty:
+        print("[WARN] skill summary: no complete water years; CSV not written.")
+        return None
+    wy_label = f"{int(d['WY'].min())}-{int(d['WY'].max())}"
+
+    rows = []
+    for cal, g in d.groupby("CalSim", observed=True):
+        cs3 = pd.to_numeric(g["cs3_val"], errors="coerce").to_numpy(float)   # obs
+        vic = pd.to_numeric(g["vic_val"], errors="coerce").to_numpy(float)   # sim
+        qm  = pd.to_numeric(g[qmap_col],  errors="coerce").to_numpy(float)   # sim
+        if not np.isfinite(cs3).any():
+            continue
+        vic_nse, qm_nse = vp_nse(cs3, vic),   vp_nse(cs3, qm)
+        vic_r2,  qm_r2  = vp_r2(cs3, vic),    vp_r2(cs3, qm)
+        vic_pb,  qm_pb  = vp_pbias(cs3, vic), vp_pbias(cs3, qm)
+        rows.append({
+            "CalSim": str(cal), "WY": wy_label,
+            "VIC_NSE": vic_nse, "QMAP_NSE": qm_nse,
+            "VIC_R2": vic_r2, "QMAP_R2": qm_r2,
+            "VIC_PBIAS": vic_pb, "QMAP_PBIAS": qm_pb,
+        })
+
+    summary = pd.DataFrame(rows)
+    path = os.path.join(output_dir, "qmap_skill_summary_monthly.csv")
+    summary.to_csv(path, index=False)
+    print(f"Monthly skill summary: {path}  ({len(summary)} inflows)")
+    return path
 
 
 def main(locations=None, qmap_col="qmap_postAdj", nonexceedance_month=None):
@@ -1407,6 +1450,10 @@ def main(locations=None, qmap_col="qmap_postAdj", nonexceedance_month=None):
 
     # VIC CSV (full overlap; standardized cs3_val)
     vic_detail_df.to_csv(os.path.join(OUTPUT_DIR, "calsim_VIC_TS.csv"), index=False)
+
+    # Per-inflow monthly skill summary (VIC vs CS3, QMAP vs CS3, and deltas)
+    # over the complete validation water years.
+    write_monthly_skill_summary(detail_df, OUTPUT_DIR, qmap_col=qmap_col)
 
     # -- 6. PRODUCT A VALIDATION CSV (for SV compiler) --------------------
     # Write final CalSim-format CSV (Part B, Part C, Year, Month, Value) to
