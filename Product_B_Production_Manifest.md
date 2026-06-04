@@ -42,6 +42,7 @@ Tier 1  FORCING (mod_forcing)
         python mod_forcing/vic/_1_append_wind_wgen_hist.py
         -> [EXTERNAL] VIC hydrologic model run
         python mod_forcing/vic/_2_compile_rim_inflows.py --product B
+        python mod_forcing/vic/_3_aggregate_routings.py --product B
     Climate:
         python mod_forcing/climate/_1_pp_point_locations.py --source Product_B --scenario 1
         python mod_forcing/climate/_2_uhh_basin_averages.py --source Product_B --scenario 1
@@ -100,6 +101,14 @@ Tier 5  FINAL COMPILATION (postprocessing)
         python postprocessing/sv_compile/product_b_compilation.py
         -> ProductB_SV_n01.dss ... ProductB_SV_n10.dss  (10 x 100 WY)
 
+        python postprocessing/calsim_runs/infeasibilities/n10.py
+        -> ProductB_SV_n10_fixed.dss  (REQUIRED n10 cold-start fix: restores
+           baseline SV values for months <= Oct 1921 so the first simulation
+           timestep is feasible; preserves the Nov 1921 - Sep 2021 stochastic
+           sequence. Use the _fixed file as the n10 input to CalSim. Re-run
+           whenever ProductB_SV_n10.dss is recompiled. n10 is the only chunk
+           with an SV-side fix; the others are addressed via WRESL model code.)
+
         Optional CLI flags:
           --chunks N [N ...]   Process specific chunks (default: all 10).
           --skip-comparison    Skip the Product A vs B comparison step.
@@ -155,6 +164,7 @@ byte-identical run-to-run on identical inputs.
 | vic/_1 | `python mod_forcing/vic/_1_append_wind_wgen_hist.py` | WGEN `Product_B` met files; historical wind | wind-appended VIC forcing |
 | [EXTERNAL] VIC | manual VIC model run (10 chunks) | wind-appended forcing | VIC flux files (RUNOFF + BASEFLOW) per chunk |
 | vic/_2 | `python mod_forcing/vic/_2_compile_rim_inflows.py --product B` | VIC fluxes; grid weights | routed monthly rim inflows `CS3_*_qmo_n{01..10}.csv` (+ DSS per chunk) |
+| vic/_3 | `python mod_forcing/vic/_3_aggregate_routings.py --product B` | routed `CS3_*_qmo_n{01..10}.csv` components | composite routings (e.g. `CS3_SRBB_qmo_n{01..10}.csv` = Bend Bridge: Shasta + above-SAC257 tributaries) |
 | climate/_1 | `python mod_forcing/climate/_1_pp_point_locations.py --source Product_B --scenario 1` | WGEN met files; PP point reference | per-location monthly precip CSVs (per chunk) |
 | climate/_2 | `python mod_forcing/climate/_2_uhh_basin_averages.py --source Product_B --scenario 1` | WGEN met files; CS3 baseline DSS (UHH precip); grid weights | basin-average precip/Tmax/Tmin/VPD + `_product_b_final/` SV CSVs |
 
@@ -350,6 +360,7 @@ patterns auto-filled by the final compiler from the CalSim baseline
 | Script | Command | Inputs | Outputs |
 |---|---|---|---|
 | sv_compile (final) | `python postprocessing/sv_compile/product_b_compilation.py` (`--chunks N`; `--skip-comparison`; `--skip-dss`; `--summary-figures`) | every module's `_product_b_final/*.csv`; CS3 baseline DSS; master inventory; optional Product A compiled DSS for comparison | `ProductB_SV_n{01..10}.dss` (10 chunks; canonical window Oct 1921 - Sep 2021 / WY 1922-2021; first 9 months of each chunk skipped for water-year alignment); inventory cross-reference CSVs; `product_b_vs_a_comparison.csv` and `product_b_vs_calsim_base_comparison.csv` + per-category `figures/` |
+| n10 cold-start fix | `python postprocessing/calsim_runs/infeasibilities/n10.py` | compiled `ProductB_SV_n10.dss`; CalSim baseline DSS | `ProductB_SV_n10_fixed.dss` -- baseline SV values restored for months <= Oct 1921, curing the n10 first-timestep LP infeasibility caused by an extreme cold-start stochastic draw (Cosumnes/Sacramento inflows 10-60x baseline at Oct 1921); Nov 1921 - Sep 2021 stochastic sequence preserved. **Required:** use `_n10_fixed.dss` (not the raw `_n10.dss`) as the n10 input to CalSim, and re-run this script whenever n10 is recompiled. Only n10 needs an SV-side fix; other chunks are handled by WRESL model-code changes. |
 | (optional) calsim_runs | `python postprocessing/calsim_runs/_productB_pickle_builder.py`; `python postprocessing/calsim_runs/_productB_postproc.py` | external CalSim 3.0 run results consuming `ProductB_SV_n{01..10}.dss` | Product B run pickle cache (per-chunk values / diffs / units pkls) |
 
 The final compiler auto-fills inventory "Constant/Rept" SVs from the
