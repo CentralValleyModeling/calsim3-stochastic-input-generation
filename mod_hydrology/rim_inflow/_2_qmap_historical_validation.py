@@ -40,7 +40,7 @@ Usage
     # Also write per-location monthly-average comparison figures:
     python mod_hydrology/rim_inflow/_2_qmap_historical_validation.py --locations UNIMP_OROV
     python mod_hydrology/rim_inflow/_2_qmap_historical_validation.py --locations UNIMP_OROV FOLSM_INFLOW
-    python mod_hydrology/rim_inflow/_2_qmap_historical_validation.py --locations UNIMP_OROV,I_MLRTN_IMP,I_SHASTA
+    python mod_hydrology/rim_inflow/_2_qmap_historical_validation.py --locations UNIMP_OROV,I_MLRTN_IMP,I_SHSTA
     python mod_hydrology/rim_inflow/_2_qmap_historical_validation.py --locations ALL
 
     # Major reservoir unimpaired inflows:
