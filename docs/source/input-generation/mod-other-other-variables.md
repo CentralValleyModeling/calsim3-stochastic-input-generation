@@ -173,7 +173,7 @@ where $P_{Stockton}$ is monthly precipitation depth in inches from the Stockton 
 Product A validation for DELTAACCRETIONFORNDOI: actual CalSim input DSS (blue) vs. reconstructed values (orange), WY 1971--2018. Overall agreement is strong; reconstructed values spike above actuals in a few wet years (notably ~720 TAF in 1993 and ~870 TAF in 1998).
 ```
 
-The direct calculation approach achieves $R^2 = 0.92$, improving on the earlier QM approach ($R^2 = 0.87$). The mean reconstructed value of 63.3 TAF compares to a mean actual of 69.3 TAF, reflecting slightly lower precipitation in the Product A synthetic climate. Some reconstructed values spike above historical actuals in extreme wet years; the current approach preserves the full range of statistically plausible events consistent with stochastic planning objectives to explore distribution tails.
+The direct calculation approach achieves $R^2 = 0.92$. The mean reconstructed value of 63.3 TAF compares to a mean actual of 69.3 TAF, reflecting slightly lower precipitation in the Product A synthetic climate. Some reconstructed values spike above historical actuals in extreme wet years; the current approach preserves the full range of statistically plausible events consistent with stochastic planning objectives to explore distribution tails.
 
 ---
 
