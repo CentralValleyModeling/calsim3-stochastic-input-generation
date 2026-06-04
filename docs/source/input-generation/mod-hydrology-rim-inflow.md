@@ -30,6 +30,8 @@ To ensure mass balance consistency across river basins after quantile mapping, a
 
 Six major anchor watersheds require adjustment: Folsom (FOLS, 46 tributaries--the largest), Oroville (OROV), Sacramento River at Bend Bridge (SRBB), Yuba (YUBA), Stanislaus (ST), and Tuolumne (TU). A total of 116 of the 227 tributary flows are adjusted through this process. Four additional anchor watersheds--Shasta, Trinity, Merced, and San Joaquin--have no assigned sub-tributaries and require no adjustment.
 
+The Bend Bridge anchor (UNIMP_SRBB) is quantile-mapped against a composite VIC routing rather than the Shasta-inflow routing it previously borrowed. The Shasta routing stops at the dam and omits the drainage between Shasta and the Bend Bridge gauge (CalSim node SAC257), under-representing the anchor by roughly 30 percent. The composite (`CS3_SRBB`, built by `mod_forcing/vic/_3_aggregate_routings.py`) sums the Shasta inflow with the seven tributaries the CalSim 3 domain GIS tags as draining above SAC257: Cow, Battle, Bear, Clear (and Clear inflow to Whiskeytown), Cottonwood, and South Fork Cottonwood creeks. The Merced (Lake McClure) and San Joaquin (Millerton) anchors already coincide with their index gauges and need no such composite.
+
 The adjustment formula distributes any discrepancy proportionally among tributaries based on their contribution to the total:
 
 $$\text{Trib}{\text{adjust}} = \left(\text{Anchor}{\text{QM}} - \sum \text{Tribs}_{\text{QM}}\right) \times \frac{\text{Trib}_{\text{QM}}}{\sum \text{Tribs}_{\text{QM}}}$$

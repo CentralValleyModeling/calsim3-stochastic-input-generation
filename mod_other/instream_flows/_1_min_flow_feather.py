@@ -425,7 +425,7 @@ def _load_product_b_chunk(chunk_num: int) -> pd.Series:
     """
     path = os.path.join(
         PATH_UNIMP_OROV_PB_DIR,
-        f'UNIMP_OROV_8RI_OROVI_qmo_n{chunk_num:02d}.csv'
+        f'UNIMP_OROV_qmo_n{chunk_num:02d}.csv'
     )
     df = pd.read_csv(path, usecols=['Year', 'Month', 'qmap_postAdj'])
     # Build end-of-month DatetimeIndex from the file's Year/Month columns
@@ -573,7 +573,7 @@ def run_product_b():
     for n in range(1, 11):
         pb_path = os.path.join(
             PATH_UNIMP_OROV_PB_DIR,
-            f'UNIMP_OROV_8RI_OROVI_qmo_n{n:02d}.csv'
+            f'UNIMP_OROV_qmo_n{n:02d}.csv'
         )
         if not os.path.exists(pb_path):
             print(f"  [n{n:02d}] Skipped - file not found: {pb_path}")

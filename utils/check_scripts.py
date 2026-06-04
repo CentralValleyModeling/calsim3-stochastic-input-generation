@@ -61,6 +61,7 @@ PRODUCT_A_SCRIPTS = [
     "mod_other/upper_watershed/_0_load_sv.py",
     "mod_forcing/vic/_1_append_wind_wgen_hist.py",
     "mod_forcing/vic/_2_compile_rim_inflows.py",
+    "mod_forcing/vic/_3_aggregate_routings.py",
     "mod_forcing/climate/_1_pp_point_locations.py",
     "mod_forcing/climate/_2_uhh_basin_averages.py",
     "mod_hydrology/calsimhydro/_1_compile_precip.py",

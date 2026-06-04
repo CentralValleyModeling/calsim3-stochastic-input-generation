@@ -1,7 +1,9 @@
 name: Deploy Sphinx Docs to GitHub Pages
 
 on:
-  workflow_dispatch:   # Manual trigger only — run from GitHub Actions UI
+  push:
+    branches: [main]   # Auto-deploy whenever main is updated
+  workflow_dispatch:   # Also allow manual trigger from the GitHub Actions UI
 
 permissions:
   contents: read
