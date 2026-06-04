@@ -49,7 +49,7 @@ Usage
         UNIMP_SJ UNIMP_TRIN UNIMP_ST UNIMP_ME UNIMP_SRBB
 """
 
-import os, sys, re, argparse, calendar, numpy as np, pandas as pd
+import os, sys, re, shutil, argparse, calendar, numpy as np, pandas as pd
 import matplotlib.pyplot as plt
 from matplotlib.ticker import AutoMinorLocator
 from pathlib import Path
@@ -318,7 +318,7 @@ _MONTHLY_AVG_SERIES = [
 # (independent of --locations). Missing entries are warned and skipped.
 _MONTHLY_AVG_ERR_LOCATIONS = [
     "I_SHSTA", "UNIMP_OROV", "UNIMP_FOLS", "UNIMP_YUBA", "UNIMP_TU",
-    "UNIMP_SJ", "UNIMP_TRIN", "UNIMP_ST", "UNIMP_ME",
+    "UNIMP_SJ", "UNIMP_TRIN", "UNIMP_ST", "UNIMP_ME", "UNIMP_SRBB",
 ]
 
 
@@ -618,6 +618,18 @@ def make_monthly_avg_err_figure(detail_df: pd.DataFrame, requested_locations, ou
     cmap = plt.get_cmap("tab10")
     loc_colors = {loc: cmap(i % 10) for i, loc in enumerate(used)}
 
+    # Shared y-axis range across BOTH monthly-error charts so VIC and VIC-QMAP
+    # are directly comparable.
+    _all = np.concatenate([np.asarray(v, float) for v in
+                           list(vic_monthly.values()) + list(qm_monthly.values())])
+    _all = _all[np.isfinite(_all)]
+    if _all.size:
+        lo, hi = float(_all.min()), float(_all.max())
+        pad = 0.05 * (hi - lo) if hi > lo else (abs(hi) or 1.0)
+        shared_ylim = (lo - pad, hi + pad)
+    else:
+        shared_ylim = None
+
     # ---- Monthly average-error line charts (one image each) ----
     def _monthly_chart(series_by_loc, title, fname):
         fig, ax = plt.subplots(figsize=(7, 4.5))
@@ -629,6 +641,8 @@ def make_monthly_avg_err_figure(detail_df: pd.DataFrame, requested_locations, ou
         ax.set_xlabel("Month", fontsize=11)
         ax.set_ylabel("Average Monthly Error (TAF/month)", fontsize=11)
         ax.set_title(title, fontsize=12, fontweight="bold")
+        if shared_ylim is not None:
+            ax.set_ylim(shared_ylim)
         ax.tick_params(labelsize=9)
         ax.grid(True, color="0.88", linewidth=0.6); ax.set_axisbelow(True)
         ax.legend(loc="center left", bbox_to_anchor=(1.02, 0.5), frameon=False, fontsize=8)
@@ -698,6 +712,11 @@ def parse_locations(loc_args, available, master_order=None):
 
 
 def main(locations=None, qmap_col="qmap_postAdj"):
+    # Start each run with a clean figures/ folder so stale figures from a
+    # previous run (e.g. different --locations) are never left behind.
+    shutil.rmtree(FIGURES_DIR, ignore_errors=True)
+    os.makedirs(FIGURES_DIR, exist_ok=True)
+
     df_vic_all    = load_vic_dir(vic_dir)
     df_calsim_all = read_calsim_monthly_multi(dss_file, calsim_names)
 
