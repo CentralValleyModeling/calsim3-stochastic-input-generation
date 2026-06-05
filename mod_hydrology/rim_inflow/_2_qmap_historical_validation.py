@@ -61,7 +61,7 @@ Usage
     python mod_hydrology/rim_inflow/_2_qmap_historical_validation.py --locations UNIMP_OROV --nonexceed-month 1,5,9
     python mod_hydrology/rim_inflow/_2_qmap_historical_validation.py --locations UNIMP_OROV --nonexceed-month all
 
-    # Replicate workbook with pre-adjustment QMAP:
+    # Use the pre-adjustment (pre-mass-balance) QMAP values instead:
     python mod_hydrology/rim_inflow/_2_qmap_historical_validation.py --locations FOLSM_INFLOW --nonexceed-month 1 --qmap-col qmap_preAdj
 """
 
@@ -702,11 +702,6 @@ def make_annual_timeseries_location_figure(vic_detail_df: pd.DataFrame,
                 transform=ax.get_xaxis_transform(), va="top", ha="left",
                 fontsize=9, color="0.4")
 
-        # No skill-metric box here: these are annual / 5-year-smoothed views, so
-        # R2/NSE on them would differ from (and inflate vs) the repo's monthly
-        # skill convention. Skill is reported on the monthly basis elsewhere
-        # (calsim_qmap_validation_TS.csv and the TotalInflow_Bar figure).
-
         # Legend above the plot, matching the repo's time-series figures.
         fig.subplots_adjust(top=0.86)
         _h, _l = ax.get_legend_handles_labels()
@@ -804,7 +799,7 @@ def make_nonexceedance_location_figure(vic_detail_df: pd.DataFrame,
                                        month="auto",
                                        qmap_col: str = "qmap_postAdj") -> dict:
     """Empirical non-exceedance (flow-duration-style) figure for one inflow and
-    one calendar month, replicating the right-hand workbook chart.
+    one calendar month.
 
     Five sorted-flow curves, plotting position rank/(n+1) on the x-axis
     (formatted 0-100%), sorted monthly flow (TAF) on a log y-axis:
@@ -1456,7 +1451,7 @@ def parse_args():
               "produced (one per month per location). Accepts one or more months "
               "(space and/or comma separated): 1-12, month names such as Jan or "
               "May, 'all' for every month, or 'auto' (peak CS3 month; the default "
-              "when the flag is given with no value). For workbook replication: "
+              "when the flag is given with no value). Examples: "
               "FOLSM_INFLOW uses 1; I_MLRTN_IMP uses 5."),
     )
     return p.parse_args()
