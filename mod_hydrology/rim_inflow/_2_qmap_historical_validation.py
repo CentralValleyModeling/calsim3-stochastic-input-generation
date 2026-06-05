@@ -5,9 +5,11 @@ Train quantile mapping on the first half of the overlap period
 (Oct 1921 - Sep 1971) and validate on the second half (Oct 1971 - Sep 2018,
 
 For each CalSim/VIC pair from CalSim3_VIC_name_mapping.csv:
-- Compute pre-adjustment QMAP and skill metrics (R-squared, NSE)
-- Enforce anchor/tributary mass balance (post-adjustment)
+- Quantile-map VIC to CalSim on the test window (pre-adjustment QMAP)
+- Enforce anchor/tributary mass balance (post-adjustment QMAP)
 - Compare VIC baseline, QMAP pre-adj, and QMAP post-adj
+- Report per-inflow monthly skill (NSE, R-squared, PBIAS) for VIC vs CS3 and
+  QMAP vs CS3 in qmap_skill_summary_monthly.csv
 
 Inputs
 ------
