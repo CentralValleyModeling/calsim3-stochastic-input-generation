@@ -3,12 +3,22 @@
 
 Infeasibility summary
 ---------------------
-n10 -- 1921_10 (first simulation timestep) infeasible.
-The specific SV value(s) causing the failure have not been identified.
-One or more stochastic SV values at October 1921 differ from the baseline
-in a way that makes the LP infeasible at initialization. Unlike the other
-failure modes (low-flow, high-flow, low-storage), no single constraint or
-variable has been pinpointed as the root cause.
+n10 -- 1921_10 (first simulation timestep) infeasible. Reported as
+``maxdiversionrate_total in svar definition: Initial data of
+rnchowr_rem_totaldv in dss file doesn't exist`` (wr_ranchomurieta.wresl,
+cycle 14 sjrbase). ``rnchowr_rem_totaldv`` is a decision variable (not an
+SV), so it is absent from the SV DSS by design -- the message is a
+downstream symptom of the first-timestep LP failing, not a missing record.
+
+A baseline-vs-n10 diff at Oct 1921 confirms the compile introduces no data
+defect (all 19,063 paths present, valid, no sentinels). The trigger is a
+pathological stochastic cold-start: n10's Oct 1921 ``I_CSM035`` (Cosumnes
+inflow, which drives the Rancho Murieta water right) is 19.5 TAF vs 0.33
+baseline (~59x), with Sacramento unimpaired flows 10-17x baseline. October
+is the cold-start timestep, so there is no prior month to absorb the shock.
+The exact binding LP constraint was not isolated, but the Cosumnes inflow
+matches the variable in the error. n10 is the only chunk whose extreme draw
+lands on the cold-start month; the others fail mid-run (WRESL fixes).
 
 Fix
 ---
@@ -35,7 +45,7 @@ import numpy as np
 import pandas as pd
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
+sys.path.insert(0, str(Path(__file__).resolve().parents[3]))
 from utils.paths import get_base_dir, get_module_generated_dir
 
 from pydsstools.heclib.dss import HecDss
@@ -56,7 +66,7 @@ DSS_PATTERN = "/*/*/*/*/1MON/*"
 CUTOFF = pd.Timestamp(1921, 10, 31)
 
 # -- Junction helper (long OneDrive paths) ---------------------------------
-_REPO_ROOT  = Path(__file__).resolve().parents[2]
+_REPO_ROOT  = Path(__file__).resolve().parents[3]
 _DSS_LINK   = _REPO_ROOT / "_dss_link"
 _PATH_LIMIT = 200
 

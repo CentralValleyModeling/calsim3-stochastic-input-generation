@@ -26,11 +26,10 @@ B120 Forecasts and Water Year Type Indexes were previously documented in separat
 | R_RFS71A_OMR039_SV | RETURN-FLOW | Water Year Type Averaging |
 | EBTML_LOSS | LOSS | Water Year Type Averaging |
 | CAP_C_CAA238_CVC_F, CAP_C_CAA238_CVC_R | CAPACITY | Repeating Time Series |
-| YBA Transfers | -- | Dynamic WRESL Flag |
 
 ## Methodology Overview
 
-A total of five different approaches are applied to reconstruct the miscellaneous terms, plus one term governed by a dynamic WRESL flag that requires no pre-generation:
+A total of five different approaches are applied to reconstruct the miscellaneous terms:
 
 **1- Water Year Type Monthly Averaging (WYT):** Groups historical months by water year type (Wet, Above Normal, Below Normal, Dry, Critical) and assigns the corresponding monthly mean to each synthetic year. This approach captures seasonal demand and operational patterns that vary with overall water availability but not with year-to-year flow variability. It is the preferred fallback when correlation with VIC outputs is too weak for quantile mapping, and is applied here to SJR return flows and EBMUD terminal reservoir loss.
 
@@ -41,8 +40,6 @@ A total of five different approaches are applied to reconstruct the miscellaneou
 **4- Direct Calculation:** Applies a physical formula derived from the governing source data rather than statistical mapping. This is used for NDOI precipitation accretion, where monthly volume is computed directly from Stockton gauge precipitation depth, Delta water surface area, and a watershed area ratio coefficient -- preserving the physical relationship between precipitation and accretion volume that statistical approaches failed to reproduce.
 
 **5- Repeating Time Series:** Identifies a representative recent period exhibiting stable, infrastructure-constrained behavior and repeats it across the full synthetic sequence. This is applied to Cross Valley Canal capacity terms whose post-2009 values reflect fixed operational limits rather than hydrology-driven variability, making statistical reconstruction unnecessary.
-
-**6- Dynamic WRESL Flag (no pre-generation required):** Some CalSim inputs are computed endogenously by the model's WRESL scripts during simulation rather than supplied as pre-generated time series. Yuba Accord transfers fall into this category: the dynamic flag is set in the CalSim configuration so the model calculates transfers at runtime based on synthetic sequence conditions, eliminating the need for and risk of pre-specifying transfer patterns.
 
 ---
 
@@ -56,13 +53,13 @@ SJR return flow at Woodbridge Irrigation District represents agricultural draina
 
 #### Validation
 
-```{figure} figures/s3-inputs_other-return-flows-r60n.png
-:name: fig-r60n-return-flow
+```{figure} ../figures/calsim-run-product-a/full-validation/R_60N_NA4_SJR022_SV.png
+:name: fig-r60n-na4-sjr022-sv
 :width: 100%
-Product A validation for R_60N_NA4_SJR022_SV: WYT-based reconstruction (orange) vs. actual CalSim inputs (blue), 1921--2021. Values oscillate between 0 and approximately 0.7 TAF.
+Product A validation for R_60N_NA4_SJR022_SV: monthly time series (left) and non-exceedance CDF (right) comparing WYT-reconstructed Product A against historical record over 1972-2018.
 ```
 
-The reconstruction achieves $R^2 = 0.97$, demonstrating that seasonal patterns conditional on water year type fully capture the dominant behavior of this highly regular irrigation district return flow.
+The reconstruction achieves $R^2 = 0.95$, $\text{NSE} = 0.95$, and $\text{PBIAS} = -1.4\%$. The monthly time series shows the reconstructed series closely tracking the seasonal oscillation of the actual record throughout the 1972-2018 period, with values cycling between near-zero winter lows and peaks of approximately 0.7 TAF in active irrigation months. The WYT conditioning captures the inter-annual differences in return flow magnitude, and the non-exceedance CDF shows close agreement across the full distribution, with only minor divergence at the very upper tail above the 95th percentile. The near-neutral percent bias of -1.4% confirms negligible long-term volume difference, and NSE = 0.95 indicates the WYT monthly averages fully capture the dominant seasonal and inter-annual structure of this highly regular irrigation district return flow.
 
 ### R_RFS71A_OMR039_SV (Return Flow, San Joaquin River)
 
@@ -70,13 +67,13 @@ Westside SJR return flow at Byron Bethany Irrigation District represents a secon
 
 #### Validation
 
-```{figure} figures/s3-inputs_other-return-flows-rfs71a.png
-:name: fig-rrfs71a-return-flow
+```{figure} ../figures/calsim-run-product-a/full-validation/R_RFS71A_OMR039_SV.png
+:name: fig-r-rfs71a-omr039-sv
 :width: 100%
-Product A validation for R_RFS71A_OMR039_SV: WYT-based reconstruction (orange) vs. actual CalSim inputs (blue), 1921--2021. Reconstruction captures the seasonal timing but underestimates peak magnitudes reaching approximately 0.20 TAF.
+Product A validation for R_RFS71A_OMR039_SV: monthly time series (left) and non-exceedance CDF (right) comparing WYT-reconstructed Product A against historical record over 1972-2018.
 ```
 
-The reconstruction achieves $R^2 = 0.55$, which is considered acceptable given the relatively low volumes involved and the absence of stronger predictive relationships across the VIC predictor library.
+The reconstruction achieves $R^2 = 0.50$, $\text{NSE} = 0.49$, and $\text{PBIAS} = -7.3\%$. The monthly time series shows the reconstruction capturing the seasonal timing of peak return flows, but the WYT class means consistently underestimate the magnitude of the larger historical peaks, which reach approximately 0.20 TAF in active months. The non-exceedance CDF reflects this systematic underestimation: Product A falls substantially below the historical curve across the upper 40% of the distribution, indicating the reconstruction compresses the upper tail of the return flow distribution. The moderate $R^2$ reflects the episodic, event-driven nature of this agricultural return flow, where individual peak events driven by storm runoff and irrigation scheduling cannot be captured by WYT-conditioned monthly means. The PBIAS of -7.3% confirms the modest low-side volume bias. Given the absence of a stronger predictive relationship across the VIC predictor library and the relatively low volumes involved, the WYT reconstruction is accepted as the best available approach for this term.
 
 ### EBTML_LOSS (Loss, EBMUD Terminal Reservoir Loss)
 
@@ -84,13 +81,13 @@ East Bay Municipal Utility District terminal reservoir loss represents operation
 
 #### Validation
 
-```{figure} figures/s3-inputs_other-ebtml-loss.png
+```{figure} ../figures/calsim-run-product-a/full-validation/EBTML_LOSS.png
 :name: fig-ebtml-loss
 :width: 100%
-Product A validation for EBTML_LOSS: WYT-based reconstruction (orange) closely overlaps actual CalSim inputs (blue), 1921--2021. Seasonal values oscillate between approximately 11 CFS in winter and 35 CFS in summer.
+Product A validation for EBTML_LOSS: monthly time series (left) and non-exceedance CDF (right) comparing WYT-reconstructed Product A against historical record over 1972-2018.
 ```
 
-The reconstruction achieves $R^2 = 0.99$, an exceptionally strong fit reflecting the regularity of EBMUD's operational loss pattern. The near-perfect agreement confirms that WYT-conditioned monthly means fully capture the seasonal and inter-annual structure of this term.
+The reconstruction achieves $R^2 = 0.99$, $\text{NSE} = 0.99$, and $\text{PBIAS} = -0.8\%$. The monthly time series shows the reconstructed series nearly indistinguishable from the actual record throughout the 1972-2018 period, with values cycling between approximately 0.7 TAF in winter and 2.2 TAF in summer. The non-exceedance CDF shows the two curves overlapping almost exactly across the full distribution. The near-neutral percent bias of -0.8% confirms negligible long-term volume difference. The exceptionally strong fit reflects the high regularity of EBMUD's operational loss pattern: because terminal reservoir losses are governed primarily by season and infrastructure capacity rather than year-to-year hydrologic variability, WYT-conditioned monthly means fully capture both the seasonal and inter-annual structure of this term.
 
 ---
 
@@ -104,7 +101,15 @@ The Tule Wetlands Index represents wetland conditions in the Tulare Basin, recon
 
 #### Validation
 
-Validation over 1,248 months (WY 1915-2018) achieved $R^2 = 0.86$ with RMSE = 11.61 and mean difference of +0.30. The reconstructed time series maintains physical bounds, with bias differences comparable to other regional terms.
+```{figure} ../figures/calsim-run-product-a/full-validation/TULE_WET_INDX_timeseries.png
+:name: fig-tule-wet-indx
+:width: 100%
+Product A validation for TULE_WET_INDX: monthly time series (left) and non-exceedance CDF (right) comparing QM-reconstructed Product A against historical record over 1972-2018.
+```
+
+Product A validation over 1972-2018 yields $R^2 = 0.70$, $\text{NSE} = 0.52$, and $\text{PBIAS} = 5.0\%$. The monthly time series captures the spiky pulse pattern of the wetlands index -- near-zero base values punctuated by sharp wet-season peaks reaching 50-175 TAF -- and the inter-annual alternation between high- and low-flow years is broadly reproduced. The non-exceedance CDF shows close alignment through most of the distribution, with the two curves overlapping well from the 10th through approximately the 90th percentile.
+
+The moderate NSE of 0.52 reflects the difficulty QM faces in reproducing the timing and precise magnitude of individual peak events: the reconstruction over- and under-estimates specific peaks throughout the record, leading to the squared-deviation penalties that suppress NSE relative to $R^2$. The slight positive PBIAS of 5.0% indicates the reconstruction runs marginally high on average across the 1972-2018 period. Despite these limitations, $R^2 = 0.70$ -- matching the predictor correlation -- confirms the QM approach preserves the statistical relationship between Millerton inflows and wetland conditions that WYT averaging alone could not capture.
 
 ---
 
@@ -120,7 +125,15 @@ $$V_{hybrid} = \frac{V_{QM} + V_{WYT}}{2}$$
 
 #### Validation
 
-The hybrid approach improved reconstruction performance from $R^2 = 0.70$ (QM only) to $R^2 = 0.78$. Nash-Sutcliffe Efficiency showed even more dramatic improvement as the squared deviation penalty in NSE heavily weights the eliminated extreme overshoots.
+```{figure} ../figures/calsim-run-product-a/full-validation/C_CBD001HIST.png
+:name: fig-c-cbd001hist
+:width: 100%
+Product A validation for C_CBD001HIST: monthly time series (left) and non-exceedance CDF (right) comparing hybrid-reconstructed Product A against historical record over 1972-2018.
+```
+
+Product A validation over 1972-2018 yields $R^2 = 0.68$, $\text{NSE} = 0.66$, and $\text{PBIAS} = -11.5\%$. The monthly time series shows the reconstruction broadly tracking the inter-annual variability of the Colusa Basin Drain record -- capturing the seasonal pulse pattern and the contrast between wet and dry years -- with the hybrid averaging successfully constraining peak values within physically plausible bounds below 600 TAF. The non-exceedance CDF shows good agreement through the lower 90% of the distribution, with the two curves closely aligned across the moderate-flow range that dominates the record.
+
+The PBIAS of -11.5% reflects a systematic underestimation of the largest historical peaks: the reconstruction tends to underestimate events above 200 TAF, visible as the slight divergence of the Product A CDF below the historical curve in the upper tail above the 95th percentile. The largest historical peaks (approaching 600 TAF in 1997 and 2019) are partially captured but not fully reproduced, consistent with the smoothing inherent in the hybrid approach. Overall, the hybrid reconstruction represents a major improvement over QM alone, which produced physically unrealistic peak overshoots up to 900 TAF, and the combination of $R^2 = 0.68$ and NSE = 0.66 confirms that the approach successfully captures the dominant inter-annual variability of this drainage channel.
 
 ### C_KLR005HIST (Flow, Knights Landing Ridge Cut)
 
@@ -128,7 +141,15 @@ Knights Landing Ridge Cut represents a second Sacramento Valley drainage channel
 
 #### Validation
 
-The hybrid approach improved reconstruction performance from $R^2 = 0.52$ (QM only) to $R^2 = 0.66$. As with Colusa Basin Drain, NSE improvement was substantial due to elimination of the extreme QM overshoots.
+```{figure} ../figures/calsim-run-product-a/full-validation/C_KLR005HIST.png
+:name: fig-c-klr005hist
+:width: 100%
+Product A validation for C_KLR005HIST: monthly time series (left) and non-exceedance CDF (right) comparing hybrid-reconstructed Product A against historical record over 1972-2018.
+```
+
+Product A validation over 1972-2018 yields $R^2 = 0.75$, $\text{NSE} = 0.75$, and $\text{PBIAS} = -4.5\%$. The monthly time series shows the reconstruction closely tracking the inter-annual variability of the Knights Landing Ridge Cut record, with the hybrid approach again constraining peak values within physical bounds while preserving meaningful year-to-year flow signal. The non-exceedance CDF demonstrates notably strong agreement: the two curves remain closely aligned from the 0th through approximately the 97th percentile, with divergence only at the very extreme upper tail where the largest historical peaks (approaching 600 TAF) are partially underestimated.
+
+The near-neutral PBIAS of -4.5% confirms negligible long-term volume bias -- a marked improvement over C_CBD001HIST -- consistent with the higher $R^2 = 0.75$ that reflects the stronger response of this channel to the shared `IERC_003` predictor after hybrid blending. The substantially better performance relative to the pre-hybrid QM-only result, combined with elimination of the extreme peak overshoots, confirms that the hybrid methodology is the appropriate reconstruction approach for this term.
 
 ---
 
@@ -152,7 +173,7 @@ where $P_{Stockton}$ is monthly precipitation depth in inches from the Stockton 
 Product A validation for DELTAACCRETIONFORNDOI: actual CalSim input DSS (blue) vs. reconstructed values (orange), WY 1971--2018. Overall agreement is strong; reconstructed values spike above actuals in a few wet years (notably ~720 TAF in 1993 and ~870 TAF in 1998).
 ```
 
-The direct calculation approach achieves $R^2 = 0.92$, improving on the earlier QM approach ($R^2 = 0.87$). The mean reconstructed value of 63.3 TAF compares to a mean actual of 69.3 TAF, reflecting slightly lower precipitation in the Product A synthetic climate. Some reconstructed values spike above historical actuals in extreme wet years; the current approach preserves the full range of statistically plausible events consistent with stochastic planning objectives to explore distribution tails.
+The direct calculation approach achieves $R^2 = 0.92$. The mean reconstructed value of 63.3 TAF compares to a mean actual of 69.3 TAF, reflecting slightly lower precipitation in the Product A synthetic climate. Some reconstructed values spike above historical actuals in extreme wet years; the current approach preserves the full range of statistically plausible events consistent with stochastic planning objectives to explore distribution tails.
 
 ---
 
@@ -163,15 +184,5 @@ Two Cross Valley Canal capacity terms employ a repeating time series, using the 
 ### CAP_C_CAA238_CVC_F and CAP_C_CAA238_CVC_R (Capacity, Cross Valley Canal)
 
 Forward and reverse conveyance capacity constraints on the Cross Valley Canal do not vary with hydrology in the historical record, reflecting fixed infrastructure limits rather than dynamic allocation. Post-2009 values exhibit consistent behavior indicative of operational capacity limits set by physical canal infrastructure. The repeating time series methodology uses this stable recent period as the representative pattern, applied across both the 1921-2018 historical reconstruction and all Product B synthetic sequences.
-
----
-
-## 6. Dynamic WRESL Flag
-
-One miscellaneous term requires no pre-generation because it is computed endogenously by CalSim's WRESL scripts during simulation.
-
-### YBA Transfers (Dynamic, Yuba Accord)
-
-Yuba Accord transfers are flagged as dynamic within the DCR CalSim WRESL scripts, enabling simulation-time calculation based on operational rules rather than pre-specified input time series. The dynamic flag was confirmed during inventory review with MSO staff, who verified that CalSim's WRESL logic computes Yuba Accord transfers endogenously based on Yuba water availability and downstream demand conditions -- making pre-generation both unnecessary and potentially conflicting with the model's internal logic.
 
 

@@ -45,7 +45,8 @@ root/
 │   └── upper_watershed/      Lower Yuba, Don Pedro: WYT/QM/hybrid reconstruction
 │
 ├── postprocessing/           
-│   └── sv_compile/           Merge all module outputs -> DSS (Product A & B)
+│   ├── sv_compile/           Merge all module outputs -> DSS (Product A & B)
+│   └── calsim_runs/          Postprocess DSS from calsim runs
 │
 ├── utils/                    Shared utilities (quantile mapping, flow indices, WYT framework)
 ├── inventory/                Master CalSim SV inventory spreadsheet
@@ -58,10 +59,22 @@ root/
 
 ### 3. Data
 
-Large files (WGEN, VIC, DSS) are on Box: https://cadwr.app.box.com/s/8dqqrbw86cutpbihpuktgmx8nni9vcv7
+Large files (WGEN, VIC, DSS) are git-ignored and live outside the repo on Box: https://cadwr.app.box.com/s/8dqqrbw86cutpbihpuktgmx8nni9vcv7
 
 By default scripts expect data under `data/` at the repo root, split into `BASE/` (read-only inputs) and `GENERATED/` (script outputs). To use a different location, copy `config_default.json` → `config.json` and set `data_dir`.
 
+#### Acquiring the data
+
+`data_management.py` downloads the module-level zips published on Box (listed in `data_links.json`) and extracts them into your `data_dir`, mirroring the `BASE/` and `GENERATED/` structure:
+
+```bash
+python data_management.py acquire                       # all modules
+python data_management.py acquire --base-only           # BASE/ only
+python data_management.py acquire GENERATED/mod_forcing/climate   # one module
+python data_management.py acquire --dry-run             # preview without downloading
+```
+
+The `cadwr.box.com` enterprise instance requires authentication. Provide a Box Developer Token (from https://developer.box.com) via the `BOX_TOKEN` environment variable or `--token`. 
 
 #### Expected data directory layout
 
@@ -82,27 +95,19 @@ data/                            (or wherever data_dir points)
     └── ...
 ```
 
-### 4. Run a module
+### 4. Run the pipeline
 
-Scripts within each module are numbered in execution order (`_1_`, `_2_`, ...).  
-Example for reservoir evaporation:
+Scripts within each module are numbered in execution order (`_1_`, `_2_`, ...) and run as scripts from inside their own directory. The full end-to-end run order, per-module commands, validation steps, and CLI flags are documented in the two production runbooks:
 
-```bash
-python mod_reservoir/evaporation/_2_run_reservoir_evap.py --product A   # Product A, all reservoirs
-python mod_reservoir/evaporation/_2_run_reservoir_evap.py --product B   # Product B
-```
+- **[Product A Validation Runbook](Product_A_Validation_Manifest.md)** — 1921–2018 historical-length scenarios.
+- **[Product B Production Runbook](Product_B_Production_Manifest.md)** — 1000-year stochastic sequences (10 chunks of 100 water years).
+
+Follow the relevant manifest start to finish; it points at each module in dependency-tiered order through to the final DSS compilation.
 
 ---
 
 ### 5. Documentation
 
-Sphinx site: `cd docs && make html` (output `docs/_build/html`).
+Published documentation: **https://centralvalleymodeling.github.io/calsim3-stochastic-input-generation/**
 
-**Execution runbooks** (standalone, not part of the Sphinx build):
-
-- [Product A Validation Runbook](Product_A_Validation_Manifest.md)
-- [Product B Production Runbook](Product_B_Production_Manifest.md)
-
-The numbered-script convention (header docstring / ASCII / CLI / no `# %%`) is
-documented in [`.github/copilot-instructions.md`](.github/copilot-instructions.md#script-convention)
-and enforced by `utils/check_scripts.py` (run locally and in CI).
+To build the Sphinx site locally: `cd docs && make html` (output `docs/_build/html`).

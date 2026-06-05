@@ -66,8 +66,8 @@ _VIC_GRID_DIR = REPO_ROOT / "mod_forcing" / "vic" / "reference" / "GridInfo"
 LOCATION   = 'CS3_8RI_OROVI'   # CS3_8RI_OROVI | CS3_I_SHSTA
 GRID_INFO  = str(_VIC_GRID_DIR / f'{LOCATION}_GridInfo.txt')
 METEO_COLS = ['Year', 'Month', 'Day', 'PRECIP', 'TMAX', 'TMIN']
-_FIG_DIR = str(_gen / "output" / "_0_stochastic_precipitation")
-os.makedirs(_FIG_DIR, exist_ok=True)
+_FIG_DIR = _gen / "output" / "_0_stochastic_precipitation"
+_FIG_DIR.mkdir(parents=True, exist_ok=True)
 
 # ============================================================
 # %% helpers
@@ -152,7 +152,7 @@ for i, w in enumerate([2, 5, 20]):
 axes[0].legend(handles=_legend_handles(), bbox_to_anchor=(1.01, 1), loc='upper left')
 axes[-1].set_xlabel('Year')
 plt.tight_layout()
-plt.savefig(f'{_FIG_DIR}/{LOCATION}_precip_rolling_means.svg')
+plt.savefig(_FIG_DIR / f'{LOCATION}_precip_rolling_means.svg')
 plt.show()
 
 # ============================================================
@@ -184,7 +184,7 @@ for i, w in enumerate([1, 2, 5, 10]):
 
 axes[-1].set_xlabel('Rolling annual precipitation (in)')
 plt.tight_layout()
-plt.savefig(f'{_FIG_DIR}/{LOCATION}_precip_rolling_kdes.svg')
+plt.savefig(_FIG_DIR / f'{LOCATION}_precip_rolling_kdes.svg')
 
 # ============================================================
 # %% plot 3 — January daily precip ECDF
@@ -211,7 +211,7 @@ ax.set(xlabel='January daily precipitation (in)', ylabel='Empirical CDF',
 _grid(ax)
 ax.legend(loc='lower right')
 plt.tight_layout()
-plt.savefig(f'{_FIG_DIR}/{LOCATION}_jan_daily_precip_ecdf.svg')
+plt.savefig(_FIG_DIR / f'{LOCATION}_jan_daily_precip_ecdf.svg')
 plt.show()
 
 # ============================================================
@@ -227,4 +227,4 @@ for data, name in [
     (stoch_precip_monthly, 'stoch_monthly'),
     (stoch_precip_annual,  'stoch_annual'),
 ]:
-    data.to_csv(f'{_out}/{LOCATION}_precip_{name}.csv', header=False)
+    data.to_csv(_out / f'{LOCATION}_precip_{name}.csv', header=False)

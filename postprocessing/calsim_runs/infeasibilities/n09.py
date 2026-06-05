@@ -46,7 +46,7 @@ matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 from pydsstools.heclib.dss import HecDss
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[4]))
+sys.path.insert(0, str(Path(__file__).resolve().parents[3]))
 from utils.paths import get_base_dir, get_generated_dir
 
 COMPILED = (get_generated_dir() / "postprocessing" / "sv_compile"

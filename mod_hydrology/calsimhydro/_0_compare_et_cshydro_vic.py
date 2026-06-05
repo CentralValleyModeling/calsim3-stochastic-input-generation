@@ -41,6 +41,8 @@ gridinfo_dir = str(_script_dir / "reference")
 startDate_dss = "31OCT1920 00:00:00"
 endDate_dss = "30SEP2021 24:00:00"
 vic_output_dir = str(get_module_generated_dir("mod_forcing/vic") / "output" / "fluxes" / "Product_A" / "1")
+_out_dir = get_module_generated_dir("mod_hydrology/calsimhydro") / "output" / "_0_compare_et_cshydro_vic"
+_out_dir.mkdir(parents=True, exist_ok=True)
 vic_et_col =  7 #7 # column index for Short Grass ET in VIC output
 vic_start_date = "1915-01-01"
 vic_end_date = "2018-12-31"
@@ -163,7 +165,7 @@ ax1.set_ylabel('ET (in/year)')
 # ax1.set_ylim(ylim)
 ax1.grid(True, axis='y', color='k', linewidth=0.5, linestyle='--', alpha=0.5)
 fig.tight_layout()
-fig.savefig(os.path.join('./_figures', f'Rolling_Annual_ET_Comparison_{cshydro_wba.replace(" ", "_")}.svg'), dpi=300)
+fig.savefig((_out_dir /f'Rolling_Annual_ET_Comparison_{cshydro_wba.replace(" ", "_")}.svg'), dpi=300)
 
 # %% lineplot of average monthly ET by model
 fig, ax = plt.subplots(figsize=(6.5, 4))
@@ -177,7 +179,7 @@ ax.set_ylabel('ET (in/month)')
 ax.legend()
 ax.grid(True, axis='y', color='k', linewidth=0.5, linestyle='--', alpha=0.5)
 fig.tight_layout()
-fig.savefig(os.path.join('./_figures', f'Average_Monthly_ET_Comparison_{cshydro_wba.replace(" ", "_")}.svg'), dpi=300)
+fig.savefig((_out_dir /f'Average_Monthly_ET_Comparison_{cshydro_wba.replace(" ", "_")}.svg'), dpi=300)
 
 # %% scatter of April values between models with 1:1 line
 april_et = et_comparison[et_comparison.index.month == 4]
@@ -191,7 +193,7 @@ ax.set_ylabel('VIC April ET (in/month)')
 ax.set_title(f'April {ref_et_label}: CS3 vs VIC')
 ax.grid(True, axis='both', color='k', linewidth=0.5, linestyle='--', alpha=0.5)
 fig.tight_layout()
-fig.savefig(os.path.join('./_figures', f'April_ET_Scatter_{cshydro_wba.replace(" ", "_")}.svg'), dpi=300)
+fig.savefig((_out_dir /f'April_ET_Scatter_{cshydro_wba.replace(" ", "_")}.svg'), dpi=300)
 
 
 
@@ -240,7 +242,7 @@ ax.set_ylabel('ET (in/year)')
 ax.grid(True, axis='y', color='k', linewidth=0.5, linestyle='--', alpha=0.5)
 ax.legend()
 fig.tight_layout()
-fig.savefig(os.path.join('./_figures', f'Rolling_Annual_ET_Comparison_QMap_{cshydro_wba.replace(" ", "_")}.svg'), dpi=300)
+fig.savefig((_out_dir /f'Rolling_Annual_ET_Comparison_QMap_{cshydro_wba.replace(" ", "_")}.svg'), dpi=300)
 
 # %% monthly mean lineplot for calendar months comparing CS3 VIC and Quantile Mapped Value
 fig, ax = plt.subplots(figsize=(6.5, 4))
@@ -255,7 +257,7 @@ ax.set_ylabel('ET (in/month)')
 ax.legend()
 ax.grid(True, axis='y', color='k', linewidth=0.5, linestyle='--', alpha=0.5)
 fig.tight_layout()
-fig.savefig(os.path.join('./_figures', f'Average_Monthly_ET_Comparison_QMap_{cshydro_wba.replace(" ", "_")}.svg'), dpi=300)
+fig.savefig((_out_dir /f'Average_Monthly_ET_Comparison_QMap_{cshydro_wba.replace(" ", "_")}.svg'), dpi=300)
 
 # %% ecdf plot of CS3 VIC and Quantile Mapped
 fig, ax = plt.subplots(figsize=(6.5, 5))
@@ -268,10 +270,10 @@ ax.set_title(f'ECDF of Monthly {ref_et_label}: {select_wba}', fontsize=10)
 ax.legend()
 ax.grid(True, axis='both', color='k', linewidth=0.5, linestyle='--', alpha=0.5)
 fig.tight_layout()
-fig.savefig(os.path.join('./_figures', f'ECDF_Annual_ET_Comparison_QMap_{cshydro_wba.replace(" ", "_")}.svg'), dpi=300)
+fig.savefig((_out_dir /f'ECDF_Annual_ET_Comparison_QMap_{cshydro_wba.replace(" ", "_")}.svg'), dpi=300)
 
 
 # %%
-et_data.to_csv(os.path.join(".", f"{cshydro_wba.replace(' ', '_')}_ET_QMap.csv"), index=True)
+et_data.to_csv(_out_dir / f"{cshydro_wba.replace(' ', '_')}_ET_QMap.csv", index=True)
 
 # %%
