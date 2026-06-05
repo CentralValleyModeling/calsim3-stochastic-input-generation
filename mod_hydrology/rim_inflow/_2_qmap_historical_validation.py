@@ -2,7 +2,7 @@
 Quantile-Mapping Historical Validation (Product A)
 ===================================================
 Train quantile mapping on the first half of the overlap period
-(Oct 1921 - Sep 1971) and validate on the second half (Oct 1971 - Dec 2018).
+(Oct 1921 - Sep 1971) and validate on the second half (Oct 1971 - Sep 2018,
 
 For each CalSim/VIC pair from CalSim3_VIC_name_mapping.csv:
 - Compute pre-adjustment QMAP and skill metrics (R-squared, NSE)
@@ -19,13 +19,13 @@ Inputs
 Outputs
 -------
 - _2_qmap_historical_validation/
-  - calsim_qmap_validation_TS.csv   (row-level qmap results)
-  - calsim_VIC_TS.csv               (VIC baseline diagnostics, full overlap)
-  - qmap_skill_summary_monthly.csv  (per-inflow monthly NSE/R2/PBIAS: VIC vs CS3
-                                     and QMAP vs CS3)
+  - calsim_qmap_validation_TS.csv   (row-level values: CalSim, Matched_inflow,
+                                     Year, Month, vic_val, cs3_val, qmap_preAdj, qmap_postAdj)
+  - qmap_skill_summary_monthly.csv  (per-inflow monthly NSE/R2/PBIAS + normalized
+                                     NSE: VIC vs CS3 and QMAP vs CS3)
   - figures/
-    - TotalInflow_Bar_Normalized_NSE.png       (VIC vs QMAP normalized-NSE skill curves)
-    - TotalInflow_Bar_Normalized_NSE_data.csv  (plotted data for QA/QC)
+    - TotalInflow_Bar_Normalized_NSE.png       (VIC vs QMAP normalized-NSE skill curves;
+                                                plotted data lives in qmap_skill_summary_monthly.csv)
     - Monthly_Avg_Err_SideBySide.png           (VIC vs VIC-QMAP avg monthly error, shared y-axis; fixed major-reservoir set)
     - Annual_Avg_Err.png                       (clustered annual avg error: VIC vs VIC-QMAP)
     - Monthly_Avg_<loc>.png                    (CS3 vs VIC vs VIC-QMAP monthly means; only when --locations is passed)
@@ -153,14 +153,6 @@ def nse(sim, obs):
     if den == 0: return np.nan
     return 1 - np.sum((obs - sim)**2) / den
 
-def pearson_r(a, b):
-    a = np.asarray(a, dtype=float); b = np.asarray(b, dtype=float)
-    m = np.isfinite(a) & np.isfinite(b)
-    if m.sum() < 2: return np.nan
-    a = a[m]; b = b[m]
-    if np.nanstd(a) == 0 or np.nanstd(b) == 0: return np.nan
-    return float(np.corrcoef(a, b)[0, 1])
-
 # Robust percent error: returns NaN if denom ~ 0 or non-finite
 def pct_error(num, den, eps=1e-12):
     num = np.asarray(num, dtype=float); den = np.asarray(den, dtype=float)
@@ -257,12 +249,6 @@ def enforce_anchor_mass_balance(qdf: pd.DataFrame, mapping_cal: pd.DataFrame):
     check["AbsDiff"] = check["Diff"].abs()
     return out, check
 
-def _pearson_safe(a, b):
-    a = np.asarray(a, float); b = np.asarray(b, float)
-    m = np.isfinite(a) & np.isfinite(b)
-    if m.sum() < 2: return np.nan
-    return float(np.corrcoef(a[m], b[m])[0,1])
-
 def _nse_safe(sim, obs):
     sim = np.asarray(sim, float); obs = np.asarray(obs, float)
     m = np.isfinite(sim) & np.isfinite(obs)
@@ -310,8 +296,8 @@ def make_total_inflow_bar_figure(detail_df: pd.DataFrame, output_dir: str) -> No
     # Normalize via 1/(2 - NSE); drop only non-finite normalized values.
     vic_norm  = normalized_nse(vic_sorted)
     qmap_norm = normalized_nse(qmap_sorted)
-    vm = np.isfinite(vic_norm);  vic_sorted  = vic_sorted[vm];  vic_norm  = vic_norm[vm]
-    qm = np.isfinite(qmap_norm); qmap_sorted = qmap_sorted[qm]; qmap_norm = qmap_norm[qm]
+    vic_norm  = vic_norm[np.isfinite(vic_norm)]
+    qmap_norm = qmap_norm[np.isfinite(qmap_norm)]
 
     # x-index 1..N for each curve.
     x_vic  = np.arange(1, len(vic_norm) + 1)
@@ -341,24 +327,11 @@ def make_total_inflow_bar_figure(detail_df: pd.DataFrame, output_dir: str) -> No
     fig.savefig(fig_path, dpi=300, bbox_inches="tight")
     plt.close(fig)
 
-    # ---- QA/QC data CSV (pad shorter array with NaN) ----
-    rows = max(len(vic_sorted), len(qmap_sorted))
-    def _pad(arr):
-        out = np.full(rows, np.nan, dtype=float)
-        out[:len(arr)] = arr
-        return out
-    qa = pd.DataFrame({
-        "idx":                 np.arange(1, rows + 1),
-        "VIC_NSE_sorted":      _pad(vic_sorted),
-        "QMAP_NSE_sorted":     _pad(qmap_sorted),
-        "VIC_Normalized_NSE":  _pad(vic_norm),
-        "QMAP_Normalized_NSE": _pad(qmap_norm),
-    })
-    qa_path = os.path.join(output_dir, "TotalInflow_Bar_Normalized_NSE_data.csv")
-    qa.to_csv(qa_path, index=False)
-
+    # The per-inflow normalized NSE values plotted here are also written (per
+    # inflow, unsorted) to qmap_skill_summary_monthly.csv, so no separate
+    # plotting-data CSV is produced.
     print(f"\nTotalInflow_Bar figure: {fig_path}")
-    print(f"  plotted {len(vic_norm)} VIC / {len(qmap_norm)} QMAP inflows; data: {qa_path}")
+    print(f"  plotted {len(vic_norm)} VIC / {len(qmap_norm)} QMAP inflows")
 
 
 # Water-year month order (Oct -> Sep) for monthly-average plots.
@@ -1131,6 +1104,9 @@ def write_monthly_skill_summary(detail_df: pd.DataFrame, output_dir: str,
     utils.validation_plots functions (R2 = Pearson^2, NSE, and
     PBIAS = 100*sum(sim-obs)/sum(obs); positive PBIAS = product overestimates
     CS3). CS3 is the observed series; VIC and QMAP are the simulated series.
+    Also includes VIC_NSE_norm / QMAP_NSE_norm = 1/(2-NSE), the quantity plotted
+    by the TotalInflow_Bar skill curve (so this CSV is the single source for
+    both the raw and normalized skill).
     """
     # Reuse the repo's shared metric implementations (signature is obs, sim).
     from utils.validation_plots import r2 as vp_r2, nse as vp_nse, pbias as vp_pbias
@@ -1159,6 +1135,17 @@ def write_monthly_skill_summary(detail_df: pd.DataFrame, output_dir: str,
         })
 
     summary = pd.DataFrame(rows)
+    if not summary.empty:
+        # Normalized NSE (1/(2-NSE)) is the quantity plotted by the
+        # TotalInflow_Bar skill curve; carry it here so this one CSV holds both
+        # the raw and normalized skill (no separate plotting-data file needed).
+        summary["VIC_NSE_norm"]  = normalized_nse(summary["VIC_NSE"].to_numpy(float))
+        summary["QMAP_NSE_norm"] = normalized_nse(summary["QMAP_NSE"].to_numpy(float))
+        summary = summary[[
+            "CalSim", "WY",
+            "VIC_NSE", "QMAP_NSE", "VIC_NSE_norm", "QMAP_NSE_norm",
+            "VIC_R2", "QMAP_R2", "VIC_PBIAS", "QMAP_PBIAS",
+        ]]
     path = os.path.join(output_dir, "qmap_skill_summary_monthly.csv")
     summary.to_csv(path, index=False)
     print(f"Monthly skill summary: {path}  ({len(summary)} inflows)")
@@ -1193,36 +1180,31 @@ def main(locations=None, qmap_col="qmap_postAdj", nonexceedance_month=None):
             continue
         joined.columns=['basis','target']   # basis = VIC, target = CalSim
 
-        # Water-year split: Oct 1921-Sep 1971 (train), Oct 1971-Dec vic_end_year (test)
+        # Water-year split: Oct 1921-Sep 1971 (train), Oct 1971-Sep vic_end_year
+        # (test). The validation window ends at the end of WY vic_end_year
+        # (Sep 30), matching the repo convention (utils.qmap_product_a_from_pairs
+        # SIM_END and the Product A compiler's OVERWRITE_END), not Dec 31.
         b_train = joined.loc['1921-10-01':'1971-09-30','basis']; t_train = joined.loc['1921-10-01':'1971-09-30','target']
-        b_test  = joined.loc['1971-10-01':f'{vic_end_year}-12-31','basis']; t_test  = joined.loc['1971-10-01':f'{vic_end_year}-12-31','target']
+        b_test  = joined.loc['1971-10-01':f'{vic_end_year}-09-30','basis']; t_test  = joined.loc['1971-10-01':f'{vic_end_year}-09-30','target']
         if b_train.empty or t_train.empty or b_test.empty or t_test.empty:
             continue
 
-        # VIC baseline diagnostics over full overlap
+        # VIC baseline values over the full overlap (consumed by the per-location
+        # annual time-series and non-exceedance figures).
         calsim_vals = joined['target'].to_numpy(float)
         vic_vals    = joined['basis'].to_numpy(float)
-        vic_pct_err = pct_error(vic_vals - calsim_vals, calsim_vals)  # robust
-        vic_error   = vic_vals - calsim_vals
-        vic_r_full  = pearson_r(vic_vals, calsim_vals)
-        vic_r2_full = (vic_r_full**2) if np.isfinite(vic_r_full) else np.nan
 
-        for ts, v_val, a_val, ep, ea in zip(joined.index, vic_vals, calsim_vals, vic_pct_err, vic_error):
+        for ts, v_val, a_val in zip(joined.index, vic_vals, calsim_vals):
             vic_detail_rows.append({
                 "CalSim":   cal,
                 "VIC_Name": vic,
                 "Year":     ts.year,
                 "Month":    ts.month,
-                "Pearson R-squared (Full Period)": vic_r2_full,
                 "VIC_val":  v_val,
                 "cs3_val":  a_val,   # standardized name for CalSim actuals
-                "VIC_Error_pct": ep,
-                "VIC_Error":     ea,
             })
 
-        # VIC baseline skill (test window) for side-by-side reporting
-        vic_r_testperiod   = pearson_r(b_test.values, t_test.values)
-        vic_r2_testperiod  = (vic_r_testperiod**2) if np.isfinite(vic_r_testperiod) else np.nan
+        # VIC baseline NSE (test window) -- consumed by the TotalInflow_Bar figure.
         vic_nse_testperiod = nse(b_test.values, t_test.values)
 
         # ---- QMAP on TEST window only ---------------------------------------
@@ -1230,42 +1212,27 @@ def main(locations=None, qmap_col="qmap_postAdj", nonexceedance_month=None):
         qmap['actual'] = t_test.values
         qmap['year']   = qmap['year'].astype(int)
 
-        # Pre-adjustment arrays & skill
         q_a = qmap['actual'].to_numpy(float)                  # CalSim test values
         q_q = qmap['quantile_mapped_value'].to_numpy(float)   # QMAP preAdj test values
-        qmap_r_pre   = pearson_r(q_q, q_a)
-        qmap_r2_pre  = (qmap_r_pre**2) if np.isfinite(qmap_r_pre) else np.nan
-        qmap_nse_pre = nse(q_q, q_a)
 
-        # Row-wise preAdj values + naive % error (we will overwrite with robust later)
+        # Row-wise preAdj % error (overwritten by the robust pct_error below;
+        # error_pct_* feeds the Monthly_Avg_PctErr figure).
         with np.errstate(divide='ignore', invalid='ignore'):
             q_pct = (q_q - q_a) / q_a * 100.0
         q_pct[~np.isfinite(q_pct)] = np.nan
-        q_err = q_q - q_a
 
-        for ts, basis_val, qval, act_val, ep, ea in zip(b_test.index, b_test.values, q_q, q_a, q_pct, q_err):
+        for ts, basis_val, qval, act_val, ep in zip(b_test.index, b_test.values, q_q, q_a, q_pct):
             detail_rows.append({
                 "CalSim":         cal,
                 "Matched_inflow": vic,
                 "Year":           ts.year,
                 "Month":          ts.month,
-
-                # VIC skill (test window)
-                "vic_rPearson_TestPeriod":  round(vic_r_testperiod, 3)  if np.isfinite(vic_r_testperiod)  else np.nan,
-                "vic_r2Pearson_TestPeriod": round(vic_r2_testperiod, 3) if np.isfinite(vic_r2_testperiod) else np.nan,
-                "vic_NSE_TestPeriod":       round(vic_nse_testperiod, 3) if np.isfinite(vic_nse_testperiod) else np.nan,
-
-                # QMAP skill (preAdj; test window)
-                "qmap_rPearson_TestPeriod_preAdj":  round(qmap_r_pre, 3)   if np.isfinite(qmap_r_pre)   else np.nan,
-                "qmap_r2Pearson_TestPeriod_preAdj": round(qmap_r2_pre, 3)  if np.isfinite(qmap_r2_pre)  else np.nan,
-                "qmap_NSE_TestPeriod_preAdj":       round(qmap_nse_pre, 3) if np.isfinite(qmap_nse_pre) else np.nan,
-
-                # Values & PRE-adj errors at this moment (temporary; will robustify below)
+                # VIC baseline NSE (test window) -- consumed by TotalInflow_Bar.
+                "vic_NSE_TestPeriod": round(vic_nse_testperiod, 3) if np.isfinite(vic_nse_testperiod) else np.nan,
                 "vic_val":        basis_val,
                 "cs3_val":        act_val,
                 "qmap_preAdj":    qval,
                 "error_pct_preAdj": ep,
-                "Error_preAdj":     ea,
             })
 
     # 5. BUILD DATAFRAMES
@@ -1366,23 +1333,20 @@ def main(locations=None, qmap_col="qmap_postAdj", nonexceedance_month=None):
                                          detail_df["qmap_preAdj"])
     detail_df.drop(columns=["Flow_QM_Adj"], inplace=True)
 
-    # Robust percent errors for BOTH preAdj and postAdj
+    # Robust percent errors (preAdj/postAdj) -- consumed by the
+    # Monthly_Avg_PctErr figure via get_qmap_pct_error_series.
     num_pre = (detail_df["qmap_preAdj"]  - detail_df["cs3_val"]).to_numpy(float)
     num_pos = (detail_df["qmap_postAdj"] - detail_df["cs3_val"]).to_numpy(float)
     den     =  detail_df["cs3_val"].to_numpy(float)
 
     detail_df["error_pct_preAdj"]  = pct_error(num_pre, den)
-    detail_df["Error_preAdj"]      = num_pre
     detail_df["error_pct_postAdj"] = pct_error(num_pos, den)
-    detail_df["Error_postAdj"]     = num_pos
 
+    # Post-adjustment NSE per inflow -- consumed by the TotalInflow_Bar figure.
     post_metrics = (
         detail_df.groupby("CalSim", as_index=False, observed=True)
                  .apply(lambda g: pd.Series({
-                     "qmap_rPearson_TestPeriod_postAdj":  _pearson_safe(g["qmap_postAdj"].values, g["cs3_val"].values),
-                     "qmap_r2Pearson_TestPeriod_postAdj": (lambda r: r*r if np.isfinite(r) else np.nan)(
-                         _pearson_safe(g["qmap_postAdj"].values, g["cs3_val"].values)),
-                     "qmap_NSE_TestPeriod_postAdj":       _nse_safe(g["qmap_postAdj"].values, g["cs3_val"].values),
+                     "qmap_NSE_TestPeriod_postAdj": _nse_safe(g["qmap_postAdj"].values, g["cs3_val"].values),
                  }), include_groups=False)
                  .reset_index(drop=True)
     )
@@ -1429,30 +1393,17 @@ def main(locations=None, qmap_col="qmap_postAdj", nonexceedance_month=None):
                   f"figure(s) in {monthly_dir}")
 
     # 6. WRITE ORGANIZED CSVs
-    export_cols = [
-        # IDs
-        "CalSim", "Matched_inflow", "Year", "Month",
-        # Core values (grouped)
-        "vic_val", "cs3_val", "qmap_preAdj", "qmap_postAdj",
-        # Errors (grouped)
-        "error_pct_preAdj", "error_pct_postAdj", "Error_preAdj", "Error_postAdj",
-        # VIC baseline skill (test window)
-        "vic_rPearson_TestPeriod", "vic_r2Pearson_TestPeriod", "vic_NSE_TestPeriod",
-        # QMAP skill (test window; pre/post)
-        "qmap_rPearson_TestPeriod_preAdj", "qmap_rPearson_TestPeriod_postAdj",
-        "qmap_r2Pearson_TestPeriod_preAdj","qmap_r2Pearson_TestPeriod_postAdj",
-        "qmap_NSE_TestPeriod_preAdj",      "qmap_NSE_TestPeriod_postAdj",
-    ]
+    # Row-level QMAP results: IDs + values only (skill metrics live in
+    # qmap_skill_summary_monthly.csv).
+    export_cols = ["CalSim", "Matched_inflow", "Year", "Month",
+                   "vic_val", "cs3_val", "qmap_preAdj", "qmap_postAdj"]
     export_cols = [c for c in export_cols if c in detail_df.columns]
     (detail_df[export_cols]
      .sort_values(["CalSim","Year","Month"])
      .to_csv(os.path.join(OUTPUT_DIR, "calsim_qmap_validation_TS.csv"), index=False))
 
-    # VIC CSV (full overlap; standardized cs3_val)
-    vic_detail_df.to_csv(os.path.join(OUTPUT_DIR, "calsim_VIC_TS.csv"), index=False)
-
-    # Per-inflow monthly skill summary (VIC vs CS3, QMAP vs CS3, and deltas)
-    # over the complete validation water years.
+    # Per-inflow monthly skill summary (VIC vs CS3, QMAP vs CS3) over the
+    # complete validation water years.
     write_monthly_skill_summary(detail_df, OUTPUT_DIR, qmap_col=qmap_col)
 
     # -- 6. PRODUCT A VALIDATION CSV (for SV compiler) --------------------
