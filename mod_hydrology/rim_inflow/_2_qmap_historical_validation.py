@@ -2,7 +2,7 @@
 Quantile-Mapping Historical Validation (Product A)
 ===================================================
 Train quantile mapping on the first half of the overlap period
-(Oct 1921 - Sep 1971) and validate on the second half (Oct 1971 - Sep 2018,
+(Oct 1921 - Sep 1971) and validate on the second half (Oct 1971 - Sep 2018)
 
 For each CalSim/VIC pair from CalSim3_VIC_name_mapping.csv:
 - Quantile-map VIC to CalSim on the test window (pre-adjustment QMAP)
@@ -23,8 +23,8 @@ Outputs
 - _2_qmap_historical_validation/
   - calsim_qmap_validation_TS.csv   (row-level values: CalSim, Matched_inflow,
                                      Year, Month, vic_val, cs3_val, qmap_preAdj, qmap_postAdj)
-  - qmap_skill_summary_monthly.csv  (per-inflow monthly NSE/R2/PBIAS + normalized
-                                     NSE: VIC vs CS3 and QMAP vs CS3)
+  - qmap_skill_summary_monthly.csv  (per-inflow monthly NSE/R2/PBIAS: VIC vs CS3
+                                     and QMAP vs CS3)
   - figures/
     - TotalInflow_Bar_Normalized_NSE.png       (VIC vs QMAP normalized-NSE skill curves;
                                                 plotted data lives in qmap_skill_summary_monthly.csv)
@@ -186,7 +186,7 @@ def excel_to_partB(name:str) -> str:
 def read_calsim_monthly_multi(dssfile, strList):
     full_idx = pd.date_range('1915-01-31', f'{vic_end_year}-12-31', freq='ME')
     with dss_io.open_dss(dssfile, version=6, catalog_flag=True) as dss:
-        paths   = dss.getPathnameList("/*/*/*/*/1MON/*")
+        paths   = dss_io.list_monthly_paths(dss)
         bucket  = {}
         for p in paths:
             b = p.strip('/').split('/')[1].upper()
@@ -200,8 +200,8 @@ def read_calsim_monthly_multi(dssfile, strList):
             master = pd.Series(index=full_idx, dtype=float)
             for p in sorted(bucket[b], key=lambda x: x.split('/')[3]):
                 ts   = dss.read_ts(p, trim_missing=True)
-                vals = np.where(ts.values <= -900, np.nan, ts.values)
-                idx  = (pd.to_datetime(ts.pytimes).to_period('M') - 1).to_timestamp('M')
+                vals = dss_io.apply_sentinel(ts.values)        # -900 -> NaN
+                idx  = dss_io.eom_index(ts.pytimes)            # start-of-month -> month-end
                 master.update(pd.Series(vals, index=idx))
             if master.notna().any():
                 data[inflow] = master
@@ -329,9 +329,8 @@ def make_total_inflow_bar_figure(detail_df: pd.DataFrame, output_dir: str) -> No
     fig.savefig(fig_path, dpi=300, bbox_inches="tight")
     plt.close(fig)
 
-    # The per-inflow normalized NSE values plotted here are also written (per
-    # inflow, unsorted) to qmap_skill_summary_monthly.csv, so no separate
-    # plotting-data CSV is produced.
+    # Normalized NSE is computed only for this plot; no plotting-data CSV is
+    # written (raw NSE per inflow lives in qmap_skill_summary_monthly.csv).
     print(f"\nTotalInflow_Bar figure: {fig_path}")
     print(f"  plotted {len(vic_norm)} VIC / {len(qmap_norm)} QMAP inflows")
 
@@ -1106,9 +1105,6 @@ def write_monthly_skill_summary(detail_df: pd.DataFrame, output_dir: str,
     utils.validation_plots functions (R2 = Pearson^2, NSE, and
     PBIAS = 100*sum(sim-obs)/sum(obs); positive PBIAS = product overestimates
     CS3). CS3 is the observed series; VIC and QMAP are the simulated series.
-    Also includes VIC_NSE_norm / QMAP_NSE_norm = 1/(2-NSE), the quantity plotted
-    by the TotalInflow_Bar skill curve (so this CSV is the single source for
-    both the raw and normalized skill).
     """
     # Reuse the repo's shared metric implementations (signature is obs, sim).
     from utils.validation_plots import r2 as vp_r2, nse as vp_nse, pbias as vp_pbias
@@ -1137,17 +1133,6 @@ def write_monthly_skill_summary(detail_df: pd.DataFrame, output_dir: str,
         })
 
     summary = pd.DataFrame(rows)
-    if not summary.empty:
-        # Normalized NSE (1/(2-NSE)) is the quantity plotted by the
-        # TotalInflow_Bar skill curve; carry it here so this one CSV holds both
-        # the raw and normalized skill (no separate plotting-data file needed).
-        summary["VIC_NSE_norm"]  = normalized_nse(summary["VIC_NSE"].to_numpy(float))
-        summary["QMAP_NSE_norm"] = normalized_nse(summary["QMAP_NSE"].to_numpy(float))
-        summary = summary[[
-            "CalSim", "WY",
-            "VIC_NSE", "QMAP_NSE", "VIC_NSE_norm", "QMAP_NSE_norm",
-            "VIC_R2", "QMAP_R2", "VIC_PBIAS", "QMAP_PBIAS",
-        ]]
     path = os.path.join(output_dir, "qmap_skill_summary_monthly.csv")
     summary.to_csv(path, index=False)
     print(f"Monthly skill summary: {path}  ({len(summary)} inflows)")
