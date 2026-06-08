@@ -937,8 +937,8 @@ def make_monthly_avg_err_figure(detail_df: pd.DataFrame, requested_locations, ou
         d["QMAP_Error"] = pd.to_numeric(d[qmap_col],  errors="coerce") - cs3
         vic_monthly[canon] = d.groupby("Month")["VIC_Error"].mean().reindex(_WY_MONTH_ORDER).to_numpy(float)
         qm_monthly[canon]  = d.groupby("Month")["QMAP_Error"].mean().reindex(_WY_MONTH_ORDER).to_numpy(float)
-        vic_annual[canon]  = float(d.groupby("WY")["VIC_Error"].sum().mean())   # TAF/yr
-        qm_annual[canon]   = float(d.groupby("WY")["QMAP_Error"].sum().mean())
+        vic_annual[canon]  = float(d.groupby("WY")["VIC_Error"].sum(min_count=12).mean())   # TAF/yr
+        qm_annual[canon]   = float(d.groupby("WY")["QMAP_Error"].sum(min_count=12).mean())
         used.append(canon)
 
     if not used:
