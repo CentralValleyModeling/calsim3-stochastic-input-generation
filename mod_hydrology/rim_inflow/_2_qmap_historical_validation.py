@@ -311,7 +311,7 @@ def make_total_inflow_bar_figure(detail_df: pd.DataFrame, output_dir: str) -> No
     ax.plot(x_vic,  vic_norm,  color="#2E75B6", linewidth=1.5, label="VIC Product A")
     ax.plot(x_qmap, qmap_norm, color="#C00000", linewidth=1.5, label="VIC-QMAP Product A")
     ax.set_xlabel("CS3 Rim Inflows (idx)", fontsize=11)
-    ax.set_ylabel("Normalize NSE (1/(2-NSE))", fontsize=11)
+    ax.set_ylabel("Normalized NSE (1/(2-NSE))", fontsize=11)
     ax.set_xlim(0, n + 1)
     ax.set_ylim(0, 1)
     ax.set_yticks(np.arange(0.0, 1.0 + 1e-9, 0.1))   # gridlines every 0.1
