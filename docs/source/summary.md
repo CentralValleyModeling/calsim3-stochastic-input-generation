@@ -2,23 +2,45 @@
 
 ## Key Results
 
-### Input Generation
+Phase I delivered both products and validated them against the CalSim 3 baseline (DCR 2023).
 
-## Key Findings
+### Product A (Validation)
+
+The historical-parallel sequence confirms the generation pipeline. At the input level, the
+actively generated, time-varying variables achieve a median $R^2$ of 0.98 and mean $R^2$ of 0.90
+against historical CalSim values, with 71% exceeding $R^2 \geq 0.90$. Driven end-to-end through a
+CalSim 3 run, Product A reproduces annual-average deliveries, Delta flows, and reservoir storage
+within roughly 0--6% of the historical baseline over WY 1972--2018. The residual differences are
+systematic rather than random, tracing to a wet rim-inflow signal and an ET bias from quantile
+mapping in CalSimHydro. Full detail in {doc}`Results / Product A </source/results_product_a>`.
+
+### Product B (Planning Ensemble)
+
+The 1,000-year, ten-trace ensemble is the primary deliverable. Its central tendency runs wetter than
+the baseline, driven by the same rim-inflow hydrology bias seen in Product A (ensemble median +7%),
+while its spread still brackets and extends the historical record. Trace means run wetter (Delta
+outflow +6 to +35% across traces), yet individual traces reach single-year minima below the
+historical worst year for deliveries, exports, and carryover storage. Running the ensemble through
+CalSim 3 also surfaced operational edge cases. Eight of ten traces required targeted WRESL fixes to
+complete the San Joaquin restoration cycle under out-of-range flow extremes. Full detail in
+{doc}`Results / Product B </source/results_product_b>` and the
+{doc}`infeasibility report </source/calsim-run/sjr_infeasibility_report>`.
+
+## Findings and Recommendations
 
 ### VIC Model Bias
 
-VIC-modeled flows show approximately 25-30% positive bias compared to CalSim 3 historical inputs. This substantial bias necessitates quantile mapping correction for all VIC-derived inputs. Without bias correction, direct use of VIC outputs would systematically overestimate water availability throughout the system.
+VIC-modeled flows show an approximately 25 to 30% positive bias relative to CalSim 3 historical inputs, so quantile mapping correction is applied to all VIC-derived inputs. Without it, direct use of VIC outputs would systematically overestimate water availability throughout the system.
 
-The quantile mapping approach successfully corrects the distributional bias, achieving close alignment between the mapped values and CalSim 3 historical targets during the validation period. However, the need for such significant correction highlights the importance of careful calibration and validation in any stochastic generation framework.
+Quantile mapping corrects the distributional bias and brings the mapped values into close alignment with CalSim 3 historical targets over the validation period. The size of the required correction reflects the framework's dependence on upstream VIC calibration.
 
 ### WGEN Wet Bias
 
-The exclusion of pre-1948 data from the WGEN sampling pool creates a systematic wet bias in 100-year stochastic sequences. Because atmospheric circulation data from NCEP/NCAR Reanalysis 1 is only available from 1948 onward, the WGEN cannot sample from the Dust Bowl era (1930s) and other pre-1948 dry periods. As a result, the 1948-2018 sampling period is approximately centered within the stochastic distribution, while the full historical record including pre-1948 would be drier.
+The exclusion of pre-1948 data from the WGEN sampling pool creates a systematic wet bias in the 100-year stochastic sequences. Atmospheric circulation data from NCEP/NCAR Reanalysis 1 is only available from 1948 onward, so the WGEN cannot sample the Dust Bowl era (1930s) or other pre-1948 dry periods. The 1948-2018 sampling period is therefore approximately centered within the stochastic distribution, whereas the full historical record including pre-1948 would be drier.
 
-This finding has important implications for drought analysis. The stochastic sequences may underrepresent the frequency and severity of extreme dry periods that could plausibly occur. Users should be aware that the 1000-year ensemble does not include Dust Bowl-like conditions, which could affect conclusions about system performance during extreme droughts.
+The stochastic sequences consequently underrepresent the frequency and severity of extreme dry periods. Drought vulnerability analysis should recognize that the 1,000-year ensemble does not include Dust Bowl-like conditions and may therefore underestimate the most extreme droughts.
 
-This bias is not spatially uniform. The WGEN tends to run wet in the Sacramento Valley and dry in Southern California, driven by the 1920--1950 period being exceptionally dry in the Sacramento basin relative to post-1948 conditions.
+The bias is not spatially uniform. The WGEN runs wet in the Sacramento Valley and dry in Southern California, because the 1920-1950 period was exceptionally dry in the Sacramento basin relative to post-1948 conditions. The wet bias is visible end-to-end in the Product B ensemble, where rim inflow runs about +7% above baseline and propagates to wetter system-level deliveries, Delta flows, and storage (see {doc}`Results / Product B </source/results_product_b>`).
 
 ::::{tab-set}
 :::{tab-item} Inflow (1915-2018)
@@ -27,7 +49,7 @@ This bias is not spatially uniform. The WGEN tends to run wet in the Sacramento 
 :::
 :::{tab-item} Inflow (1948-2018)
 ![Oroville Streamflow 1948-2018](figures/s2-methods_oroville-streamflow-1948-2018.png)
-*Mean annual Oroville unimpaired flow for 14 synthetic 70-year segments (gray box, IQR ~4,950--5,330 TAF/yr) compared to the WGEN historical 1948--2018 mean (~5,070 TAF/yr, red dot). When evaluated over the 70-year (1948-2018) historical period, the historical mean falls within the inner quartile of the synthetic distribution, showing that the WGEN does not have a wet bias relative to the historical data is was sampled from.*
+*Mean annual Oroville unimpaired flow for 14 synthetic 70-year segments (gray box, IQR ~4,950--5,330 TAF/yr) compared to the WGEN historical 1948-2018 mean (~5,070 TAF/yr, red dot). When evaluated over the 70-year (1948-2018) historical period, the historical mean falls within the inner quartile of the synthetic distribution, showing that the WGEN does not have a wet bias relative to the historical data it was sampled from.*
 :::
 :::{tab-item} Precipitation
 ![Oroville Precipitation Comparison](figures/s2-methods_oroville-precip-comparison.png)
@@ -37,31 +59,18 @@ This bias is not spatially uniform. The WGEN tends to run wet in the Sacramento 
 
 ### ET Bias
 
-ET bias is mainly propagated through CalSimHydro. VIC flux outputs (EVAP, PET_H2OSURF, PET_SHORT) are first quantile-mapped to CalSim historical ET targets, then the mapped ET is used as input to CalSimHydro alongside WGEN precipitation. The resulting bias reflects the combined effect of both the VIC model's ET estimation under synthetic climate and the quantile mapping transformation itself. Because quantile mapping corrects the distribution but not the rank ordering, shifts in the VIC ET distribution propagate through the mapping in ways that differ from a simple temperature-driven bias.
+ET bias is mainly propagated through CalSimHydro. VIC flux outputs (EVAP, PET_H2OSURF, PET_SHORT) are first quantile-mapped to CalSim historical ET targets, then the mapped ET is used as input to CalSimHydro alongside WGEN precipitation. The resulting bias reflects both the VIC model's ET estimation under synthetic climate and the quantile mapping transformation. Because quantile mapping corrects the distribution but not the rank ordering, shifts in the VIC ET distribution propagate through the mapping in ways that differ from a simple temperature-driven bias.
 
-The net effect on CalSimHydro water budgets is substantial. Lower rangeland ET under quantile-mapped inputs leaves more water available for percolation, driving a +12% increase in deep percolation across all Water Budget Areas (~600 TAF/yr). Applied water increases +2% as irrigation compensates for higher potential ET. The ET change proved more influential than the WGEN precipitation change in driving CalSimHydro output differences, with approximately 300,000 acre-feet annual shift in the valley-wide water budget.
+The net effect on CalSimHydro water budgets is substantial. Lower rangeland ET under quantile-mapped inputs leaves more water available for percolation, driving a +8.8% increase in deep percolation across all Water Budget Areas (~380 TAF/yr). Applied water increases +2% as irrigation compensates for higher potential ET. The ET change proved more influential than the WGEN precipitation change in driving CalSimHydro output differences.
 
+The VIC-based ET quantile mapping approach should continue through Phase I. For Phase II, the Hargreaves-Samani calibrated CIMIS grass-reference ET methodology should be incorporated as an enhancement.
 
-## Recommendations
+### Phase II Scope
 
-Based on the findings from Phase I, the project team offers the following recommendations for planning for Phase II refinement and production runs.
-
-### Update ET Methodology
-
-The current VIC-based ET quantile mapping approach should continue for Phase I completion. MSO is developing an alternative evapotranspiration calculation method that coudld allow the stochastic input generation to bypass VIC entirely. The alternative ET methodology should be incorporated as a Phase II enhancement. 
-
-### Address WGEN Bias
-
-The WGEN wet bias from post-1948 sampling means the stochastic ensemble excludes Dust Bowl-era (1930s) conditions. Users conducting drought vulnerability analysis should recognize that the 1,000-year ensemble may underestimate the frequency of the most extreme droughts. The VIC positive bias of approximately 25–30% in rim inflows is corrected through quantile mapping but highlights the sensitivity of the generation framework to upstream model calibration. 
-
-### Plan Phase II Scope
-
-Preliminary scoping for Phase II should begin based on emerging findings from Phase I, particularly around model infeasibilities and operational rule modifications that may be needed for extreme stochastic sequences. Extended droughts and multi-year wet sequences may cause CalSim operational rules to behave in unexpected ways that require adjustment for realistic simulation.
-
-Documentation of these issues during Phase I provides the foundation for Phase II planning. The Phase I report should clearly identify areas where model modifications may be beneficial, even if those modifications are beyond the current scope.
+Phase II scoping should build on the Phase I findings, particularly the model infeasibilities and operational rule modifications needed for extreme stochastic sequences. Extended droughts and multi-year wet sequences can push CalSim operational rules outside their design range and require adjustment for realistic simulation. The Phase I report should identify these areas even where the modifications fall beyond the current scope.
 
 ### DCR 2025/27 Transition
 
-DCR 2025 includes several retired closure terms, which will simplify processing for those variables. The retirement of closure terms reduces the complexity of the stochastic generation framework and eliminates the need to maintain the weighted-average methodology for variables that no longer exist in the model. Additionally, DCR 2025 may incorporate updated reservoir sedimentation data, revised operational rules, and potentially the new ET methodology—each of which could affect stochastic input generation requirements.
+DCR 2025 retires several closure terms, which simplifies processing and eliminates the need to maintain the weighted-average methodology for variables that no longer exist in the model. DCR 2025 may also incorporate updated reservoir sedimentation data, revised operational rules, and potentially the new ET methodology. Each of these could affect stochastic input generation requirements.
 
 When transitioning to DCR 2025, careful attention must be paid to ensuring proper alignment of module versions. CalSimHydro, External Elements (EE), Small Watersheds, Delta Channel Depletion (DCD), and the Delta Salinity Model (DSM) all need to be compatible with the DCR 2025 baseline. The integration testing phase of DCR 2025 deployment will need to verify that stochastic inputs work correctly with all updated modules.

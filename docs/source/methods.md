@@ -3,7 +3,7 @@
 This section describes the technical approaches used to transform synthetic weather into the full suite of CalSim 3 inputs. The pipeline starts with a Weather Generator that produces plausible daily climate sequences, passes those through physical models, and applies statistical reconstruction methods to bridge any remaining gaps.
 
 ## WGEN (the "Weather Generator")
-d
+
 The WGEN is a Non-Homogeneous Hidden Markov Model (NHMM) that generates synthetic daily temperature and precipitation by simulating transitions between eight distinct weather regimes derived from historical atmospheric circulation patterns over the western United States. For each simulated day, the model selects a weather regime, then bootstraps daily precipitation and temperature from the pool of historical days sharing that regime. This preserves observed relationships between large-scale atmospheric patterns and local weather outcomes.
 
 The algorithm samples historical dates in **4-year blocks** to maintain multi-year persistence -- consecutive drought winters or extended pluvial periods that purely random regime simulation would underrepresent. Within each block, approximately 70--85% of days come from the same historical 4-year period; the remainder are drawn from other periods when regime transitions require alternative source dates.
@@ -26,7 +26,7 @@ The WGEN produces two output products. **Product A** covers the historical perio
 |---|---|---|
 | **Period** | WY 1915--2018 (~104 years) | 1,000 years (10 x 100-year chunks) |
 | **WGEN mode** | Historical regime sequence | Unconstrained stochastic regimes |
-| **QM training** | 1921--1971 (validated on 1972--2018) | Uses full historical record |
+| **QM training** | WY 1922--1971 (validated on WY 1972--2018) | Full historical record (WY 1922--2018) |
 | **Purpose** | Validate methods against known CalSim inputs | Stochastic planning runs |
 :::
 ::::
@@ -68,7 +68,7 @@ _Method selection decision tree. The appropriate reconstruction methodology for 
 
 Validation applies to the **entire suite** of generated inputs -- not just the quantile-mapped variables, but every variable produced by every module. The goal is to confirm that the full set of synthetic inputs, when taken together, produces a CalSim run that behaves consistently with the historical baseline.
 
-The validation period is dictated by the quantile mapping train/test split. Because the overlapping historical period (1921--2018) is divided 50/46 -- training on WY 1922--1971 and testing on WY 1972--2018 -- the held-out half (1972--2018) is the only period where QM-based inputs can be independently evaluated. All other input types (model-based, WYT averaging, direct calculation, etc.) are validated over this same window for consistency. Product A VIC output is used as the validation basis, ensuring consistency with Product B -- both share the same underlying gridded climate data. Performance at the individual variable level is measured using coefficient of determination (R-squared), Nash-Sutcliffe Efficiency (NSE), and percent bias (PBIAS).
+The validation period is dictated by the quantile mapping train/test split. Because the overlapping historical period (WY 1922--2018) is divided 50/46 -- training on WY 1922--1971 and testing on WY 1972--2018 -- the held-out half (WY 1972--2018) is the only period where QM-based inputs can be independently evaluated. All other input types (model-based, WYT averaging, direct calculation, etc.) are validated over this same window for consistency. Product A VIC output is used as the validation basis, ensuring consistency with Product B -- both share the same underlying gridded climate data. Performance at the individual variable level is measured using coefficient of determination (R-squared), Nash-Sutcliffe Efficiency (NSE), and percent bias (PBIAS).
 
 Beyond variable-level checks, Product A validation includes a **full CalSim 3 run** using the complete set of Product A inputs. This end-to-end test compares the CalSim historical baseline (driven by its original inputs) against a CalSim run driven entirely by inputs reconstructed from WGEN Product A climate. Differences in the resulting system operations -- reservoir storage, deliveries, Delta exports -- reflect the cumulative effect of all input generation procedures and reveal whether the synthetic inputs are suitable for planning-scale analysis.
 
@@ -136,20 +136,21 @@ Quantile mapping is applied differently depending on whether a variable has a di
 ```{mermaid}
 flowchart TB
     subgraph rim_a["RIM INFLOW / ET TERMS"]
-        RA_sim["Basis: VIC Product A<br/>(1972-2018)"] -. sim .-> RA_qm["QM"] 
-        RA_basis["Basis: VIC Product A<br/>(1921-1971)"] -. train .-> RA_qm
-        RA_target["Target: CalSim3 Term<br/>(1921-1971)"] -. train .-> RA_qm -. sim .-> RA_out["QMAP Product A<br/>CalSim3 Term<br/>(1972-2018)"]
+        RA_sim["Basis: VIC Product A<br/>(WY 1972-2018)"] -. sim .-> RA_qm["QM"] 
+        RA_basis["Basis: VIC Product A<br/>(WY 1922-1971)"] -. train .-> RA_qm
+        RA_target["Target: CalSim3 Inflow Term<br/>(WY 1922-1971)"] -. train .-> RA_qm -. sim .-> RA_out["Target: QMAP Product A<br/>of CalSim3 Inflow Term<br/>(WY 1972-2018)"]
     end
 
     subgraph other_a["OTHER TERMS"]
     
-        OA_sim["Basis: QMAP Product A<br/>of Matching Term<br/>(1972-2018)"] -.sim .-> OA_qm["QM"]
-        OA_basis["Basis: CalSim3 Matching Term<br/>(1921-1971)"] -. train .-> OA_qm
-        OA_target["Target: CalSim3 Term<br/>(1921-1971)"] -. train .-> OA_qm -. sim .-> OA_out["QMAP Product A<br/>CalSim3 Term<br/>(1972-2018)"]
+        OA_sim["Basis: QMAP Product A<br/>of Calsim Inflow Term<br/>(WY 1972-2018)"] -.sim .-> OA_qm["QM"]
+        OA_basis["Basis: CalSim3 Inflow Term<br/>(WY 1922-1971)"] -. train .-> OA_qm
+        OA_target["Target: CalSim3 Other Term<br/>(WY 1922-1971)"] -. train .-> OA_qm -. sim .-> OA_out["Target: QMAP Product A<br/>of CalSim3 Other Term<br/>(WY 1972-2018)"]
     end
 
     RA_out -.->|"serves as sim basis"| OA_sim
 
+    style rim_a fill:#264653,color:#fff
     style RA_basis fill:#264653,color:#fff
     style RA_target fill:#2d6a4f,color:#fff
     style OA_basis fill:#264653,color:#fff
@@ -169,14 +170,14 @@ _Product A validation. Dashed "train" arrows feed empirical CDFs from the traini
 flowchart TB
     subgraph rim_b["RIM INFLOW / ET TERMS"]
         RB_sim["Basis: VIC Product B<br/>(1000 years)"] -. sim .-> RB_qm["QM"]
-        RB_basis["Basis: VIC Product A<br/>(1921-2018)"] -. train .-> RB_qm
-        RB_target["Target: CalSim3 Term<br/>(1921-2018)"] -. train .-> RB_qm -. sim .-> RB_out["QMAP Product B<br/>CalSim3 Term<br/>(1000 years)"]
+        RB_basis["Basis: VIC Product A<br/>(WY 1922-2018)"] -. train .-> RB_qm
+        RB_target["Target: CalSim3 Inflow Term<br/>(WY 1922-2018)"] -. train .-> RB_qm -. sim .-> RB_out["Target: QMAP Product B<br/>of CalSim3 Inflow Term<br/>(1000 years)"]
     end
 
     subgraph other_b["OTHER TERMS"]
-        OB_sim["Basis: QMAP Product B<br/>of Matching Term<br/>(1000 years)"] -. sim .-> OB_qm["QM"]
-        OB_basis["Basis: CalSim3 Matching Term<br/>(1921-2018)"] -. train .-> OB_qm
-        OB_target["Target: CalSim3 Term<br/>(1921-2018)"] -. train .-> OB_qm -. sim .-> OB_out["QMAP Product B<br/>CalSim3 Term<br/>(1000 years)"]
+        OB_sim["Basis: QMAP Product B<br/>of CalSim3 Inflow Term<br/>(1000 years)"] -. sim .-> OB_qm["QM"]
+        OB_basis["Basis: CalSim3 Inflow Term<br/>(WY 1922-2018)"] -. train .-> OB_qm
+        OB_target["Target: CalSim3 Other Term<br/>(WY 1922-2018)"] -. train .-> OB_qm -. sim .-> OB_out["Target: QMAP Product B<br/>of CalSim3 Other Term<br/>(1000 years)"]
     end
 
     RB_out -.->|"serves as sim basis"| OB_sim
