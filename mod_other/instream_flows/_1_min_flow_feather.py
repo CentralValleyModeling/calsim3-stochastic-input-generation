@@ -58,8 +58,7 @@ INPUTS / OUTPUTS
 
   Product A  <-  CalSim SV DSS  __calsim_sv_default__.dss
     UNIMP_OROV/FLOW-UNIMPAIRED CalSim baseline monthly unimpaired inflow,
-    read via utils.dss_io (same approach as _2_sjr_rest_req.py).  Used for
-    both classification and date assignment in the Product A run.
+    read via utils.dss_io.  This is used for the Product A run and for the Product B WY-1921 seed.
 
   Output 1 - Validation (WY 1922-2021)
     Classifies with historical CS3 data; dates from Oct 1921 - Sep 2021.
@@ -117,15 +116,15 @@ _rim_gen    = get_module_generated_dir("mod_hydrology/rim_inflow")
 _gen        = get_module_generated_dir("mod_other/instream_flows")
 
 # CalSim baseline UNIMP_OROV is read directly from the CalSim SV DSS
-# (UNIMP_OROV/FLOW-UNIMPAIRED), mirroring _2_sjr_rest_req.py.  This replaces
-# the deprecated calsim_all_inflows.csv intermediate, which the rim-inflow
-# pipeline no longer produces.  Used for the Product A run and for the
+# (UNIMP_OROV/FLOW-UNIMPAIRED). Used for the Product A run and for the
 # Product B WY-1921 rolling-average seed.
 DSS_FILE         = get_base_dir() / "CalSim3" / "__calsim_sv_default__.dss"
 DSS_READ_START   = "1915-01-31"
 DSS_READ_END     = "2021-12-31"
 UNIMP_OROV_BPART = "UNIMP_OROV"
 UNIMP_OROV_CPART = "FLOW-UNIMPAIRED"
+MINFLOW_BPART    = "MINFLOWFEATHER"     # CS3 actual min-flow (Value_CS3 source)
+MINFLOW_CPART    = "FLOW-MIN-REQUIRED"
 
 # Product B directory (10 chunk CSVs)
 PATH_UNIMP_OROV_PB_DIR = _rim_gen / "output" / "_3_qmap_product_b"
@@ -332,30 +331,27 @@ def _load_xlsx_thresholds() -> dict:
     }
 
 
-def _load_xlsx_cs3_values() -> pd.Series:
+def _load_cs3_minflow_from_dss(
+    dssfile: Path = DSS_FILE,
+    bpart: str = MINFLOW_BPART,
+    part_c: str = MINFLOW_CPART,
+) -> pd.Series:
     """
-    Load the CS3 actual MINFLOWFEATHER (cfs) from the Graph sheet, column B
-    of MIF_FEATHER_Logic_Reconstruction.xlsx.
+    Load the CS3 actual MINFLOWFEATHER (cfs) from the CalSim SV DSS
+    (MINFLOWFEATHER/FLOW-MIN-REQUIRED), read via utils.dss_io.
 
-    Graph sheet layout (data rows start at index 2, 0-indexed):
-      Col A : Date (end-of-month datetime)
-      Col B : ACTUAL INPUT MIN FLOW FEATHER (cfs)
+
 
     Returns end-of-month DatetimeIndex Series of integer cfs values.
     """
-    import openpyxl
-    from datetime import datetime as _dt
-    wb = openpyxl.load_workbook(PATH_XLSX, read_only=True, data_only=True)
-    rows = list(wb['Graph'].iter_rows(values_only=True))
-    wb.close()
-    flows = {}
-    for row in rows[2:]:  # skip header rows
-        dt, val = row[0], row[1]
-        if not isinstance(dt, _dt) or val is None:
-            continue
-        ts = pd.Timestamp(dt) + pd.offsets.MonthEnd(0)
-        flows[ts] = int(val)
-    s = pd.Series(flows, name='Value_CS3', dtype=int).sort_index()
+    key = (bpart.upper(), part_c.upper())
+    with dss_io.open_dss(str(dssfile), version=6, catalog_flag=True) as dss:
+        series_map = dss_io.read_monthly_series(
+            dss, {key}, DSS_READ_START, DSS_READ_END)
+    if key not in series_map:
+        raise KeyError(f"Could not find {bpart}/{part_c} in {dssfile}")
+    s = series_map[key].dropna().round().astype(int)
+    s.name = 'Value_CS3'
     s.index.name = 'date'
     return s
 
@@ -516,7 +512,7 @@ def run_validation():
     df_val_wide = to_calsim_csv(mf_val, 'MINFLOWFEATHER', 'FLOW-MIN-REQUIRED') \
                       .rename(columns={'Value': 'Value_Python'})
 
-    cs3_vals = _load_xlsx_cs3_values()
+    cs3_vals = _load_cs3_minflow_from_dss()
     cs3_df = pd.DataFrame({
         'Year':  cs3_vals.index.year,
         'Month': cs3_vals.index.month,
