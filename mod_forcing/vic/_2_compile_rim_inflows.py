@@ -3,7 +3,8 @@ Compile Rim Inflows from VIC Flux Files
 =======================================
 Routes VIC RUNOFF + BASEFLOW through grid weights to monthly rim inflows for
 each CalSim rim location, writing per-location monthly CSVs (and DSS) for
-Product A (1921-2018) or Product B (1000-year, chunked).
+Historical (observed climate, 1915-2018), Product A (WGEN historical,
+1915-2018), or Product B (1000-year, chunked).
 
 Inputs
 ------
@@ -12,7 +13,8 @@ Inputs
 
 Outputs
 -------
-- <generated>/output/routed/Product_A/1/CS3_<loc>_qmo.csv  (+ DSS)
+- <generated>/output/routed/Historical/CS3_<loc>_qmo.csv  (with --product Historical)
+- <generated>/output/routed/Product_A/1/CS3_<loc>_qmo.csv  (with --product A)
 - <generated>/output/routed/Product_B/1/...  (with --product B)
 
 Dependencies
@@ -21,6 +23,7 @@ Dependencies
 
 Usage
 -----
+    python mod_forcing/vic/_2_compile_rim_inflows.py --product Historical
     python mod_forcing/vic/_2_compile_rim_inflows.py --product A
     python mod_forcing/vic/_2_compile_rim_inflows.py --product B
 """
@@ -216,10 +219,13 @@ def main():
     parser.add_argument('--full_vic', action='store_true', help='If set, use full VIC output (default is trimmed).')
     parser.add_argument('--output_path', type=str, default=None, help='Path to output directory')
     parser.add_argument('--start_date', type=str, default='1915-01-01', help='Start date (YYYY-MM-DD)')
-    parser.add_argument('--end_date', type=str, default='2018-12-31', help='End date (YYYY-MM-DD)')
+    parser.add_argument('--end_date', type=str, default=None,
+                        help='End date (YYYY-MM-DD); defaults per product: '
+                             'Historical 2021-12-31, A 2018-12-31 (ignored for B).')
     parser.add_argument('--watersheds', type=str, nargs='*', default=None, help='Watershed names to select (optional)')
-    parser.add_argument('--product', choices=['A', 'B'], required=True,
-                        help='Product to generate: A (historical 1921-2018) or B (stochastic 1000-yr chunks).')
+    parser.add_argument('--product', choices=['Historical', 'A', 'B'], required=True,
+                        help='Product to generate: Historical (observed climate 1915-2018), '
+                             'A (WGEN historical 1915-2018), or B (stochastic 1000-yr chunks).')
     args = parser.parse_args()
 
     grid_info_path = args.grid_info_path or str(_script_dir / 'reference' / 'GridInfo')
@@ -228,16 +234,29 @@ def main():
     if product_b:
         fluxes_path = args.fluxes_path or str(_vic_gen / 'output' / 'fluxes' / 'Product_B' / '1')
         output_path = args.output_path or str(_vic_gen / 'output' / 'routed' / 'Product_B' / '1')
+    elif args.product == 'Historical':
+        # Observed climate run: flat dirs (no realization subdir), 1915-2021 non-chunked
+        fluxes_path = args.fluxes_path or str(_vic_gen / 'output' / 'fluxes' / 'Historical')
+        output_path = args.output_path or str(_vic_gen / 'output' / 'routed' / 'Historical')
     else:
         fluxes_path = args.fluxes_path or str(_vic_gen / 'output' / 'fluxes' / 'Product_A' / '1')
         output_path = args.output_path or str(_vic_gen / 'output' / 'routed' / 'Product_A' / '1')
+
+    # Resolve end date per product (flux extents differ): Historical runs through
+    # 2021-12-31 (supports the CalSim run WY 1922-2021); Product A ends 2018-12-31.
+    if args.end_date:
+        end_date = args.end_date
+    elif args.product == 'Historical':
+        end_date = '2021-12-31'
+    else:
+        end_date = '2018-12-31'
 
     rim = compile_rim_inflows(
         grid_info_path=grid_info_path,
         fluxes_path=fluxes_path,
         output_path=output_path,
         start_date=args.start_date,
-        end_date=args.end_date,
+        end_date=end_date,
         product_b=product_b,
         full_vic=args.full_vic
     )
@@ -245,7 +264,7 @@ def main():
 
 if __name__ == "__main__":
     # Historical:
-    # python _2_compile_rim_inflows.py --grid_info_path ./reference/GridInfo --fluxes_path ./output/fluxes/Historical --output_path ./output/routed/Historical --watersheds CS3_8RI_DPR_I
+    # python _2_compile_rim_inflows.py --product Historical --grid_info_path ./reference/GridInfo --fluxes_path ./output/fluxes/Historical --output_path ./output/routed/Historical --watersheds CS3_8RI_DPR_I
     # Product A:
     # python _2_compile_rim_inflows.py --product A --grid_info_path ./reference/GridInfo --fluxes_path ./output/fluxes/Product_A/1 --output_path ./output/routed/Product_A/1 --watersheds CS3_8RI_OROVI
     # Product B (writes 10 chunk files per watershed):
