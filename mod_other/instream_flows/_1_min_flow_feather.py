@@ -54,11 +54,11 @@ INPUTS / OUTPUTS
   Historical CS3  <-  MIF_FEATHER_Logic_Reconstruction.xlsx  Main sheet, col B
     Monthly UNIMP_OROV (TAF) as entered in the spreadsheet (WY 1921-2021).
     This is the authoritative source used for validation - it extends through
-    Sep 2021, beyond the _10_RimInflow CSV (which stops Dec 2018).
-    The _10_RimInflow CSV is still used for the Product B WY-1921 seed.
+    Sep 2021.  The CalSim SV DSS supplies the Product B WY-1921 seed.
 
-  Product A  <-  _10_RimInflow/.../Product_A/calsim_all_inflows.csv
-    Quantile-mapped synthetic monthly inflow (WY 1921-2018).  Used for
+  Product A  <-  CalSim SV DSS  __calsim_sv_default__.dss
+    UNIMP_OROV/FLOW-UNIMPAIRED CalSim baseline monthly unimpaired inflow,
+    read via utils.dss_io (same approach as _2_sjr_rest_req.py).  Used for
     both classification and date assignment in the Product A run.
 
   Output 1 - Validation (WY 1922-2021)
@@ -106,7 +106,8 @@ import numpy as np
 
 # Add repo root to path for utils imports
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
-from utils.paths import get_module_generated_dir
+from utils.paths import get_base_dir, get_module_generated_dir
+from utils import dss_io
 
 # -----------------------------------------------------------------------------
 # Paths
@@ -115,14 +116,18 @@ _SCRIPT_DIR = Path(__file__).resolve().parent
 _rim_gen    = get_module_generated_dir("mod_hydrology/rim_inflow")
 _gen        = get_module_generated_dir("mod_other/instream_flows")
 
-# Input 1: Historical CS3 unimpaired Oroville inflow - used for validation
-#          (matches Main column B in the spreadsheet)
-PATH_UNIMP_OROV_HIST = _rim_gen / "output" / "_2_qmap_historical_validation" / "calsim_all_inflows.csv"
+# CalSim baseline UNIMP_OROV is read directly from the CalSim SV DSS
+# (UNIMP_OROV/FLOW-UNIMPAIRED), mirroring _2_sjr_rest_req.py.  This replaces
+# the deprecated calsim_all_inflows.csv intermediate, which the rim-inflow
+# pipeline no longer produces.  Used for the Product A run and for the
+# Product B WY-1921 rolling-average seed.
+DSS_FILE         = get_base_dir() / "CalSim3" / "__calsim_sv_default__.dss"
+DSS_READ_START   = "1915-01-31"
+DSS_READ_END     = "2021-12-31"
+UNIMP_OROV_BPART = "UNIMP_OROV"
+UNIMP_OROV_CPART = "FLOW-UNIMPAIRED"
 
-# Input 2: Product A synthetic unimpaired Oroville inflow - used for Product A
-PATH_UNIMP_OROV_PA = _rim_gen / "output" / "_2_qmap_historical_validation" / "calsim_all_inflows.csv"
-
-# Input 3: Product B directory (10 chunk CSVs)
+# Product B directory (10 chunk CSVs)
 PATH_UNIMP_OROV_PB_DIR = _rim_gen / "output" / "_3_qmap_product_b"
 
 # Spreadsheet with original computed schedule (for 3-way validation comparison)
@@ -435,13 +440,28 @@ def _load_product_b_chunk(chunk_num: int) -> pd.Series:
     return pd.Series(df['qmap_postAdj'].values, index=dates, name='UNIMP_OROV')
 
 
-def _load_unimp_orov(path: str, label: str) -> pd.Series:
-    """Load a UNIMP_OROV CSV and return as a monthly Series."""
-    print(f"\nLoading {label} UNIMP_OROV from:\n  {path}")
-    s = pd.read_csv(
-        path, parse_dates=['date'], index_col='date',
-        usecols=['date', 'UNIMP_OROV'],
-    )['UNIMP_OROV'].dropna()
+def _load_unimp_orov_from_dss(
+    dssfile: Path = DSS_FILE,
+    bpart: str = UNIMP_OROV_BPART,
+    part_c: str = UNIMP_OROV_CPART,
+) -> pd.Series:
+    """Load monthly CalSim baseline UNIMP_OROV (TAF) from the CalSim SV DSS.
+
+    Reads <bpart>/<part_c> from __calsim_sv_default__.dss via the shared
+    utils.dss_io helpers (same approach as _2_sjr_rest_req.py), returning an
+    end-of-month DatetimeIndex Series.  Replaces the deprecated
+    calsim_all_inflows.csv intermediate.
+    """
+    key = (bpart.upper(), part_c.upper())
+    print(f"\nLoading UNIMP_OROV from CalSim SV DSS:\n  {dssfile}")
+    with dss_io.open_dss(str(dssfile), version=6, catalog_flag=True) as dss:
+        series_map = dss_io.read_monthly_series(
+            dss, {key}, DSS_READ_START, DSS_READ_END)
+    if key not in series_map:
+        raise KeyError(f"Could not find {bpart}/{part_c} in {dssfile}")
+    s = series_map[key].dropna()
+    s.name = 'UNIMP_OROV'
+    s.index.name = 'date'
     print(f"  Range : {s.index.min().date()} - {s.index.max().date()}  "
           f"({len(s):,} months)")
     return s
@@ -449,8 +469,8 @@ def _load_unimp_orov(path: str, label: str) -> pd.Series:
 def _load_xlsx_unimp_orov() -> pd.Series:
     """
     Load monthly UNIMP_OROV (TAF) from the Main sheet of the spreadsheet.
-    This source extends through Sep 2021, unlike the _10_RimInflow CSV
-    which only covers through Dec 2018.
+    This source extends through Sep 2021 and is used only for validation;
+    the Product A/B runs read CalSim baseline UNIMP_OROV from the SV DSS.
 
     Main sheet layout: Col A = Date (end-of-month), Col B = UNIMP_OROV (TAF).
     Rows with None dates (template/blank rows) are skipped.
@@ -546,7 +566,7 @@ def run_product_a():
     print("OUTPUT 2 - Product A  (WY 1922-2018, Product A input)")
     print("-" * 65)
 
-    unimp_pa = _load_unimp_orov(PATH_UNIMP_OROV_PA, 'Product A')
+    unimp_pa = _load_unimp_orov_from_dss()
     mf_pa    = compute_min_flow_feather(unimp_pa)
     mf_pa_out = mf_pa.loc['1921-10-31':'2018-09-30']
     df_pa = to_calsim_csv(mf_pa_out, 'MINFLOWFEATHER', 'FLOW-MIN-REQUIRED')
@@ -567,7 +587,7 @@ def run_product_b():
     print("-" * 65)
 
     # CS3 WY 1921 seed (Oct 1920 - Sep 1921) for 2-year rolling avg priming.
-    unimp_hist = _load_unimp_orov(PATH_UNIMP_OROV_HIST, 'Historical CS3')
+    unimp_hist = _load_unimp_orov_from_dss()
     _cs3_seed  = unimp_hist.loc['1920-10-31':'1921-09-30'].copy()
 
     for n in range(1, 11):
