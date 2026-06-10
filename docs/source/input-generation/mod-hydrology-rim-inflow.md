@@ -73,17 +73,40 @@ The quantile mapping methodology achieved substantial improvements across the ri
 
 The figure below summarizes this improvement across the full network. Skill is expressed as normalized NSE, $1/(2-\text{NSE})$, which maps NSE onto the 0--1 range (0.5 corresponds to NSE = 0 and 1.0 to a perfect score). Quantile mapping improves skill at nearly every location, with the largest gains in the low-skill tail, where the poorest performing raw VIC locations are lifted from near zero to above 0.4.
 
-![Rim Inflow Skill (Normalized NSE)](figures/s3-inputs_rim-inflow-skill-normalized-nse.png)
+```{image} figures/s3-inputs_rim-inflow-skill-normalized-nse.png
+:alt: Rim Inflow Skill (Normalized NSE)
+:width: 60%
+:align: center
+```
+
 _Monthly skill (normalized NSE) across all CalSim 3 rim inflow locations, sorted lowest to highest, for raw VIC (blue) and quantile-mapped (VIC-QMAP, red) flows._
 
 These results were first presented at Progress Meeting 2, where the validation demonstrated that seasonal patterns were successfully restored and bias in monthly exceedance was reduced across the board. The NSE improvements reflect not just distributional correction but genuine restoration of the relationship between synthetic and historical flows at monthly timesteps.
 
 Several challenges were identified during the validation process. Spring bias during April through June remains the most persistent issue for Shasta, Oroville, and Yuba, where VIC tends to overestimate spring snowmelt contributions even after quantile mapping corrects distributional characteristics. Folsom showed unexpected negative bias after mapping due to VIC's drying trend over the simulation period--a clear example of the trend inheritance limitation discussed in the quantile mapping methodology section. Millerton shows persistent dry bias in May and June despite overall improvements, likely reflecting VIC's difficulty in capturing the San Joaquin's snowmelt timing.
 
-![Average Monthly Error at Anchor Watersheds](figures/s3-inputs_rim-inflow-monthly-error-anchors.png)
+```{image} figures/s3-inputs_rim-inflow-monthly-error-anchors.png
+:alt: Average Monthly Error at Anchor Watersheds
+:width: 100%
+:align: center
+```
+
 _Average monthly error relative to CalSim 3 (TAF/month) at the anchor watersheds, WY 1972--2018, for raw VIC (left) and quantile-mapped (right) flows. Quantile mapping substantially reduces the winter--spring errors, while residual spring snowmelt bias remains at locations such as Bend Bridge, Oroville, and Yuba._
+
+```{image} figures/s3-inputs_rim-inflow-annual-error-anchors.png
+:alt: Average Annual Error at Anchor Watersheds
+:width: 70%
+:align: center
+```
+
+_Average annual error relative to CalSim 3 (TAF/year) at the anchor watersheds, WY 1972--2018, for raw VIC (blue) and quantile-mapped (VIC-QMAP, red) flows. Annual errors shrink markedly at some anchors (e.g., Oroville) but grow or change sign at others (e.g., Bend Bridge, Folsom, Trinity), reflecting that monthly quantile mapping does not directly constrain annual totals._
 
 The percentage error metric showed that 50% of locations fell within the -15% to +18% range. Extreme percentage errors (up to 79,000% at one location) occur exclusively at near-zero baseline values where even modest absolute differences produce outsized percentages. These extreme percentages do not indicate meaningful reconstruction failure; the underlying absolute errors remain small.
 
-![QM Example -- Folsom Inflow Detail](figures/s3-inputs_rim-inflow-qm-folsom-detail.png)
+```{image} figures/s3-inputs_rim-inflow-qm-folsom-detail.png
+:alt: QM Example -- Folsom Inflow Detail
+:width: 100%
+:align: center
+```
+
 _Quantile mapping validation for Folsom inflow (FOLSM_INFLOW), WY 1972--2018. Left: monthly average flow, where quantile mapping (VIC-QMAP, red) corrects raw VIC's (blue) overestimated spring peak and missing summer baseflow to match the CalSim 3 historical target (black). Right: box plots of annual water-year totals, showing the quantile-mapped distribution reproduces the historical median, spread, and extremes._
