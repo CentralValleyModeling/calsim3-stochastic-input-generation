@@ -42,7 +42,6 @@ Tier 1  FORCING (mod_forcing)
         python mod_forcing/vic/_1_append_wind_wgen_hist.py
         -> [EXTERNAL] VIC hydrologic model run
         python mod_forcing/vic/_2_compile_rim_inflows.py --product B
-        python mod_forcing/vic/_3_aggregate_routings.py --product B
     Climate:
         python mod_forcing/climate/_1_pp_point_locations.py --source Product_B --scenario 1
         python mod_forcing/climate/_2_uhh_basin_averages.py --source Product_B --scenario 1
@@ -163,8 +162,7 @@ byte-identical run-to-run on identical inputs.
 |---|---|---|---|
 | vic/_1 | `python mod_forcing/vic/_1_append_wind_wgen_hist.py` | WGEN `Product_B` met files; historical wind | wind-appended VIC forcing |
 | [EXTERNAL] VIC | manual VIC model run (10 chunks) | wind-appended forcing | VIC flux files (RUNOFF + BASEFLOW) per chunk |
-| vic/_2 | `python mod_forcing/vic/_2_compile_rim_inflows.py --product B` | VIC fluxes; grid weights | routed monthly rim inflows `CS3_*_qmo_n{01..10}.csv` (+ DSS per chunk) |
-| vic/_3 | `python mod_forcing/vic/_3_aggregate_routings.py --product B` | routed `CS3_*_qmo_n{01..10}.csv` components | composite routings (e.g. `CS3_SRBB_qmo_n{01..10}.csv` = Bend Bridge: Shasta + above-SAC257 tributaries) |
+| vic/_2 | `python mod_forcing/vic/_2_compile_rim_inflows.py --product B` | VIC fluxes; grid weights (incl. composite `CS3_8RI_SRBB_GridInfo.txt`) | routed monthly rim inflows `CS3_*_qmo_n{01..10}.csv` (+ DSS per chunk), incl. Bend Bridge `CS3_8RI_SRBB_qmo_n{01..10}.csv` (Shasta + above-SAC257 tributaries) |
 | climate/_1 | `python mod_forcing/climate/_1_pp_point_locations.py --source Product_B --scenario 1` | WGEN met files; PP point reference | per-location monthly precip CSVs (per chunk) |
 | climate/_2 | `python mod_forcing/climate/_2_uhh_basin_averages.py --source Product_B --scenario 1` | WGEN met files; CS3 baseline DSS (UHH precip); grid weights | basin-average precip/Tmax/Tmin/VPD + `_product_b_final/` SV CSVs |
 

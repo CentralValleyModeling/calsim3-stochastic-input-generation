@@ -109,5 +109,34 @@ Follow the relevant manifest start to finish; it points at each module in depend
 ### 5. Documentation
 
 Published documentation: **https://centralvalleymodeling.github.io/calsim3-stochastic-input-generation/**
+(deployed automatically from `main` by `.github/workflows/deploy-docs.yml`).
 
-To build the Sphinx site locally: `cd docs && make html` (output `docs/_build/html`).
+The docs are a Sphinx site under `docs/`. To work on them locally:
+
+**Install the docs toolchain (once):**
+
+```bash
+pip install -r docs/requirements.txt
+```
+
+**Serve with live reload** (rebuilds and refreshes the browser as you edit — recommended while authoring):
+
+```bash
+cd docs
+sphinx-autobuild . _build/html      # then open http://127.0.0.1:8000
+# equivalently, if GNU make is installed:  make livehtml
+```
+
+**Build once (static HTML):**
+
+```bash
+cd docs
+sphinx-build -b html . _build/html  # output in docs/_build/html
+# equivalently, if GNU make is installed:  make html
+```
+
+Open the result at `docs/_build/html/index.html` (on Windows: `start docs/_build/html/index.html`).
+
+> The `make html` / `make livehtml` shortcuts require GNU `make`, which is not installed by
+> default on Windows; use the `sphinx-build` / `sphinx-autobuild` commands above instead.
+> `docs/_build/` is git-ignored.

@@ -7,6 +7,9 @@
 data/
 _dss_link/
 
+# ── Box sync change-detection cache (local manifests) ─────────────────────────
+.sync_cache/
+
 # ── PowerBI workbooks ─────────────────────────────────────────────────────────
 **/PowerBI/
 

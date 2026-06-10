@@ -3,6 +3,8 @@
 Two subcommands:
 
   sync     Upload changed local data to Box as module-level zip archives.
+           Unchanged files are copied from the existing zip without
+           recompressing; only new or modified files are compressed.
            Requires the csstochastic conda env (uses utils.paths).
 
   acquire  Download and unpack zips from Box shared links (data_links.json).
@@ -11,7 +13,8 @@ Two subcommands:
 Usage:
     python data_management.py sync [--force] [--dry-run] [--base-only]
                                    [--generated-only] [--box-dir PATH]
-                                   [--depth {1,2}] [--workers N]
+                                   [--depth {1,2}] [--compresslevel {0-9}]
+                                   [--workers N]
 
     python data_management.py acquire [--data-dir PATH] [--force] [--dry-run]
                                       [--base-only] [--generated-only]
@@ -23,6 +26,7 @@ import sys
 import json
 import zipfile
 import shutil
+import struct
 import tempfile
 import argparse
 import urllib.request
@@ -63,6 +67,8 @@ IGNORE_SUFFIXES = {".pyc"}
 LINKS_FILE = _REPO_ROOT / "data_links.json"
 CHUNK_SIZE = 8 * 1024 * 1024  # 8 MB per download chunk
 BOX_TOKEN_ENV = "BOX_TOKEN"  # env var for Box access token
+CACHE_ROOT = _REPO_ROOT / ".sync_cache"  # local per-zip manifests for change detection
+DEFAULT_COMPRESSLEVEL = 6  # DEFLATE level; lower = faster but larger archives
 
 # ---------------------------------------------------------------------------
 # Sync helpers
@@ -132,35 +138,83 @@ def discover_targets(
     return result
 
 
-def max_mtime(source_dir: Path) -> float:
-    """Return the maximum mtime of all non-skipped files under source_dir."""
+def scan_source(source_dir: Path) -> tuple[set, float]:
+    """Return (set of relative posix file paths, max mtime) for all non-skipped
+    files under source_dir.  The path set mirrors exactly what create_zip would
+    store, so it can be compared against an existing zip's manifest."""
+    files = set()
     latest = 0.0
     for path in source_dir.rglob("*"):
-        if path.is_file():
-            rel = path.relative_to(source_dir)
-            if not should_skip_file(rel):
-                mtime = path.stat().st_mtime
-                if mtime > latest:
-                    latest = mtime
-    return latest
+        if not path.is_file():
+            continue
+        rel = path.relative_to(source_dir)
+        if should_skip_file(rel):
+            continue
+        files.add(rel.as_posix())
+        mtime = path.stat().st_mtime
+        if mtime > latest:
+            latest = mtime
+    return files, latest
 
 
-def needs_update(source_dir: Path, dest_zip: Path) -> bool:
-    """Return True if dest_zip is missing or any source file is newer than it."""
+def read_manifest(manifest_path: Path | None) -> set | None:
+    """Return the file set recorded for a zip at its last sync, or None when no
+    manifest exists or it cannot be read."""
+    if manifest_path is None or not manifest_path.exists():
+        return None
+    try:
+        data = json.loads(manifest_path.read_text(encoding="utf-8"))
+        return set(data.get("files", []))
+    except (OSError, ValueError):
+        return None
+
+
+def write_manifest(manifest_path: Path, source_dir: Path, dest_zip: Path) -> None:
+    """Record source_dir's current file set locally so the next sync can detect
+    deletions without reading the (possibly cloud-only) zip."""
+    files, _ = scan_source(source_dir)
+    manifest_path.parent.mkdir(parents=True, exist_ok=True)
+    payload = {"zip_mtime": dest_zip.stat().st_mtime, "files": sorted(files)}
+    tmp = manifest_path.parent / (manifest_path.name + ".tmp")
+    tmp.write_text(json.dumps(payload), encoding="utf-8")
+    tmp.replace(manifest_path)
+
+
+def needs_update(
+    source_dir: Path, dest_zip: Path, manifest_path: Path | None = None
+) -> bool:
+    """Return True if dest_zip is missing or out of date relative to source_dir.
+
+    Detection never reads the zip's contents -- important when the destination
+    lives on an on-demand cloud mount (e.g. Box Drive), where reading a zip
+    forces a full download.  A source file newer than the zip's filesystem mtime
+    catches additions and edits (metadata only).  Deletions are caught by
+    comparing the current file set against a local manifest written at the last
+    sync.  The manifest is seeded automatically the first time a target is seen
+    up to date, so deletions are detected from the second sync onward.
+    """
     if not dest_zip.exists():
         return True
-    return max_mtime(source_dir) > dest_zip.stat().st_mtime
+    current_files, latest_mtime = scan_source(source_dir)
+    if latest_mtime > dest_zip.stat().st_mtime:
+        return True
+    stored = read_manifest(manifest_path)
+    return stored is not None and current_files != stored
 
 
-def create_zip(source_dir: Path, dest_zip: Path) -> int:
+def create_zip(
+    source_dir: Path, dest_zip: Path, compresslevel: int = DEFAULT_COMPRESSLEVEL
+) -> int:
     """Create a zip of source_dir at dest_zip. Returns the number of files zipped.
 
-    Files that cannot be read (e.g. OneDrive cloud-only placeholders) are
-    skipped with a printed warning so the rest of the zip still completes.
+    The archive is built on local disk and moved to dest_zip at the end, so the
+    many small writes during compression never go through a cloud-synced folder.
+    Files that cannot be read (e.g. OneDrive cloud-only placeholders) are skipped
+    with a printed warning so the rest of the zip still completes.
     """
     dest_zip.parent.mkdir(parents=True, exist_ok=True)
 
-    tmp_fd, tmp_path_str = tempfile.mkstemp(dir=dest_zip.parent, suffix=".zip.tmp")
+    tmp_fd, tmp_path_str = tempfile.mkstemp(suffix=".zip.tmp")
     tmp_path = Path(tmp_path_str)
     file_count = 0
     try:
@@ -168,7 +222,7 @@ def create_zip(source_dir: Path, dest_zip: Path) -> int:
         with zipfile.ZipFile(
             tmp_path, "w",
             compression=zipfile.ZIP_DEFLATED,
-            compresslevel=9,
+            compresslevel=compresslevel,
         ) as zf:
             for path in sorted(source_dir.rglob("*")):
                 if not path.is_file():
@@ -189,6 +243,154 @@ def create_zip(source_dir: Path, dest_zip: Path) -> int:
     return file_count
 
 
+def _copy_member_raw(
+    zin: zipfile.ZipFile, zout: zipfile.ZipFile, info: zipfile.ZipInfo
+) -> None:
+    """Append info's already-compressed bytes from zin into zout without
+    decompressing or recompressing.
+
+    Uses ZipFile internals (fp, filelist, NameToInfo, start_dir) that have been
+    stable across CPython 3.x.  Any failure is the caller's signal to fall back
+    to recompressing the member.
+    """
+    in_fp = zin.fp
+    out_fp = zout.fp
+    if in_fp is None or out_fp is None:
+        raise zipfile.BadZipFile("zip file object unavailable")
+
+    # Locate the compressed payload: a fixed 30-byte local file header, then
+    # variable-length filename and extra fields, then the data itself.
+    in_fp.seek(info.header_offset)
+    header = in_fp.read(30)
+    if header[0:4] != b"PK\x03\x04":
+        raise zipfile.BadZipFile(f"bad local header for {info.filename}")
+    fname_len, extra_len = struct.unpack("<HH", header[26:30])
+    in_fp.seek(info.header_offset + 30 + fname_len + extra_len)
+    data = in_fp.read(info.compress_size)
+    if len(data) != info.compress_size:
+        raise zipfile.BadZipFile(f"short read for {info.filename}")
+
+    # Rebuild a ZipInfo carrying the original compression and metadata, then
+    # write the local header + raw bytes and register it in the destination.
+    zi = zipfile.ZipInfo(filename=info.filename, date_time=info.date_time)
+    zi.compress_type = info.compress_type
+    zi.create_system = info.create_system
+    zi.external_attr = info.external_attr
+    zi.internal_attr = info.internal_attr
+    zi.flag_bits = info.flag_bits & ~0x08  # no trailing data descriptor
+    zi.CRC = info.CRC
+    zi.compress_size = info.compress_size
+    zi.file_size = info.file_size
+    zi.header_offset = zout.start_dir
+
+    out_fp.seek(zout.start_dir)
+    out_fp.write(zi.FileHeader())
+    out_fp.write(data)
+    zout.start_dir = out_fp.tell()
+    zout.filelist.append(zi)
+    zout.NameToInfo[zi.filename] = zi
+
+
+def _incremental_zip(
+    source_dir: Path, dest_zip: Path, compresslevel: int = DEFAULT_COMPRESSLEVEL
+) -> int:
+    """Rebuild dest_zip, copying unchanged members straight from the existing
+    archive and only (re)compressing files that are new or modified since the
+    zip was last written.  Deleted files are simply not carried over.
+
+    A file is treated as unchanged when it is present in the existing zip and
+    its mtime is not newer than the zip -- the same mtime convention used by
+    needs_update.  Raises on any structural problem so update_zip can fall back
+    to a full recompress.
+    """
+    old_mtime = dest_zip.stat().st_mtime
+    current, _ = scan_source(source_dir)
+
+    tmp_fd, tmp_path_str = tempfile.mkstemp(suffix=".zip.tmp")
+    tmp_path = Path(tmp_path_str)
+    os.close(tmp_fd)
+    file_count = 0
+    reused = 0
+    try:
+        with zipfile.ZipFile(dest_zip, "r") as zin, zipfile.ZipFile(
+            tmp_path, "w",
+            compression=zipfile.ZIP_DEFLATED,
+            compresslevel=compresslevel,
+        ) as zout:
+            stored = {i.filename: i for i in zin.infolist() if not i.is_dir()}
+            for rel in sorted(current):
+                local_path = source_dir.joinpath(*rel.split("/"))
+                info = stored.get(rel)
+                if info is not None and local_path.stat().st_mtime <= old_mtime:
+                    try:
+                        _copy_member_raw(zin, zout, info)
+                        reused += 1
+                        file_count += 1
+                        continue
+                    except Exception:
+                        pass  # raw copy failed -> recompress this one member
+                try:
+                    zout.write(str(local_path), rel)
+                    file_count += 1
+                except OSError as e:
+                    print(f"\n    [SKIP] {rel}: {e}", flush=True)
+
+        # Verify the rebuilt archive's manifest before replacing the original.
+        with zipfile.ZipFile(tmp_path) as zcheck:
+            built = {i.filename for i in zcheck.infolist() if not i.is_dir()}
+        if built != current:
+            raise zipfile.BadZipFile(
+                f"rebuilt manifest mismatch ({len(built)} vs {len(current)} files)"
+            )
+        shutil.move(str(tmp_path), dest_zip)
+    except Exception:
+        tmp_path.unlink(missing_ok=True)
+        raise
+
+    if reused:
+        print(
+            f"    [reuse] {dest_zip.name}: {reused}/{file_count} members "
+            f"copied without recompressing",
+            flush=True,
+        )
+    return file_count
+
+
+def update_zip(
+    source_dir: Path,
+    dest_zip: Path,
+    manifest_path: Path | None = None,
+    compresslevel: int = DEFAULT_COMPRESSLEVEL,
+) -> int:
+    """Refresh dest_zip from source_dir, reusing already-compressed bytes for
+    unchanged files and only (re)compressing new or modified ones; deleted files
+    are dropped.  Records a local manifest afterwards so the next sync can detect
+    deletions without reading the zip.
+
+    Falls back to a full recompress (create_zip) when dest_zip is missing or the
+    incremental path raises for any reason, so correctness never depends on the
+    raw-copy fast path succeeding.
+    """
+    if not dest_zip.exists():
+        n = create_zip(source_dir, dest_zip, compresslevel)
+    else:
+        try:
+            n = _incremental_zip(source_dir, dest_zip, compresslevel)
+        except Exception as e:
+            print(
+                f"\n    [rebuild] {dest_zip.name}: incremental update failed "
+                f"({e}); recompressing in full",
+                flush=True,
+            )
+            n = create_zip(source_dir, dest_zip, compresslevel)
+    if manifest_path is not None:
+        try:
+            write_manifest(manifest_path, source_dir, dest_zip)
+        except OSError as e:
+            print(f"\n    [warn] manifest {manifest_path.name}: {e}", flush=True)
+    return n
+
+
 def sync_section(
     source_root: Path,
     box_root: Path,
@@ -197,6 +399,8 @@ def sync_section(
     explicit_targets: list | None = None,
     max_depth: int = 2,
     depth_overrides: dict | None = None,
+    cache_root: Path | None = None,
+    compresslevel: int = DEFAULT_COMPRESSLEVEL,
     workers: int | None = None,
     force: bool,
     dry_run: bool,
@@ -225,22 +429,33 @@ def sync_section(
 
     updated = 0
     skipped = 0
-    to_zip = []  # (source_dir, dest_zip, rel)
+    to_zip = []  # (source_dir, dest_zip, rel, manifest_path)
 
     for source_dir in source_dirs:
         rel = source_dir.relative_to(source_root)
         dest_zip = box_root / rel.parent / (rel.name + ".zip")
+        manifest_path = (
+            cache_root / rel.parent / (rel.name + ".json")
+            if cache_root is not None else None
+        )
 
-        if force or needs_update(source_dir, dest_zip):
+        if force or needs_update(source_dir, dest_zip, manifest_path):
             reason = "new" if not dest_zip.exists() else "changed"
             if dry_run:
                 print(f"  [would update] {rel}  ({reason})")
             else:
-                to_zip.append((source_dir, dest_zip, rel))
+                to_zip.append((source_dir, dest_zip, rel, manifest_path))
             updated += 1
         else:
             print(f"  [up-to-date]   {rel}")
             skipped += 1
+            # Seed a missing manifest from the matching source so the next sync
+            # can detect deletions -- no re-zip and no zip read required.
+            if manifest_path is not None and not dry_run and not manifest_path.exists():
+                try:
+                    write_manifest(manifest_path, source_dir, dest_zip)
+                except OSError:
+                    pass
 
     if dry_run or not to_zip:
         return updated, skipped
@@ -251,8 +466,8 @@ def sync_section(
 
     with ProcessPoolExecutor(max_workers=n_workers) as executor:
         futures = {
-            executor.submit(create_zip, sd, dz): (rel, dz)
-            for sd, dz, rel in to_zip
+            executor.submit(update_zip, sd, dz, mp, compresslevel): (rel, dz)
+            for sd, dz, rel, mp in to_zip
         }
         for future in as_completed(futures):
             rel, dz = futures[future]
@@ -433,6 +648,8 @@ def cmd_sync(args) -> None:
             args.box_dir / "BASE",
             label="BASE",
             explicit_targets=BASE_TARGETS,
+            cache_root=CACHE_ROOT / "BASE",
+            compresslevel=args.compresslevel,
             workers=args.workers,
             force=args.force,
             dry_run=args.dry_run,
@@ -448,6 +665,8 @@ def cmd_sync(args) -> None:
             label="GENERATED",
             max_depth=args.depth,
             depth_overrides=GENERATED_DEPTH_OVERRIDES,
+            cache_root=CACHE_ROOT / "GENERATED",
+            compresslevel=args.compresslevel,
             workers=args.workers,
             force=args.force,
             dry_run=args.dry_run,
@@ -521,6 +740,10 @@ def main() -> None:
                         help=f"Box destination directory (default: {BOX_DEFAULT})")
     p_sync.add_argument("--depth", type=int, choices=[1, 2], default=2,
                         help="Auto-discovery depth for GENERATED/ (default: 2)")
+    p_sync.add_argument("--compresslevel", type=int, choices=range(0, 10),
+                        default=DEFAULT_COMPRESSLEVEL, metavar="{0-9}",
+                        help=f"DEFLATE level 0-9 (default: {DEFAULT_COMPRESSLEVEL}); "
+                             "lower is faster but produces larger archives")
     p_sync.add_argument("--workers", type=int, default=None,
                         help="Parallel zip workers (default: cpu count)")
     p_sync.set_defaults(func=cmd_sync)
