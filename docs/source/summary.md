@@ -26,21 +26,19 @@ complete the San Joaquin restoration cycle under out-of-range flow extremes. Ful
 {doc}`Results / Product B </source/results_product_b>` and the
 {doc}`infeasibility report </source/calsim-run/sjr_infeasibility_report>`.
 
-## Findings and Recommendations
+## Key Findings
 
 ### VIC Model Bias
 
 VIC-modeled flows show an approximately 25 to 30% positive bias relative to CalSim 3 historical inputs, so quantile mapping correction is applied to all VIC-derived inputs. Without it, direct use of VIC outputs would systematically overestimate water availability throughout the system.
 
-Quantile mapping corrects the distributional bias and brings the mapped values into close alignment with CalSim 3 historical targets over the validation period. The size of the required correction reflects the framework's dependence on upstream VIC calibration.
+Quantile mapping corrects the distributional bias and brings the mapped values into closer alignment with CalSim 3 historical targets over the validation period. The size of the required correction reflects the framework's dependence on upstream VIC calibration.
 
 ### WGEN Wet Bias
 
-The exclusion of pre-1948 data from the WGEN sampling pool creates a systematic wet bias in the 100-year stochastic sequences. Atmospheric circulation data from NCEP/NCAR Reanalysis 1 is only available from 1948 onward, so the WGEN cannot sample the Dust Bowl era (1930s) or other pre-1948 dry periods. The 1948-2018 sampling period is therefore approximately centered within the stochastic distribution, whereas the full historical record including pre-1948 would be drier.
+The exclusion of pre-1948 data from the WGEN sampling pool creates a slight wet bias in the 100-year stochastic sequences. Atmospheric circulation data from NCEP/NCAR Reanalysis 1 is only available from 1948 onward, so the WGEN cannot sample the Dust Bowl era (1930s), which seems to result in stochastic sequences underrepresenting the frequency and length of extreme dry periods. The 1948-2018 sampling period is therefore approximately centered within the stochastic distribution, whereas the full historical record including pre-1948 would likely shift the center of the stochastic distribution more in agreement with the full 1921-2018 period.
 
-The stochastic sequences consequently underrepresent the frequency and severity of extreme dry periods. Drought vulnerability analysis should recognize that the 1,000-year ensemble does not include Dust Bowl-like conditions and may therefore underestimate the most extreme droughts.
-
-The bias is not spatially uniform. The WGEN runs wet in the Sacramento Valley and dry in Southern California, because the 1920-1950 period was exceptionally dry in the Sacramento basin relative to post-1948 conditions. The wet bias is visible end-to-end in the Product B ensemble, where rim inflow runs about +7% above baseline and propagates to wetter system-level deliveries, Delta flows, and storage (see {doc}`Results / Product B </source/results_product_b>`).
+The bias is not spatially uniform. The WGEN runs wet in the Sacramento Valley and dry in Southern California, because the 1920-1950 period was exceptionally dry in the Sacramento basin relative to post-1948 conditions. The wet bias is visible end-to-end in the Product B ensemble, where 100-year mean precipitation run 0-7% above baseline and propagates to wetter system-level deliveries, Delta flows, and storage.
 
 ::::{tab-set}
 :::{tab-item} Inflow (1915-2018)
@@ -49,7 +47,7 @@ The bias is not spatially uniform. The WGEN runs wet in the Sacramento Valley an
 :::
 :::{tab-item} Inflow (1948-2018)
 ![Oroville Streamflow 1948-2018](figures/s2-methods_oroville-streamflow-1948-2018.png)
-*Mean annual Oroville unimpaired flow for 14 synthetic 70-year segments (gray box, IQR ~4,950--5,330 TAF/yr) compared to the WGEN historical 1948-2018 mean (~5,070 TAF/yr, red dot). When evaluated over the 70-year (1948-2018) historical period, the historical mean falls within the inner quartile of the synthetic distribution, showing that the WGEN does not have a wet bias relative to the historical data it was sampled from.*
+*Mean annual Oroville unimpaired flow for 14 synthetic 70-year segments (gray box, IQR ~4,950--5,330 TAF/yr) compared to the WGEN historical 1948--2018 mean (~5,070 TAF/yr, red dot). When evaluated over the 70-year (1948-2018) historical period, the historical mean falls within the inner quartile of the synthetic distribution, showing that the WGEN does not have a wet bias relative to the historical data it was sampled from.*
 :::
 :::{tab-item} Precipitation
 ![Oroville Precipitation Comparison](figures/s2-methods_oroville-precip-comparison.png)
@@ -63,9 +61,20 @@ ET bias is mainly propagated through CalSimHydro. VIC flux outputs (EVAP, PET_H2
 
 The net effect on CalSimHydro water budgets is substantial. Lower rangeland ET under quantile-mapped inputs leaves more water available for percolation, driving a +8.8% increase in deep percolation across all Water Budget Areas (~380 TAF/yr). Applied water increases +2% as irrigation compensates for higher potential ET. The ET change proved more influential than the WGEN precipitation change in driving CalSimHydro output differences.
 
-The VIC-based ET quantile mapping approach should continue through Phase I. For Phase II, the Hargreaves-Samani calibrated CIMIS grass-reference ET methodology should be incorporated as an enhancement.
 
-### Phase II Scope
+## Recommendations
+
+Phase I findings point to the following recommendations for Phase II refinement and production runs.
+
+### Update ET Methodology
+
+The current VIC-based ET quantile mapping approach should continue for Phase I completion. The Hargreaves-Samani calibrated CIMIS grass-reference ET methodology should be incorporated as a Phase II enhancement.
+
+### Address WGEN Bias
+
+The WGEN wet bias from post-1948 sampling excludes Dust Bowl-era (1930s) conditions from the stochastic ensemble, so drought vulnerability analysis may underestimate the frequency of the most extreme droughts. The VIC positive bias of approximately 25 to 30% in rim inflows is partially corrected through quantile mapping but reflects the framework's dependence on hydrology model calibration. 
+
+### Plan Phase II Scope
 
 Phase II scoping should build on the Phase I findings, particularly the model infeasibilities and operational rule modifications needed for extreme stochastic sequences. Extended droughts and multi-year wet sequences can push CalSim operational rules outside their design range and require adjustment for realistic simulation. The Phase I report should identify these areas even where the modifications fall beyond the current scope.
 
