@@ -32,7 +32,7 @@ The Bend Bridge anchor (UNIMP_SRBB) is quantile-mapped against a composite VIC r
 
 The adjustment formula distributes any discrepancy proportionally among tributaries based on their contribution to the total:
 
-$$\text{Trib}{\text{adjust}} = \left(\text{Anchor}{\text{QM}} - \sum \text{Tribs}_{\text{QM}}\right) \times \frac{\text{Trib}_{\text{QM}}}{\sum \text{Tribs}_{\text{QM}}}$$
+$$\text{Trib}_{\text{adjust}} = \left(\text{Anchor}_{\text{QM}} - \sum \text{Tribs}_{\text{QM}}\right) \times \frac{\text{Trib}_{\text{QM}}}{\sum \text{Tribs}_{\text{QM}}}$$
 
 $$\text{Final Flow} = \text{Trib}_{\text{QM}} + \text{Trib}_{\text{adjust}}$$
 
