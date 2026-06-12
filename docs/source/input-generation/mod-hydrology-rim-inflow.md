@@ -83,6 +83,8 @@ _Monthly skill (normalized NSE) across all CalSim 3 rim inflow locations, sorted
 
 These results were first presented at Progress Meeting 2, where the validation demonstrated that seasonal patterns were successfully restored and bias in monthly exceedance was reduced across the board. The NSE improvements reflect not just distributional correction but genuine restoration of the relationship between synthetic and historical flows at monthly timesteps.
 
+### Monthly Validation at Rim Inflow Anchors
+
 Several challenges were identified during the validation process. Spring bias during April through June remains the most persistent issue for Shasta, Oroville, and Yuba, where VIC tends to overestimate spring snowmelt contributions even after quantile mapping corrects distributional characteristics. Folsom showed unexpected negative bias after mapping due to VIC's drying trend over the simulation period--a clear example of the trend inheritance limitation discussed in the quantile mapping methodology section. Millerton shows persistent dry bias in May and June despite overall improvements, likely reflecting VIC's difficulty in capturing the San Joaquin's snowmelt timing.
 
 ```{image} figures/s3-inputs_rim-inflow-monthly-error-anchors.png
@@ -91,32 +93,13 @@ Several challenges were identified during the validation process. Spring bias du
 :align: center
 ```
 
-_Average monthly error relative to CalSim 3 (TAF/month) at the anchor watersheds, WY 1972--2018, for raw VIC (left) and quantile-mapped (right) flows. Quantile mapping substantially reduces the winter--spring errors, while residual spring snowmelt bias remains at locations such as Bend Bridge, Oroville, and Yuba._
+_Average monthly error relative to CalSim 3 (TAF/month) at the rim inflow anchors, WY 1972--2018, for raw VIC (left) and VIC-QMAP (right) flows._
 
-```{image} figures/s3-inputs_rim-inflow-annual-error-anchors.png
-:alt: Average Annual Error at Anchor Watersheds
-:width: 70%
-:align: center
-```
-
-_Average annual error relative to CalSim 3 (TAF/year) at the anchor watersheds, WY 1972--2018, for raw VIC (blue) and quantile-mapped (VIC-QMAP, red) flows. Annual errors shrink markedly at some anchors (e.g., Oroville) but grow or change sign at others (e.g., Bend Bridge, Folsom, Trinity), reflecting that monthly quantile mapping does not directly constrain annual totals._
-
-The percentage error metric showed that 50% of locations fell within the -15% to +18% range. Extreme percentage errors (up to 79,000% at one location) occur exclusively at near-zero baseline values where even modest absolute differences produce outsized percentages. These extreme percentages do not indicate meaningful reconstruction failure; the underlying absolute errors remain small.
-
-```{image} figures/s3-inputs_rim-inflow-qm-folsom-detail.png
-:alt: QM Example -- Folsom Inflow Detail
-:width: 100%
-:align: center
-```
-
-_Quantile mapping validation for Folsom inflow (FOLSM_INFLOW), WY 1972--2018. Left: monthly average flow, where quantile mapping (VIC-QMAP, red) corrects raw VIC's (blue) overestimated spring peak and missing summer baseflow to match the CalSim 3 historical target (black). Right: box plots of annual water-year totals, showing the quantile-mapped distribution reproduces the historical median, spread, and extremes._
-
-### Monthly Average Flow at Rim Inflow Anchors
-
-The panels below extend the Folsom example to all ten rim inflow anchors over the validation
-period (WY 1972--2018). Each panel shows the average monthly flow for the CalSim 3 historical
-target (black), raw VIC (blue), and quantile-mapped VIC (VIC-QMAP, red), with box plots of
-annual water-year totals at right.
+The panels below show each of the ten rim inflow anchors over the validation period
+(WY 1972--2018): average monthly flow for the CalSim 3 historical target (black), raw VIC
+(blue), and quantile-mapped VIC (VIC-QMAP, red), with box plots of annual water-year totals at
+right. The Folsom panel illustrates the typical correction, where quantile mapping removes raw
+VIC's overestimated spring peak and restores the missing summer baseflow.
 
 ::::{tab-set}
 :::{tab-item} Bend Bridge
@@ -151,7 +134,23 @@ annual water-year totals at right.
 :::
 ::::
 
-### Annual Time Series at Rim Inflow Anchors
+_Average monthly flow and annual water-year totals at each rim inflow anchor, WY 1972--2018._
+
+### Annual Validation at Rim Inflow Anchors
+
+Annual errors shrink markedly at some anchors (e.g., Oroville) but grow or change sign at
+others (e.g., Bend Bridge, Folsom, Trinity), reflecting that monthly quantile mapping does not
+directly constrain annual totals.
+
+```{image} figures/s3-inputs_rim-inflow-annual-error-anchors.png
+:alt: Average Annual Error at Anchor Watersheds
+:width: 70%
+:align: center
+```
+
+_Average annual error relative to CalSim 3 (TAF/year) at the rim inflow anchors, WY 1972--2018, for raw VIC (blue) and VIC-QMAP (red) flows._
+
+The percentage error metric showed that 50% of locations fell within the -15% to +18% range. Extreme percentage errors (up to 79,000% at one location) occur exclusively at near-zero baseline values where even modest absolute differences produce outsized percentages. These extreme percentages do not indicate meaningful reconstruction failure; the underlying absolute errors remain small.
 
 The panels below show the annual (water-year total) flow and its 5-year mean at each of the ten
 anchor watersheds, comparing the CalSim 3 historical target (black), raw VIC (blue), and
@@ -203,3 +202,5 @@ dry periods such as the 1976--77 and 1987--92 droughts.
 ![Merced (UNIMP_ME) 5-year mean annual flow](figures/rim-inflow-annual-ts/Annual_5Y_Mean_TS_UNIMP_ME.png)
 :::
 ::::
+
+_Annual flow (top) and centered 5-year mean annual flow (bottom) at each rim inflow anchor, WY 1922--2018. VIC-QMAP begins in WY 1972; the shaded band marks the validation period._
