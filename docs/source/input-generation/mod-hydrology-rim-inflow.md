@@ -110,3 +110,56 @@ The percentage error metric showed that 50% of locations fell within the -15% to
 ```
 
 _Quantile mapping validation for Folsom inflow (FOLSM_INFLOW), WY 1972--2018. Left: monthly average flow, where quantile mapping (VIC-QMAP, red) corrects raw VIC's (blue) overestimated spring peak and missing summer baseflow to match the CalSim 3 historical target (black). Right: box plots of annual water-year totals, showing the quantile-mapped distribution reproduces the historical median, spread, and extremes._
+
+### Annual Time Series at Rim Inflow Anchors
+
+The panels below show the annual (water-year total) flow and its 5-year mean at each of the ten
+anchor watersheds, comparing the CalSim 3 historical target (black), raw VIC (blue), and
+quantile-mapped VIC (VIC-QMAP, red) flows. Quantile mapping is trained on WY 1922--1971 and
+applied over the shaded validation period (WY 1972--2018), so the VIC-QMAP trace begins in
+WY 1972. The annual series shows how well year-to-year variability and extremes are reproduced,
+while the 5-year mean (labeled by middle water year) shows the persistence of multi-year wet and
+dry periods such as the 1976--77 and 1987--92 droughts.
+
+::::{tab-set}
+:::{tab-item} Bend Bridge
+![Bend Bridge (UNIMP_SRBB) annual flow](figures/rim-inflow-annual-ts/Annual_TS_UNIMP_SRBB.png)
+![Bend Bridge (UNIMP_SRBB) 5-year mean annual flow](figures/rim-inflow-annual-ts/Annual_5Y_Mean_TS_UNIMP_SRBB.png)
+:::
+:::{tab-item} Shasta
+![Shasta (I_SHSTA) annual flow](figures/rim-inflow-annual-ts/Annual_TS_I_SHSTA.png)
+![Shasta (I_SHSTA) 5-year mean annual flow](figures/rim-inflow-annual-ts/Annual_5Y_Mean_TS_I_SHSTA.png)
+:::
+:::{tab-item} Oroville
+![Oroville (UNIMP_OROV) annual flow](figures/rim-inflow-annual-ts/Annual_TS_UNIMP_OROV.png)
+![Oroville (UNIMP_OROV) 5-year mean annual flow](figures/rim-inflow-annual-ts/Annual_5Y_Mean_TS_UNIMP_OROV.png)
+:::
+:::{tab-item} Folsom
+![Folsom (UNIMP_FOLS) annual flow](figures/rim-inflow-annual-ts/Annual_TS_UNIMP_FOLS.png)
+![Folsom (UNIMP_FOLS) 5-year mean annual flow](figures/rim-inflow-annual-ts/Annual_5Y_Mean_TS_UNIMP_FOLS.png)
+:::
+:::{tab-item} Yuba
+![Yuba (UNIMP_YUBA) annual flow](figures/rim-inflow-annual-ts/Annual_TS_UNIMP_YUBA.png)
+![Yuba (UNIMP_YUBA) 5-year mean annual flow](figures/rim-inflow-annual-ts/Annual_5Y_Mean_TS_UNIMP_YUBA.png)
+:::
+:::{tab-item} Tuolumne
+![Tuolumne (UNIMP_TU) annual flow](figures/rim-inflow-annual-ts/Annual_TS_UNIMP_TU.png)
+![Tuolumne (UNIMP_TU) 5-year mean annual flow](figures/rim-inflow-annual-ts/Annual_5Y_Mean_TS_UNIMP_TU.png)
+:::
+:::{tab-item} San Joaquin
+![San Joaquin (UNIMP_SJ) annual flow](figures/rim-inflow-annual-ts/Annual_TS_UNIMP_SJ.png)
+![San Joaquin (UNIMP_SJ) 5-year mean annual flow](figures/rim-inflow-annual-ts/Annual_5Y_Mean_TS_UNIMP_SJ.png)
+:::
+:::{tab-item} Trinity
+![Trinity (UNIMP_TRIN) annual flow](figures/rim-inflow-annual-ts/Annual_TS_UNIMP_TRIN.png)
+![Trinity (UNIMP_TRIN) 5-year mean annual flow](figures/rim-inflow-annual-ts/Annual_5Y_Mean_TS_UNIMP_TRIN.png)
+:::
+:::{tab-item} Stanislaus
+![Stanislaus (UNIMP_ST) annual flow](figures/rim-inflow-annual-ts/Annual_TS_UNIMP_ST.png)
+![Stanislaus (UNIMP_ST) 5-year mean annual flow](figures/rim-inflow-annual-ts/Annual_5Y_Mean_TS_UNIMP_ST.png)
+:::
+:::{tab-item} Merced
+![Merced (UNIMP_ME) annual flow](figures/rim-inflow-annual-ts/Annual_TS_UNIMP_ME.png)
+![Merced (UNIMP_ME) 5-year mean annual flow](figures/rim-inflow-annual-ts/Annual_5Y_Mean_TS_UNIMP_ME.png)
+:::
+::::

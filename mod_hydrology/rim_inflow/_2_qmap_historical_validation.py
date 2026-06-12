@@ -49,7 +49,7 @@ Usage
     python mod_hydrology/rim_inflow/_2_qmap_historical_validation.py --locations UNIMP_OROV,I_MLRTN_IMP,I_SHSTA
     python mod_hydrology/rim_inflow/_2_qmap_historical_validation.py --locations ALL
 
-    # Major reservoir unimpaired inflows:
+    # Rim inflow anchor unimpaired inflows:
     python mod_hydrology/rim_inflow/_2_qmap_historical_validation.py --locations \
         I_SHSTA UNIMP_OROV UNIMP_FOLS UNIMP_YUBA UNIMP_TU \
         UNIMP_SJ UNIMP_TRIN UNIMP_ST UNIMP_ME UNIMP_SRBB
@@ -1432,7 +1432,7 @@ def parse_args():
                "  --locations UNIMP_OROV,FOLSM_INFLOW\n"
                "  --locations ALL          (or: --locations *)\n"
                "  --locations I_SHSTA UNIMP_OROV UNIMP_FOLS UNIMP_YUBA UNIMP_TU "
-               "UNIMP_SJ UNIMP_TRIN UNIMP_ST UNIMP_ME   (major reservoir unimpaired inflows)",
+               "UNIMP_SJ UNIMP_TRIN UNIMP_ST UNIMP_ME   (rim inflow anchor unimpaired inflows)",
         formatter_class=argparse.RawDescriptionHelpFormatter)
     p.add_argument("--locations", "--location", nargs="*", default=None, metavar="LOC",
                    dest="locations",
