@@ -114,52 +114,40 @@ _Quantile mapping validation for Folsom inflow (FOLSM_INFLOW), WY 1972--2018. Le
 ### Monthly Average Flow at Rim Inflow Anchors
 
 The panels below extend the Folsom example to all ten rim inflow anchors over the validation
-period (WY 1972--2018). For each anchor, the upper panel shows the average monthly flow for the
-CalSim 3 historical target (black), raw VIC (blue), and quantile-mapped VIC (VIC-QMAP, red),
-with box plots of annual water-year totals at right. The lower panel shows the median monthly
-percent error of raw VIC and VIC-QMAP relative to CalSim 3, with the annual percent error
-distribution at right.
+period (WY 1972--2018). Each panel shows the average monthly flow for the CalSim 3 historical
+target (black), raw VIC (blue), and quantile-mapped VIC (VIC-QMAP, red), with box plots of
+annual water-year totals at right.
 
 ::::{tab-set}
 :::{tab-item} Bend Bridge
 ![Bend Bridge (UNIMP_SRBB) monthly average flow](figures/rim-inflow-monthly-avg/Monthly_Avg_UNIMP_SRBB.png)
-![Bend Bridge (UNIMP_SRBB) monthly percent error](figures/rim-inflow-monthly-avg/Monthly_Avg_PctErr_UNIMP_SRBB.png)
 :::
 :::{tab-item} Shasta
 ![Shasta (I_SHSTA) monthly average flow](figures/rim-inflow-monthly-avg/Monthly_Avg_I_SHSTA.png)
-![Shasta (I_SHSTA) monthly percent error](figures/rim-inflow-monthly-avg/Monthly_Avg_PctErr_I_SHSTA.png)
 :::
 :::{tab-item} Oroville
 ![Oroville (UNIMP_OROV) monthly average flow](figures/rim-inflow-monthly-avg/Monthly_Avg_UNIMP_OROV.png)
-![Oroville (UNIMP_OROV) monthly percent error](figures/rim-inflow-monthly-avg/Monthly_Avg_PctErr_UNIMP_OROV.png)
 :::
 :::{tab-item} Folsom
 ![Folsom (UNIMP_FOLS) monthly average flow](figures/rim-inflow-monthly-avg/Monthly_Avg_UNIMP_FOLS.png)
-![Folsom (UNIMP_FOLS) monthly percent error](figures/rim-inflow-monthly-avg/Monthly_Avg_PctErr_UNIMP_FOLS.png)
 :::
 :::{tab-item} Yuba
 ![Yuba (UNIMP_YUBA) monthly average flow](figures/rim-inflow-monthly-avg/Monthly_Avg_UNIMP_YUBA.png)
-![Yuba (UNIMP_YUBA) monthly percent error](figures/rim-inflow-monthly-avg/Monthly_Avg_PctErr_UNIMP_YUBA.png)
 :::
 :::{tab-item} Tuolumne
 ![Tuolumne (UNIMP_TU) monthly average flow](figures/rim-inflow-monthly-avg/Monthly_Avg_UNIMP_TU.png)
-![Tuolumne (UNIMP_TU) monthly percent error](figures/rim-inflow-monthly-avg/Monthly_Avg_PctErr_UNIMP_TU.png)
 :::
 :::{tab-item} San Joaquin
 ![San Joaquin (UNIMP_SJ) monthly average flow](figures/rim-inflow-monthly-avg/Monthly_Avg_UNIMP_SJ.png)
-![San Joaquin (UNIMP_SJ) monthly percent error](figures/rim-inflow-monthly-avg/Monthly_Avg_PctErr_UNIMP_SJ.png)
 :::
 :::{tab-item} Trinity
 ![Trinity (UNIMP_TRIN) monthly average flow](figures/rim-inflow-monthly-avg/Monthly_Avg_UNIMP_TRIN.png)
-![Trinity (UNIMP_TRIN) monthly percent error](figures/rim-inflow-monthly-avg/Monthly_Avg_PctErr_UNIMP_TRIN.png)
 :::
 :::{tab-item} Stanislaus
 ![Stanislaus (UNIMP_ST) monthly average flow](figures/rim-inflow-monthly-avg/Monthly_Avg_UNIMP_ST.png)
-![Stanislaus (UNIMP_ST) monthly percent error](figures/rim-inflow-monthly-avg/Monthly_Avg_PctErr_UNIMP_ST.png)
 :::
 :::{tab-item} Merced
 ![Merced (UNIMP_ME) monthly average flow](figures/rim-inflow-monthly-avg/Monthly_Avg_UNIMP_ME.png)
-![Merced (UNIMP_ME) monthly percent error](figures/rim-inflow-monthly-avg/Monthly_Avg_PctErr_UNIMP_ME.png)
 :::
 ::::
 
