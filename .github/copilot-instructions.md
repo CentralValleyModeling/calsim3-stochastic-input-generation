@@ -140,7 +140,7 @@ WGEN -> VIC (append wind, run model) -> VIC outputs -> [calsimhydro, calsimhydro
 |--------|---------|---------|
 | `_1_append_wind_wgen_hist.py` | Append wind to WGEN for VIC (Jupyter-style) | A |
 | `_1_append_wind_wgen_stochastic.py` | Append wind to WGEN for VIC (Jupyter-style) | B |
-| `_2_compile_rim_inflows.py` | VIC flux files → rim inflows (argparse class) | A & B |
+| `_2_compile_rim_inflows.py` | VIC flux files → rim inflows (argparse class); `--product {Historical,A,B}`; routes the `CS3_8RI_SRBB` Bend Bridge composite directly via a merged GridInfo | Historical, A & B |
 
 ### mod_forcing/climate/
 

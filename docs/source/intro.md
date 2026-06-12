@@ -6,10 +6,10 @@ This project removes that limitation. By coupling a stochastic Weather Generator
 
 ## What This Project Produces
 
-The generation pipeline covers **1,733 CalSim input variables** organized into 15 categories -- from rim inflows and Sacramento Valley hydrology to reservoir evaporation, Delta channel depletion, and operational forecast terms. Two products are generated:
+The generation pipeline covers **1,733 CalSim input variables** organized into 15 categories -- from rim inflows and Sacramento Valley hydrology to reservoir evaporation, Delta channel depletion, and operational forecast terms. Of these, **1,465 require active stochastic generation**; the remaining 268 are held constant, repeat historical patterns, or are unused in the DCR 2023 baseline. Two products are generated:
 
-- **Product A** (1972--2018): A historical-based sequence used for validation against the historical CalSim baseline.
-- **Product B** (1,000 years): Ten 100-year stochastic sequences for planning analysis.
+- **Product A** (WGEN climate WY 1915--2018): A historical-parallel sequence used to validate the generation pipeline against the historical CalSim baseline. The held-out WY 1972--2018 window is the validation period, and the full Product A input set drives a CalSim 3 run over WY 1922--2021.
+- **Product B** (1,000 years): Ten 100-year stochastic sequences (`_n01`--`_n10`) for planning analysis -- the project's primary deliverable.
 
 ## How It Works
 
@@ -26,7 +26,9 @@ The choice of reconstruction method for each variable depends on its correlation
 
 - {doc}`Methods </source/methods>` describes the WGEN algorithm, the input generation framework, and reconstruction techniques in detail.
 - {doc}`Input Generation </source/input-generation/overview>` documents each of the 15 variable categories with methodology specifics, validation results, and known limitations.
-- {doc}`CalSim Runs </source/calsim-run/overview>` covers the Product A validation run and Product B stochastic execution, including diagnostics.
+- {doc}`Results / Product A </source/results_product_a>` reports input-level and CalSim-run validation of the historical-parallel sequence against the CalSim baseline.
+- {doc}`Results / Product B </source/results_product_b>` reports the distributional comparison and CalSim-run behavior of the 1,000-year stochastic ensemble.
+- {doc}`CalSim Runs </source/calsim-run/overview>` covers the run framework and stochastic-sequence diagnostics, including solver infeasibilities.
 - {doc}`Wrap-up </source/summary>` presents technical observations, cross-category dependencies, and recommendations for Phase II.
 
 ## Development Environment

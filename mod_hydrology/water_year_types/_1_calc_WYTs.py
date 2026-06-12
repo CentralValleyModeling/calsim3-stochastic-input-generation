@@ -382,16 +382,14 @@ def process_product_b(input_dir, output_dir, thresholds):
         if missing:
             print(f"    WARNING: Missing components: {missing}")
         
-        # Calculate WYTs for this chunk
-        # Use 1921 initial index values (previous year for 1922 start) for first chunk only
-        # From CDEC historical WYT data: 1921 Sac Index = 9.20, SJ Index = 3.23
-        if chunk_num == 1:
-            wyt_df = calculate_wyts(df_chunk, thresholds,
-                                   sac_initial_index=9.20,
-                                   sj_initial_index=3.23)
-        else:
-            # For subsequent chunks, use default (threshold 'd') since these are synthetic continuations
-            wyt_df = calculate_wyts(df_chunk, thresholds)
+        # Calculate WYTs for this chunk.
+        # Each chunk is an independent 100-year sequence mapped to a WY1922 start,
+        # so every chunk seeds the recursion with the 1921 index values (the year
+        # preceding WY1922). From CDEC historical WYT data: 1921 Sac Index = 9.20,
+        # SJ Index = 3.23.
+        wyt_df = calculate_wyts(df_chunk, thresholds,
+                               sac_initial_index=9.20,
+                               sj_initial_index=3.23)
         
         # Remap water years to CalSim convention (WY 1922-2021)
         wyt_df['water_year'] = list(range(1922, 1922 + len(wyt_df)))
