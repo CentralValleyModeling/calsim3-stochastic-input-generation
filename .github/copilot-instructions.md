@@ -140,7 +140,9 @@ WGEN -> VIC (append wind, run model) -> VIC outputs -> [calsimhydro, calsimhydro
 |--------|---------|---------|
 | `_1_append_wind_wgen_hist.py` | Append wind to WGEN for VIC (Jupyter-style) | A |
 | `_1_append_wind_wgen_stochastic.py` | Append wind to WGEN for VIC (Jupyter-style) | B |
-| `_2_compile_rim_inflows.py` | VIC flux files → rim inflows (argparse class); `--product {Historical,A,B}`; routes the `CS3_8RI_SRBB` Bend Bridge composite directly via a merged GridInfo | Historical, A & B |
+| `_2_compile_rim_inflows.py` | VIC flux files → rim inflows (argparse class); `--product {Historical,Historical_Unsplit,A,B}`; routes the `CS3_8RI_SRBB` Bend Bridge composite directly via a merged GridInfo | Historical, A & B |
+| `reference/build_8RI_SRBB_gridinfo.py` | Build-time only (needs geopandas): merges Shasta + 7 rim tributary GridInfo components and rasterizes the CT_BENDBRIDGE valley floor (WBA 02/03) from `BASE/CalSim3/calsim3.gpkg` into `CS3_8RI_SRBB_GridInfo.txt` (single SRBB build; valley step folded in) | n/a |
+| `reference/build_no_gooselake_gridinfo.py` | Build-time only (needs geopandas): `--target {I_SHSTA,SRBB,all}` drops the ~1000 sq mi Goose Lake over-extension outside the authoritative SHSTA / CT_BENDBRIDGE drainage, writing `CS3_I_SHSTA_no_gooselake_GridInfo.txt` and `CS3_8RI_SRBB_no_gooselake_GridInfo.txt` | n/a |
 
 ### mod_forcing/climate/
 
