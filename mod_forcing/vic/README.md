@@ -23,23 +23,64 @@ WGEN outputs precip and temperature but not wind. These scripts merge historical
 
 ## 2. Run VIC
 
-The VIC model version used for CalSim perturbed hydrology is 4.2.d and can be downloaded from:
-https://cadwr.box.com/s/64ghda1cqfy4vtdwkbsr8s6o8i3lbem5
+The VIC model version used for CalSim perturbed hydrology is 4.2.d. The source
+tree, parameter files, and global parameter files live in the generated data
+directory (downloaded from Box once):
 
-After download, place the VIC model executable in the generated data directory:
-```data/GENERATED/mod_hydrology/vic/VIC_Support_4.2.d/src/```
-
-The global parameter files for running VIC are available from the Box folder.
-
-To run:
-```bash
-cd data/GENERATED/mod_hydrology/vic/VIC_Support_4.2.d/src/
-./vicNl.exe -g ../global_Historical.txt
-./vicNl.exe -g ../global_WGEN_Product_A_1.txt
-./vicNl.exe -g ../global_WGEN_Product_B_1.txt
+```
+data/GENERATED/mod_forcing/vic/VIC_Support_4.2.d/
+  src/          C source + Makefile, and the compiled vicNl binary
+  parameters/   soil / veg / snow-band parameter files
+  global_*.txt  one global parameter file per scenario
 ```
 
-Outputs daily fluxes (runoff, baseflow, ET, etc.) to `data/GENERATED/mod_hydrology/vic/output/fluxes/{Product}/`.
+VIC 4.2.d is a C program. The `vicNl` binary shipped in `src/` was compiled for
+**ARM aarch64** and will NOT run on an x86-64 machine. On Windows, build and run
+it under WSL (Ubuntu). The original ARM binary is preserved as `src/vicNl_aarch64`.
+
+### 2a. Build (one-time, under WSL)
+
+```bash
+# install a C toolchain (WSL authenticates via Windows, so -u root needs no password)
+wsl -u root -e bash -lc 'apt-get update && apt-get install -y build-essential'
+
+# build on the native Linux filesystem (not /mnt/c) for speed
+SRC="/mnt/c/.../data/GENERATED/mod_forcing/vic/VIC_Support_4.2.d/src"
+mkdir -p ~/vicbuild && cp "$SRC"/*.c "$SRC"/*.h "$SRC/Makefile" ~/vicbuild/ && cd ~/vicbuild
+make model CC=gcc \
+  CFLAGS="-I. -O2 -std=gnu89 -fcommon -w -U_FORTIFY_SOURCE -D_FORTIFY_SOURCE=0 -fno-stack-protector" \
+  LIBRARY="-lm"
+```
+
+Why the non-default flags (all required to build/run VIC 4.2.d on a modern gcc/glibc):
+- `-std=gnu89` keeps implicit declarations as warnings (gcc 14+ makes them hard errors by default).
+- `-fcommon` allows the legacy multiple-tentative-definition globals (gcc 10+ defaults to `-fno-common`).
+- `-U_FORTIFY_SOURCE -D_FORTIFY_SOURCE=0 -fno-stack-protector` disables glibc hardening. VIC 4.2.d
+  has a benign fixed-buffer over-write in startup config parsing (`get_global_param`) that a
+  fortified build aborts on (`*** buffer overflow detected ***`). This is a one-time startup
+  write, not in the simulation loop; the de-hardened build (how VIC is historically compiled)
+  produces correct, mass-balanced output.
+
+To refresh the committed binary in the data dir: `cp ~/vicbuild/vicNl "$SRC/vicNl"`.
+
+### 2b. Run on the native ext4 filesystem
+
+Run from WSL's ext4 home, not the `/mnt/c` (DrvFs) mount -- output is many large files
+and DrvFs is far slower. Stage inputs/outputs on ext4 and point a copy of the global
+file at absolute ext4 paths (`FORCING1`, `SOIL`, `VEGLIB`, `VEGPARAM`, `SNOW_BAND`,
+`RESULT_DIR`). Keep paths short.
+
+```bash
+cd ~/vicbuild
+./vicNl -g ~/vicrun/global_WGEN_Product_A_1.txt
+```
+
+Reference throughput (this machine, WSL2): ~2.1 s per grid cell for the full
+1915-2018 period; the full Product A grid (~4097 cells) takes ~2.4 h and writes
+~7.5 GB of daily fluxes. Copy results back to
+`data/GENERATED/mod_forcing/vic/output/fluxes/{Product}/` when done.
+
+Outputs daily fluxes (runoff, baseflow, ET, etc.) named `fluxes_<lat>_<lon>`.
 
 ## 3. Compile Rim Inflows
 

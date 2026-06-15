@@ -175,9 +175,9 @@ WGEN -> VIC (append wind, run model) -> VIC outputs -> [calsimhydro, calsimhydro
 |--------|---------|---------|
 | `_0_stochastic_inflow_explore.py` | Interactive exploration (30-yr rolling drought scatter) | Analysis |
 | `_0_stochastic_precipitation.py` | Precipitation exploration | Analysis |
-| `_1_calc_correlations.py` | R² between CalSim and VIC inflows | Correlation |
-| `_2_qmap_historical_validation.py` | Quantile-map Product A to historical period | A |
-| `_3_qmap_productB.py` | Quantile-map Product B stochastic inflows | B |
+| `_1_calc_correlations.py` | R² between CalSim and VIC inflows | Correlation (`--basis {Historical,Historical_Unsplit}`) |
+| `_2_qmap_historical_validation.py` | Quantile-map Product A to historical period | A (`--basis {Product_A,Historical_Unsplit}`, `--locations`, `--qmap-col`, `--nonexceedance-month`) |
+| `_3_qmap_productB.py` | Quantile-map Product B stochastic inflows | B (`--basis {Product_A,Historical_Unsplit}`) |
 | `_calc_nse.py` | Nash-Sutcliffe efficiency metrics | Validation |
 
 ### mod_hydrology/water_year_types/

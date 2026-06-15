@@ -14,7 +14,9 @@ For each CalSim/VIC pair from CalSim3_VIC_name_mapping.csv:
 Inputs
 ------
 - CalSim baseline DSS:    CalSim3/__calsim_sv_default__.dss
-- Product A VIC routed:   mod_forcing/vic/output/routed/Product_A/1/
+- VIC routed (basis):     mod_forcing/vic/output/routed/Product_A/1/ (default), or
+                          mod_forcing/vic/output/routed/Historical_Unsplit/
+                          with --basis Historical_Unsplit
 - Name mapping:           reference/CalSim3_VIC_name_mapping.csv
 - Anchor map:             reference/RimInflowAnchor.xlsx
 
@@ -26,22 +28,33 @@ Outputs
   - qmap_skill_summary_monthly.csv  (per-inflow monthly NSE/R2/PBIAS: VIC vs CS3
                                      and QMAP vs CS3)
   - figures/
+    Summary figures (always, over all inflows / the fixed major-reservoir set):
     - TotalInflow_Bar_Normalized_NSE.png       (VIC vs QMAP normalized-NSE skill curves;
                                                 plotted data lives in qmap_skill_summary_monthly.csv)
     - Monthly_Avg_Err_SideBySide.png           (VIC vs VIC-QMAP avg monthly error, shared y-axis; fixed major-reservoir set)
     - Annual_Avg_Err.png                       (clustered annual avg error: VIC vs VIC-QMAP)
-    - Monthly_Avg_<loc>.png                    (CS3 vs VIC vs VIC-QMAP monthly means; only when --locations is passed)
-    - Monthly_Avg_PctErr_<loc>.png             (monthly median % error + annual WY % error box; only when --locations is passed)
-    - Annual_TS_<loc>.png                      (annual WY flow time series: CS3/VIC/QMAP; only when --locations is passed)
-    - Annual_5Y_Mean_TS_<loc>.png              (5-year centered mean annual flow; only when --locations is passed)
-    - NonExceedance_<loc>_<Mon>.png            (per-month non-exceedance curves; only when --locations is passed)
+    Per-location figures (by default for the curated major-reservoir set; pass
+    --locations NAME... or --locations ALL to target a different set):
+    - Monthly_Avg_<loc>.png                    (CS3 vs VIC vs VIC-QMAP monthly means)
+    - Monthly_Avg_PctErr_<loc>.png             (monthly median % error + annual WY % error box)
+    - Annual_TS_<loc>.png                      (annual WY flow time series: CS3/VIC/QMAP)
+    - Annual_5Y_Mean_TS_<loc>.png              (5-year centered mean annual flow)
+    - NonExceedance_<loc>_<Mon>.png            (per-month non-exceedance curves; auto peak-CS3
+                                                month by default, or pick via --nonexceed-month)
 - _2_qmap_historical_validation/_product_a_validation/
   - _riminflow_productA_1972_2018.csv  (CalSim format for SV compiler)
+  (with --basis Historical_Unsplit, the parallel convention is
+   _2_qmap_historical_validation_historical_unsplit/_historical_unsplit_validation/
+   _riminflow_historical_unsplit_1972_2018.csv)
 
 Usage
 -----
-    # Full validation run (default behavior / outputs):
+    # Full validation run (default behavior / outputs; Product_A basis):
     python mod_hydrology/rim_inflow/_2_qmap_historical_validation.py
+
+    # Train on the continuous Historical_Unsplit basis instead (opt-in; writes to
+    # _2_qmap_historical_validation_historical_unsplit/, Product_A run untouched):
+    python mod_hydrology/rim_inflow/_2_qmap_historical_validation.py --basis Historical_Unsplit
 
     # Also write per-location monthly-average comparison figures:
     python mod_hydrology/rim_inflow/_2_qmap_historical_validation.py --locations UNIMP_OROV
@@ -100,16 +113,72 @@ _SCRIPT_DIR = Path(__file__).resolve().parent
 _gen = get_module_generated_dir("mod_hydrology/rim_inflow")
 _vic_gen = get_module_generated_dir("mod_forcing/vic")
 
-# RESULTS ROOT
-BASE_RESULTS_DIR = str(_gen / "output" / "_2_qmap_historical_validation")
-OUTPUT_DIR       = BASE_RESULTS_DIR
-FIGURES_DIR      = os.path.join(BASE_RESULTS_DIR, "figures")
-VALIDATION_DIR   = str(_gen / "output" / "_2_qmap_historical_validation" / "_product_a_validation")
+# QM TRAINING BASIS
+# The "basis" is the VIC historical routed series the quantile map is trained
+# from (paired against the CalSim target). Default Product_A preserves the
+# historical behavior and output locations exactly; any other basis writes to a
+# basis-tagged results dir so the Product_A outputs are never clobbered.
+_BASIS_VIC_ROUTED = {
+    "Product_A":          ("output", "routed", "Product_A", "1"),
+    "Historical_Unsplit": ("output", "routed", "Historical_Unsplit"),
+}
+DEFAULT_BASIS = "Product_A"
+
+
+def resolve_basis_paths(basis):
+    """Return the VIC routed dir and output dirs for a training basis.
+
+    Product_A keeps the original output locations; every other basis gets a
+    '<dir>_<basis>' sibling so its outputs never overwrite the Product_A run.
+
+    Each basis also gets its own CalSim-format validation subdir + file, following
+    the '_<basis>_validation' / '_riminflow_<basis>_1972_2018.csv' convention
+    (e.g. Historical_Unsplit -> '_historical_unsplit_validation' /
+    '_riminflow_historical_unsplit_1972_2018.csv'). Product_A keeps its existing
+    '_product_a_validation' / '_riminflow_productA_1972_2018.csv' names so the
+    SV compiler that scans them is unaffected.
+    """
+    if basis not in _BASIS_VIC_ROUTED:
+        raise ValueError(f"Unknown basis {basis!r}; choose from {list(_BASIS_VIC_ROUTED)}.")
+    vic = str(_vic_gen.joinpath(*_BASIS_VIC_ROUTED[basis]))
+    if basis == DEFAULT_BASIS:
+        base_results = str(_gen / "output" / "_2_qmap_historical_validation")
+        val_token = "productA"          # preserve the historical filename token
+    else:
+        base_results = str(_gen / "output" / f"_2_qmap_historical_validation_{basis.lower()}")
+        val_token = basis.lower()       # e.g. historical_unsplit
+    # '_product_a_validation' for Product_A ('Product_A'.lower() == 'product_a'),
+    # '_historical_unsplit_validation' for Historical_Unsplit, etc.
+    validation_dir = os.path.join(base_results, f"_{basis.lower()}_validation")
+    return {
+        "vic_dir":        vic,
+        "base_results":   base_results,
+        "output_dir":     base_results,
+        "figures_dir":    os.path.join(base_results, "figures"),
+        "validation_dir": validation_dir,
+        "validation_csv": f"_riminflow_{val_token}_1972_2018.csv",
+    }
+
+
+def basis_display_label(basis):
+    """Human-readable basis label for figure legends/titles.
+
+    'Product_A' -> 'Product A', 'Historical_Unsplit' -> 'Historical Unsplit'.
+    """
+    return str(basis).replace("_", " ")
+
+
+# Module-level defaults (Product_A); main() overrides these from --basis.
+_default_paths   = resolve_basis_paths(DEFAULT_BASIS)
+BASE_RESULTS_DIR = _default_paths["base_results"]
+OUTPUT_DIR       = _default_paths["output_dir"]
+FIGURES_DIR      = _default_paths["figures_dir"]
+VALIDATION_DIR   = _default_paths["validation_dir"]
+vic_dir          = _default_paths["vic_dir"]
 
 # CONFIG (path strings only -- no disk reads happen at import; see load_inputs())
 master_xlsx  = str(get_inventory_dir() / "_MASTER_INVENTORY_FOR_STOCHASTIC_INPUT_GENERATION_.xlsx")
 dss_file     = str(get_base_dir() / "CalSim3" / "__calsim_sv_default__.dss")
-vic_dir      = str(_vic_gen / "output" / "routed" / "Product_A" / "1")
 ANCHOR_XLSX     = str(_SCRIPT_DIR / "reference" / "RimInflowAnchor.xlsx")
 NAME_MAP_CSV    = str(_SCRIPT_DIR / "reference" / "CalSim3_VIC_name_mapping.csv")
 
@@ -279,7 +348,8 @@ def normalized_nse(values):
     return out
 
 
-def make_total_inflow_bar_figure(detail_df: pd.DataFrame, output_dir: str) -> None:
+def make_total_inflow_bar_figure(detail_df: pd.DataFrame, output_dir: str,
+                                 basis_label: str = "Product A") -> None:
     """`TotalInflow_Bar` figure: independently sorted,
     normalized NSE curves comparing VIC vs post-adjusted QMAP skill across CS3
     rim inflows. Smooth XY line chart (no markers), not a bar chart.
@@ -308,8 +378,8 @@ def make_total_inflow_bar_figure(detail_df: pd.DataFrame, output_dir: str) -> No
 
     # ---- Figure (TotalInflow_Bar chart) ----
     fig, ax = plt.subplots(figsize=(7, 4.5))
-    ax.plot(x_vic,  vic_norm,  color="#2E75B6", linewidth=1.5, label="VIC Product A")
-    ax.plot(x_qmap, qmap_norm, color="#C00000", linewidth=1.5, label="VIC-QMAP Product A")
+    ax.plot(x_vic,  vic_norm,  color="#2E75B6", linewidth=1.5, label=f"VIC {basis_label}")
+    ax.plot(x_qmap, qmap_norm, color="#C00000", linewidth=1.5, label=f"VIC-QMAP {basis_label}")
     ax.set_xlabel("CS3 Rim Inflows (idx)", fontsize=11)
     ax.set_ylabel("Normalized NSE (1/(2-NSE))", fontsize=11)
     ax.set_xlim(0, n + 1)
@@ -338,11 +408,12 @@ def make_total_inflow_bar_figure(detail_df: pd.DataFrame, output_dir: str) -> No
 # Water-year month order (Oct -> Sep) for monthly-average plots.
 _WY_MONTH_ORDER = [10, 11, 12, 1, 2, 3, 4, 5, 6, 7, 8, 9]
 
-# Monthly_Avg series colors.
+# Monthly_Avg series colors. Labels carry a {basis} placeholder filled per call
+# (e.g. "VIC Product A" or "VIC Historical Unsplit").
 _MONTHLY_AVG_SERIES = [
-    ("CS3 Historical",  "cs3_val", "black"),       # CS3
-    ("VIC Product A",   "vic_val", "#2E75B6"),     # VIC (blue)
-    ("VIC-QMAP Product A", None,   "#C00000"),     # VIC-QMAP (red; col filled in per call)
+    ("CS3 Historical",   "cs3_val", "black"),      # CS3
+    ("VIC {basis}",      "vic_val", "#2E75B6"),    # VIC (blue)
+    ("VIC-QMAP {basis}", None,      "#C00000"),    # VIC-QMAP (red; col filled in per call)
 ]
 
 # Fixed location set always shown in the Monthly_Avg_Err validation figures
@@ -350,6 +421,14 @@ _MONTHLY_AVG_SERIES = [
 _MONTHLY_AVG_ERR_LOCATIONS = [
     "UNIMP_OROV", "UNIMP_SRBB", "UNIMP_FOLS", "UNIMP_YUBA", "UNIMP_TU",
     "UNIMP_SJ", "UNIMP_TRIN", "UNIMP_ST", "UNIMP_ME"]
+
+# Curated major-reservoir set that gets the full per-location figure suite
+# (Monthly_Avg, Monthly_Avg_PctErr, Annual_TS/5Y, and non-exceedance auto-month)
+# BY DEFAULT, i.e. when no --locations is given. Pass --locations to target a
+# different set (or ALL). Missing entries are warned and skipped.
+_DEFAULT_LOCATION_FIGURES = [
+    "I_SHSTA", "UNIMP_OROV", "UNIMP_SRBB", "UNIMP_FOLS", "UNIMP_YUBA",
+    "UNIMP_TU", "UNIMP_SJ", "UNIMP_TRIN", "UNIMP_ST", "UNIMP_ME"]
 def sanitize_filename(name: str) -> str:
     """Make a string safe for use as a filename: replace spaces and unsafe
     characters (/ \\ : * ? " < > | and similar) with underscores."""
@@ -393,7 +472,8 @@ def complete_water_year_filter(df: pd.DataFrame, wy_start: int = 1972,
 
 def make_monthly_avg_location_figure(detail_df: pd.DataFrame, location: str, output_dir: str,
                                      qmap_col: str = "qmap_postAdj",
-                                     include_annual_box: bool = True) -> dict:
+                                     include_annual_box: bool = True,
+                                     basis_label: str = "Product A") -> dict:
     """`Monthly_Avg` figure for one inflow: 12-point average monthly
     hydrograph (CS3 Historical vs VIC Product A vs VIC-QMAP Product A) in water-year
     month order (Oct -> Sep), optionally with an annual WY-total box inset.
@@ -413,7 +493,7 @@ def make_monthly_avg_location_figure(detail_df: pd.DataFrame, location: str, out
         return {"location": canonical, "status": "no_complete_wy", "n_complete_wy": 0, "figure_path": None}
     n_wy = int(loc_df["WY"].nunique())
 
-    series = [(lbl, (qmap_col if col is None else col), color)
+    series = [(lbl.format(basis=basis_label), (qmap_col if col is None else col), color)
               for lbl, col, color in _MONTHLY_AVG_SERIES]
     value_cols = [col for _, col, _ in series]
     for c in value_cols:
@@ -505,7 +585,8 @@ def get_qmap_pct_error_series(df: pd.DataFrame, qmap_col: str) -> pd.Series:
 
 
 def make_monthly_avg_pcterr_location_figure(detail_df: pd.DataFrame, location: str, output_dir: str,
-                                            qmap_col: str = "qmap_postAdj") -> dict:
+                                            qmap_col: str = "qmap_postAdj",
+                                            basis_label: str = "Product A") -> dict:
     """`Monthly_Avg_PctErr` figure for one inflow: 12-point monthly MEDIAN
     percent-error line chart (VIC vs VIC-QMAP) in water-year month order, with a
     side annual water-year percent-error box-and-whisker panel.
@@ -532,8 +613,8 @@ def make_monthly_avg_pcterr_location_figure(detail_df: pd.DataFrame, location: s
     loc_df["VIC_PctErr"]  = pct_error((vic - cs3).to_numpy(float), cs3.to_numpy(float))
     loc_df["QMAP_PctErr"] = get_qmap_pct_error_series(loc_df, qmap_col).to_numpy(float)
 
-    series = [("VIC Product A",      "VIC_PctErr",  "#2E75B6"),
-              ("VIC-QMAP Product A", "QMAP_PctErr", "#C00000")]
+    series = [(f"VIC {basis_label}",      "VIC_PctErr",  "#2E75B6"),
+              (f"VIC-QMAP {basis_label}", "QMAP_PctErr", "#C00000")]
 
     # Monthly MEDIAN percent error, WY order.
     monthly = (loc_df.groupby("Month")[["VIC_PctErr", "QMAP_PctErr"]]
@@ -607,17 +688,19 @@ def make_monthly_avg_pcterr_location_figure(detail_df: pd.DataFrame, location: s
 # (CS3 black, VIC blue, QMAP red).
 _ANNUAL_TS_HIST_START = 1922          # first complete water year for CS3/VIC
 _ANNUAL_TS_SIM_START  = 1972          # first complete water year for QMAP
+# Labels carry a {basis} placeholder filled per call (e.g. "VIC Product A").
 _ANNUAL_TS_SERIES = [
-    ("CS3 Historical",     "CS3",  "black"),
-    ("VIC Product A",      "VIC",  "#2E75B6"),
-    ("VIC-QMAP Product A", "QMAP", "#C00000"),
+    ("CS3 Historical",   "CS3",  "black"),
+    ("VIC {basis}",      "VIC",  "#2E75B6"),
+    ("VIC-QMAP {basis}", "QMAP", "#C00000"),
 ]
 
 
 def make_annual_timeseries_location_figure(vic_detail_df: pd.DataFrame,
                                            detail_df: pd.DataFrame,
                                            location: str, output_dir: str,
-                                           qmap_col: str = "qmap_postAdj") -> dict:
+                                           qmap_col: str = "qmap_postAdj",
+                                           basis_label: str = "Product A") -> dict:
     """Per-location annual water-year time-series figure (two stacked panels):
 
       - Top:    Annual Flow (TAF)             -- CS3, VIC, QMAP per water year
@@ -682,7 +765,7 @@ def make_annual_timeseries_location_figure(vic_detail_df: pd.DataFrame,
 
         for label, col, color in _ANNUAL_TS_SERIES:
             ax.plot(wy, data[col].to_numpy(float), linewidth=1.4, color=color,
-                    label=label, zorder=3)
+                    label=label.format(basis=basis_label), zorder=3)
         ax.set_xlabel("Water Year", fontsize=11)
         ax.set_ylabel(ylabel, fontsize=11)
         ax.set_xlim(1920, x_hi)
@@ -897,7 +980,8 @@ def make_nonexceedance_location_figure(vic_detail_df: pd.DataFrame,
 
 
 def make_monthly_avg_err_figure(detail_df: pd.DataFrame, requested_locations, output_dir: str,
-                                qmap_col: str = "qmap_postAdj") -> dict:
+                                qmap_col: str = "qmap_postAdj",
+                                basis_label: str = "Product A") -> dict:
     """`Monthly_Avg_Err` figures for the selected inflows, written as TWO images:
 
       - Monthly_Avg_Err_SideBySide.png  VIC vs VIC-QMAP average monthly error
@@ -984,8 +1068,8 @@ def make_monthly_avg_err_figure(detail_df: pd.DataFrame, requested_locations, ou
 
     # ---- Combined side-by-side figure (VIC | VIC-QMAP), shared y-axis ----
     fig, (axL, axR) = plt.subplots(1, 2, figsize=(10, 5.2), sharey=True)
-    _draw_monthly(axL, vic_monthly, "VIC Product A", ylabel=True)
-    _draw_monthly(axR, qm_monthly, "VIC-QMAP Product A", ylabel=False)
+    _draw_monthly(axL, vic_monthly, f"VIC {basis_label}", ylabel=True)
+    _draw_monthly(axR, qm_monthly, f"VIC-QMAP {basis_label}", ylabel=False)
     handles, labels = axL.get_legend_handles_labels()
     fig.legend(handles, labels, title="Location", loc="center left",
                bbox_to_anchor=(0.90, 0.5), frameon=False, fontsize=8.5,
@@ -1006,9 +1090,9 @@ def make_monthly_avg_err_figure(detail_df: pd.DataFrame, requested_locations, ou
     yb = np.arange(len(used)); h = 0.4
     # VIC on the lower bar, VIC-QMAP on the upper bar (after invert_yaxis).
     ax.barh(yb + h / 2, [vic_annual[loc] for loc in used], h,
-            label="VIC Product A", color="#2E75B6")
+            label=f"VIC {basis_label}", color="#2E75B6")
     ax.barh(yb - h / 2, [qm_annual[loc] for loc in used], h,
-            label="VIC-QMAP Product A", color="#C00000")
+            label=f"VIC-QMAP {basis_label}", color="#C00000")
     ax.axvline(0, color="0.2", linewidth=1.0)   # darker zero reference
     ax.set_yticks(yb)
     ax.set_yticklabels(used, fontsize=9)
@@ -1134,7 +1218,21 @@ def write_monthly_skill_summary(detail_df: pd.DataFrame, output_dir: str,
     return path
 
 
-def main(locations=None, qmap_col="qmap_postAdj", nonexceedance_month=None):
+def main(locations=None, qmap_col="qmap_postAdj", nonexceedance_month=None, basis=DEFAULT_BASIS):
+    # Resolve all basis-dependent paths up front, overriding the module-level
+    # Product_A defaults so every downstream reference uses the chosen basis.
+    global vic_dir, BASE_RESULTS_DIR, OUTPUT_DIR, FIGURES_DIR, VALIDATION_DIR
+    _paths = resolve_basis_paths(basis)
+    vic_dir          = _paths["vic_dir"]
+    BASE_RESULTS_DIR = _paths["base_results"]
+    OUTPUT_DIR       = _paths["output_dir"]
+    FIGURES_DIR      = _paths["figures_dir"]
+    VALIDATION_DIR   = _paths["validation_dir"]
+    validation_csv_name = _paths["validation_csv"]
+    basis_label = basis_display_label(basis)
+    print(f"Training basis: {basis}  (VIC routed: {vic_dir})")
+    print(f"Results dir:    {OUTPUT_DIR}")
+
     # Create output dirs and start each run with a clean figures/ folder so
     # stale figures from a previous run (e.g. different --locations) are gone.
     os.makedirs(OUTPUT_DIR, exist_ok=True)
@@ -1335,44 +1433,60 @@ def main(locations=None, qmap_col="qmap_postAdj", nonexceedance_month=None):
     detail_df = detail_df.merge(post_metrics, on="CalSim", how="left")
 
     # TotalInflow_Bar figure: normalized NSE skill curves (VIC vs QMAP postAdj)
-    make_total_inflow_bar_figure(detail_df, FIGURES_DIR)
+    make_total_inflow_bar_figure(detail_df, FIGURES_DIR, basis_label=basis_label)
 
     # Monthly_Avg_Err figures (VIC, VIC-QMAP, annual): always over the fixed
     # major-reservoir set, regardless of --locations.
     make_monthly_avg_err_figure(detail_df, _MONTHLY_AVG_ERR_LOCATIONS, FIGURES_DIR,
-                                qmap_col=qmap_col)
+                                qmap_col=qmap_col, basis_label=basis_label)
 
-    # Optional per-location monthly-average comparison figures (--locations).
-    # Additive only: does not alter any existing output above.
-    if locations is not None:
-        available = list(pd.unique(detail_df["CalSim"].dropna().astype(str)))
+    # Per-location comparison figures (Monthly_Avg, Monthly_Avg_PctErr, Annual_TS,
+    # and non-exceedance). Default (no --locations): the curated major-reservoir
+    # set, with non-exceedance at the auto (peak-CS3) month. With --locations: the
+    # requested set, and non-exceedance stays opt-in via --nonexceed-month.
+    available = list(pd.unique(detail_df["CalSim"].dropna().astype(str)))
+    if locations is None:
+        requested = parse_locations(_DEFAULT_LOCATION_FIGURES, available, master_order)
+        ne_by_default = True
+        scope_label = "default major-reservoir"
+    else:
         requested = parse_locations(locations, available, master_order)
-        monthly_dir = FIGURES_DIR
-        if not requested:
+        ne_by_default = False
+        scope_label = "requested"
+
+    monthly_dir = FIGURES_DIR
+    if not requested:
+        if locations is not None:
             print("[WARN] --locations supplied but no locations resolved; "
-                  "no monthly-average figures produced.")
+                  "no per-location figures produced.")
+    else:
+        results = [make_monthly_avg_location_figure(detail_df, loc, monthly_dir,
+                                                    qmap_col=qmap_col, basis_label=basis_label)
+                   for loc in requested]
+        for loc in requested:
+            make_monthly_avg_pcterr_location_figure(detail_df, loc, monthly_dir,
+                                                    qmap_col=qmap_col, basis_label=basis_label)
+        for loc in requested:
+            make_annual_timeseries_location_figure(vic_detail_df, detail_df, loc,
+                                                   monthly_dir, qmap_col=qmap_col,
+                                                   basis_label=basis_label)
+        # Non-exceedance: explicit month(s) via --nonexceed-month always win;
+        # otherwise produce the auto (peak-CS3) month by default when no
+        # --locations was given.
+        if nonexceedance_month is not None:
+            ne_months = parse_ne_months(nonexceedance_month)
+        elif ne_by_default:
+            ne_months = ["auto"]
         else:
-            results = [make_monthly_avg_location_figure(detail_df, loc, monthly_dir,
-                                                        qmap_col=qmap_col)
-                       for loc in requested]
-            for loc in requested:
-                make_monthly_avg_pcterr_location_figure(detail_df, loc, monthly_dir,
-                                                        qmap_col=qmap_col)
-            for loc in requested:
-                make_annual_timeseries_location_figure(vic_detail_df, detail_df, loc,
-                                                       monthly_dir, qmap_col=qmap_col)
-            # Non-exceedance figures are opt-in: produced only when the caller
-            # explicitly requests month(s) via --nonexceed-month.
-            if nonexceedance_month is not None:
-                ne_months = parse_ne_months(nonexceedance_month)
-                for loc in requested:
-                    for ne_month in ne_months:
-                        make_nonexceedance_location_figure(vic_detail_df, detail_df, loc,
-                                                           monthly_dir, month=ne_month,
-                                                           qmap_col=qmap_col)
-            n_ok = sum(1 for r in results if r["status"] == "ok")
-            print(f"\nMonthly-avg: produced {n_ok}/{len(requested)} requested location "
-                  f"figure(s) in {monthly_dir}")
+            ne_months = []
+        for loc in requested:
+            for ne_month in ne_months:
+                make_nonexceedance_location_figure(vic_detail_df, detail_df, loc,
+                                                   monthly_dir, month=ne_month,
+                                                   qmap_col=qmap_col)
+        n_ok = sum(1 for r in results if r["status"] == "ok")
+        print(f"\nPer-location figures: produced {n_ok}/{len(requested)} {scope_label} "
+              f"location figure(s) in {monthly_dir}")
 
     # 6. WRITE ORGANIZED CSVs
     # Row-level QMAP results: IDs + values only (skill metrics live in
@@ -1388,9 +1502,10 @@ def main(locations=None, qmap_col="qmap_postAdj", nonexceedance_month=None):
     # complete validation water years.
     write_monthly_skill_summary(detail_df, OUTPUT_DIR, qmap_col=qmap_col)
 
-    # -- 6. PRODUCT A VALIDATION CSV (for SV compiler) --------------------
-    # Write final CalSim-format CSV (Part B, Part C, Year, Month, Value) to
-    # _product_a_validation/ for consumption by the SV compiler.
+    # -- 6. VALIDATION CSV (for SV compiler) ------------------------------
+    # Write final CalSim-format CSV (Part B, Part C, Year, Month, Value) to the
+    # basis validation dir (_product_a_validation / _historical_unsplit_validation)
+    # for consumption by the SV compiler.
 
     # Build Part B -> Part C map from the inventory (col index 2 = Part B, 3 = Part C)
     col_partB = df_master.columns[2]
@@ -1415,9 +1530,9 @@ def main(locations=None, qmap_col="qmap_postAdj", nonexceedance_month=None):
         })
 
     df_val_csv = pd.DataFrame(val_rows).sort_values(['Part B', 'Year', 'Month']).reset_index(drop=True)
-    val_csv_path = os.path.join(VALIDATION_DIR, "_riminflow_productA_1972_2018.csv")
+    val_csv_path = os.path.join(VALIDATION_DIR, validation_csv_name)
     df_val_csv.to_csv(val_csv_path, index=False)
-    print(f"\nProduct A validation CSV: {val_csv_path}")
+    print(f"\n{basis_label} validation CSV: {val_csv_path}")
     print(f"  {len(df_val_csv):,} rows, {df_val_csv['Part B'].nunique()} inflows")
 
 
@@ -1442,8 +1557,13 @@ def parse_args():
                         "Example: --locations UNIMP_OROV,FOLSM_INFLOW")
     p.add_argument("--qmap-col", choices=["qmap_preAdj", "qmap_postAdj"],
                    default="qmap_postAdj",
-                   help="Which QMAP column to plot as 'Q-MAP Product A' "
+                   help="Which QMAP column to plot as the VIC-QMAP series "
                         "(default: qmap_postAdj).")
+    p.add_argument("--basis", choices=list(_BASIS_VIC_ROUTED), default=DEFAULT_BASIS,
+                   help="VIC historical training basis (default: Product_A). "
+                        "Historical_Unsplit uses the continuous 1915-2018 WGEN "
+                        "sequence; its outputs go to a basis-tagged results dir "
+                        "so the Product_A outputs are untouched.")
     p.add_argument(
         "--nonexceedance-month", "--nonexceed-month", dest="nonexceedance_month",
         nargs="*", default=None, metavar="MONTH",
@@ -1460,4 +1580,4 @@ def parse_args():
 if __name__ == "__main__":
     _args = parse_args()
     main(locations=_args.locations, qmap_col=_args.qmap_col,
-         nonexceedance_month=_args.nonexceedance_month)
+         nonexceedance_month=_args.nonexceedance_month, basis=_args.basis)
