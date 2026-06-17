@@ -8,7 +8,7 @@ Tulare Basin groundwater terms via WYT averaging
 ```
 
 
-Groundwater pumping (`GP_GWR15`–`GP_GWR21`) and deep percolation (`DP_GWR15`–`DP_GWR21`) are 14 Tulare Basin groundwater stress terms: seven pumping terms and seven deep-percolation terms. CalSim 3 documentation describes Tulare-region groundwater pumping and deep percolation as region-indexed inputs passed to the groundwater DLL via `SetGP` and `SetDP`, and identifies seven Tulare Basin subregions in the groundwater-DLL configuration [CalSim 3 Hydrology Report (DCR 2023)](https://data.cnra.ca.gov/dataset/a3bb1ddd-624b-4c3d-95e7-2aa6b3bf2b5b/resource/6ba59600-d562-44da-a267-a6a50dff3f0d/download/final_cs3_hydrologyreport_v2.pdf). Because a complete Tulare Basin groundwater reconstruction is outside Phase I scope, they are reconstructed using WYT-based monthly averaging rather than through Tulare Basin C2VSim simulation.
+Groundwater pumping (`GP_GWR15`–`GP_GWR21`) and deep percolation (`DP_GWR15`–`DP_GWR21`) are 14 Tulare Basin groundwater stress terms: seven pumping terms and seven deep-percolation terms. CalSim 3 documentation describes Tulare-region groundwater pumping and deep percolation as region-indexed inputs passed to the groundwater DLL, and identifies seven Tulare Basin subregions in the groundwater-DLL configuration [CalSim 3 Hydrology Report (DCR 2023)](https://data.cnra.ca.gov/dataset/a3bb1ddd-624b-4c3d-95e7-2aa6b3bf2b5b/resource/6ba59600-d562-44da-a267-a6a50dff3f0d/download/final_cs3_hydrologyreport_v2.pdf). Because a complete Tulare Basin groundwater reconstruction is outside Phase I scope, they are reconstructed using WYT-based monthly averaging rather than through Tulare Basin C2VSim simulation.
 
 ## Methodology
 
