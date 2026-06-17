@@ -26,24 +26,27 @@ WYT averaging is accepted despite its limitations: because these terms serve as 
 
 Groundwater pumping variables show acceptable NSE values ranging from moderate to strong correspondence. The highest agreement examples demonstrate good overall fit with realistic seasonal patterns. The lowest agreement pumping term (`GP_GWR19`) still achieves acceptable results despite showing less variation than historical values, reflecting the inherent averaging effect of the WYT methodology. Drought period Product A values show less volatility than historical values, which is expected when using categorical averaging rather than continuous predictors. Given the lack of better predictive methods, this smoothing effect represents an acceptable tradeoff.
 
+::::{tab-set}
+:::{tab-item} Highest Agreement
+![Tulare GW Best Examples](figures/s3-inputs_tulare-gw-best-examples.png)
+*`GP_GWR15` groundwater pumping reconstruction (WY 1972 to 2018), the GP term with the highest agreement (NSE = 0.96, PBIAS = 1.1%). Left: monthly time series cycling between approximately 0 TAF in winter and 300 to 400 TAF during summer irrigation season; Product A (orange) closely tracks historical (blue), capturing both seasonal amplitude and yearly variations in peak pumping. Right: non-exceedance CDF showing the Product A distribution closely matching the historical distribution.*
+:::
+:::{tab-item} Lowest Agreement
+![Tulare GW Best GP-19](figures/s3-inputs_tulare-gw-best-gp19.png)
+*`GP_GWR19` groundwater pumping reconstruction (WY 1972 to 2018), the GP term with the lowest agreement (NSE = 0.76, PBIAS = 4.0%). Left: summer peaks in historical data reach approximately 150 to 175 TAF while Product A values plateau lower, illustrating the WYT averaging smoothing effect; the Product A series captures seasonal timing but compresses the range of peak values. Right: non-exceedance CDF showing Product A values underestimating the upper tail of the distribution.*
+:::
+::::
+
 ### Deep Percolation Terms
 
 Deep percolation variables exhibit lower NSE values and reduced ability to capture signal variability compared to groundwater pumping. The highest and lowest agreement examples spanning areas 15 to 21 illustrate a range of performance, with `DP_GWR17` showing the strongest reconstruction while `DP_GWR21` shows the weakest, unable to reproduce the episodic high percolation events that dominate its variability. A consistent pattern of underestimation appears in deep percolation Product A values, suggesting potential mass balance considerations merit investigation.
 
 ::::{tab-set}
-:::{tab-item} GP Highest Agreement
-![Tulare GW Best Examples](figures/s3-inputs_tulare-gw-best-examples.png)
-*`GP_GWR15` groundwater pumping reconstruction (WY 1972 to 2018), the GP term with the highest agreement (NSE = 0.96, PBIAS = 1.1%). Left: monthly time series cycling between approximately 0 TAF in winter and 300 to 400 TAF during summer irrigation season; Product A (orange) closely tracks historical (blue), capturing both seasonal amplitude and yearly variations in peak pumping. Right: non-exceedance CDF showing the Product A distribution closely matching the historical distribution.*
-:::
-:::{tab-item} GP Lowest Agreement
-![Tulare GW Best GP-19](figures/s3-inputs_tulare-gw-best-gp19.png)
-*`GP_GWR19` groundwater pumping reconstruction (WY 1972 to 2018), the GP term with the lowest agreement (NSE = 0.76, PBIAS = 4.0%). Left: summer peaks in historical data reach approximately 150 to 175 TAF while Product A values plateau lower, illustrating the WYT averaging smoothing effect; the Product A series captures seasonal timing but compresses the range of peak values. Right: non-exceedance CDF showing Product A values underestimating the upper tail of the distribution.*
-:::
-:::{tab-item} DP Highest Agreement
+:::{tab-item} Highest Agreement
 ![Tulare GW DP Best](figures/s3-inputs_tulare-gw-dp-best.png)
 *`DP_GWR17` deep percolation reconstruction (WY 1972 to 2018), the DP term with the highest agreement (NSE = 0.62, PBIAS = -2.1%). Left: historical values (blue) range from approximately 15 to 115 TAF with frequent spikes in wet months, while Product A values (orange) are compressed, capturing the general seasonal pattern but underestimating peaks in wet months. Right: non-exceedance CDF showing close agreement through the middle range with divergence in the upper tail.*
 :::
-:::{tab-item} DP Lowest Agreement
+:::{tab-item} Lowest Agreement
 ![Tulare GW DP Worst](figures/s3-inputs_tulare-gw-dp-worst.png)
 *`DP_GWR21` deep percolation reconstruction (WY 1972 to 2018), the term with the lowest agreement overall (NSE = 0.38, PBIAS = -5.7%). Left: historical values (blue) show dramatic spikes in wet years reaching approximately 220 TAF, while Product A values (orange) remain much lower; the WYT averaging approach captures the baseline level but cannot reproduce the episodic high percolation events that dominate variability in this area. Right: non-exceedance CDF showing the Product A distribution falling well below the historical distribution at the upper tail, where the largest percolation events are not reproduced.*
 :::
