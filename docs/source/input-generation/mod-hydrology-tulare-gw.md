@@ -8,7 +8,7 @@ Tulare Basin groundwater terms via WYT averaging
 ```
 
 
-Groundwater pumping and deep percolation terms for Tulare Basin C2VSim areas 15 to 21. The 14 terms comprise seven groundwater pumping variables and seven deep percolation variables representing C2VSim fine grid solution outputs. These terms exist outside CalSim's primary water system domain, serving as placeholders that maintain groundwater dynamics in reasonable ranges without full integration into CalSim's operations.
+Groundwater pumping (GP_GWR15–GP_GWR21) and deep percolation (DP_GWR15–DP_GWR21) terms represent seven legacy Tulare Basin groundwater response regions used as external groundwater stress inputs. These 14 terms derive from C2VSim fine grid solution outputs. They exist outside CalSim's primary water system domain, serving as placeholders that maintain groundwater dynamics in reasonable ranges without full integration into CalSim's operations.
 
 ## Methodology
 
