@@ -8,11 +8,11 @@ Tulare Basin groundwater terms via WYT averaging
 ```
 
 
-Groundwater pumping and deep percolation terms for Tulare Basin C2VSim areas 15-21. The 14 terms comprise seven groundwater pumping variables and seven deep percolation variables representing C2VSim fine grid solution outputs. These terms exist outside CalSim's primary water system domain, serving as placeholders that maintain groundwater dynamics in reasonable ranges without full integration into CalSim's operations.
+Groundwater pumping and deep percolation terms for Tulare Basin C2VSim areas 15 to 21. The 14 terms comprise seven groundwater pumping variables and seven deep percolation variables representing C2VSim fine grid solution outputs. These terms exist outside CalSim's primary water system domain, serving as placeholders that maintain groundwater dynamics in reasonable ranges without full integration into CalSim's operations.
 
 ## Methodology
 
-Correlation testing against rim inflow variables across all 14 terms revealed correlations uniformly below 0.8, with most substantially lower. This eliminated quantile mapping as a viable approach since QM performance degrades significantly when basis-target correlation falls below 0.7. The Progress Meeting 3 presentation included an R^2 comparison table showing QM versus WYT performance for all 14 terms, confirming WYT averaging's superiority for these low-correlation variables. Water year type averaging emerged as the only practical methodology given these constraints.
+Correlation testing against rim inflow variables across all 14 terms revealed correlations uniformly below 0.8, with most substantially lower. This eliminated quantile mapping as a viable approach since QM performance degrades significantly when correlation between basis and target falls below 0.7. The Progress Meeting 3 presentation included an R^2 comparison table showing QM versus WYT performance for all 14 terms, confirming WYT averaging's superiority for these low correlation variables. Water year type averaging emerged as the only practical methodology given these constraints.
 
 The approach calculates monthly averages conditional on San Joaquin water year type classification (Wet, Above Normal, Below Normal, Dry, Critical), which is appropriate given Tulare Basin's location and hydrologic character. For each calendar month and water year type combination, historical values are averaged to produce representative patterns. These patterns are then applied to synthetic sequences based on reconstructed San Joaquin WYT classification.
 
@@ -24,11 +24,11 @@ This candid assessment from MSO informed the decision to accept WYT averaging de
 
 ### Groundwater Pumping Terms
 
-Groundwater pumping variables show acceptable NSE values ranging from moderate to strong correspondence. The highest-agreement examples demonstrate good overall fit with realistic seasonal patterns. The lowest-agreement pumping term (GP_GWR19) still achieves acceptable results despite showing less variation than historical values, reflecting the inherent averaging effect of the WYT methodology. Drought period Product A values show less up-and-down volatility than historical values, which is expected when using categorical averaging rather than continuous predictors. Given the lack of better predictive methods, this smoothing effect represents an acceptable trade-off.
+Groundwater pumping variables show acceptable NSE values ranging from moderate to strong correspondence. The highest agreement examples demonstrate good overall fit with realistic seasonal patterns. The lowest agreement pumping term (GP_GWR19) still achieves acceptable results despite showing less variation than historical values, reflecting the inherent averaging effect of the WYT methodology. Drought period Product A values show less volatility than historical values, which is expected when using categorical averaging rather than continuous predictors. Given the lack of better predictive methods, this smoothing effect represents an acceptable tradeoff.
 
 ### Deep Percolation Terms
 
-Deep percolation variables exhibit lower NSE values and reduced ability to capture signal variability compared to groundwater pumping. The highest- and lowest-agreement examples spanning areas 15-21 illustrate a range of performance, with DP_GWR17 showing the strongest reconstruction while DP_GWR21 shows the weakest, unable to reproduce the episodic high-percolation events that dominate its variability. A consistent pattern of underestimation appears in deep percolation Product A values, suggesting potential mass balance considerations merit investigation.
+Deep percolation variables exhibit lower NSE values and reduced ability to capture signal variability compared to groundwater pumping. The highest and lowest agreement examples spanning areas 15 to 21 illustrate a range of performance, with DP_GWR17 showing the strongest reconstruction while DP_GWR21 shows the weakest, unable to reproduce the episodic high percolation events that dominate its variability. A consistent pattern of underestimation appears in deep percolation Product A values, suggesting potential mass balance considerations merit investigation.
 
 ::::{tab-set}
 :::{tab-item} GP Highest Agreement
@@ -49,4 +49,4 @@ Deep percolation variables exhibit lower NSE values and reduced ability to captu
 :::
 ::::
 
-The documented limitations are acceptable within project constraints. The groundwater pumping and deep percolation patterns provide hydrologically reasonable boundary conditions that avoid introducing systematic biases or unrealistic trends. For long-term stochastic planning focused on core system performance, maintaining plausible Tulare groundwater behavior through WYT averaging serves project objectives while acknowledging appropriate methodological boundaries.
+The documented limitations are acceptable within project constraints. The groundwater pumping and deep percolation patterns provide hydrologically reasonable boundary conditions that avoid introducing systematic biases or unrealistic trends. For long term stochastic planning focused on core system performance, maintaining plausible Tulare groundwater behavior through WYT averaging serves project objectives while acknowledging appropriate methodological boundaries.
