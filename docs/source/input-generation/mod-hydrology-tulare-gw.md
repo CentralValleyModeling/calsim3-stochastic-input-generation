@@ -24,11 +24,11 @@ This candid assessment from MSO informed the decision to accept WYT averaging de
 
 ### Groundwater Pumping Terms
 
-Groundwater pumping variables show acceptable R^2 values ranging from moderate to strong correspondence. The best-performing examples demonstrate good overall fit with realistic seasonal patterns. The worst-performing pumping term (GP-19) still achieves acceptable results despite showing less variation than actual historical values, reflecting the inherent averaging effect of the WYT methodology. Drought period reconstruction shows less up-and-down volatility than actual values, which is expected when using categorical averaging rather than continuous predictors. Given the lack of better predictive methods, this smoothing effect represents an acceptable trade-off.
+Groundwater pumping variables show acceptable NSE values ranging from moderate to strong correspondence. The highest-agreement examples demonstrate good overall fit with realistic seasonal patterns. The lowest-agreement pumping term (GP_GWR19) still achieves acceptable results despite showing less variation than historical values, reflecting the inherent averaging effect of the WYT methodology. Drought period Product A values show less up-and-down volatility than historical values, which is expected when using categorical averaging rather than continuous predictors. Given the lack of better predictive methods, this smoothing effect represents an acceptable trade-off.
 
 ### Deep Percolation Terms
 
-Deep percolation variables exhibit lower R^2 values and reduced ability to capture signal variability compared to groundwater pumping. Best and worst examples spanning areas 15-21 illustrate a range of performance, with Term 15 showing poor reconstruction, while Terms 19-20 demonstrate moderate improvement. A consistent pattern of underestimation appears in deep percolation reconstruction, suggesting potential mass balance considerations merit investigation.
+Deep percolation variables exhibit lower NSE values and reduced ability to capture signal variability compared to groundwater pumping. The highest- and lowest-agreement examples spanning areas 15-21 illustrate a range of performance, with DP_GWR17 showing the strongest reconstruction while DP_GWR21 shows the weakest, unable to reproduce the episodic high-percolation events that dominate its variability. A consistent pattern of underestimation appears in deep percolation Product A values, suggesting potential mass balance considerations merit investigation.
 
 ::::{tab-set}
 :::{tab-item} GP Highest Agreement
@@ -48,10 +48,5 @@ Deep percolation variables exhibit lower R^2 values and reduced ability to captu
 *DP_GWR21 deep percolation reconstruction (WY 1972 to 2018), the term with the lowest agreement overall (NSE = 0.38, PBIAS = -5.7%). Left: historical values (blue) show dramatic spikes in wet years reaching approximately 220 TAF, while Product A values (orange) remain much lower; the WYT averaging approach captures the baseline level but cannot reproduce the episodic high percolation events that dominate variability in this area. Right: non-exceedance CDF showing the Product A distribution falling well below the historical distribution at the upper tail, where the largest percolation events are not reproduced.*
 :::
 ::::
-
-:::{admonition} Suggested Plot
-:class: note
-Four-panel comparison showing best and worst examples for both GP and DP terms. Each panel includes time series (WY 1972-2018) with actual (gray) and reconstructed (blue) values, plus inset box plot by WYT showing how averages differ across water year types. Annotate R^2 and mean annual difference on each panel.
-:::
 
 The documented limitations are acceptable within project constraints. The groundwater pumping and deep percolation patterns provide hydrologically reasonable boundary conditions that avoid introducing systematic biases or unrealistic trends. For long-term stochastic planning focused on core system performance, maintaining plausible Tulare groundwater behavior through WYT averaging serves project objectives while acknowledging appropriate methodological boundaries.
