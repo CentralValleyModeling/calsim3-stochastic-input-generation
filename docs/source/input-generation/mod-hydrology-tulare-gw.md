@@ -22,7 +22,7 @@ WYT averaging is accepted despite its limitations: because these terms serve as 
 
 ## Results
 
-Reconstruction quality is assessed over the WY 1972–2018 validation period (see {doc}`Methods </source/methods>` for NSE, PBIAS, and Product A). For each term group, the figures show the terms with the best and worst agreement; the left panel compares the reconstructed Product A series with historical, and the right compares their non-exceedance distributions.
+Reconstruction quality is assessed over the WY 1972–2018 validation period (see {doc}`Methods </source/methods>` for NSE, PBIAS, and Product A). For both groundwater pumping and deep percolation, the figures show the terms with the best and worst agreement; the left panel compares the reconstructed Product A series with historical, and the right compares their non-exceedance distributions.
 
 ### Groundwater Pumping Terms
 
