@@ -92,7 +92,7 @@ Deep percolation variables show lower NSE values and capture less variability th
 :::
 ::::
 
-The documented limitations are acceptable within Phase I constraints. Groundwater pumping terms reproduce historical seasonal patterns well, while deep percolation terms show reduced variability and some negative bias that should be tracked in aggregate recharge volume checks. For long term stochastic planning focused on core system performance, WYT averaging provides plausible legacy Tulare groundwater boundary behavior.
+Groundwater pumping terms reproduce historical seasonal patterns well, while deep percolation terms capture less variability and tend to underestimate.
 
 ## References
 
