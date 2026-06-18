@@ -59,7 +59,7 @@ Groundwater pumping variables show acceptable to strong NSE values. The highest 
 
 ### Deep Percolation Terms
 
-Deep percolation variables show lower NSE values and capture less variability than groundwater pumping. Across the seven terms, agreement ranges from `DP_GWR17` at the high end to `DP_GWR21` at the low end. A pattern of underestimation appears across most deep percolation Product A values, consistent with the predominantly negative PBIAS values reported in the figures (`DP_GWR19` is the exception, at +1.8%).
+Deep percolation variables show lower NSE values and capture less variability than groundwater pumping. Even `DP_GWR17`, the DP term with the highest agreement, reaches only NSE = 0.62, and the lowest term (`DP_GWR21`) falls to NSE = 0.38. A pattern of underestimation appears across most deep percolation Product A values, consistent with the predominantly negative PBIAS values reported in the figures (`DP_GWR19` is the exception, at +1.8%).
 
 ::::{tab-set}
 :::{tab-item} DP_GWR15
