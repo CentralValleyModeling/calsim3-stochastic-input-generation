@@ -29,66 +29,66 @@ Groundwater pumping variables show acceptable to strong NSE values. The highest 
 ::::{tab-set}
 :::{tab-item} GP_GWR15
 ![GP_GWR15 groundwater pumping reconstruction](figures/s3-inputs_tulare-gw-gp-gwr15.png)
-*`GP_GWR15` groundwater pumping reconstruction (WY 1972-2018), the GP term with the highest agreement. Product A (orange) vs historical (blue); NSE and PBIAS are annotated on the time series panel.*
+*`GP_GWR15` groundwater pumping reconstruction (WY 1972-2018), the GP term with the highest agreement. NSE = 0.96, PBIAS = 1.1%; Product A (orange) vs historical (blue).*
 :::
 :::{tab-item} GP_GWR16
 ![GP_GWR16 groundwater pumping reconstruction](figures/s3-inputs_tulare-gw-gp-gwr16.png)
-*`GP_GWR16` groundwater pumping reconstruction (WY 1972-2018). Product A (orange) vs historical (blue); NSE and PBIAS are annotated on the time series panel.*
+*`GP_GWR16` groundwater pumping reconstruction (WY 1972-2018). NSE = 0.80, PBIAS = 2.8%; Product A (orange) vs historical (blue).*
 :::
 :::{tab-item} GP_GWR17
 ![GP_GWR17 groundwater pumping reconstruction](figures/s3-inputs_tulare-gw-gp-gwr17.png)
-*`GP_GWR17` groundwater pumping reconstruction (WY 1972-2018). Product A (orange) vs historical (blue); NSE and PBIAS are annotated on the time series panel.*
+*`GP_GWR17` groundwater pumping reconstruction (WY 1972-2018). NSE = 0.87, PBIAS = 2.6%; Product A (orange) vs historical (blue).*
 :::
 :::{tab-item} GP_GWR18
 ![GP_GWR18 groundwater pumping reconstruction](figures/s3-inputs_tulare-gw-gp-gwr18.png)
-*`GP_GWR18` groundwater pumping reconstruction (WY 1972-2018). Product A (orange) vs historical (blue); NSE and PBIAS are annotated on the time series panel.*
+*`GP_GWR18` groundwater pumping reconstruction (WY 1972-2018). NSE = 0.93, PBIAS = 2.0%; Product A (orange) vs historical (blue).*
 :::
 :::{tab-item} GP_GWR19
 ![GP_GWR19 groundwater pumping reconstruction](figures/s3-inputs_tulare-gw-gp-gwr19.png)
-*`GP_GWR19` groundwater pumping reconstruction (WY 1972-2018), the GP term with the lowest agreement. Product A (orange) vs historical (blue); NSE and PBIAS are annotated on the time series panel.*
+*`GP_GWR19` groundwater pumping reconstruction (WY 1972-2018), the GP term with the lowest agreement. NSE = 0.76, PBIAS = 4.0%; Product A (orange) vs historical (blue).*
 :::
 :::{tab-item} GP_GWR20
 ![GP_GWR20 groundwater pumping reconstruction](figures/s3-inputs_tulare-gw-gp-gwr20.png)
-*`GP_GWR20` groundwater pumping reconstruction (WY 1972-2018). Product A (orange) vs historical (blue); NSE and PBIAS are annotated on the time series panel.*
+*`GP_GWR20` groundwater pumping reconstruction (WY 1972-2018). NSE = 0.88, PBIAS = 4.3%; Product A (orange) vs historical (blue).*
 :::
 :::{tab-item} GP_GWR21
 ![GP_GWR21 groundwater pumping reconstruction](figures/s3-inputs_tulare-gw-gp-gwr21.png)
-*`GP_GWR21` groundwater pumping reconstruction (WY 1972-2018). Product A (orange) vs historical (blue); NSE and PBIAS are annotated on the time series panel.*
+*`GP_GWR21` groundwater pumping reconstruction (WY 1972-2018). NSE = 0.90, PBIAS = 4.0%; Product A (orange) vs historical (blue).*
 :::
 ::::
 
 ### Deep Percolation Terms
 
-Deep percolation variables show lower NSE values and capture less variability than groundwater pumping. Across the seven terms, agreement ranges from `DP_GWR17` at the high end to `DP_GWR21` at the low end. A consistent pattern of underestimation appears in deep percolation Product A values, consistent with the negative PBIAS values reported in the figures.
+Deep percolation variables show lower NSE values and capture less variability than groundwater pumping. Across the seven terms, agreement ranges from `DP_GWR17` at the high end to `DP_GWR21` at the low end. A pattern of underestimation appears across most deep percolation Product A values, consistent with the predominantly negative PBIAS values reported in the figures (`DP_GWR19` is the exception, at +1.8%).
 
 ::::{tab-set}
 :::{tab-item} DP_GWR15
 ![DP_GWR15 deep percolation reconstruction](figures/s3-inputs_tulare-gw-dp-gwr15.png)
-*`DP_GWR15` deep percolation reconstruction (WY 1972-2018). Product A (orange) vs historical (blue); NSE and PBIAS are annotated on the time series panel.*
+*`DP_GWR15` deep percolation reconstruction (WY 1972-2018). NSE = 0.54, PBIAS = -1.7%; Product A (orange) vs historical (blue).*
 :::
 :::{tab-item} DP_GWR16
 ![DP_GWR16 deep percolation reconstruction](figures/s3-inputs_tulare-gw-dp-gwr16.png)
-*`DP_GWR16` deep percolation reconstruction (WY 1972-2018). Product A (orange) vs historical (blue); NSE and PBIAS are annotated on the time series panel.*
+*`DP_GWR16` deep percolation reconstruction (WY 1972-2018). NSE = 0.46, PBIAS = -2.4%; Product A (orange) vs historical (blue).*
 :::
 :::{tab-item} DP_GWR17
 ![DP_GWR17 deep percolation reconstruction](figures/s3-inputs_tulare-gw-dp-gwr17.png)
-*`DP_GWR17` deep percolation reconstruction (WY 1972-2018), the DP term with the highest agreement. Product A (orange) vs historical (blue); NSE and PBIAS are annotated on the time series panel.*
+*`DP_GWR17` deep percolation reconstruction (WY 1972-2018), the DP term with the highest agreement. NSE = 0.62, PBIAS = -2.1%; Product A (orange) vs historical (blue).*
 :::
 :::{tab-item} DP_GWR18
 ![DP_GWR18 deep percolation reconstruction](figures/s3-inputs_tulare-gw-dp-gwr18.png)
-*`DP_GWR18` deep percolation reconstruction (WY 1972-2018). Product A (orange) vs historical (blue); NSE and PBIAS are annotated on the time series panel.*
+*`DP_GWR18` deep percolation reconstruction (WY 1972-2018). NSE = 0.54, PBIAS = -3.1%; Product A (orange) vs historical (blue).*
 :::
 :::{tab-item} DP_GWR19
 ![DP_GWR19 deep percolation reconstruction](figures/s3-inputs_tulare-gw-dp-gwr19.png)
-*`DP_GWR19` deep percolation reconstruction (WY 1972-2018). Product A (orange) vs historical (blue); NSE and PBIAS are annotated on the time series panel.*
+*`DP_GWR19` deep percolation reconstruction (WY 1972-2018). NSE = 0.40, PBIAS = 1.8%; Product A (orange) vs historical (blue).*
 :::
 :::{tab-item} DP_GWR20
 ![DP_GWR20 deep percolation reconstruction](figures/s3-inputs_tulare-gw-dp-gwr20.png)
-*`DP_GWR20` deep percolation reconstruction (WY 1972-2018). Product A (orange) vs historical (blue); NSE and PBIAS are annotated on the time series panel.*
+*`DP_GWR20` deep percolation reconstruction (WY 1972-2018). NSE = 0.48, PBIAS = -6.3%; Product A (orange) vs historical (blue).*
 :::
 :::{tab-item} DP_GWR21
 ![DP_GWR21 deep percolation reconstruction](figures/s3-inputs_tulare-gw-dp-gwr21.png)
-*`DP_GWR21` deep percolation reconstruction (WY 1972-2018), the term with the lowest agreement overall. Product A (orange) vs historical (blue); NSE and PBIAS are annotated on the time series panel.*
+*`DP_GWR21` deep percolation reconstruction (WY 1972-2018), the term with the lowest agreement overall. NSE = 0.38, PBIAS = -5.7%; Product A (orange) vs historical (blue).*
 :::
 ::::
 
