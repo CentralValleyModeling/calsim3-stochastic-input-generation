@@ -26,7 +26,7 @@ Reconstruction quality is assessed over the WY 1972–2018 validation period (se
 
 ### Groundwater Pumping Terms
 
-Groundwater pumping variables show acceptable NSE values ranging from moderate to strong correspondence. The highest agreement examples demonstrate good overall fit with realistic seasonal patterns. The lowest agreement pumping term (`GP_GWR19`) still achieves acceptable results despite showing less variation than historical values, reflecting the inherent averaging effect of the WYT methodology. Drought period Product A values show less volatility than historical values, which is expected when using categorical averaging rather than continuous predictors. Given the lack of better predictive methods, this smoothing effect represents an acceptable tradeoff.
+Groundwater pumping variables show acceptable to strong NSE values. The highest agreement terms fit well and reproduce realistic seasonal patterns. The lowest agreement pumping term (`GP_GWR19`) remains acceptable (NSE = 0.76) but compresses the range of peak values relative to historical, reflecting the averaging effect of the WYT methodology rather than continuous predictors.
 
 ::::{tab-set}
 :::{tab-item} Highest Agreement
@@ -41,7 +41,7 @@ Groundwater pumping variables show acceptable NSE values ranging from moderate t
 
 ### Deep Percolation Terms
 
-Deep percolation variables exhibit lower NSE values and reduced ability to capture signal variability compared to groundwater pumping. The highest and lowest agreement examples spanning areas 15 to 21 illustrate a range of performance, with `DP_GWR17` showing the strongest reconstruction while `DP_GWR21` shows the weakest, unable to reproduce the episodic high percolation events that dominate its variability. A consistent pattern of underestimation appears in deep percolation Product A values, suggesting potential mass balance considerations merit investigation.
+Deep percolation variables show lower NSE values and capture less variability than groundwater pumping. The highest and lowest agreement examples (`DP_GWR17` and `DP_GWR21`) illustrate a range of performance, with `DP_GWR17` showing the strongest reconstruction and `DP_GWR21` the weakest. A consistent pattern of underestimation appears in deep percolation Product A values, consistent with the negative PBIAS values reported in the figures.
 
 ::::{tab-set}
 :::{tab-item} Highest Agreement
@@ -54,7 +54,7 @@ Deep percolation variables exhibit lower NSE values and reduced ability to captu
 :::
 ::::
 
-The documented limitations are acceptable within Phase I constraints. Groundwater pumping terms reproduce historical seasonal patterns well, while deep percolation terms show reduced variability and some negative bias that should be tracked in aggregate recharge volume checks. For long term stochastic planning focused on core system performance, WYT averaging provides plausible legacy Tulare groundwater boundary behavior while clearly documenting its limitations.
+The documented limitations are acceptable within Phase I constraints. Groundwater pumping terms reproduce historical seasonal patterns well, while deep percolation terms show reduced variability and some negative bias that should be tracked in aggregate recharge volume checks. For long term stochastic planning focused on core system performance, WYT averaging provides plausible legacy Tulare groundwater boundary behavior.
 
 ## References
 
