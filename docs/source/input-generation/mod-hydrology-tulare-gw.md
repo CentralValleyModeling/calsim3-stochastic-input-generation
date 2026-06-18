@@ -8,50 +8,92 @@ Tulare Basin groundwater terms via WYT averaging
 ```
 
 
-Groundwater pumping and deep percolation terms for Tulare Basin C2VSim areas 15-21. The 14 terms comprise seven groundwater pumping variables and seven deep percolation variables representing C2VSim fine grid solution outputs. These terms exist outside CalSim's primary water system domain, serving as placeholders that maintain groundwater dynamics in reasonable ranges without full integration into CalSim's operations.
+Groundwater pumping (`GP_GWR15`–`GP_GWR21`) and deep percolation (`DP_GWR15`–`DP_GWR21`) are 14 Tulare Basin groundwater stress terms: seven pumping terms and seven deep percolation terms. CalSim 3 documentation describes Tulare region groundwater pumping and deep percolation as region indexed inputs passed to the groundwater DLL, and identifies seven Tulare Basin subregions in the groundwater DLL configuration ([CalSim 3 Hydrology Report (DCR 2023)](https://data.cnra.ca.gov/dataset/a3bb1ddd-624b-4c3d-95e7-2aa6b3bf2b5b/resource/6ba59600-d562-44da-a267-a6a50dff3f0d/download/final_cs3_hydrologyreport_v2.pdf), Fig. 15-9, p. 15-21). These terms are reconstructed using WYT based monthly averaging rather than a full Tulare Basin C2VSim simulation.
 
 ## Methodology
 
-Correlation testing against rim inflow variables across all 14 terms revealed correlations uniformly below 0.8, with most substantially lower. This eliminated quantile mapping as a viable approach since QM performance degrades significantly when basis-target correlation falls below 0.7. The Progress Meeting 3 presentation included an R^2 comparison table showing QM versus WYT performance for all 14 terms, confirming WYT averaging's superiority for these low-correlation variables. Water year type averaging emerged as the only practical methodology given these constraints.
+The Tulare groundwater terms are reconstructed using San Joaquin Water Year Type (WYT) monthly averaging. For each calendar month and San Joaquin WYT category (Wet, Above Normal, Below Normal, Dry, Critical), historical values are averaged to produce representative monthly patterns. These WYT month patterns are then applied to the synthetic sequences using their reconstructed San Joaquin WYT classification.
 
-The approach calculates monthly averages conditional on San Joaquin water year type classification (Wet, Above Normal, Below Normal, Dry, Critical), which is appropriate given Tulare Basin's location and hydrologic character. For each calendar month and water year type combination, historical values are averaged to produce representative patterns. These patterns are then applied to synthetic sequences based on reconstructed San Joaquin WYT classification.
+Quantile mapping was evaluated but not adopted for this term group. Screening against candidate rim inflow predictors produced weak to moderate relationships, with correlations below 0.8 for all 14 terms. So WYT averaging was selected as the more stable approach.
 
-Running C2VSim for 1,000 years would require land use projections, agricultural demand assumptions, and computational resources beyond Phase I scope. MSO staff provided important context during the October and November progress meetings, noting that these terms "are kind of like a placeholder that we just keep the groundwater in a reasonable range" and emphasizing "I really wouldn't put too much weight on this part of the data." CalSim 3 does not cover the entire Tulare region, and these terms originate from an older C2VSim fine grid solution not directly coupled to CalSim operations. The terms represent a legacy boundary condition inherited from earlier model versions where Tulare Basin dynamics were approximated rather than simulated.
-
-This candid assessment from MSO informed the decision to accept WYT averaging despite its limitations. Investing significant effort in sophisticated reconstruction methods for variables that model developers themselves consider approximate placeholders would not be an efficient use of project resources.
+This approach does not attempt to simulate Tulare Basin groundwater conditions. Running C2VSim for 1,000 years would require land use projections, agricultural demand assumptions, and computational resources beyond Phase I scope. These terms function as placeholders that keep groundwater within a reasonable range rather than simulated quantities. The current CalSim 3 model domain covers the Sacramento River and San Joaquin River Hydrologic Regions and the Delta, but only a northwest part of the Tulare Lake Hydrologic Region, where a complete Tulare Lake module is still under development [CalSim 3 Hydrology Report (DCR 2023)](https://data.cnra.ca.gov/dataset/a3bb1ddd-624b-4c3d-95e7-2aa6b3bf2b5b/resource/6ba59600-d562-44da-a267-a6a50dff3f0d/download/final_cs3_hydrologyreport_v2.pdf).
 
 ## Results
 
+Reconstruction quality is assessed over the WY 1972-2018 validation period. Although Product A spans the full historical period (WY 1915-2018), this window keeps the evaluation consistent with the quantile-mapped terms (see {doc}`Methods </source/methods>` for Product A). For both groundwater pumping and deep percolation, all seven terms are shown below; in each figure the left panel compares the reconstructed Product A series with the historical CalSim 3 State Variable (SV) inputs from the DCR 2023 baseline, and the right compares their non-exceedance distributions.
+
 ### Groundwater Pumping Terms
 
-Groundwater pumping variables show acceptable R^2 values ranging from moderate to strong correspondence. The best-performing examples demonstrate good overall fit with realistic seasonal patterns. The worst-performing pumping term (GP-19) still achieves acceptable results despite showing less variation than actual historical values, reflecting the inherent averaging effect of the WYT methodology. Drought period reconstruction shows less up-and-down volatility than actual values, which is expected when using categorical averaging rather than continuous predictors. Given the lack of better predictive methods, this smoothing effect represents an acceptable trade-off.
-
-### Deep Percolation Terms
-
-Deep percolation variables exhibit lower R^2 values and reduced ability to capture signal variability compared to groundwater pumping. Best and worst examples spanning areas 15-21 illustrate a range of performance, with Term 15 showing poor reconstruction, while Terms 19-20 demonstrate moderate improvement. A consistent pattern of underestimation appears in deep percolation reconstruction, suggesting potential mass balance considerations merit investigation.
+Groundwater pumping variables show acceptable to strong NSE values. The highest agreement terms fit well and reproduce realistic seasonal patterns. The lowest agreement pumping term (`GP_GWR19`) remains acceptable (NSE = 0.76) but compresses the range of peak values relative to historical, reflecting the averaging effect of the WYT methodology rather than continuous predictors.
 
 ::::{tab-set}
-:::{tab-item} GP Best (R^2 = 0.96)
-![Tulare GW Best Examples](figures/s3-inputs_tulare-gw-best-examples.png)
-*GP_GWR15 groundwater pumping reconstruction (1921--2021), best-performing GP term (R^2 = 0.96). Monthly time series cycles between approximately 0 TAF in winter and 300--400 TAF during summer irrigation season. Reconstructed (orange) closely tracks actual (blue), capturing both seasonal amplitude and year-to-year variations in peak pumping.*
+:::{tab-item} GP_GWR15
+![GP_GWR15 groundwater pumping reconstruction](figures/s3-inputs_tulare-gw-gp-gwr15.png)
+*`GP_GWR15` groundwater pumping reconstruction (WY 1972-2018), the GP term with the highest agreement. NSE = 0.96, PBIAS = 1.1%; Product A (orange) vs historical (blue).*
 :::
-:::{tab-item} GP Worst (R^2 = 0.70)
-![Tulare GW Best GP-19](figures/s3-inputs_tulare-gw-best-gp19.png)
-*GP_GWR19 groundwater pumping reconstruction (1921--2021), worst-performing GP term (R^2 = 0.70). Summer peaks in actual data reach approximately 150 TAF while reconstructed values plateau around 110 TAF, illustrating the WYT averaging smoothing effect. The reconstructed series captures seasonal timing but compresses the range of peak values, particularly missing the higher pumping years.*
+:::{tab-item} GP_GWR16
+![GP_GWR16 groundwater pumping reconstruction](figures/s3-inputs_tulare-gw-gp-gwr16.png)
+*`GP_GWR16` groundwater pumping reconstruction (WY 1972-2018). NSE = 0.80, PBIAS = 2.8%; Product A (orange) vs historical (blue).*
 :::
-:::{tab-item} DP Best (R^2 = 0.64)
-![Tulare GW DP Best](figures/s3-inputs_tulare-gw-dp-best.png)
-*DP_GWR17 deep percolation reconstruction (1921--2021), best-performing DP term (R^2 = 0.64). Actual values (blue) range from approximately 15 to 115 TAF with frequent spikes above 80 TAF in wet months. Reconstructed values (orange) are compressed to approximately 20--75 TAF, capturing the general seasonal pattern but underestimating wet-month peaks by 30--40 TAF.*
+:::{tab-item} GP_GWR17
+![GP_GWR17 groundwater pumping reconstruction](figures/s3-inputs_tulare-gw-gp-gwr17.png)
+*`GP_GWR17` groundwater pumping reconstruction (WY 1972-2018). NSE = 0.87, PBIAS = 2.6%; Product A (orange) vs historical (blue).*
 :::
-:::{tab-item} DP Worst (R^2 = 0.32)
-![Tulare GW DP Worst](figures/s3-inputs_tulare-gw-dp-worst.png)
-*DP_GWR21 deep percolation reconstruction (1921--2021), worst-performing term overall (R^2 = 0.32). Actual values (blue) show dramatic wet-year spikes reaching approximately 220 TAF, while reconstructed values (orange) remain within approximately 40--90 TAF. The WYT averaging approach captures the baseline level (~50 TAF) but cannot reproduce the episodic high-percolation events that dominate variability in this area.*
+:::{tab-item} GP_GWR18
+![GP_GWR18 groundwater pumping reconstruction](figures/s3-inputs_tulare-gw-gp-gwr18.png)
+*`GP_GWR18` groundwater pumping reconstruction (WY 1972-2018). NSE = 0.93, PBIAS = 2.0%; Product A (orange) vs historical (blue).*
+:::
+:::{tab-item} GP_GWR19
+![GP_GWR19 groundwater pumping reconstruction](figures/s3-inputs_tulare-gw-gp-gwr19.png)
+*`GP_GWR19` groundwater pumping reconstruction (WY 1972-2018), the GP term with the lowest agreement. NSE = 0.76, PBIAS = 4.0%; Product A (orange) vs historical (blue).*
+:::
+:::{tab-item} GP_GWR20
+![GP_GWR20 groundwater pumping reconstruction](figures/s3-inputs_tulare-gw-gp-gwr20.png)
+*`GP_GWR20` groundwater pumping reconstruction (WY 1972-2018). NSE = 0.88, PBIAS = 4.3%; Product A (orange) vs historical (blue).*
+:::
+:::{tab-item} GP_GWR21
+![GP_GWR21 groundwater pumping reconstruction](figures/s3-inputs_tulare-gw-gp-gwr21.png)
+*`GP_GWR21` groundwater pumping reconstruction (WY 1972-2018). NSE = 0.90, PBIAS = 4.0%; Product A (orange) vs historical (blue).*
 :::
 ::::
 
-:::{admonition} Suggested Plot
-:class: note
-Four-panel comparison showing best and worst examples for both GP and DP terms. Each panel includes time series (WY 1972-2018) with actual (gray) and reconstructed (blue) values, plus inset box plot by WYT showing how averages differ across water year types. Annotate R^2 and mean annual difference on each panel.
-:::
+### Deep Percolation Terms
 
-The documented limitations are acceptable within project constraints. The groundwater pumping and deep percolation patterns provide hydrologically reasonable boundary conditions that avoid introducing systematic biases or unrealistic trends. For long-term stochastic planning focused on core system performance, maintaining plausible Tulare groundwater behavior through WYT averaging serves project objectives while acknowledging appropriate methodological boundaries.
+Deep percolation variables show lower NSE values and capture less variability than groundwater pumping. Even `DP_GWR17`, the DP term with the highest agreement, reaches only NSE = 0.62, and the lowest term (`DP_GWR21`) falls to NSE = 0.38. A pattern of underestimation appears across most deep percolation Product A values, consistent with the predominantly negative PBIAS values reported in the figures (`DP_GWR19` is the exception, at +1.8%).
+
+::::{tab-set}
+:::{tab-item} DP_GWR15
+![DP_GWR15 deep percolation reconstruction](figures/s3-inputs_tulare-gw-dp-gwr15.png)
+*`DP_GWR15` deep percolation reconstruction (WY 1972-2018). NSE = 0.54, PBIAS = -1.7%; Product A (orange) vs historical (blue).*
+:::
+:::{tab-item} DP_GWR16
+![DP_GWR16 deep percolation reconstruction](figures/s3-inputs_tulare-gw-dp-gwr16.png)
+*`DP_GWR16` deep percolation reconstruction (WY 1972-2018). NSE = 0.46, PBIAS = -2.4%; Product A (orange) vs historical (blue).*
+:::
+:::{tab-item} DP_GWR17
+![DP_GWR17 deep percolation reconstruction](figures/s3-inputs_tulare-gw-dp-gwr17.png)
+*`DP_GWR17` deep percolation reconstruction (WY 1972-2018), the DP term with the highest agreement. NSE = 0.62, PBIAS = -2.1%; Product A (orange) vs historical (blue).*
+:::
+:::{tab-item} DP_GWR18
+![DP_GWR18 deep percolation reconstruction](figures/s3-inputs_tulare-gw-dp-gwr18.png)
+*`DP_GWR18` deep percolation reconstruction (WY 1972-2018). NSE = 0.54, PBIAS = -3.1%; Product A (orange) vs historical (blue).*
+:::
+:::{tab-item} DP_GWR19
+![DP_GWR19 deep percolation reconstruction](figures/s3-inputs_tulare-gw-dp-gwr19.png)
+*`DP_GWR19` deep percolation reconstruction (WY 1972-2018). NSE = 0.40, PBIAS = 1.8%; Product A (orange) vs historical (blue).*
+:::
+:::{tab-item} DP_GWR20
+![DP_GWR20 deep percolation reconstruction](figures/s3-inputs_tulare-gw-dp-gwr20.png)
+*`DP_GWR20` deep percolation reconstruction (WY 1972-2018). NSE = 0.48, PBIAS = -6.3%; Product A (orange) vs historical (blue).*
+:::
+:::{tab-item} DP_GWR21
+![DP_GWR21 deep percolation reconstruction](figures/s3-inputs_tulare-gw-dp-gwr21.png)
+*`DP_GWR21` deep percolation reconstruction (WY 1972-2018), the term with the lowest agreement overall. NSE = 0.38, PBIAS = -5.7%; Product A (orange) vs historical (blue).*
+:::
+::::
+
+Groundwater pumping terms reproduce historical seasonal patterns well, while deep percolation terms capture less variability and tend to underestimate.
+
+## References
+
+California Department of Water Resources (DWR). 2023. *Final CalSim 3 Hydrology Report*. Companion technical document to the *Final State Water Project Delivery Capability Report 2023* (DCR 2023). <https://data.cnra.ca.gov/dataset/a3bb1ddd-624b-4c3d-95e7-2aa6b3bf2b5b/resource/6ba59600-d562-44da-a267-a6a50dff3f0d/download/final_cs3_hydrologyreport_v2.pdf>
