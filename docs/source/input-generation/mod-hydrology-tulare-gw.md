@@ -18,8 +18,6 @@ Quantile mapping was evaluated but not adopted for this term group. Screening ag
 
 This approach does not attempt to dynamically simulate Tulare Basin groundwater conditions. Running C2VSim for 1,000 years would require land use projections, agricultural demand assumptions, and computational resources beyond Phase I scope. These terms function as placeholders that keep groundwater within a reasonable range rather than simulated quantities. The current CalSim 3 model domain covers the Sacramento River and San Joaquin River Hydrologic Regions and the Delta, but only a northwest part of the Tulare Lake Hydrologic Region, where a complete Tulare Lake module is still under development [CalSim 3 Hydrology Report (DCR 2023)](https://data.cnra.ca.gov/dataset/a3bb1ddd-624b-4c3d-95e7-2aa6b3bf2b5b/resource/6ba59600-d562-44da-a267-a6a50dff3f0d/download/final_cs3_hydrologyreport_v2.pdf).
 
-WYT averaging is accepted despite its limitations: because these terms serve as approximate placeholders, more sophisticated reconstruction methods are not warranted within Phase I scope.
-
 ## Results
 
 Reconstruction quality is assessed over the WY 1972–2018 validation period (see {doc}`Methods </source/methods>` for NSE, PBIAS, and Product A). For both groundwater pumping and deep percolation, the figures show the terms with the best and worst agreement; the left panel compares the reconstructed Product A series with historical, and the right compares their non-exceedance distributions.
