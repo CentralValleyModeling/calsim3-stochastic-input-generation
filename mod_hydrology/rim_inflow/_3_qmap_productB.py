@@ -1,8 +1,13 @@
 """
 Quantile-Map Product B Rim Inflows
 ==================================
-Train on the full Product A overlap (Oct 1921 - Dec 2018) and apply to
+Train on the full historical overlap (Oct 1921 - Dec 2018) and apply to
 Product B stochastic VIC routed flows (10 chunks x 100 water years).
+
+The training basis (VIC historical source) is selectable with --basis: the
+default Product_A reproduces the historical behavior and output location, while
+--basis Historical_Unsplit trains on the continuous 1915-2018 WGEN sequence and
+writes to a basis-tagged dir so the Product_A outputs are untouched.
 
 Workflow
 --------
@@ -17,7 +22,8 @@ Uses multiprocessing (ProcessPoolExecutor) for step 3.
 
 Inputs
 ------
-- Product A VIC routed:  data/GENERATED/mod_forcing/vic/output/routed/Product_A/1/
+- VIC routed (basis):    data/GENERATED/mod_forcing/vic/output/routed/Product_A/1/ (default),
+                         or .../routed/Historical_Unsplit/ with --basis Historical_Unsplit
 - Product B VIC routed:  data/GENERATED/mod_forcing/vic/output/routed/Product_B/1/
 - CalSim baseline DSS:   CalSim3/__calsim_sv_default__.dss
 - Name mapping:          reference/CalSim3_VIC_name_mapping.csv
@@ -32,8 +38,10 @@ Outputs
 Usage
 -----
     cd mod_hydrology/rim_inflow && python _3_qmap_productB.py
+    cd mod_hydrology/rim_inflow && python _3_qmap_productB.py --basis Historical_Unsplit
 """
 
+import argparse
 import os
 import re
 import sys
@@ -54,18 +62,41 @@ _gen = get_module_generated_dir("mod_hydrology/rim_inflow")
 _vic_gen = get_module_generated_dir("mod_forcing/vic")
 
 # ==== CONFIG =================================================================
-# Historical training data (Product A)
 master_xlsx   = str(get_inventory_dir() / "_MASTER_INVENTORY_FOR_STOCHASTIC_INPUT_GENERATION_.xlsx")
 dss_file      = str(get_base_dir() / "CalSim3" / "__calsim_sv_default__.dss")
-vic_hist_dir  = str(_vic_gen / "output" / "routed" / "Product_A" / "1")
 vic_end_year  = 2018
 
-# Simulated to be adjusted (Product B)
+# Simulated to be adjusted (Product B) -- the basis only changes the historical
+# training source, never the Product B series being mapped.
 vic_sim_dir   = str(_vic_gen / "output" / "routed" / "Product_B" / "1")
 
-BASE_OUT_DIR  = str(_gen / "output" / "_3_qmap_product_b")
+# QM TRAINING BASIS
+# The "basis" is the VIC historical routed series the quantile map is trained
+# from (paired against the CalSim target) before applying to Product B. Default
+# Product_A preserves the historical behavior and output location exactly; any
+# other basis writes to a basis-tagged dir so the Product_A outputs are untouched.
+_BASIS_VIC_ROUTED = {
+    "Product_A":          ("output", "routed", "Product_A", "1"),
+    "Historical_Unsplit": ("output", "routed", "Historical_Unsplit"),
+}
+DEFAULT_BASIS = "Product_A"
+
+
+def resolve_basis_paths(basis):
+    """Return the (VIC historical training dir, output dir) for a training basis."""
+    if basis not in _BASIS_VIC_ROUTED:
+        raise ValueError(f"Unknown basis {basis!r}; choose from {list(_BASIS_VIC_ROUTED)}.")
+    vic_hist = str(_vic_gen.joinpath(*_BASIS_VIC_ROUTED[basis]))
+    if basis == DEFAULT_BASIS:
+        out_dir = str(_gen / "output" / "_3_qmap_product_b")
+    else:
+        out_dir = str(_gen / "output" / f"_3_qmap_product_b_{basis.lower()}")
+    return vic_hist, out_dir
+
+
+# Module-level defaults (Product_A); main() overrides these from --basis.
+vic_hist_dir, BASE_OUT_DIR = resolve_basis_paths(DEFAULT_BASIS)
 OUT_TS_DIR    = BASE_OUT_DIR
-os.makedirs(OUT_TS_DIR, exist_ok=True)
 
 # All Product B chunks span exactly 100 water years (Oct 1921 - Sep 2021,
 # i.e. WY 1922-2021).  We enforce this canonical date range regardless of
@@ -370,7 +401,16 @@ def _qmap_worker(cal, vic, b_train_df, t_train_df, sim_dir, ts_list):
 
 
 # ==== MAIN WORKFLOW ==========================================================
-def main():
+def main(basis=DEFAULT_BASIS):
+    # Resolve basis-dependent paths up front, overriding the module-level
+    # Product_A defaults so every downstream reference uses the chosen basis.
+    global vic_hist_dir, BASE_OUT_DIR, OUT_TS_DIR
+    vic_hist_dir, BASE_OUT_DIR = resolve_basis_paths(basis)
+    OUT_TS_DIR = BASE_OUT_DIR
+    os.makedirs(OUT_TS_DIR, exist_ok=True)
+    print(f"Training basis: {basis}  (VIC historical: {vic_hist_dir})")
+    print(f"Output dir:     {OUT_TS_DIR}")
+
     t_start = time.perf_counter()
 
     # --- 1. Static data (done once) -----------------------------------------
@@ -558,5 +598,15 @@ def main():
     print(f"\nComplete: {total_files} files written in {t_total:.1f}s")
 
 
+def parse_args():
+    p = argparse.ArgumentParser(description="Quantile-map Product B rim inflows.")
+    p.add_argument("--basis", choices=list(_BASIS_VIC_ROUTED), default=DEFAULT_BASIS,
+                   help="VIC historical training basis (default: Product_A). "
+                        "Historical_Unsplit uses the continuous 1915-2018 WGEN "
+                        "sequence; outputs go to a basis-tagged dir so the "
+                        "Product_A outputs are untouched.")
+    return p.parse_args()
+
+
 if __name__ == "__main__":
-    main()
+    main(basis=parse_args().basis)

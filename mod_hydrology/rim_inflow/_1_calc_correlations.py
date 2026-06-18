@@ -11,21 +11,26 @@ Inputs
 ------
 - CalSim baseline DSS:  CalSim3/__calsim_sv_default__.dss
 - Master inventory:     _MASTER_INVENTORY_FOR_STOCHASTIC_INPUT_GENERATION_.xlsx
-- VIC historical routed: mod_forcing/vic/output/routed/Historical/
+- VIC routed (basis):   mod_forcing/vic/output/routed/Historical/ (default), or
+                        mod_forcing/vic/output/routed/Historical_Unsplit/ with
+                        --basis Historical_Unsplit
 
 Outputs
 -------
-- _1_calc_correlations/r2_calsim_vs_vic.csv
+- _1_calc_correlations/r2_calsim_vs_vic.csv  (Historical basis; default)
+- _1_calc_correlations_historical_unsplit/r2_calsim_vs_vic.csv  (--basis Historical_Unsplit)
   Columns: DSS Inflow, VIC Inflow (matched or best), R-squared
 
 Usage
 -----
     cd mod_hydrology/rim_inflow && python _1_calc_correlations.py
+    cd mod_hydrology/rim_inflow && python _1_calc_correlations.py --basis Historical_Unsplit
 """
 
 # %% This script calculates the Correlation (R^2) between
 # CALSIM inflows (1920-2021) and SAC-SMA inflows (1915-2018) over their
 # overlapping period (1920-2018).
+import argparse
 import os
 import sys
 from pathlib import Path
@@ -41,13 +46,33 @@ from utils.paths import get_base_dir, get_inventory_dir, get_module_generated_di
 _gen = get_module_generated_dir("mod_hydrology/rim_inflow")
 _vic_gen = get_module_generated_dir("mod_forcing/vic")
 
+# %% --- Training/correlation basis (VIC routed source) ---
+# Default 'Historical' reproduces the original behavior (observed-climate VIC
+# routed); 'Historical_Unsplit' uses the continuous 1915-2018 WGEN sequence and
+# writes to a basis-tagged output dir so the default outputs are untouched.
+# parse_known_args keeps interactive (# %%) execution working -- it ignores the
+# Jupyter/VS Code kernel's injected arguments instead of erroring on them.
+_BASIS_VIC_ROUTED = {
+    "Historical":         "Historical",
+    "Historical_Unsplit": "Historical_Unsplit",
+}
+DEFAULT_BASIS = "Historical"
+_basis_parser = argparse.ArgumentParser(description="CalSim vs VIC inflow correlations.")
+_basis_parser.add_argument("--basis", choices=list(_BASIS_VIC_ROUTED), default=DEFAULT_BASIS,
+                           help="VIC routed source (default: Historical, observed climate). "
+                                "Historical_Unsplit uses the continuous 1915-2018 WGEN "
+                                "sequence; output goes to a basis-tagged dir so the default "
+                                "outputs are untouched.")
+_basis = _basis_parser.parse_known_args()[0].basis
+print(f"Correlation basis: {_basis}")
+
 # %% ---  Extract inflow names from Excel MASTER file ---
 excel_path = str(get_inventory_dir() / "_MASTER_INVENTORY_FOR_STOCHASTIC_INPUT_GENERATION_.xlsx")
 sheet_name = "MASTER"
 df_master = pd.read_excel(excel_path, sheet_name=sheet_name)
 inflow_rows = df_master[df_master.iloc[:, 8] == 'Rim Inflow']
 inflow_names = [str(name).strip().upper() for name in inflow_rows.iloc[:, 2].tolist()]
-vic_path = str(_vic_gen / "output" / "routed" / "Historical")
+vic_path = str(_vic_gen / "output" / "routed" / _BASIS_VIC_ROUTED[_basis])
 
 
 # %% --- read DSS monthly INFLOW slices, overwrite missing codes with NaN
@@ -97,8 +122,10 @@ for file in os.listdir(vic_path):
     VICinflow = file[len("CS3_") : -len("_qmo.csv")] 
     fpath = os.path.join(vic_path, file)
     df_v = pd.read_csv(fpath, header=None)
-    df_v.iloc[:, 0] = pd.to_datetime(df_v.iloc[:, 0], errors="coerce")
-    ser = pd.Series(df_v.iloc[:, 1].values, index=df_v.iloc[:, 0].values, name=VICinflow)
+    # Build the datetime index directly rather than assigning it back into the
+    # (string-dtype) first column, which pandas 3.0 rejects as an in-place set.
+    idx = pd.to_datetime(df_v.iloc[:, 0], errors="coerce")
+    ser = pd.Series(df_v.iloc[:, 1].values, index=idx.values, name=VICinflow)
 
 
     vic_series[VICinflow] = ser.sort_index()
@@ -145,7 +172,8 @@ for dss in dss_names_ordered:
 # 4) Build final output: keep EXACT Excel order; one VIC name + one R² per DSS inflow
 final_df = pd.DataFrame(results_rows, columns=["DSS Inflow", "VIC Inflow (matched or best)", "R²"]).set_index("DSS Inflow")
 final_df = final_df.reindex(dss_names_ordered).reset_index()
-_out_dir = _gen / "output" / "_1_calc_correlations"
+_out_dir = _gen / "output" / ("_1_calc_correlations" if _basis == DEFAULT_BASIS
+                              else f"_1_calc_correlations_{_basis.lower()}")
 _out_dir.mkdir(parents=True, exist_ok=True)
 final_df.to_csv(str(_out_dir / "r2_calsim_vs_vic.csv"), index=False)
 
