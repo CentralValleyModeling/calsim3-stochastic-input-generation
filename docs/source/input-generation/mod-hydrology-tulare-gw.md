@@ -20,35 +20,75 @@ This approach does not attempt to dynamically simulate Tulare Basin groundwater 
 
 ## Results
 
-Reconstruction quality is assessed over the WY 1972-2018 validation period (see {doc}`Methods </source/methods>` for NSE, PBIAS, and Product A). For both groundwater pumping and deep percolation, the figures show the terms with the best and worst agreement; the left panel compares the reconstructed Product A series with historical, and the right compares their non-exceedance distributions.
+Reconstruction quality is assessed over the WY 1972-2018 validation period. Although Product A spans the full historical period (WY 1915-2018), this window keeps the evaluation consistent with the quantile-mapped terms (see {doc}`Methods </source/methods>` for Product A). For both groundwater pumping and deep percolation, all seven terms are shown below; in each figure the left panel compares the reconstructed Product A series with the historical CalSim 3 State Variable (SV) inputs from the DCR 2023 baseline, and the right compares their non-exceedance distributions.
 
 ### Groundwater Pumping Terms
 
 Groundwater pumping variables show acceptable to strong NSE values. The highest agreement terms fit well and reproduce realistic seasonal patterns. The lowest agreement pumping term (`GP_GWR19`) remains acceptable (NSE = 0.76) but compresses the range of peak values relative to historical, reflecting the averaging effect of the WYT methodology rather than continuous predictors.
 
 ::::{tab-set}
-:::{tab-item} Highest Agreement
-![Tulare GW Best Examples](figures/s3-inputs_tulare-gw-best-examples.png)
-*`GP_GWR15` groundwater pumping reconstruction (WY 1972-2018), the GP term with the highest agreement (NSE = 0.96, PBIAS = 1.1%). Left: monthly time series cycling between approximately 0 TAF in winter and 300 to 400 TAF during summer irrigation season; Product A (orange) closely tracks historical (blue), capturing both seasonal amplitude and yearly variations in peak pumping. Right: non-exceedance CDF showing the Product A distribution closely matching the historical distribution.*
+:::{tab-item} GP_GWR15
+![GP_GWR15 groundwater pumping reconstruction](figures/s3-inputs_tulare-gw-gp-gwr15.png)
+*`GP_GWR15` groundwater pumping reconstruction (WY 1972-2018), the GP term with the highest agreement. Product A (orange) vs historical (blue); NSE and PBIAS are annotated on the time series panel.*
 :::
-:::{tab-item} Lowest Agreement
-![Tulare GW Best GP-19](figures/s3-inputs_tulare-gw-best-gp19.png)
-*`GP_GWR19` groundwater pumping reconstruction (WY 1972-2018), the GP term with the lowest agreement (NSE = 0.76, PBIAS = 4.0%). Left: summer peaks in historical data reach approximately 150 to 175 TAF while Product A values plateau lower, illustrating the WYT averaging smoothing effect; the Product A series captures seasonal timing but compresses the range of peak values. Right: non-exceedance CDF showing Product A values underestimating the upper tail of the distribution.*
+:::{tab-item} GP_GWR16
+![GP_GWR16 groundwater pumping reconstruction](figures/s3-inputs_tulare-gw-gp-gwr16.png)
+*`GP_GWR16` groundwater pumping reconstruction (WY 1972-2018). Product A (orange) vs historical (blue); NSE and PBIAS are annotated on the time series panel.*
+:::
+:::{tab-item} GP_GWR17
+![GP_GWR17 groundwater pumping reconstruction](figures/s3-inputs_tulare-gw-gp-gwr17.png)
+*`GP_GWR17` groundwater pumping reconstruction (WY 1972-2018). Product A (orange) vs historical (blue); NSE and PBIAS are annotated on the time series panel.*
+:::
+:::{tab-item} GP_GWR18
+![GP_GWR18 groundwater pumping reconstruction](figures/s3-inputs_tulare-gw-gp-gwr18.png)
+*`GP_GWR18` groundwater pumping reconstruction (WY 1972-2018). Product A (orange) vs historical (blue); NSE and PBIAS are annotated on the time series panel.*
+:::
+:::{tab-item} GP_GWR19
+![GP_GWR19 groundwater pumping reconstruction](figures/s3-inputs_tulare-gw-gp-gwr19.png)
+*`GP_GWR19` groundwater pumping reconstruction (WY 1972-2018), the GP term with the lowest agreement. Product A (orange) vs historical (blue); NSE and PBIAS are annotated on the time series panel.*
+:::
+:::{tab-item} GP_GWR20
+![GP_GWR20 groundwater pumping reconstruction](figures/s3-inputs_tulare-gw-gp-gwr20.png)
+*`GP_GWR20` groundwater pumping reconstruction (WY 1972-2018). Product A (orange) vs historical (blue); NSE and PBIAS are annotated on the time series panel.*
+:::
+:::{tab-item} GP_GWR21
+![GP_GWR21 groundwater pumping reconstruction](figures/s3-inputs_tulare-gw-gp-gwr21.png)
+*`GP_GWR21` groundwater pumping reconstruction (WY 1972-2018). Product A (orange) vs historical (blue); NSE and PBIAS are annotated on the time series panel.*
 :::
 ::::
 
 ### Deep Percolation Terms
 
-Deep percolation variables show lower NSE values and capture less variability than groundwater pumping. The highest and lowest agreement examples (`DP_GWR17` and `DP_GWR21`) illustrate a range of performance, with `DP_GWR17` showing the strongest reconstruction and `DP_GWR21` the weakest. A consistent pattern of underestimation appears in deep percolation Product A values, consistent with the negative PBIAS values reported in the figures.
+Deep percolation variables show lower NSE values and capture less variability than groundwater pumping. Across the seven terms, agreement ranges from `DP_GWR17` at the high end to `DP_GWR21` at the low end. A consistent pattern of underestimation appears in deep percolation Product A values, consistent with the negative PBIAS values reported in the figures.
 
 ::::{tab-set}
-:::{tab-item} Highest Agreement
-![Tulare GW DP Best](figures/s3-inputs_tulare-gw-dp-best.png)
-*`DP_GWR17` deep percolation reconstruction (WY 1972-2018), the DP term with the highest agreement (NSE = 0.62, PBIAS = -2.1%). Left: historical values (blue) range from approximately 15 to 115 TAF with frequent spikes in wet months, while Product A values (orange) are compressed, capturing the general seasonal pattern but underestimating peaks in wet months. Right: non-exceedance CDF showing close agreement through the middle range with divergence in the upper tail.*
+:::{tab-item} DP_GWR15
+![DP_GWR15 deep percolation reconstruction](figures/s3-inputs_tulare-gw-dp-gwr15.png)
+*`DP_GWR15` deep percolation reconstruction (WY 1972-2018). Product A (orange) vs historical (blue); NSE and PBIAS are annotated on the time series panel.*
 :::
-:::{tab-item} Lowest Agreement
-![Tulare GW DP Worst](figures/s3-inputs_tulare-gw-dp-worst.png)
-*`DP_GWR21` deep percolation reconstruction (WY 1972-2018), the term with the lowest agreement overall (NSE = 0.38, PBIAS = -5.7%). Left: historical values (blue) show dramatic spikes in wet years reaching approximately 220 TAF, while Product A values (orange) remain much lower; the WYT averaging approach captures the baseline level but cannot reproduce the episodic high percolation events that dominate variability in this area. Right: non-exceedance CDF showing the Product A distribution falling well below the historical distribution at the upper tail, where the largest percolation events are not reproduced.*
+:::{tab-item} DP_GWR16
+![DP_GWR16 deep percolation reconstruction](figures/s3-inputs_tulare-gw-dp-gwr16.png)
+*`DP_GWR16` deep percolation reconstruction (WY 1972-2018). Product A (orange) vs historical (blue); NSE and PBIAS are annotated on the time series panel.*
+:::
+:::{tab-item} DP_GWR17
+![DP_GWR17 deep percolation reconstruction](figures/s3-inputs_tulare-gw-dp-gwr17.png)
+*`DP_GWR17` deep percolation reconstruction (WY 1972-2018), the DP term with the highest agreement. Product A (orange) vs historical (blue); NSE and PBIAS are annotated on the time series panel.*
+:::
+:::{tab-item} DP_GWR18
+![DP_GWR18 deep percolation reconstruction](figures/s3-inputs_tulare-gw-dp-gwr18.png)
+*`DP_GWR18` deep percolation reconstruction (WY 1972-2018). Product A (orange) vs historical (blue); NSE and PBIAS are annotated on the time series panel.*
+:::
+:::{tab-item} DP_GWR19
+![DP_GWR19 deep percolation reconstruction](figures/s3-inputs_tulare-gw-dp-gwr19.png)
+*`DP_GWR19` deep percolation reconstruction (WY 1972-2018). Product A (orange) vs historical (blue); NSE and PBIAS are annotated on the time series panel.*
+:::
+:::{tab-item} DP_GWR20
+![DP_GWR20 deep percolation reconstruction](figures/s3-inputs_tulare-gw-dp-gwr20.png)
+*`DP_GWR20` deep percolation reconstruction (WY 1972-2018). Product A (orange) vs historical (blue); NSE and PBIAS are annotated on the time series panel.*
+:::
+:::{tab-item} DP_GWR21
+![DP_GWR21 deep percolation reconstruction](figures/s3-inputs_tulare-gw-dp-gwr21.png)
+*`DP_GWR21` deep percolation reconstruction (WY 1972-2018), the term with the lowest agreement overall. Product A (orange) vs historical (blue); NSE and PBIAS are annotated on the time series panel.*
 :::
 ::::
 
