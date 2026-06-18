@@ -13,10 +13,11 @@ Basin cell sets + area_weight come from the **SAC-SMA repo** (``SACSMA_REPO`` be
 ``data/hru/hruinfo_<domain>.csv`` (per-basin dedup; cells may be shared across nested
 basins, e.g. BND nests SHA).  Outputs go to this repo's GENERATED tree
 (via ``utils.paths.get_module_generated_dir``):
-  GENERATED/mod_forcing/climate/output/precip_split_vs_unsplit/vic_precip_split_vs_unsplit.csv
-  GENERATED/mod_forcing/climate/output/precip_split_vs_unsplit/vic_precip_split_vs_unsplit.png
-  GENERATED/.../precip_split_vs_unsplit/vic_precip_split_vs_unsplit_bycell.csv  per-cell full-period split/unsplit + diff%
-  GENERATED/.../precip_split_vs_unsplit/vic_precip_split_vs_unsplit_map.png     per-cell full-period diff% map
+  GENERATED/mod_forcing/climate/output/precip_split_vs_unsplit/livneh_precip_split_vs_unsplit.csv
+  GENERATED/mod_forcing/climate/output/precip_split_vs_unsplit/livneh_precip_split_vs_unsplit.png
+  GENERATED/.../precip_split_vs_unsplit/livneh_precip_split_vs_unsplit_bycell.csv   per-cell split/unsplit, diff% & mm/yr, for full/pre-1950/post-1950
+  GENERATED/.../precip_split_vs_unsplit/livneh_precip_split_vs_unsplit_map_pct.png  per-cell diff% maps (full, pre-1950, post-1950)
+  GENERATED/.../precip_split_vs_unsplit/livneh_precip_split_vs_unsplit_map_mag.png  per-cell magnitude (mm/yr) maps (full, pre-1950, post-1950)
 """
 import os
 import re
@@ -109,7 +110,7 @@ def main():
     res = pd.DataFrame(rows)
     out_dir = get_module_generated_dir("mod_forcing/climate") / "output" / "precip_split_vs_unsplit"
     out_dir.mkdir(parents=True, exist_ok=True)
-    out_csv = out_dir / "vic_precip_split_vs_unsplit.csv"
+    out_csv = out_dir / "livneh_precip_split_vs_unsplit.csv"
     res.to_csv(out_csv, index=False)
     print("->", out_csv)
 
@@ -133,45 +134,66 @@ def main():
     axes[0].legend(fontsize=7, loc="lower right", framealpha=0.9)
     fig.suptitle("Livneh Unsplit vs Split - total precipitation, by basin and period", fontsize=11)
     fig.tight_layout(rect=[0, 0, 1, 0.97])
-    out_png = out_dir / "vic_precip_split_vs_unsplit.png"
+    out_png = out_dir / "livneh_precip_split_vs_unsplit.png"
     fig.savefig(out_png)
     plt.close(fig)
     print("->", out_png)
 
-    # ---- per-cell map: full-period diff% at each grid cell ----------------------
-    # Reuse the cells already loaded for the basin averages: cache holds the
-    # full-period split/unsplit totals per cell, so this adds no extra file I/O.
-    cpts = [(la, lo, r["s_full"], r["u_full"])
-            for (la, lo), r in cache.items() if r is not None and r["s_full"] > 0]
-    cdf = pd.DataFrame(cpts, columns=["lat", "lon", "s_full", "u_full"])
-    cdf["full_split"] = (cdf["s_full"] / NYR["full"]).round(1)    # mm/yr
-    cdf["full_unsplit"] = (cdf["u_full"] / NYR["full"]).round(1)  # mm/yr
-    cdf["full_diff_pct"] = (100 * (cdf["u_full"] - cdf["s_full"]) / cdf["s_full"]).round(2)
-    out_cells = out_dir / "vic_precip_split_vs_unsplit_bycell.csv"
-    cdf[["lat", "lon", "full_split", "full_unsplit", "full_diff_pct"]].to_csv(out_cells, index=False)
+    # ---- per-cell maps: diff% AND magnitude (mm/yr), for full / pre-1950 / post-1950 ----
+    # Reuse the cells already loaded for the basin averages: the cache holds the
+    # per-period split/unsplit totals per cell, so this adds no extra file I/O.
+    periods = [("full", "full (1915-2018)"),
+               ("P1", "pre-1950 (1915-1949)"),
+               ("P2", "post-1950 (1950-2018)")]
+    rows_cell = []
+    for (la, lo), r in cache.items():
+        if r is None or r["s_full"] <= 0:
+            continue
+        rec = {"lat": la, "lon": lo}
+        for p, _ in periods:
+            s = r[f"s_{p}"] / NYR[p]    # split mm/yr
+            u = r[f"u_{p}"] / NYR[p]    # unsplit mm/yr
+            rec[f"{p}_split_mmyr"] = round(s, 1)
+            rec[f"{p}_unsplit_mmyr"] = round(u, 1)
+            rec[f"{p}_diff_mmyr"] = round(u - s, 1)                       # magnitude (unsplit - split)
+            rec[f"{p}_diff_pct"] = round(100 * (u - s) / s, 2) if s > 0 else np.nan
+        rows_cell.append(rec)
+    cdf = pd.DataFrame(rows_cell)
+    out_cells = out_dir / "livneh_precip_split_vs_unsplit_bycell.csv"
+    cdf.to_csv(out_cells, index=False)
     print("->", out_cells)
 
-    fig, ax = plt.subplots(figsize=(6.2, 7.6), dpi=400)
-    vmax = max(1.0, float(np.nanpercentile(cdf["full_diff_pct"].abs(), 98)))  # clip outliers
-    sc = ax.scatter(cdf["lon"], cdf["lat"], c=cdf["full_diff_pct"], cmap="RdBu",
-                    vmin=-vmax, vmax=vmax, s=12, marker="s", linewidths=0)
     # geographic aspect: stretch latitude by 1/cos(lat) so the 1/16-deg cells read square
-    ax.set_aspect(1.0 / np.cos(np.deg2rad(float(cdf["lat"].mean()))))
-    ax.set_xlabel("longitude", fontsize=8)
-    ax.set_ylabel("latitude", fontsize=8)
-    ax.tick_params(labelsize=7)
-    ax.grid(lw=0.3, alpha=0.4)
-    ax.set_title("Livneh Unsplit - Split: full-period precip by cell\n"
-                 f"(% of split; blue = unsplit wetter, red = drier; {len(cdf)} basin cells)",
-                 fontsize=10)
-    cb = fig.colorbar(sc, ax=ax, shrink=0.6, pad=0.02)
-    cb.set_label("unsplit - split precip (% of split)", fontsize=8)
-    cb.ax.tick_params(labelsize=7)
-    fig.tight_layout()
-    out_map = out_dir / "vic_precip_split_vs_unsplit_map.png"
-    fig.savefig(out_map)
-    plt.close(fig)
-    print("->", out_map)
+    aspect = 1.0 / np.cos(np.deg2rad(float(cdf["lat"].mean())))
+    map_specs = [
+        ("diff_pct", "% of split", "livneh_precip_split_vs_unsplit_map_pct.png",
+         "Livneh Unsplit - Split precip by cell, % of split"),
+        ("diff_mmyr", "mm/yr", "livneh_precip_split_vs_unsplit_map_mag.png",
+         "Livneh Unsplit - Split precip by cell, magnitude (mm/yr)"),
+    ]
+    for suffix, unit, fname, title in map_specs:
+        # shared color scale across the three periods so they are directly comparable
+        allvals = pd.concat([cdf[f"{p}_{suffix}"].abs() for p, _ in periods])
+        vmax = max(1e-6, float(np.nanpercentile(allvals, 98)))  # clip outliers
+        fig, axes = plt.subplots(1, 3, figsize=(15, 7.2), dpi=300)
+        sc = None
+        for ax, (p, plabel) in zip(axes, periods):
+            sc = ax.scatter(cdf["lon"], cdf["lat"], c=cdf[f"{p}_{suffix}"], cmap="RdBu",
+                            vmin=-vmax, vmax=vmax, s=10, marker="s", linewidths=0)
+            ax.set_aspect(aspect)
+            ax.set_title(plabel, fontsize=10)
+            ax.set_xlabel("longitude", fontsize=8)
+            ax.tick_params(labelsize=7)
+            ax.grid(lw=0.3, alpha=0.4)
+        axes[0].set_ylabel("latitude", fontsize=8)
+        cb = fig.colorbar(sc, ax=axes, shrink=0.6, pad=0.02)
+        cb.set_label(f"unsplit - split precip ({unit}; blue = unsplit wetter, red = drier)", fontsize=8)
+        cb.ax.tick_params(labelsize=7)
+        fig.suptitle(f"{title}  ({len(cdf)} basin cells)", fontsize=12)
+        out_map = out_dir / fname
+        fig.savefig(out_map, bbox_inches="tight")
+        plt.close(fig)
+        print("->", out_map)
 
 
 if __name__ == "__main__":

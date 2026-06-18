@@ -1373,13 +1373,15 @@ def _historical_wy_totals_from_dss(ppt_part_b: str, start_wy: int = 1922, end_wy
     return wy_tot
 
 
-def _productB_chunk_wy_totals(chunk_csv: Path) -> dict:
-    """Read a Product B chunk file once and return WY totals for every Part B location.
+def _long_format_wy_totals(csv_path: Path) -> dict:
+    """Read a long-format SV precip CSV and return WY totals per Part B location.
 
-    Product B chunk format: Part B, Part C, Year, Month, Value
-    Returns dict[location_name -> DataFrame(WY, precip_inches)].
+    Format: Part B, Part C, Year, Month, Value. Used for both Product B chunk
+    files and the Product A validation CSV (identical format). Returns
+    dict[location_name -> DataFrame(WY, precip_inches)], keeping only complete
+    (12-month) water years.
     """
-    df = pd.read_csv(chunk_csv)
+    df = pd.read_csv(csv_path)
     df['Value'] = pd.to_numeric(df['Value'], errors='coerce')
     df = df.dropna(subset=['Value'])
     df['WY'] = df['Year'] + (df['Month'] >= 10).astype(int)
@@ -1426,8 +1428,12 @@ def _plot_hist_vs_productB_box(
     title: str,
     out_png: Path,
     unit: str = "inches",
+    productA_wy: pd.DataFrame = None,
 ):
-    """Create boxplot: historical + n01..n10 annual WY precip totals.
+    """Create boxplot: historical (+ Product A) + n01..n10 annual WY precip totals.
+
+    When ``productA_wy`` is provided (and non-empty), a Product A box is drawn
+    between the historical box and the Product B blocks.
 
     Styled to match _productB_postproc.plot_summary_boxplots.
     """
@@ -1437,18 +1443,33 @@ def _plot_hist_vs_productB_box(
     _DWR_GRAY = "#5A5A5A"
     _DWR_HIST_FACE = "#F0F0F0"  # pale grey to mirror productB_postproc historical style
     _DWR_HIST_EDGE = _DWR_GRAY
+    _DWR_PRODA_FACE = "#F2C57C"  # warm gold: distinct from grey historical and blue Product B
+    _DWR_PRODA_EDGE = "#A86A12"
 
     hist_vals = hist_wy['precip_inches'].dropna().to_numpy(dtype=float)
     block_data = [bw['precip_inches'].dropna().to_numpy(dtype=float) for bw in block_wy_list]
-    labels = ['Hist'] + [f'n{i:02d}' for i in range(1, len(block_wy_list) + 1)]
-    data = [hist_vals] + block_data
+
+    has_proda = productA_wy is not None and not productA_wy.empty
+    proda_vals = (productA_wy['precip_inches'].dropna().to_numpy(dtype=float)
+                  if has_proda else None)
+
+    # Position layout: Historical=1, [Product A=2], then the Product B blocks.
+    pos_hist = 1
+    next_pos = 2
+    pos_proda = None
+    labels = ['Hist']
+    if has_proda:
+        pos_proda = next_pos
+        labels.append('ProdA')
+        next_pos += 1
+    block_positions = list(range(next_pos, next_pos + len(block_data)))
+    labels += [f'n{i:02d}' for i in range(1, len(block_data) + 1)]
 
     fig, ax = plt.subplots(figsize=(11, 5))
-    positions = list(range(1, len(labels) + 1))
 
     # Historical box (pale grey) with grey median line
     ax.boxplot(
-        [data[0]], positions=[1], widths=0.5, showfliers=True,
+        [hist_vals], positions=[pos_hist], widths=0.5, showfliers=True,
         patch_artist=True, showmeans=True,
         boxprops=dict(facecolor=_DWR_HIST_FACE, edgecolor=_DWR_HIST_EDGE, linewidth=1.0),
         medianprops=dict(color=_DWR_GRAY, linewidth=1.8),
@@ -1460,9 +1481,24 @@ def _plot_hist_vs_productB_box(
                         markeredgecolor=_DWR_GRAY, markersize=3, alpha=0.5),
     )
 
+    # Product A box (warm gold) with grey median line
+    if has_proda:
+        ax.boxplot(
+            [proda_vals], positions=[pos_proda], widths=0.5, showfliers=True,
+            patch_artist=True, showmeans=True,
+            boxprops=dict(facecolor=_DWR_PRODA_FACE, edgecolor=_DWR_PRODA_EDGE, linewidth=1.0),
+            medianprops=dict(color=_DWR_GRAY, linewidth=1.8),
+            meanprops=dict(marker="D", markerfacecolor=_DWR_PRODA_EDGE,
+                           markeredgecolor=_DWR_PRODA_EDGE, markersize=5),
+            whiskerprops=dict(color=_DWR_PRODA_EDGE, linewidth=1.0),
+            capprops=dict(color=_DWR_PRODA_EDGE, linewidth=1.0),
+            flierprops=dict(marker="o", markerfacecolor=_DWR_PRODA_EDGE,
+                            markeredgecolor=_DWR_PRODA_EDGE, markersize=3, alpha=0.5),
+        )
+
     # Product B block boxes with grey median line
     ax.boxplot(
-        data[1:], positions=positions[1:], widths=0.5, showfliers=True,
+        block_data, positions=block_positions, widths=0.5, showfliers=True,
         patch_artist=True, showmeans=True,
         boxprops=dict(facecolor=_DWR_LIGHT_BLUE, edgecolor=_DWR_BLUE, linewidth=1.0),
         medianprops=dict(color=_DWR_GRAY, linewidth=1.8),
@@ -1479,9 +1515,10 @@ def _plot_hist_vs_productB_box(
         ax.axhline(hist_mean, color=_DWR_GRAY, linestyle="--", linewidth=1.4,
                    label=f"Historical Mean ({hist_mean:,.1f} {unit})")
 
-    ax.set_xticks(positions)
+    all_positions = [pos_hist] + ([pos_proda] if has_proda else []) + block_positions
+    ax.set_xticks(all_positions)
     ax.set_xticklabels(labels, fontsize=11, fontweight="medium")
-    ax.set_xlabel("Historical / Product B Block", fontsize=12, fontweight="bold", labelpad=8)
+    ax.set_xlabel("Historical / Product A / Product B Block", fontsize=12, fontweight="bold", labelpad=8)
     ax.set_ylabel(f"Annual WY Precipitation ({unit})", fontsize=12, fontweight="bold", labelpad=8)
     ax.set_title(title, fontsize=14, fontweight="bold", pad=12)
     ax.tick_params(axis="both", labelsize=11)
@@ -1499,7 +1536,11 @@ def _plot_hist_vs_productB_box(
 
 
 def run_compare_historical_productB(args):
-    """Compare historical annual WY precip vs Product B (n01-n10) boxplots.
+    """Compare historical annual WY precip vs Product A and Product B (n01-n10) boxplots.
+
+    The Product A box (single historical-length realization) is included when the
+    Product A validation CSV (output/_product_a_validation/_uhh_precip_productA_*.csv)
+    is available; otherwise only Historical and the Product B blocks are drawn.
 
     Produces:
       - one figure per UHH location
@@ -1548,20 +1589,41 @@ def run_compare_historical_productB(args):
     per_loc_chunks: dict = {s: [] for s in hist_wy_by_loc}
     for chunk_csv in chunk_files:
         print(f"  Reading {chunk_csv.name}...")
-        chunk_totals = _productB_chunk_wy_totals(chunk_csv)
+        chunk_totals = _long_format_wy_totals(chunk_csv)
         empty = pd.DataFrame(columns=['WY', 'precip_inches'])
         for shorthand in hist_wy_by_loc:
             loc_name = ppt_name_by_loc[shorthand]
             per_loc_chunks[shorthand].append(chunk_totals.get(loc_name, empty))
+
+    # Load Product A WY totals per location (single historical-length realization,
+    # WY ~1922-2018) from the Product A validation CSV, if present. Same long
+    # format as the Product B chunks, so it reads with the same helper.
+    empty_wy = pd.DataFrame(columns=['WY', 'precip_inches'])
+    productA_by_loc: dict = {}
+    productA_val_dir = gen_dir / "output" / "_product_a_validation"
+    productA_files = sorted(productA_val_dir.glob("_uhh_precip_productA_*.csv"))
+    if productA_files:
+        productA_csv = productA_files[-1]
+        print(f"\nLoading Product A WY precip totals from {productA_csv.name} ...")
+        productA_totals = _long_format_wy_totals(productA_csv)
+        for shorthand in hist_wy_by_loc:
+            loc_name = ppt_name_by_loc[shorthand]
+            if loc_name in productA_totals:
+                productA_by_loc[shorthand] = productA_totals[loc_name]
+                print(f"  {shorthand}: {len(productA_by_loc[shorthand])} WYs")
+    else:
+        print(f"\nNo Product A validation CSV in {productA_val_dir} "
+              "(_uhh_precip_productA_*.csv); Product A box will be omitted.")
 
     # --- Per-location figures ---
     print("\nGenerating per-location comparison figures...")
     for shorthand in hist_wy_by_loc:
         hist_wy = hist_wy_by_loc[shorthand]
         block_list = per_loc_chunks[shorthand]
+        proda_wy = productA_by_loc.get(shorthand)
         title = f"Annual WY Precipitation - {shorthand}"
         out_png = out_dir / f"boxplot_precip_hist_vs_productB_{shorthand}.png"
-        _plot_hist_vs_productB_box(hist_wy, block_list, title, out_png)
+        _plot_hist_vs_productB_box(hist_wy, block_list, title, out_png, productA_wy=proda_wy)
         print(f"  {out_png.name}")
 
     # --- Aggregate figures (area-weighted) ---
@@ -1583,6 +1645,12 @@ def run_compare_historical_productB(args):
         hist_per_loc = {s: hist_wy_by_loc[s] for s in available}
         hist_agg = _area_weighted_mean(hist_per_loc, w)
 
+        # Aggregate Product A (area-weighted) when any group location has it
+        proda_agg = None
+        if any(s in productA_by_loc for s in available):
+            proda_per_loc = {s: productA_by_loc.get(s, empty_wy) for s in available}
+            proda_agg = _area_weighted_mean(proda_per_loc, w)
+
         # Aggregate Product B per chunk
         n_chunks = len(chunk_files)
         block_agg_list = []
@@ -1592,7 +1660,7 @@ def run_compare_historical_productB(args):
 
         title = f"Annual WY Precipitation - {label}"
         out_png = out_dir / f"boxplot_precip_hist_vs_productB_{tag}.png"
-        _plot_hist_vs_productB_box(hist_agg, block_agg_list, title, out_png)
+        _plot_hist_vs_productB_box(hist_agg, block_agg_list, title, out_png, productA_wy=proda_agg)
         print(f"  {out_png.name}")
 
     # Build stats table: rows = location (+ aggregates), columns = scenario stats
@@ -1604,12 +1672,15 @@ def run_compare_historical_productB(args):
         return {'mean': float(v.mean()), 'min': float(v.min()),
                 'max': float(v.max()), 'n': int(len(v))}
 
+    # Each section: (label, historical series, Product A series or None, list of block series)
     # All locations from the per-location loop, then the three aggregates
-    stat_sections: list[tuple[str, pd.Series, list[pd.Series]]] = []
+    stat_sections: list = []
     for shorthand in hist_wy_by_loc:
+        proda = productA_by_loc.get(shorthand)
         stat_sections.append((
             shorthand,
             hist_wy_by_loc[shorthand]['precip_inches'],
+            proda['precip_inches'] if proda is not None and not proda.empty else None,
             [bw['precip_inches'] for bw in per_loc_chunks[shorthand]],
         ))
     # Aggregates (same computation used for figures)
@@ -1619,19 +1690,24 @@ def run_compare_historical_productB(args):
             continue
         w = {s: weights_by_loc[s] for s in available}
         hist_agg_s = _area_weighted_mean({s: hist_wy_by_loc[s] for s in available}, w)
+        proda_agg_s = None
+        if any(s in productA_by_loc for s in available):
+            proda_agg_s = _area_weighted_mean(
+                {s: productA_by_loc.get(s, empty_wy) for s in available}, w)
         block_agg_s = []
         for i in range(len(chunk_files)):
             block_agg_s.append(_area_weighted_mean({s: per_loc_chunks[s][i] for s in available}, w))
         stat_sections.append((
             f"[{tag}]",
             hist_agg_s['precip_inches'],
+            proda_agg_s['precip_inches'] if proda_agg_s is not None and not proda_agg_s.empty else None,
             [b['precip_inches'] for b in block_agg_s],
         ))
 
     # Build tidy stats rows
     stats_rows = []
     n_chunks = len(chunk_files)
-    for loc_label, hist_series, block_series_list in stat_sections:
+    for loc_label, hist_series, proda_series, block_series_list in stat_sections:
         h = _stats(hist_series)
         row = {
             'location': loc_label,
@@ -1640,6 +1716,11 @@ def run_compare_historical_productB(args):
             'Historical_max_in': h['max'],
             'Historical_n_WYs': h['n'],
         }
+        p = _stats(proda_series if proda_series is not None else pd.Series(dtype=float))
+        row['ProductA_mean_in'] = p['mean']
+        row['ProductA_min_in'] = p['min']
+        row['ProductA_max_in'] = p['max']
+        row['ProductA_n_WYs'] = p['n']
         for i, bv in enumerate(block_series_list, start=1):
             s = _stats(bv)
             tag = f'n{i:02d}'
@@ -1690,9 +1771,11 @@ def parse_arguments():
         '--compare-historical-productB',
         action='store_true',
         dest='compare_historical_productB',
-        help='Compare historical annual WY precipitation against Product B (n01-n10) boxplots. '
-             'Generates one figure per UHH location plus area-weighted aggregates for the '
-             'Sacramento Valley, San Joaquin Valley, and all UHH locations (TR and WH excluded).'
+        help='Compare historical annual WY precipitation against Product A and Product B '
+             '(n01-n10) boxplots. The Product A box is included when its validation CSV is '
+             'available. Generates one figure per UHH location plus area-weighted aggregates '
+             'for the Sacramento Valley, San Joaquin Valley, and all UHH locations '
+             '(TR and WH excluded).'
     )
     parser.add_argument(
         '--locations',
