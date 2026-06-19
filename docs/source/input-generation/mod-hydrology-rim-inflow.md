@@ -12,7 +12,7 @@ Rim inflows represent streamflow entering the CalSim 3 model domain from surroun
 
 ## Methodology
 
-### Correlation Analysis and VIC Selection
+### Correlation Analysis
 
 The methodology development began with a systematic correlation analysis, matching each of the approximately 227 CalSim rim inflow variables against modeled streamflow locations from both SAC-SMA and VIC hydrologic models to identify the strongest statistical predictors. Of the 227 variables requiring stochastic generation, every one had a corresponding VIC simulated streamflow location available as the quantile mapping basis, with more than 80% showing R² above 0.6 against that VIC basis and over 60% above 0.7.
 
@@ -20,7 +20,7 @@ An early methodological choice involved selecting between SAC-SMA and VIC as the
 
 ### Quantile Mapping Procedure
 
-The procedure follows the framework described in [Quantile Mapping](../methods.md#quantile-mapping): monthly stratification with Gamma-distribution tail extrapolation. For the historical validation reported below, the mapping is trained on WY 1922-1971 and validated  on WY 1972-2018, so the corrected flows can be scored against an independent record. The Product B mapping is instead trained on the full Product A overlap (Oct 1921-Dec 2018) to use every available year of historical correspondence. For rim inflows specifically, the highest correlated VIC streamflow serves as the basis series and the historical CalSim 3 rim inflows (e.g., I_FOLSM, UNIMP_OROV) serve as the target series. Negative flows are clipped to zero. When a synthetic value falls below the entire historical range, the mapping extrapolates into the lower tail by taking the smallest observed target value and subtracting an increment from the fitted Gamma distribution. For months whose flows are already near zero, this can push the result slightly below zero, so any negative values are reset to zero.
+The procedure follows the framework described in [Quantile Mapping](../methods.md#quantile-mapping): monthly stratification with Gamma-distribution tail extrapolation. For the historical validation reported below, the mapping is trained on WY 1922-1971 and validated on WY 1972-2018, so the corrected flows can be scored against an independent record. The Product B mapping is instead trained on the full Product A overlap (Oct 1921-Dec 2018) to use every available year of historical correspondence. For rim inflows specifically, the highest correlated VIC streamflow serves as the basis series and the historical CalSim 3 rim inflows (e.g., I_FOLSM, UNIMP_OROV) serve as the target series. Negative flows are clipped to zero. When a synthetic value falls below the entire historical range, the mapping extrapolates into the lower tail by taking the smallest observed target value and subtracting an increment from the fitted Gamma distribution. For months whose flows are already near zero, this can push the result slightly below zero, so any negative values are reset to zero.
 
 ### Anchor Watershed Mass Balance
 
