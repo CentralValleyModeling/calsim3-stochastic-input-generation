@@ -60,7 +60,7 @@ flowchart TD
     SUM --> COMPARE
 
     COMPARE -->|Yes| DONE["No Adjustment Needed"]
-    COMPARE -->|No| RESIDUAL["Residual =<br/>Anchor_QM - Sum_Tribs_QM"]
+    COMPARE -->|No| RESIDUAL["Residual =<br/>Anchor QM - Sum of Tribs QM"]
     RESIDUAL --> DIST["Distribute Proportionally<br/>by Tributary Share"]
     DIST --> ADJ1["Trib 1 Final =<br/>Trib 1 QM + Adjustment"]
     DIST --> ADJ2["Trib 2 Final =<br/>Trib 2 QM + Adjustment"]
