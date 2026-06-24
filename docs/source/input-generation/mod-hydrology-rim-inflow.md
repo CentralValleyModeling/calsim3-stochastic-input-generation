@@ -42,7 +42,7 @@ The adjustment formula distributes any discrepancy proportionally among tributar
 
 $$\text{Trib}_{\text{adjust}} = \left(\text{Anchor}_{\text{QM}} - \sum \text{Tribs}_{\text{QM}}\right) \times \frac{\text{Trib}_{\text{QM}}}{\sum \text{Tribs}_{\text{QM}}}$$
 
-$$\text{Final Flow} = \text{Trib}_{\text{QM}} + \text{Trib}_{\text{adjust}}$$
+$$\text{Trib}_{\text{final}} = \text{Trib}_{\text{QM}} + \text{Trib}_{\text{adjust}}$$
 
 This ensures that the downstream anchor flow equals the sum of all upstream tributary contributions, maintaining hydrologic mass balance while allowing individual tributary flows to reflect their quantile-mapped distributions.
 
