@@ -77,7 +77,7 @@ from utils.paths import get_data_dir, get_base_dir, get_generated_dir, get_modul
 # get_inventory_dir()       -> <repo_root>/inventory
 ```
 
-Data layout: `BASE/WGEN/{Product_A,Product_B}/1/`, `BASE/Historical_Climate/1_Historical/`, `BASE/CalSim3/__calsim_sv_default__.dss`. Outputs mirror module structure under `GENERATED/`.
+Data layout: `BASE/WGEN/{Product_A,Product_B}/1/`, `BASE/Historical_Climate_LTO/1_Historical/`, `BASE/CalSim3/__calsim_sv_default__.dss`. Outputs mirror module structure under `GENERATED/`.
 
 ---
 

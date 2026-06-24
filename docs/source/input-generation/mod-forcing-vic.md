@@ -18,7 +18,7 @@ WGEN generates daily precipitation and temperature but does not produce wind spe
 - **Product A** (`_1_append_wind_wgen_hist.py`): Historical observed wind data (1915--2021) is appended directly to the WGEN meteorological files. Since Product A replicates the historical weather regime sequence, actual historical wind is the appropriate match.
 - **Product B** (`_1_append_wind_wgen_stochastic.py`): Wind is resampled from historical records using the WGEN internal date mapping (`resampled.dates_Product_B_1000yr.csv`). Each synthetic day's wind comes from the historical day that WGEN sampled for that position, maintaining consistency between precipitation/temperature patterns and wind conditions.
 
-In both cases the daily wind series is read from the `data_*` Historical_Climate files and merged onto the matching WGEN met file -- located by substituting `data` -> `meteo` in the filename -- as an additional column alongside the existing precipitation, maximum temperature, and minimum temperature fields. The wind-appended `meteo_*` files written to the VIC input directory are the complete forcing inputs VIC consumes.
+In both cases the daily wind series is read from the `data_*` Historical_Climate_LTO files and merged onto the matching WGEN met file -- located by substituting `data` -> `meteo` in the filename -- as an additional column alongside the existing precipitation, maximum temperature, and minimum temperature fields. The wind-appended `meteo_*` files written to the VIC input directory are the complete forcing inputs VIC consumes.
 
 ## Rim Inflow Compilation
 

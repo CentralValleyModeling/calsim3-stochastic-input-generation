@@ -412,7 +412,7 @@ def main():
 
     # Data folder
     if args.source == 'Historical':
-        data_folder = get_base_dir() / 'Historical_Climate' / '1_Historical'
+        data_folder = get_base_dir() / 'Historical_Climate_LTO' / '1_Historical'
     else:
         data_folder = get_base_dir() / 'WGEN' / args.source / str(args.scenario)
 

@@ -7,7 +7,7 @@ each UHH location, with Trinity (TR_UHH) highlighted for GitHub issue #78:
   2. PRISM_LT        PRISM long-term/stable, 800m (independent reference)
   3. Hist_CalSim     CalSim historical SV precip  (__calsim_sv_default__.dss)
   4. LIVNEH_UNSPLIT  Livneh "unsplit" forcing     (WGEN/Historical_Unsplit, col 3)
-  5. LIVNEH_SPLIT    Livneh "split" forcing       (Historical_Climate/1_Historical, col 0)
+  5. LIVNEH_SPLIT    Livneh "split" forcing       (Historical_Climate_LTO/1_Historical, col 0)
 
 The four gridded per-cell sources (all named data_<lat>_<lon>) are area-weighted
 to each UHH location using the GridInfo weights (mod_forcing/vic/reference/
@@ -46,9 +46,9 @@ uhh = importlib.import_module("_2_uhh_basin_averages")
 BASE = get_base_dir()
 # Plain strings for os.listdir (the long-path prefix get_base_dir adds is harmless
 # here and these dirs are well under MAX_PATH).
-PRISM_AN_DIR = os.path.normpath(str(BASE / "climate" / "historical_prism" / "an"))
-PRISM_LT_DIR = os.path.normpath(str(BASE / "climate" / "historical_prism" / "lt"))
-SPLIT_DIR    = os.path.normpath(str(BASE / "Historical_Climate" / "1_Historical"))  # col 0 = prcp
+PRISM_AN_DIR = os.path.normpath(str(BASE / "PRISM" / "an"))
+PRISM_LT_DIR = os.path.normpath(str(BASE / "PRISM" / "lt"))
+SPLIT_DIR    = os.path.normpath(str(BASE / "Historical_Climate_LTO" / "1_Historical"))  # col 0 = prcp
 UNSPLIT_DIR  = os.path.normpath(str(BASE / "WGEN" / "Historical_Unsplit"))          # col 3 = prcp
 
 REPO_ROOT = Path(__file__).resolve().parents[2]

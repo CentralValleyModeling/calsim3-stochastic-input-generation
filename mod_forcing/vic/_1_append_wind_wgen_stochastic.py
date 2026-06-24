@@ -16,7 +16,7 @@ _gen = get_module_generated_dir("mod_forcing/vic")
 #-Scenario-
 wgen_dir = str(_base / 'WGEN' / 'Product_B' / '1')
 #-Wind Location-
-hist_dir = str(_base / 'Historical_Climate' / '1_Historical')
+hist_dir = str(_base / 'Historical_Climate_LTO' / '1_Historical')
 #-VIC Input Directory-
 out_dir_gen = str(_gen / 'input' / 'Product_B' / '1')
 

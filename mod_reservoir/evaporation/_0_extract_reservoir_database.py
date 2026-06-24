@@ -273,7 +273,7 @@ class ReservoirDatabase:
 
 
 def find_nearest_weather_file(reservoir_code: str,
-                               weather_dir: str = '../_00_Data/Historical_Climate/1_Historical') -> Optional[str]:
+                               weather_dir: str = '../_00_Data/Historical_Climate_LTO/1_Historical') -> Optional[str]:
     """
     Find the nearest weather data file for a reservoir.
 

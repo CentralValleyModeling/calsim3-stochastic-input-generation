@@ -6,7 +6,7 @@ Repo data (BASE inputs, GENERATED outputs) is resolved through ``utils.paths`` p
 the repo convention, so it follows ``config.json`` wherever the data dir lives.
 
 Inputs (resolved via ``utils.paths.get_base_dir``):
-  BASE/Historical_Climate/1_Historical/data_<lat>_<lon>   SPLIT:   prcp tmax tmin wind (no dates)
+  BASE/Historical_Climate_LTO/1_Historical/data_<lat>_<lon>   SPLIT:   prcp tmax tmin wind (no dates)
   BASE/WGEN/Historical_Unsplit/data_<lat>_<lon>           UNSPLIT: yr mo dy prcp tmax tmin
 
 Basin cell sets + area_weight come from the **SAC-SMA repo** (``SACSMA_REPO`` below):
@@ -39,7 +39,7 @@ BASE = get_base_dir()
 # Normalize to a plain string (forward slashes -> backslashes; the long-path
 # prefix get_base_dir adds is harmless here and these dirs are well under MAX_PATH)
 # so os.listdir in index_dir is happy on Windows.
-SP = os.path.normpath(str(BASE / "Historical_Climate" / "1_Historical"))  # split   (col 0 = prcp)
+SP = os.path.normpath(str(BASE / "Historical_Climate_LTO" / "1_Historical"))  # split   (col 0 = prcp)
 UN = os.path.normpath(str(BASE / "WGEN" / "Historical_Unsplit"))          # unsplit (col 3 = prcp)
 
 # external SAC-SMA repo: supplies the basin->cell definitions (hruinfo) read below.

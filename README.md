@@ -84,7 +84,7 @@ data/                            (or wherever data_dir points)
 │   ├── WGEN/
 │   │   ├── Product_A/1           meteo_LAT_LON files, 1915–2018  (~14 GB)
 │   │   └── Product_B/1           10 chunk subdirs n01–n10, 1000 yr  (~120 GB)
-│   ├── Historical_Climate/
+│   ├── Historical_Climate_LTO/
 │   │   └── 1_Historical/        Observed climate with wind column  (~1 GB)
 │   └── CalSim3/
 │       └── __calsim_sv_default__.dss   CalSim3 baseline study-variable DSS

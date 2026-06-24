@@ -3,7 +3,7 @@ Append Historical Wind to WGEN Met Files (VIC Forcing)
 ======================================================
 
 WGEN outputs precip and temperature but not wind. This script appends daily
-wind (4th column of the ``Historical_Climate/1_Historical`` wind files), matched
+wind (4th column of the ``Historical_Climate_LTO/1_Historical`` wind files), matched
 by date, to the WGEN climate files and writes complete VIC forcing files
 (``meteo_LAT_LON``: pr, tmax, tmin, wind) to the VIC input directory.
 
@@ -58,7 +58,7 @@ def add_wind(wind_file_name,
         tmax, tmin). Named ``meteo_*`` for Product_A, ``data_*`` for
         Historical_Unsplit -- resolved by the caller.
     wind_dir : str
-        Directory of the Historical_Climate wind files.
+        Directory of the Historical_Climate_LTO wind files.
     climate_dir : str
         Directory of the WGEN climate files.
     wind_date_start, wind_date_end : str
@@ -108,7 +108,7 @@ def main():
     _base = get_base_dir()
     _gen = get_module_generated_dir("mod_forcing/vic")
     # -Wind Location- (same for both sources; the limiting set)
-    wind_dir = str(_base / 'Historical_Climate' / '1_Historical')
+    wind_dir = str(_base / 'Historical_Climate_LTO' / '1_Historical')
 
     if args.source == 'Product_A':
         # WGEN files are named meteo_*; match each wind cell by data -> meteo rename.

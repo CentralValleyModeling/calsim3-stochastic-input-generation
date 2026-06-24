@@ -11,7 +11,7 @@ Product B: 10 long-format chunk CSVs (100 WY each, Oct 1921 - Sep 2021).
 Inputs
 ------
 - reference/pp_point_locations.csv
-- WGEN/Product_A/1/  or  WGEN/Product_B/1/  or  Historical_Climate/  (meteo files)
+- WGEN/Product_A/1/  or  WGEN/Product_B/1/  or  Historical_Climate_LTO/  (meteo files)
 
 Outputs
 -------
@@ -404,8 +404,8 @@ def main():
     
     # Build data path based on source type
     if args.source == "Historical":
-        # Historical data is in Historical_Climate folder, not WGEN
-        data_folder = base_dir / "Historical_Climate"
+        # Historical data is in Historical_Climate_LTO folder, not WGEN
+        data_folder = base_dir / "Historical_Climate_LTO"
         output_folder = gen_dir / "output" / "_1_pp_point_locations" / "historical"
         script_output_folder = output_folder
     else:

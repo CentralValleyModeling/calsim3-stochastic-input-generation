@@ -48,7 +48,7 @@ BOX_DEFAULT = Path(
 # Mirrors the existing Box structure; order determines zip output order.
 BASE_TARGETS = [
     "CalSim3",
-    "Historical_Climate",
+    "Historical_Climate_LTO",
     "WGEN/Product_A/1",
     "WGEN/Product_B/1",
 ]

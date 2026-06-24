@@ -13,7 +13,7 @@ Inputs
 ------
 - reference/uhh_locations.csv
 - mod_forcing/vic/reference/GridInfo/<location>_GridInfo.txt
-- WGEN/Product_A/1/  or  WGEN/Product_B/1/  or  Historical_Climate/  (meteo files)
+- WGEN/Product_A/1/  or  WGEN/Product_B/1/  or  Historical_Climate_LTO/  (meteo files)
 - reference/calsim_climate_sv.xlsx  (historical VPD target for quantile mapping)
 
 Outputs
@@ -1844,7 +1844,7 @@ def main():
     
     # Build data path based on source type
     if args.source == "Historical":
-        data_folder = base_dir / "Historical_Climate"
+        data_folder = base_dir / "Historical_Climate_LTO"
         output_folder = gen_dir / "output" / "_2_uhh_basin_averages" / "historical"
         script_output_folder = output_folder
     else:

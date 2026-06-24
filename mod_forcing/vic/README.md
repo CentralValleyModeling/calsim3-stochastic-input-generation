@@ -12,7 +12,7 @@ All paths below are relative to the repo root (`calsim3-stochastic-input-generat
 WGEN outputs precip and temperature but not wind. These scripts merge historical wind data with WGEN climate files to create complete VIC forcing inputs.
 
 **`_1_append_wind_wgen_hist.py`** — Product A (historical-length scenarios)
-- Merges wind from `data/BASE/Historical_Climate/1_Historical/` with WGEN files from `data/BASE/WGEN/Product_A/{scenario}/`
+- Merges wind from `data/BASE/Historical_Climate_LTO/1_Historical/` with WGEN files from `data/BASE/WGEN/Product_A/{scenario}/`
 - Matches by date (1915-2021)
 - Output: `data/GENERATED/mod_hydrology/vic/input/Product_A/{scenario}/meteo_*`
 
