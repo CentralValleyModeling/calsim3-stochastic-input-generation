@@ -59,7 +59,7 @@ Usage
     # Also write per-location monthly-average comparison figures:
     python mod_hydrology/rim_inflow/_2_qmap_historical_validation.py --locations UNIMP_OROV
     python mod_hydrology/rim_inflow/_2_qmap_historical_validation.py --locations UNIMP_OROV FOLSM_INFLOW
-    python mod_hydrology/rim_inflow/_2_qmap_historical_validation.py --locations UNIMP_OROV,I_MLRTN_IMP,I_SHSTA
+    python mod_hydrology/rim_inflow/_2_qmap_historical_validation.py --locations UNIMP_OROV,UNIMP_SJ,I_SHSTA
     python mod_hydrology/rim_inflow/_2_qmap_historical_validation.py --locations ALL
 
     # Major reservoir unimpaired inflows:
@@ -70,7 +70,7 @@ Usage
     # Pick month(s) for the non-exceedance plot (one figure per month per
     # location); accepts 1-12, month names, comma/space lists, 'all', or 'auto':
     python mod_hydrology/rim_inflow/_2_qmap_historical_validation.py --locations FOLSM_INFLOW,I_SHSTA --nonexceed-month 1
-    python mod_hydrology/rim_inflow/_2_qmap_historical_validation.py --locations I_MLRTN_IMP --nonexceed-month May
+    python mod_hydrology/rim_inflow/_2_qmap_historical_validation.py --locations UNIMP_SJ --nonexceed-month May
     python mod_hydrology/rim_inflow/_2_qmap_historical_validation.py --locations UNIMP_OROV --nonexceed-month 1,5,9
     python mod_hydrology/rim_inflow/_2_qmap_historical_validation.py --locations UNIMP_OROV --nonexceed-month all
 
@@ -1572,7 +1572,7 @@ def parse_args():
               "(space and/or comma separated): 1-12, month names such as Jan or "
               "May, 'all' for every month, or 'auto' (peak CS3 month; the default "
               "when the flag is given with no value). Examples: "
-              "FOLSM_INFLOW uses 1; I_MLRTN_IMP uses 5."),
+              "FOLSM_INFLOW uses 1; UNIMP_SJ uses 5."),
     )
     return p.parse_args()
 
