@@ -8,7 +8,7 @@ Delta consumptive use and seepage (DCD/DETAW)
 ```
 
 
-Delta Channel Depletion (DCD) represents consumptive use and seepage in the Sacramento-San Joaquin Delta. The model operates on a "planning study" configuration (as opposed to "historical study") to align with CalSim 3 DCR 2023. The distinction between "planning study" and "historical study" configurations is important: the planning study configuration assumes equilibrium groundwater and land use conditions appropriate for long-term planning, matching the DCR 2023 baseline. Using the historical configuration would inject year-specific calibration adjustments that are not reproducible from synthetic climate alone. Each DCD run requires approximately 3 hours of processing time.
+Delta Channel Depletion (DCD) represents consumptive use and seepage in the Sacramento-San Joaquin Delta. The model operates on a "planning study" configuration (as opposed to "historical study") to align with CalSim 3 DCR 2023. The distinction between "planning study" and "historical study" configurations is important: the planning study configuration assumes equilibrium groundwater and land use conditions appropriate for long-term planning, matching the DCR 2023 baseline. Using the historical configuration would inject year-specific calibration adjustments that are not reproducible from synthetic climate alone.
 
 ## Methodology
 
