@@ -48,23 +48,23 @@ This ensures that the downstream anchor flow equals the sum of all upstream trib
 
 ```{mermaid}
 flowchart TD
-    VIC["VIC Streamflow Outputs"] --> QM_ANC["Quantile Map\nAnchor Watershed\n(e.g., UNIMP_FOLS)"]
-    VIC --> QM_T1["Quantile Map\nTributary 1"]
-    VIC --> QM_T2["Quantile Map\nTributary 2"]
-    VIC --> QM_TN["Quantile Map\nTributary N"]
+    VIC["VIC Streamflow Outputs"] --> QM_ANC["Quantile Map<br/>Anchor Watershed<br/>(e.g., UNIMP_FOLS)"]
+    VIC --> QM_T1["Quantile Map<br/>Tributary 1"]
+    VIC --> QM_T2["Quantile Map<br/>Tributary 2"]
+    VIC --> QM_TN["Quantile Map<br/>Tributary N"]
 
-    QM_ANC --> COMPARE{"Anchor QM =\nSum of Tribs QM?"}
+    QM_ANC --> COMPARE{"Anchor QM =<br/>Sum of Tribs QM?"}
     QM_T1 --> SUM["Sum Tributary QMs"]
     QM_T2 --> SUM
     QM_TN --> SUM
     SUM --> COMPARE
 
     COMPARE -->|Yes| DONE["No Adjustment Needed"]
-    COMPARE -->|No| RESIDUAL["Compute Residual\nAnchor_QM - Sum_Tribs_QM"]
-    RESIDUAL --> DIST["Distribute Proportionally\nby Tributary Share"]
-    DIST --> ADJ1["Trib 1 Final =\nTrib 1 QM + Adjustment"]
-    DIST --> ADJ2["Trib 2 Final =\nTrib 2 QM + Adjustment"]
-    DIST --> ADJN["Trib N Final =\nTrib N QM + Adjustment"]
+    COMPARE -->|No| RESIDUAL["Compute Residual<br/>Anchor_QM - Sum_Tribs_QM"]
+    RESIDUAL --> DIST["Distribute Proportionally<br/>by Tributary Share"]
+    DIST --> ADJ1["Trib 1 Final =<br/>Trib 1 QM + Adjustment"]
+    DIST --> ADJ2["Trib 2 Final =<br/>Trib 2 QM + Adjustment"]
+    DIST --> ADJN["Trib N Final =<br/>Trib N QM + Adjustment"]
 
     style QM_ANC fill:#264653,color:#fff
     style DONE fill:#2d6a4f,color:#fff
@@ -79,7 +79,7 @@ _Anchor watershed mass balance adjustment. After independent quantile mapping, t
 
 Quantile mapping substantially improved monthly skill across the rim inflow network. On the normalized skill scale of the skill figure below, the network average rose from 0.68 (raw VIC) to 0.79. Monthly bias also fell markedly at the major anchor watersheds.
 
-The figure below summarizes this improvement across the full network. Skill is expressed as normalized NSE, $1/(2-\text{NSE})$, which maps NSE onto the 0-1 range (0.5 corresponds to NSE = 0 and 1.0 to a perfect score). The two curves are sorted independently, so the figure compares the distribution of skill rather than location by location pairs: quantile mapping shifts the entire distribution upward, with the largest gains in the low-skill tail, where the poorest performing locations rise from near zero to about 0.4.
+The figure below summarizes this improvement across the full network. Skill is expressed as normalized NSE, $1/(2-\text{NSE})$, which maps NSE onto the 0-1 range (0.5 corresponds to NSE = 0 and 1.0 to a perfect score). The two curves are sorted independently, so the figure compares the distribution of skill rather than location by location pairs: quantile mapping shifts the entire distribution upward, with the largest gains in the low-skill tail.
 
 ```{image} figures/s3-inputs_rim-inflow-skill-normalized-nse.png
 :alt: Rim Inflow Skill (Normalized NSE)
