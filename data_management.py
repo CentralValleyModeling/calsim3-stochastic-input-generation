@@ -49,9 +49,24 @@ BOX_DEFAULT = Path(
 BASE_TARGETS = [
     "CalSim3",
     "Historical_Climate_LTO",
+    "PRISM",
+    "WGEN/Historical_Unsplit",
     "WGEN/Product_A/1",
     "WGEN/Product_B/1",
 ]
+
+# Individual loose files under data/BASE that no BASE_TARGETS directory covers
+# (the packer only zips folders, and these sit between/above the dir targets --
+# e.g. directly under WGEN/, alongside the Product_A/Product_B subdirs).  They
+# are bundled together into a single BASE/_loose_files.zip with arcnames relative
+# to BASE, so acquire unpacks them straight back to their original locations.
+BASE_LOOSE_FILES = [
+    "WGEN/resampled.dates_Product_B_1000yr.csv",
+    "WGEN/resampled.dates_Product_B_1000yr.xlsx",
+    "WGEN/README.md",
+    "WGEN/Product_A/missing grids.txt",
+]
+LOOSE_FILES_KEY = "BASE/_loose_files"  # data_links.json key + Box zip stem
 
 # Per-path depth overrides for GENERATED auto-discovery (relative to GENERATED
 # root, forward slashes).  Paths not listed here use the --depth default (2).
@@ -480,6 +495,105 @@ def sync_section(
 
     return updated, skipped
 
+
+def _write_loose_manifest(manifest_path: Path, rel_set: set, dest_zip: Path) -> None:
+    """Record the bundled loose-file set locally so the next sync can detect
+    additions/removals without reading the (possibly cloud-only) zip."""
+    manifest_path.parent.mkdir(parents=True, exist_ok=True)
+    payload = {"zip_mtime": dest_zip.stat().st_mtime, "files": sorted(rel_set)}
+    tmp = manifest_path.parent / (manifest_path.name + ".tmp")
+    tmp.write_text(json.dumps(payload), encoding="utf-8")
+    tmp.replace(manifest_path)
+
+
+def sync_loose_files(
+    base_root: Path,
+    box_base_root: Path,
+    rel_files: list,
+    *,
+    label: str = "BASE",
+    cache_root: Path | None = None,
+    compresslevel: int = DEFAULT_COMPRESSLEVEL,
+    force: bool = False,
+    dry_run: bool = False,
+) -> tuple[int, int]:
+    """Bundle the individually-listed loose files under ``base_root`` into a
+    single zip (``box_base_root/_loose_files.zip``), arcnames relative to
+    ``base_root`` so acquire unpacks them back to their original locations.
+
+    ``sync_section`` only zips folders; these files live between or above the
+    directory targets and would otherwise never be pushed.  Change detection
+    mirrors ``needs_update``: rebuild when the zip is missing, any bundled file
+    is newer than the zip, or the set of present files differs from the manifest
+    written at the last sync.  The zip itself is never read, so a cloud-mounted
+    destination is never force-downloaded just to diff it.
+    """
+    present = []
+    for rel in rel_files:
+        p = base_root / Path(*rel.split("/"))
+        if p.is_file():
+            present.append((p, rel))
+        else:
+            print(f"  [{label}] WARNING: loose file not found: {rel}")
+    if not present:
+        return 0, 0
+
+    rel_set = {rel for _, rel in present}
+    latest = max(p.stat().st_mtime for p, _ in present)
+    dest_zip = box_base_root / (LOOSE_FILES_KEY.split("/")[-1] + ".zip")
+    manifest_path = (cache_root / "_loose_files.json") if cache_root is not None else None
+
+    def _stale() -> bool:
+        if not dest_zip.exists():
+            return True
+        if latest > dest_zip.stat().st_mtime:
+            return True
+        stored = read_manifest(manifest_path)
+        return stored is not None and rel_set != stored
+
+    if not force and not _stale():
+        print(f"  [up-to-date]   {LOOSE_FILES_KEY}")
+        # Seed a missing manifest so the next sync can detect add/remove.
+        if manifest_path is not None and not dry_run and not manifest_path.exists():
+            try:
+                _write_loose_manifest(manifest_path, rel_set, dest_zip)
+            except OSError:
+                pass
+        return 0, 1
+
+    if dry_run:
+        reason = "new" if not dest_zip.exists() else "changed"
+        print(f"  [would update] {LOOSE_FILES_KEY}  ({reason}, {len(present)} file(s))")
+        return 1, 0
+
+    dest_zip.parent.mkdir(parents=True, exist_ok=True)
+    tmp_fd, tmp_path_str = tempfile.mkstemp(suffix=".zip.tmp")
+    tmp_path = Path(tmp_path_str)
+    os.close(tmp_fd)
+    try:
+        with zipfile.ZipFile(
+            tmp_path, "w", compression=zipfile.ZIP_DEFLATED, compresslevel=compresslevel
+        ) as zf:
+            for p, rel in present:
+                try:
+                    zf.write(str(p), rel)
+                except OSError as e:
+                    print(f"\n    [SKIP] {rel}: {e}", flush=True)
+        shutil.move(str(tmp_path), dest_zip)
+    except Exception:
+        tmp_path.unlink(missing_ok=True)
+        raise
+
+    if manifest_path is not None:
+        try:
+            _write_loose_manifest(manifest_path, rel_set, dest_zip)
+        except OSError as e:
+            print(f"\n    [warn] manifest {manifest_path.name}: {e}", flush=True)
+
+    size_mb = dest_zip.stat().st_size / 1_048_576
+    print(f"  [done]         {LOOSE_FILES_KEY}  ({len(present)} files, {size_mb:.1f} MB)")
+    return 1, 0
+
 # ---------------------------------------------------------------------------
 # Acquire helpers
 # ---------------------------------------------------------------------------
@@ -591,19 +705,29 @@ def acquire(
     dry_run: bool,
     token: str | None = None,
 ) -> bool:
-    target_dir = data_root / Path(*key.split("/"))
+    # Loose-file bundles carry arcnames relative to a logical root (e.g. BASE),
+    # so they unpack into that root rather than a folder named after the key.
+    # They are tiny and extractall overwrites in place, so there is no cheap
+    # populated-check -- just refresh them every run.
+    is_loose = key == LOOSE_FILES_KEY
+    extract_root = (
+        data_root / key.split("/")[0] if is_loose else data_root / Path(*key.split("/"))
+    )
 
-    if not force and is_populated(target_dir):
+    if not is_loose and not force and is_populated(extract_root):
         print(f"  [exists]       {key}")
         return True
 
     if dry_run:
-        status = "re-download" if is_populated(target_dir) else "new"
+        if is_loose:
+            status = "refresh"
+        else:
+            status = "re-download" if is_populated(extract_root) else "new"
         print(f"  [would fetch]  {key}  ({status})")
         return True
 
-    target_dir.mkdir(parents=True, exist_ok=True)
-    tmp = target_dir.parent / f".{target_dir.name}.zip.tmp"
+    extract_root.mkdir(parents=True, exist_ok=True)
+    tmp = extract_root.parent / f".{extract_root.name}.zip.tmp"
 
     try:
         _box_stream(url, tmp, token, key)
@@ -614,9 +738,9 @@ def acquire(
 
         print(f"  [extracting]   {key} ...", end="", flush=True)
         with zipfile.ZipFile(tmp) as zf:
-            zf.extractall(target_dir)
+            n = sum(1 for m in zf.namelist() if not m.endswith("/"))
+            zf.extractall(extract_root)
 
-        n = sum(1 for p in target_dir.rglob("*") if p.is_file())
         size_mb = tmp.stat().st_size / 1_048_576
         print(f"\r  [done]         {key}  ({n} files from {size_mb:.1f} MB zip)")
         return True
@@ -651,6 +775,20 @@ def cmd_sync(args) -> None:
             cache_root=CACHE_ROOT / "BASE",
             compresslevel=args.compresslevel,
             workers=args.workers,
+            force=args.force,
+            dry_run=args.dry_run,
+        )
+        total_updated += u
+        total_skipped += s
+
+        # Loose files under BASE that no directory target covers.
+        u, s = sync_loose_files(
+            get_base_dir(),
+            args.box_dir / "BASE",
+            BASE_LOOSE_FILES,
+            label="BASE",
+            cache_root=CACHE_ROOT / "BASE",
+            compresslevel=args.compresslevel,
             force=args.force,
             dry_run=args.dry_run,
         )
