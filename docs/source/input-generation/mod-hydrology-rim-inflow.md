@@ -215,4 +215,4 @@ _Annual flow (top) and centered 5-year mean annual flow (bottom) at each anchor 
 
 ## References
 
-California Department of Water Resources (DWR). 2023. *Risk-Informed Future Climate Scenario Development for the State Water Project Delivery Capability Report*. Methodology report for the 2023 Delivery Capability Report (DCR 2023) climate change scenarios. <https://deltacouncil.ca.gov/pdf/science-program/2023-08-24-dwr-report-risk-informed-future-climate-scenario-development.pdf>
+California Department of Water Resources (DWR). 2023. *Risk-Informed Future Climate Scenario Development for the State Water Project Delivery Capability Report*. Methodology report for the 2023 Delivery Capability Report (DCR 2023) climate change scenarios. <https://data.cnra.ca.gov/dataset/finaldcr2023/resource/e41f531d-dace-4d37-b52e-35a6ddd2224e>
