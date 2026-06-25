@@ -93,7 +93,7 @@ The validation demonstrated that seasonal patterns were successfully restored an
 
 ### Monthly Validation at Anchor Watersheds
 
-Quantile mapping sharply reduces the raw-VIC errors, most clearly the late-spring underestimation. Several challenges remain in the quantile-mapped flows. In the VIC-QMAP panel of the Average Monthly Error Relative to CalSim 3 figure, each anchor's line sits above zero where the corrected flow overestimates the historical target and below zero where it runs dry. A residual wet-season overestimate remains the most persistent issue at Bend Bridge, Oroville, and Yuba, where VIC-QMAP still overestimates wet-season flows even after quantile mapping corrects distributional characteristics. At Oroville and Yuba this overestimate is concentrated in the April through June snowmelt runoff, sharpest in May, while at Bend Bridge it spans the broader December through May wet season and peaks earlier, around March and April. Folsom shows a modest negative bias after quantile-mapping, concentrated in the winter months, consistent with VIC's drying trend being inherited through the correction (the trend inheritance limitation discussed in [Quantile Mapping](../methods.md#quantile-mapping)). San Joaquin shows a persistent dry bias across the year, largest in late spring around May and June, despite overall improvements. Because the quantile mapping is trained on WY 1922-1971, these residual biases over the WY 1972-2018 validation period can also reflect differences between the training and validation period distributions.
+Quantile mapping sharply reduces the raw VIC errors across the anchor watersheds, most clearly the late spring underestimation seen in the raw VIC panel of the Average Monthly Error Relative to CalSim 3 figure below. Several challenges remain in the quantile-mapped flows. In the VIC-QMAP panel, each anchor's line sits above zero where the corrected flow overestimates the historical target and below zero where it runs dry. A residual wet season overestimate remains the most persistent issue at Bend Bridge, Oroville, and Yuba, where VIC-QMAP still overestimates wet season flows even after quantile mapping corrects distributional characteristics. At Oroville and Yuba this overestimate is concentrated in the April through June snowmelt runoff, sharpest in May, while at Bend Bridge it spans the broader December through May wet season and peaks earlier, around March and April. Folsom shows a modest negative bias after quantile-mapping, concentrated in the winter months, consistent with VIC's drying trend being inherited through the correction (the trend inheritance limitation discussed in [Quantile Mapping](../methods.md#quantile-mapping)). San Joaquin shows a persistent dry bias across the year, largest in late spring around May and June, despite overall improvements. Because the quantile mapping is trained on WY 1922-1971, these residual biases over the WY 1972-2018 validation period can also reflect differences between the training and validation period distributions.
 
 ```{image} figures/s3-inputs_rim-inflow-monthly-error-anchors.png
 :alt: Average Monthly Error at Anchor Watersheds
@@ -101,13 +101,13 @@ Quantile mapping sharply reduces the raw-VIC errors, most clearly the late-sprin
 :align: center
 ```
 
-_Average monthly error relative to CalSim 3 (TAF/month) at the anchor watersheds, WY 1972-2018, for raw VIC (left) and VIC-QMAP (right) flows; positive values indicate the validation results exceeds the historical CalSim 3 inflow._
+_Average monthly error relative to CalSim 3 historical inflows (TAF/month) at the anchor watersheds, WY 1972-2018, for raw VIC (left) and VIC-QMAP (right) flows; positive values indicate the validation results exceeds the historical CalSim 3 inflow._
 
 The panels below show each of the ten anchor watersheds over the validation period
 (WY 1972-2018): average monthly flow for the CalSim 3 historical target (black), raw VIC
-(blue), and quantile-mapped VIC (VIC-QMAP, red), with box plots of annual water-year totals at
+(blue), and quantile-mapped VIC (VIC-QMAP, red), with box plots of annual water year totals at
 right. The Folsom panel illustrates the typical correction, where quantile mapping removes raw
-VIC's overestimated spring peak and restores the missing summer baseflow. The Shasta panel is the opposite case: its mapped flow stays close to raw VIC and well above the historical record through the wet season. Because Shasta dominates the Bend Bridge drainage, this matches the Bend Bridge overestimate noted above.
+VIC's overestimated spring peak and restores the missing summer baseflow. The Shasta panel is the opposite case, its quantile-mapped flow stays close to raw VIC and well above the historical record through the wet season. Because Shasta dominates the Bend Bridge drainage, this matches the Bend Bridge overestimate noted above.
 
 ::::{tab-set}
 :::{tab-item} Bend Bridge
@@ -142,7 +142,7 @@ VIC's overestimated spring peak and restores the missing summer baseflow. The Sh
 :::
 ::::
 
-_Average monthly flow and annual water-year totals at each anchor watershed, WY 1972-2018._
+_Average monthly flow and annual water year totals at each anchor watershed, WY 1972-2018._
 
 ### Annual Validation at Anchor Watersheds
 
@@ -160,7 +160,7 @@ _Average annual error relative to CalSim 3 (TAF/year) at the anchor watersheds, 
 
 The percentage error metric showed that 50% of locations fell within the -15% to +18% range. Extreme percentage errors (up to 79,000% at one location) occur exclusively at near-zero baseline values where even modest absolute differences produce outsized percentages. These extreme percentages do not indicate meaningful reconstruction failure; the underlying absolute errors remain small.
 
-The panels below show the annual (water-year total) flow and its 5-year mean at each of the ten
+The panels below show the annual (water year total) flow and its 5-year mean at each of the ten
 anchor watersheds, comparing the CalSim 3 historical target (black), raw VIC (blue), and
 quantile-mapped VIC (VIC-QMAP, red) flows. Quantile mapping is trained on WY 1922-1971 and
 applied over the shaded validation period (WY 1972-2018), so the VIC-QMAP trace begins in
