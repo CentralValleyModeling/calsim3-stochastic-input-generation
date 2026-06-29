@@ -157,15 +157,11 @@ that monthly quantile mapping does not directly constrain annual totals.
 
 _Average annual error relative to CalSim 3 (TAF/year) at the anchor watersheds, WY 1972-2018, for raw VIC (blue) and VIC-QMAP (red) flows._
 
-Across all rim inflow locations, not just the anchors above, the annual percentage error metric showed that 50% of locations fell within the -15% to +18% range.
+Generally across all rim inflow locations, annual percent bias was generally modest: the middle half of locations fell between -15% and +18%.
 
 The panels below show the annual (water year total) flow and its 5-year mean at each of the ten
 anchor watersheds, comparing the CalSim 3 historical target (black), raw VIC (blue), and
-quantile-mapped VIC (VIC-QMAP, red) flows. Because quantile mapping is applied only over the
-shaded validation period (WY 1972-2018), the VIC-QMAP trace begins in WY 1972. The annual
-series shows how well year-to-year variability and extremes are reproduced,
-while the 5-year mean (labeled by middle water year) shows the persistence of multi-year wet and
-dry periods such as the 1976-77 and 1987-92 droughts.
+quantile-mapped VIC (VIC-QMAP, red) flows. The annual series shows year to year variability and individual wet or dry extremes, including short events such as the 1976–77 drought. The centered 5 year mean, labeled by middle water year, smooths individual years to highlight sustained multi year wet and dry periods, such as the 1987–92 drought.
 
 ::::{tab-set}
 :::{tab-item} Bend Bridge
