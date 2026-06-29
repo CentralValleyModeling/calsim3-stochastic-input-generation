@@ -20,7 +20,7 @@ The methodology has four parts: correlation analysis, model selection, applying 
 
 ### Correlation Analysis
 
-The methodology development began with a systematic correlation analysis, matching each of the 227 CalSim rim inflow variables against modeled streamflow locations from both SAC-SMA and VIC hydrologic models to identify the strongest statistical predictors. Every one of the 227 variables had a corresponding VIC simulated streamflow series, and the correlations were strong, with most variables exceeding an R² of 0.6 and more than half exceeding 0.7.
+The methodology development began with a systematic correlation analysis, matching each of the 227 CalSim rim inflow variables against modeled streamflow locations from both SAC-SMA and VIC hydrologic models to identify the strongest statistical predictors. Every one of the 227 variables had a corresponding VIC simulated streamflow series, and the correlations were strong, with most variables exceeding an $R^2$ of 0.6 and more than half exceeding 0.7.
 
 ### Model Selection
 
