@@ -145,9 +145,9 @@ _Average monthly flow and annual water year totals at each anchor watershed, WY 
 
 ### Annual Validation at Anchor Watersheds
 
-Annual errors shrink markedly at some anchors (e.g., Oroville) but grow or change sign at
-others (e.g., Bend Bridge, Folsom, Trinity), reflecting that monthly quantile mapping does not
-directly constrain annual totals.
+Relative to raw VIC, the quantile-mapped annual error shrinks markedly at some anchors (e.g.,
+Oroville) but grows or changes sign at others (e.g., Bend Bridge, Folsom, Trinity), reflecting
+that monthly quantile mapping does not directly constrain annual totals.
 
 ```{image} figures/s3-inputs_rim-inflow-annual-error-anchors.png
 :alt: Average Annual Error at Anchor Watersheds
@@ -157,13 +157,13 @@ directly constrain annual totals.
 
 _Average annual error relative to CalSim 3 (TAF/year) at the anchor watersheds, WY 1972-2018, for raw VIC (blue) and VIC-QMAP (red) flows._
 
-The percentage error metric showed that 50% of locations fell within the -15% to +18% range. Extreme percentage errors (up to 79,000% at one location) occur exclusively at near-zero baseline values where even modest absolute differences produce outsized percentages. These extreme percentages do not indicate meaningful reconstruction failure; the underlying absolute errors remain small.
+Across all rim inflow locations, not just the anchors above, the annual percentage error metric showed that 50% of locations fell within the -15% to +18% range.
 
 The panels below show the annual (water year total) flow and its 5-year mean at each of the ten
 anchor watersheds, comparing the CalSim 3 historical target (black), raw VIC (blue), and
-quantile-mapped VIC (VIC-QMAP, red) flows. Quantile mapping is trained on WY 1922-1971 and
-applied over the shaded validation period (WY 1972-2018), so the VIC-QMAP trace begins in
-WY 1972. The annual series shows how well year-to-year variability and extremes are reproduced,
+quantile-mapped VIC (VIC-QMAP, red) flows. Because quantile mapping is applied only over the
+shaded validation period (WY 1972-2018), the VIC-QMAP trace begins in WY 1972. The annual
+series shows how well year-to-year variability and extremes are reproduced,
 while the 5-year mean (labeled by middle water year) shows the persistence of multi-year wet and
 dry periods such as the 1976-77 and 1987-92 droughts.
 
