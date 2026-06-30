@@ -31,11 +31,47 @@ The WRESL code documents the donor year convention but not the exact flow index 
 - Four river Sacramento index (Folsom, Oroville, Sacramento River at Bend Bridge, Yuba): 7 of 27.
 - Eight river index (the four Sacramento rivers plus Stanislaus, Tuolumne, Merced, and San Joaquin): 16 of 27.
 - Eight river index plus selected local inflows: up to 17 of 27.
-- Eight river index plus a bootstrapped best subset of extra inflows: 25 of 27 at best, leaving two unmatched. **This study adopts this index** (defined below).
+- Eight river index plus a bootstrapped best subset of extra inflows: 20 of 27 at best, leaving seven unmatched. **This study adopts this index** (defined below).
 
-Freeport lies upstream of the San Joaquin confluence, so a Sacramento index alone might be expected to suffice; yet adding the San Joaquin rivers more than doubled the matches (7 to 16). That adopted index is a water year (Oct-Sep) sum of the eight unimpaired rivers plus six extra inflows (`I_LJC022`, `I_CLV026`, `I_SFM005`, `I_MOK079`, `I_CMCHE`, `I_PTH070`), listed in `reference_inflows.csv`.
+Freeport lies upstream of the San Joaquin confluence, so a Sacramento index alone might be expected to suffice; yet adding the San Joaquin rivers more than doubled the matches (7 to 16). That adopted index is a water year (Oct-Sep) sum of the eight unimpaired rivers (Eight river index) plus six extra inflows (`I_LJC022`, `I_CLV026`, `I_SFM005`, `I_MOK079`, `I_CMCHE`, `I_PTH070`), listed in `reference_inflows.csv`. The seven unmatched years are taken up in the Results.
 
-**A weak hydrologic signal.** The figure below is a diagnostic check on the day volume fractions, shown for February as an example. It tests whether the shape of the daily pattern depends on unimpaired flow, measured either by water year type or by the same month 8-river inflow. On the left, the average February fraction is grouped by water year type over 1955-2021. The curves overlap a lot, so there is no strong or consistent water year type signal in how the February volume falls across the days. On the right, each line is one historical water year, colored by that year's February 8-river inflow. If same  month inflow strongly controlled the daily pattern, low inflow and high inflow years would cluster into distinct shapes or peak timing. That does not happen: wet and dry Februarys can produce very similar daily patterns, and peak timing is highly scattered. So monthly unimpaired inflow does not carry a strong signal for how the volume is spread across the days. This is expected, because the daily fractions describe impaired, operated flow at Freeport, while the unimpaired inflow is used only to pick a donor year, not to set the daily shape. The pattern looks noisy and operations driven. This study still follows the existing convention for filling periods without observed daily data; the figure simply acknowledges that the hydrologic signal behind the within-month pattern is weak.
+### Stochastic Application
+
+For stochastic Product B generation, the expanded observation pool from 1955-2021 provides bootstrap candidates. Each synthetic water year gets matched to the historical year with the closest value of the adopted index, then borrows that year's day volume fraction pattern. 
+
+
+
+```{mermaid}
+flowchart TD
+    SYN["Synthetic Water Year<br/>(Product B)"] --> CALC_IDX["Calculate Adopted Flow Index"]
+    CALC_IDX --> MATCH["Find Nearest Historical Year<br/>by Adopted Flow Index"]
+
+    subgraph POOL["Historical Observation Pool (1955-2021)"]
+        direction LR
+        Y55["1955"] ~~~ Y70["1970"] ~~~ Y90["1990"] ~~~ Y21["2021"]
+    end
+
+    MATCH --> POOL
+    POOL --> BEST["Best Match Historical Year"]
+    BEST --> BORROW["Borrow Day Volume<br/>Fraction Pattern<br/>(28-31 days per month)"]
+    BORROW --> OUTPUT["Synthetic DVF<br/>(fractions sum to 1.0<br/>per month)"]
+
+    style SYN fill:#264653,color:#fff
+    style OUTPUT fill:#2d6a4f,color:#fff
+    style POOL fill:#f0f4f8,stroke:#264653
+```
+
+_Day volume fraction bootstrap methodology. Each synthetic year is matched to the historical year with the nearest adopted flow index, then borrows that year's within-month disaggregation pattern._
+
+## Results
+
+### Reconstruction validation
+
+The 27 donor years for 1921 to 1948 were identified by exact pattern matches. The adopted index, which extends the standard eight river index with six local inflows, reproduces 20 of those 27 donors. 
+
+### Hydrologic signal in the daily pattern
+
+The figure below is a diagnostic check on the day volume fractions, shown for February as an example. It tests whether the shape of the daily pattern depends on unimpaired flow, measured either by water year type or by the same month 8-river inflow. On the left, the average February fraction is grouped by water year type over 1955-2021. The curves overlap a lot, so there is no strong or consistent water year type signal in how the February volume falls across the days. On the right, each line is one historical water year, colored by that year's February 8-river inflow. If same month inflow strongly controlled the daily pattern, low inflow and high inflow years would cluster into distinct shapes or peak timing. That does not happen: wet and dry Februarys can produce very similar daily patterns, and peak timing is highly scattered. So monthly unimpaired inflow does not carry a strong signal for how the volume is spread across the days. This is expected, because the daily fractions describe impaired, operated flow at Freeport, while the unimpaired inflow is used only to pick a donor year, not to set the daily shape. The pattern looks noisy and operations driven. This study still follows the existing convention for filling periods without observed daily data; the figure simply acknowledges that the hydrologic signal behind the within-month pattern is weak.
 
 ![February day volume fractions by water year type and by February 8-river inflow](figures/s3-inputs_dvf-february-patterns.png)
 
@@ -69,42 +105,6 @@ The same weak signal holds in every month: the average curves overlap by water y
 
 ![December day volume fractions](figures/dvf-monthly/12_dec.png)
 :::
-
-### Stochastic Application
-
-For stochastic Product B generation, the expanded observation pool from 1955-2021 provides bootstrap candidates. Each synthetic water year gets matched to the historical year with the closest value of the adopted index, then borrows that year's day volume fraction pattern. 
-
-
-
-```{mermaid}
-flowchart TD
-    SYN["Synthetic Water Year<br/>(Product B)"] --> CALC_IDX["Calculate Flow Index<br/>(8-river annual sum)"]
-    CALC_IDX --> MATCH["Find Nearest Historical Year<br/>by Flow Index Distance"]
-
-    subgraph POOL["Historical Observation Pool (1955-2021)"]
-        direction LR
-        Y55["1955"] ~~~ Y70["1970"] ~~~ Y90["1990"] ~~~ Y21["2021"]
-    end
-
-    MATCH --> POOL
-    POOL --> BEST["Best Match Historical Year"]
-    BEST --> BORROW["Borrow Day Volume<br/>Fraction Pattern<br/>(Days 1-30 per month)"]
-    BORROW --> OUTPUT["Synthetic DVF<br/>(fractions sum to 1.0<br/>per month)"]
-
-    style SYN fill:#264653,color:#fff
-    style OUTPUT fill:#2d6a4f,color:#fff
-    style POOL fill:#f0f4f8,stroke:#264653
-```
-
-_Day volume fraction bootstrap methodology. Each synthetic year is matched to the historical year with the nearest flow index, then borrows that year's within-month disaggregation pattern._
-
-## Results
-
-### Validation
-
-Primary validation metric focuses on exact water year matches where possible, since perfect replication of assigned year indicates correct methodology application. For years without exact matches, secondary metrics include R^2 or Nash-Sutcliffe Efficiency of monthly volume fractions, assessing how well the borrowed pattern reproduces the target distribution.
-
-The 1921-1948 validation period provides critical ground truth since exact matching demonstrates methodology success. Achieving perfect matches for majority of years in this period confirms the bootstrap approach works as documented. Remaining scatter for some years suggests potential refinements (calendar year aggregation, eight river index, alternative Sacramento components) that warrant investigation.
 
 
 
