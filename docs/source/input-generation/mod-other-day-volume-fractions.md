@@ -22,7 +22,7 @@ The series provides up to 31 daily bins (Day 1 through Day 31) whose fractions s
 
 The WRESL code documents the donor year convention but not the exact flow index used to choose donor years. Reconstruction proceeded in two parts: recover the donor years CalSim actually assigned, then find the index that reproduces those donor year pairings.
 
-**Step 1: Recover the assigned donor years.** Each pre-1955 year's daily pattern was compared against every 1955-2003 year, using root mean squared error (RMSE). When the RMSE is near zero, the two patterns are the same, which reveals the donor year CalSim borrowed from. The day volume fractions for water year 1922, for example, were borrowed from 1975. Exact donors were found for every year from 1921 to 1948 (27 years in total). Years 1949 to 1954 had no exact match in the pool, suggesting these years may have been built by a different method or from different source records.
+**Step 1: Recover the assigned donor years.** Each pre-1955 year's daily pattern was compared against every 1955-2003 year, using root mean squared error (RMSE). When the RMSE is near zero, the two patterns are the same, which reveals the donor year CalSim borrowed from. The day volume fractions for water year 1922, for example, were borrowed from 1975. Exact donors were found for every year from 1922 to 1948 (27 years in total). Years 1949 to 1954 had no exact match in the pool, suggesting these years may have been built by a different method or from different source records.
 
 **Step 2: Characterize 2003-2021 Extension.** Comparing 1955-2003 patterns against 2004-2021 found no exact matches, confirming that the post-2003 years are an observation based continuation rather than borrowed. All of 1955-2021 can therefore serve as donor candidates, expanding the pool beyond the documented 1955-2003 window for generating the synthetic (Product B) sequences
 
@@ -33,7 +33,7 @@ The WRESL code documents the donor year convention but not the exact flow index 
 - Eight river index plus selected local inflows: up to 17 of 27.
 - Eight river index plus a bootstrapped best subset of extra inflows: 20 of 27 at best, leaving seven unmatched. **This study adopts this index** (defined below).
 
-Freeport lies upstream of the San Joaquin confluence, so a Sacramento index alone might be expected to suffice; yet adding the San Joaquin rivers more than doubled the matches (7 to 16). That adopted index is a water year (Oct-Sep) sum of the eight unimpaired rivers (Eight river index) plus six extra inflows (`I_LJC022`, `I_CLV026`, `I_SFM005`, `I_MOK079`, `I_CMCHE`, `I_PTH070`), listed in `reference_inflows.csv`. The seven unmatched years are taken up in the Results.
+Freeport lies upstream of the San Joaquin confluence, so a Sacramento index alone might be expected to suffice; yet adding the San Joaquin rivers more than doubled the matches (7 to 16). That adopted index is a water year (Oct-Sep) sum of the eight unimpaired rivers (Eight river index) plus six extra inflows (`I_LJC022`, `I_CLV026`, `I_SFM005`, `I_MOK079`, `I_CMCHE`, `I_PTH070`), listed in `mod_other/day_volume_fractions/reference/reference_inflows.csv`. These six were selected by bootstrapping candidate local inflows, with the eight rivers held fixed, to find the subset that reproduces the most known donor years. 
 
 ### Stochastic Application
 
@@ -67,7 +67,7 @@ _Day volume fraction bootstrap methodology. Each synthetic year is matched to th
 
 ### Reconstruction validation
 
-The 27 donor years for 1921 to 1948 were identified by exact pattern matches. The adopted index, which extends the standard eight river index with six local inflows, reproduces 20 of those 27 donors. 
+The 27 donor years for 1922 to 1948 were identified by exact pattern matches. The adopted index, which extends the standard eight river index with six local inflows, reproduces 20 of those 27 donors. 
 
 ### Hydrologic signal in the daily pattern
 
@@ -105,8 +105,6 @@ The same weak signal holds in every month: the average curves overlap by water y
 
 ![December day volume fractions](figures/dvf-monthly/12_dec.png)
 :::
-
-
 
 
 
