@@ -22,7 +22,7 @@ The series provides up to 31 daily bins (Day 1 through Day 31) whose fractions s
 
 The WRESL code documents the donor year convention but not the exact flow index used to choose donor years. Reconstruction proceeded in two parts: recover the donor years CalSim actually assigned, then find the index that reproduces those donor year pairings.
 
-**Step 1: Recover the assigned donor years.** Each pre-1955 year's daily pattern was compared against every 1955-2003 year, using root mean squared error (RMSE). When the RMSE is near zero, the two patterns are the same, which reveals the donor year CalSim borrowed from. The day volume fractions for water year 1922, for example, were borrowed from 1975. Exact donors were found for every year from 1922 to 1948 (27 years in total). Years 1949 to 1954 had no exact match in the pool, suggesting these years may have been built by a different method or from different source records.
+**Step 1: Recover the assigned donor years.** Each pre-1955 year's daily pattern was compared against every 1955-2003 year, using root mean squared error (RMSE). When the RMSE is in the millionths, the two patterns are the same, which reveals the donor year CalSim borrowed from. The day volume fractions for water year 1922, for example, were borrowed from 1975. Exact donors were found for every year from 1922 to 1948 (27 years in total). Years 1949 to 1954 had no exact match in the pool, suggesting these years may have been built by a different method or from different source records.
 
 **Step 2: Characterize 2003-2021 Extension.** Comparing 1955-2003 patterns against 2004-2021 found no exact matches, confirming that the post-2003 years are an observation based continuation rather than borrowed. All of 1955-2021 can therefore serve as donor candidates, expanding the pool beyond the documented 1955-2003 window for generating the synthetic (Product B) sequences
 
@@ -33,7 +33,7 @@ The WRESL code documents the donor year convention but not the exact flow index 
 - Eight river index plus selected local inflows: up to 17 of 27.
 - Eight river index plus a bootstrapped best subset of extra inflows: 20 of 27 at best, leaving seven unmatched. **This study adopts this index** (defined below).
 
-Freeport lies upstream of the San Joaquin confluence, so a Sacramento index alone might be expected to suffice; yet adding the San Joaquin rivers more than doubled the matches (7 to 16). That adopted index is a water year (Oct-Sep) sum of the eight unimpaired rivers (Eight river index) plus six extra inflows (`I_LJC022`, `I_CLV026`, `I_SFM005`, `I_MOK079`, `I_CMCHE`, `I_PTH070`), listed in `mod_other/day_volume_fractions/reference/reference_inflows.csv`. These six were selected by bootstrapping candidate local inflows, with the eight rivers held fixed, to find the subset that reproduces the most known donor years. 
+Freeport lies upstream of the San Joaquin confluence, so a Sacramento index alone might be expected to suffice; yet adding the San Joaquin rivers more than doubled the matches (7 to 16). That adopted index is a water year (Oct-Sep) sum of the eight unimpaired rivers (Eight river index) plus six extra inflows (`I_LJC022`, `I_CLV026`, `I_SFM005`, `I_MOK079`, `I_CMCHE`, `I_PTH070`). These six were selected by bootstrapping candidate local inflows, with the eight rivers held fixed, to find the subset that reproduces the most known donor years. 
 
 ### Stochastic Application
 
@@ -61,25 +61,24 @@ flowchart TD
     style POOL fill:#f0f4f8,stroke:#264653
 ```
 
-_Day volume fraction bootstrap methodology. Each synthetic year is matched to the historical year with the nearest adopted flow index, then borrows that year's within-month disaggregation pattern._
+_Day volume fraction bootstrap methodology. Each synthetic year is matched to the historical year with the nearest adopted flow index, then borrows that year's daily disaggregation pattern._
 
 ## Results
 
 ### Reconstruction validation
-
-The 27 donor years for 1922 to 1948 were identified by exact pattern matches. The adopted index, which extends the standard eight river index with six local inflows, reproduces 20 of those 27 donors. 
+The first reverse engineering step recovered the historical donor assignments by comparing each WY 1922-1954 `VOL-FRACTION` pattern against the 1955-2003 candidate pool. Exact matches were found for 1922 to 1948 (27 years), confirming that the pre-1949 reconstructed day volume fraction records are copies of existing 1955-2003 donor year values. The second step then searches candidate flow indices for the one that best reproduces those donor choices, approximating the total unimpaired Delta inflow criterion. The adopted index, which extends the standard eight river index with six local inflows, reproduces 20 of those 27 donors, and this study adopts that index.
 
 ### Hydrologic signal in the daily pattern
 
-The figure below is a diagnostic check on the day volume fractions, shown for February as an example. It tests whether the shape of the daily pattern depends on unimpaired flow, measured either by water year type or by the same month 8-river inflow. On the left, the average February fraction is grouped by water year type over 1955-2021. The curves overlap a lot, so there is no strong or consistent water year type signal in how the February volume falls across the days. On the right, each line is one historical water year, colored by that year's February 8-river inflow. If same month inflow strongly controlled the daily pattern, low inflow and high inflow years would cluster into distinct shapes or peak timing. That does not happen: wet and dry Februarys can produce very similar daily patterns, and peak timing is highly scattered. So monthly unimpaired inflow does not carry a strong signal for how the volume is spread across the days. This is expected, because the daily fractions describe impaired, operated flow at Freeport, while the unimpaired inflow is used only to pick a donor year, not to set the daily shape. The pattern looks noisy and operations driven. This study still follows the existing convention for filling periods without observed daily data; the figure simply acknowledges that the hydrologic signal behind the within-month pattern is weak.
+The figure below is a diagnostic check on the day volume fractions, shown for February as an example. It tests whether the shape of the daily pattern depends on unimpaired flow, measured either by water year type or by eight river inflow. On the left, the average February fraction is grouped by water year type over 1955-2021. The curves overlap a lot, so there is no strong or consistent water year type signal in how the February volume falls across the days. On the right, each line is one historical water year, colored by that year's February eight river inflow. If same month inflow strongly controlled the daily pattern, low inflow and high inflow years would cluster into distinct shapes or peak timing. That does not happen: wet and dry Februarys can produce very similar daily patterns, and peak timing is highly scattered. So monthly unimpaired inflow does not carry a strong signal for how the volume is spread across the days. This is expected, because the daily fractions describe impaired, operated flow at Freeport, while the eight river index, computed from unimpaired flow. The pattern looks noisy and operations driven. This study still follows the existing convention for generating Product B volume fractions; however, the figure acknowledges that the hydrologic signal behind the within-month pattern is weak.
 
-![February day volume fractions by water year type and by February 8-river inflow](figures/s3-inputs_dvf-february-patterns.png)
+![February day volume fractions by water year type and by February eight river inflow](figures/s3-inputs_dvf-february-patterns.png)
 
-_February day volume fractions, water years 1955-2021. Left: average pattern by water year type. Right: individual water years colored by February 8-river inflow._
+_February day volume fractions, water years 1955-2021. Left: average pattern by water year type. Right: individual water years colored by February eight river inflow._
 
-:::{dropdown} All months, water years 1955-2021 (left: average Day Volume Fraction by water year type; right: individual years colored by that month's 8-river inflow)
+:::{dropdown} All months, water years 1955-2021 (left: average Day Volume Fraction by water year type; right: individual years colored by that month's eight river inflow)
 
-The same weak signal holds in every month: the average curves overlap by water year type, and individual years do not separate by same month 8-river inflow.
+The same weak signal holds in every month: the average curves overlap by water year type, and individual years do not separate by same month eight river inflow.
 
 ![January day volume fractions](figures/dvf-monthly/01_jan.png)
 
