@@ -8,15 +8,15 @@ Monthly-to-daily disaggregation fractions
 ```
 
 
-Daily disaggregation factors converting monthly CalSim values to daily timesteps for within-month operational analysis.
+Daily disaggregation factors that convert CalSim monthly volumes into daily flow patterns while preserving each monthly volume.
 
 ## Methodology
 
-Day volume fractions provide the temporal disaggregation necessary to represent within-month flow variations in a model that operates on monthly timesteps. CalSim calculates monthly water balances and operations, but many regulatory requirements, hydropower scheduling decisions, and water quality considerations require sub-monthly resolution. The day volume fractions act as shape factors that distribute monthly totals across 30 daily bins while preserving monthly sums.
+Day volume fractions provide the temporal disaggregation necessary to represent within-month flow variations in a model that operates on monthly timesteps. CalSim calculates monthly water balances and operations, but many regulatory requirements, hydropower scheduling decisions, and water quality considerations require sub-monthly resolution. The day volume fractions act as shape factors that distribute monthly totals across 28-31 daily bins while preserving monthly sums.
 
-The original methodology documented in project files establishes three distinct periods: 1921-1954 employs bootstrapping from 1955-2003 observations based on hydrologic similarity, 1955-2003 uses observation-based patterns from Freeport flows, and 2003-2021 extends the series using matching approaches. This structure reflects data availability, where pre-1955 daily records required reconstruction while post-1955 benefited from gauge observations.
+The day-volume-fraction methodology follows the donor-year convention documented in the DCR2023 CalSim 3 WRESL implementation. Comments in that code describe two rules: daily flows follow patterns defined as volume fraction time series from 1955-2003 historical Sacramento River flows at Freeport, and each water year from 1921 to 1954 borrows the pattern of a 1955-2003 year with similar total unimpaired Delta Inflow volume. The record extends through 2021, with the post-2003 years carried forward as observation-based patterns. This structure reflects data availability, where pre-1955 daily records required reconstruction while 1955 onward benefited from gauge observations.
 
-Day 1 through Day 30 values represent fractions summing to 1.0 for each month, not a single monthly value repeated 30 times. The disaggregation applies after CalSim monthly operations determine total monthly volumes, with day fractions distributing that total across daily timesteps for sub-monthly analysis. This maintains consistency between monthly water balance calculations and daily operational simulations.
+The series provides up to 31 daily bins (Day 1 through Day 31) whose fractions sum to 1.0 across each month's actual days. The disaggregation applies after CalSim monthly operations determine total monthly volumes, with day fractions distributing that total across daily timesteps for sub-monthly analysis. This maintains consistency between monthly water balance calculations and daily operational simulations.
 
 ### Reverse Engineering the Bootstrapping
 
