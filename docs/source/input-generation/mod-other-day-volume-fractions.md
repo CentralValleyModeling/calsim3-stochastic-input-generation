@@ -22,7 +22,7 @@ The series provides up to 31 daily bins (Day 1 through Day 31) whose fractions s
 
 The WRESL code documents the donor year convention but not the exact flow index used to choose donor years. Reconstruction proceeded in two parts: recover the donor years CalSim actually assigned, then find the index that reproduces those donor year pairings.
 
-**Step 1: Recover the assigned donor years.** Each pre-1955 year's daily pattern was compared against every 1955-2003 year, using root mean squared error (RMSE). When the RMSE is in the millionths, the two patterns are the same, which reveals the donor year CalSim borrowed from. The day volume fractions for water year 1922, for example, were borrowed from 1975. Exact donors were found for every year from 1922 to 1948 (27 years in total). Years 1949 to 1954 had no exact match in the pool, suggesting these years may have been built by a different method or from different source records.
+**Step 1: Recover the assigned donor years.** Each pre-1955 year's daily pattern was compared against every 1955-2003 year, using root mean squared error (RMSE). When the RMSE is in the millionths, the two patterns are the same, which reveals the donor year CalSim borrowed from. The day volume fractions for water year 1922, for example, were borrowed from 1975. Exact donors were found for every year from water year 1922 to 1948 (27 years in total). Years 1949 to 1954 had no exact match in the pool, suggesting these years may have been built by a different method or from different source records.
 
 **Step 2: Characterize 2003-2021 Extension.** Comparing 1955-2003 patterns against 2004-2021 found no exact matches, confirming that the post-2003 years are an observation based continuation rather than borrowed. All of 1955-2021 can therefore serve as donor candidates, expanding the pool beyond the documented 1955-2003 window for generating the synthetic (Product B) sequences
 
@@ -69,7 +69,7 @@ The results first confirm that the reconstruction reproduces the historical dono
 
 ### Reconstruction validation
 
-The first reverse engineering step recovered the historical donor assignments by comparing each WY 1922-1954 `VOL-FRACTION` pattern against the 1955-2003 candidate pool. Exact matches were found for 1922 to 1948 (27 years), confirming that the pre-1949 reconstructed day volume fraction records are copies of existing 1955-2003 donor year values. The second step then searches candidate flow indices for the one that best reproduces those donor choices, approximating the total unimpaired Delta inflow criterion. The adopted index, which extends the standard eight river index with six local inflows, reproduces 20 of those 27 donors, and this study adopts that index.
+The first reverse engineering step recovered the historical donor assignments by comparing each water year 1922-1954 `VOL-FRACTION` pattern against the 1955-2003 candidate pool. Exact matches were found for water year 1922 to 1948 (27 years), confirming that the pre-1949 reconstructed day volume fraction records are copies of existing 1955-2003 donor year values. The second step then searches candidate flow indices for the one that best reproduces those donor choices, approximating the total unimpaired Delta inflow criterion. The adopted index, which extends the standard eight river index with six local inflows, reproduces 20 of those 27 donors, and this study adopts that index.
 
 ### Hydrologic signal in the daily pattern
 
