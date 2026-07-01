@@ -65,7 +65,7 @@ _Day volume fraction bootstrap methodology. Each synthetic year is matched to th
 
 ## Results
 
-The results first validate the reconstruction against the known donor assignments, then examine how strongly hydrology relates to the day volume fractions.
+The results first confirm that the reconstruction reproduces the historical donor assignments, then examine how strongly hydrology relates to the day volume fractions.
 
 ### Reconstruction validation
 
@@ -81,7 +81,7 @@ _February day volume fractions, water years 1955-2021. Left: average pattern by 
 
 :::{dropdown} All months, water years 1955-2021 (left: average Day Volume Fraction by water year type; right: individual years colored by that month's eight river inflow)
 
-The same weak signal holds in every month: the average curves overlap by water year type, and individual years do not separate by same month eight river inflow.
+The same weak signal holds in every month: the average curves overlap across water year types, and individual years do not separate by that month's eight river inflow.
 
 ![January day volume fractions](figures/dvf-monthly/01_jan.png)
 
