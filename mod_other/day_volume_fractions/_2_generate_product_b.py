@@ -124,8 +124,7 @@ def build_vf_by_wy(df_vf: pd.DataFrame, min_wy: int = DONOR_WY_MIN) -> dict:
 
     Only water years >= ``min_wy`` with a complete 12-month record are kept.
     Pre-1955 years are excluded because their patterns are themselves borrowed
-    from the 1955-2003 pool, so reusing them as donors would propagate a
-    second-hand pattern rather than an original observed one.
+    from the 1955-2003 pool.
     """
     df = df_vf.copy()
     df.index = pd.to_datetime(df.index)
