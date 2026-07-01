@@ -65,7 +65,10 @@ _Day volume fraction bootstrap methodology. Each synthetic year is matched to th
 
 ## Results
 
+The results first validate the reconstruction against the known donor assignments, then examine how strongly hydrology relates to the day volume fractions.
+
 ### Reconstruction validation
+
 The first reverse engineering step recovered the historical donor assignments by comparing each WY 1922-1954 `VOL-FRACTION` pattern against the 1955-2003 candidate pool. Exact matches were found for 1922 to 1948 (27 years), confirming that the pre-1949 reconstructed day volume fraction records are copies of existing 1955-2003 donor year values. The second step then searches candidate flow indices for the one that best reproduces those donor choices, approximating the total unimpaired Delta inflow criterion. The adopted index, which extends the standard eight river index with six local inflows, reproduces 20 of those 27 donors, and this study adopts that index.
 
 ### Hydrologic signal in the daily pattern
