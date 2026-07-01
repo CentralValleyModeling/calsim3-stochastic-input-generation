@@ -64,6 +64,12 @@ PRODUCT_B_FINAL = _GEN_DIR / "output" /"_product_b_final"
 N_CHUNKS = 10
 MAX_WORKERS = max(1, (os.cpu_count() or 4) - 1)
 
+# Earliest water year allowed in the donor pool. Patterns before 1955 are
+# themselves borrowed (a 1921-1954 year copies a 1955-2003 year), so they must
+# not serve as donor candidates; only the observation-based 1955-2021 record is
+# eligible.
+DONOR_WY_MIN = 1955
+
 
 # Helper: read a single DSS monthly time series (multi-block merge)
 def _read_dss_series(dss, plist):
@@ -113,8 +119,13 @@ def extract_vol_fractions(dss_path: Path) -> pd.DataFrame:
 
 
 # Build historical vol-fraction lookup keyed by WY
-def build_vf_by_wy(df_vf: pd.DataFrame) -> dict:
-    """Return {wy: DataFrame of 12 monthly rows} for all available WYs."""
+def build_vf_by_wy(df_vf: pd.DataFrame, min_wy: int = DONOR_WY_MIN) -> dict:
+    """Return {wy: DataFrame of 12 monthly rows} for eligible donor WYs.
+
+    Only water years >= ``min_wy`` with a complete 12-month record are kept.
+    Pre-1955 years are excluded because their patterns are themselves borrowed
+    from the 1955-2003 pool.
+    """
     df = df_vf.copy()
     df.index = pd.to_datetime(df.index)
     df["WY"] = df.index.year + (df.index.month >= 10).astype(int)
@@ -122,7 +133,7 @@ def build_vf_by_wy(df_vf: pd.DataFrame) -> dict:
 
     lookup = {}
     for wy, grp in df.groupby("WY"):
-        if len(grp) == 12:
+        if wy >= min_wy and len(grp) == 12:
             lookup[wy] = grp.sort_values("Month").drop(columns="WY").reset_index(drop=True)
     return lookup
 
