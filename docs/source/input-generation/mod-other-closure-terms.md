@@ -59,15 +59,15 @@ flowchart TD
     PCT --> H2["Historical May 1957<br/>(6 of 31 days, 19%)"]
     PCT --> H3["Historical June 1952<br/>(4 of 31 days, 13%)"]
 
-    H1 --> CT1["Bend Bridge CT<br/>May 1972: 5.44 TAF"]
-    H2 --> CT2["Bend Bridge CT<br/>May 1957: -2.57 TAF"]
-    H3 --> CT3["Bend Bridge CT<br/>June 1952: 18.55 TAF"]
+    H1 --> CT1["Closure Term Value<br/>May 1972: 5.44 TAF"]
+    H2 --> CT2["Closure Term Value<br/>May 1957: -2.57 TAF"]
+    H3 --> CT3["Closure Term Value<br/>June 1952: 18.55 TAF"]
 
-    CT1 --> WAVG["Weighted Average<br/>(21/31)(5.44)<br/>+ (6/31)(-2.57)<br/>+ (4/31)(18.55)<br/>= 5.58 TAF"]
+    CT1 --> WAVG["Weighted Average<br/>0.68(5.44)<br/>+ 0.19(-2.57)<br/>+ 0.13(18.55)<br/>= 5.58 TAF"]
     CT2 --> WAVG
     CT3 --> WAVG
 
-    WAVG --> OUTPUT["Synthetic Bend Bridge CT<br/>for May, Year 2036"]
+    WAVG --> OUTPUT["Synthetic Closure Term<br/>for May, Year 2036"]
 
     style WGEN_MONTH fill:#264653,color:#fff
     style OUTPUT fill:#2d6a4f,color:#fff
