@@ -10,11 +10,11 @@ Water balance closure adjustments
 
 Closure terms are monthly stream-inflow adjustments derived from historical reach water balances. They reconcile calculated water-balance components with observed flows at control gauges and are used in CalSim 3 primarily to correct errors in exogenous rim inflows and valley-floor surface runoff (DCR 2023 CalSim 3 Hydrology Report). Because they are calculated directly from historical flow-balance data rather than from a governing physical model, this project can only transfer historical associations between synthetic and historical periods.
 
-Of the 26 total closure terms in the CalSim 3 inventory, five terms are zero throughout the historical period and require no generation. Eight San Joaquin terms show repeating annual patterns and can be used directly. The remaining thirteen terms vary through time in non-repeating patterns and require a generation methodology.
+For the DCR 2023-based inventory screened for this project, 26 closure-term inputs were identified: five are zero throughout the historical period and require no generation, eight San Joaquin Valley terms use repeating monthly patterns, and 13 have nonrepeating historical sequences. The WGEN date-weighted method is applied to these 13 Product B terms.
 
 ## Methodology
 
-Initial investigation attempted to correlate closure terms with nearest upstream unimpaired flow predictors and water year type (WYT) indices. Monthly correlation was too low to support quantile mapping or index driven monthly averages; only Bend Bridge exceeds 0.5. Annual sum correlation was higher, but the annual signal is too coarse to use directly because of strong month to month variation, for example, January can be highly positive while February may be negative, and the annual signal cannot capture these monthly fluctuations.
+Initial investigation attempted to correlate closure terms with nearest upstream unimpaired flow predictors and water year type (WYT) indices. Monthly Pearson correlations were generally weak, with Bend Bridge showing the strongest relationship at approximately r=0.50. These relationships were not considered sufficient to support quantile mapping or index-based monthly generation. Annual sum correlation was higher, but the annual signal is too coarse to use directly because of strong month to month variation, for example, January can be highly positive while February may be negative, and the annual signal cannot capture these monthly fluctuations.
 
 ::::{tab-set}
 :::{tab-item} Location Map
@@ -48,7 +48,7 @@ Initial investigation attempted to correlate closure terms with nearest upstream
 
 Given the limitations of correlation-based approaches, the team developed a novel weighted-average methodology using WGEN sampling dates. The approach extracts WGEN sampled dates for each synthetic month, calculates the percentage of days sampled from each historical month/year combination, extracts closure term values for each contributing historical period, and weights closure term values by sampling percentage to create the weighted average for each WGEN month.
 
-The methodology leverages a key insight: since WGEN constructs each synthetic month by sampling from historical days, and those sampling dates are recorded, the closure terms can be reconstructed by applying the same temporal mixing. For example, WGEN's synthetic May of simulation year 2036 draws 21 of its 31 days from historical May 1972, 6 days from historical May 1957, and the remaining 4 days from historical June 1952, a donor period can come from a different calendar month entirely, not just a different year. Weighting historical closure term by these day counts (5.44, -2.57, and 18.55 TAF for May 1972, May 1957, and June 1952) gives 0.68(5.44) + 0.19(-2.57) + 0.13(18.55) = 5.58 TAF for the synthetic month. This approach inherits whatever physical or operational processes originally generated the closure terms without requiring an independent physical model.
+The methodology leverages a key insight: since WGEN constructs each synthetic month by sampling from historical days, and those sampling dates are recorded, the closure terms can be reconstructed by applying the same temporal mixing. For example, WGEN's synthetic May of simulation year 2036 draws 21 of its 31 days from historical May 1972, 6 days from historical May 1957, and the remaining 4 days from historical June 1952, a donor period can come from a different calendar month entirely, not just a different year. Weighting Bend Bridge's historical closure term by these day counts (5.44, -2.57, and 18.55 TAF for May 1972, May 1957, and June 1952) gives (21/31)(5.44) + (6/31)(-2.57) + (4/31)(18.55) = 5.58 TAF for the synthetic month. This approach preserves the temporal association between WGEN donor dates and historical closure-term values; it does not explicitly identify or simulate the physical, operational, or data-related causes of the residuals.
 
 ```{mermaid}
 flowchart TD
@@ -59,15 +59,15 @@ flowchart TD
     PCT --> H2["Historical May 1957<br/>(6 of 31 days, 19%)"]
     PCT --> H3["Historical June 1952<br/>(4 of 31 days, 13%)"]
 
-    H1 --> CT1["Closure Term Value<br/>May 1972: 5.44 TAF"]
-    H2 --> CT2["Closure Term Value<br/>May 1957: -2.57 TAF"]
-    H3 --> CT3["Closure Term Value<br/>June 1952: 18.55 TAF"]
+    H1 --> CT1["Bend Bridge CT<br/>May 1972: 5.44 TAF"]
+    H2 --> CT2["Bend Bridge CT<br/>May 1957: -2.57 TAF"]
+    H3 --> CT3["Bend Bridge CT<br/>June 1952: 18.55 TAF"]
 
-    CT1 --> WAVG["Weighted Average<br/>0.68(5.44)<br/>+ 0.19(-2.57)<br/>+ 0.13(18.55)<br/>= 5.58 TAF"]
+    CT1 --> WAVG["Weighted Average<br/>(21/31)(5.44)<br/>+ (6/31)(-2.57)<br/>+ (4/31)(18.55)<br/>= 5.58 TAF"]
     CT2 --> WAVG
     CT3 --> WAVG
 
-    WAVG --> OUTPUT["Synthetic Closure Term<br/>for May, Year 2036"]
+    WAVG --> OUTPUT["Synthetic Bend Bridge CT<br/>for May, Year 2036"]
 
     style WGEN_MONTH fill:#264653,color:#fff
     style OUTPUT fill:#2d6a4f,color:#fff
