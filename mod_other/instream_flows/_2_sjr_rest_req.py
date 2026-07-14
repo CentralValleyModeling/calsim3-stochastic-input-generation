@@ -50,6 +50,7 @@ _gen = get_module_generated_dir("mod_other/instream_flows")
 DEFAULT_OUT_HIST = _gen / "output" / "_2_sjr_rest_req"
 DEFAULT_OUT_A = _gen / "output" / "_product_a_validation"
 DEFAULT_OUT_B = _gen / "output" / "_product_b_final"
+DEFAULT_OUT_FIG_A = _gen / "output" / "figures" / "product_a"
 
 #  Conversion Constants
 # -----------------------------------------------------------------------------
@@ -69,6 +70,9 @@ NORMAL_DRY_RELEASE = 330.256
 NORMAL_WET_RELEASE = 400.256
 NWET_PLUS_RELEASE = 547.444
 WET_RELEASE = 673.4872385
+
+# Runoff levels where annual_release_from_runoff jumps discontinuously.
+DISCONTINUITY_THRESHOLDS_TAF = (400.0, 670.0, 2500.0)
 
 # -----------------------------------------------------------------------------
 # release schedules from alpha sheet.
@@ -558,6 +562,85 @@ def _fill_leading_edge(
     return np_series, p_series
 
 
+def threshold_crossing_years(
+    actual_unimp: pd.Series,
+    recon_unimp: pd.Series,
+) -> list[int]:
+    """Restoration years whose actual and reconstructed water year runoff
+    totals straddle a schedule discontinuity."""
+    act = build_water_year_totals(actual_unimp.dropna())
+    rec = build_water_year_totals(recon_unimp.dropna())
+    years: list[int] = []
+    for wy in sorted(set(act.index) & set(rec.index)):
+        lo = min(float(act.loc[wy]), float(rec.loc[wy]))
+        hi = max(float(act.loc[wy]), float(rec.loc[wy]))
+        if any(lo < t <= hi for t in DISCONTINUITY_THRESHOLDS_TAF):
+            years.append(int(wy))
+    return years
+
+
+def plot_product_a_validation(
+    np_series: pd.Series,
+    p_series: pd.Series,
+    actual_rest_req: dict[str, pd.Series],
+    figures_dir: Path,
+    pulse_bpart: str = "REST_REQ_P",
+    nonpulse_bpart: str = "REST_REQ_NP",
+    plot_start: str | pd.Timestamp = "1971-10-01",
+    plot_end: str | pd.Timestamp = "2018-09-30",
+    crossing_years: list[int] | None = None,
+) -> list[Path]:
+    """Write the canonical TS+CDF validation figures for Product A.
+
+    One ``<part_b>.png`` per component comparing the reconstruction against
+    the actual CalSim input, in the shared ``utils.validation_plots`` style.
+    Non-pulse compares monthly values; pulse compares April values only.
+    ``crossing_years`` restoration years (Mar-Feb) are shaded on the
+    non-pulse panel only; the crossings barely move the pulse.
+    """
+    import matplotlib.pyplot as plt
+    from utils.validation_plots import Series, plot_ts_cdf
+
+    figures_dir = Path(figures_dir)
+    figures_dir.mkdir(parents=True, exist_ok=True)
+
+    start, end = pd.Timestamp(plot_start), pd.Timestamp(plot_end)
+    np_recon = np_series.loc[start:end]
+    p_recon = p_series.loc[start:end]
+    p_recon = p_recon[p_recon.index.month == 4]
+
+    written: list[Path] = []
+    for bpart, recon, title, shade in (
+        (nonpulse_bpart, np_recon, nonpulse_bpart, True),
+        (pulse_bpart, p_recon, f"{pulse_bpart} (April values)", False),
+    ):
+        actual = actual_rest_req.get(bpart, pd.Series(dtype=float)).reindex(recon.index)
+        if actual.dropna().empty:
+            print(f"  (skipping {bpart} figure: no actual DSS values in window)")
+            continue
+        out_path = figures_dir / f"{bpart}.png"
+        fig = plot_ts_cdf(
+            series=[
+                Series("Historical", recon.index, actual.to_numpy(dtype=float)),
+                Series("Product A", recon.index, recon.to_numpy(dtype=float)),
+            ],
+            title=title,
+            unit="TAF",
+            compute_metrics_from=0,
+        )
+        if shade:
+            ax_ts = fig.axes[0]
+            for ry in crossing_years or []:
+                band_lo = max(pd.Timestamp(ry, 3, 1), start)
+                band_hi = min(pd.Timestamp(ry + 1, 3, 1), end)
+                if band_lo < band_hi:
+                    ax_ts.axvspan(band_lo, band_hi, color="0.82", alpha=0.5, zorder=0)
+        fig.savefig(out_path, bbox_inches="tight", facecolor="white", dpi=300)
+        plt.close(fig)
+        written.append(out_path)
+    return written
+
+
 def run_product_a(
     product_a_csv: Path,
     outdir: Path,
@@ -565,6 +648,8 @@ def run_product_a(
     nonpulse_bpart: str,
     part_c: str,
     default_rest_req: dict[str, pd.Series] | None = None,
+    figures_dir: Path | None = None,
+    actual_unimp: pd.Series | None = None,
 ) -> list[Path]:
     inflow = read_unimp_csv(product_a_csv)
     recon = reconstruct_rest_req(inflow)
@@ -576,7 +661,20 @@ def run_product_a(
     np_path = outdir / "_SJRRPreqNonPulse_productA_1972_2018.csv"
     to_output_format(p_series, pulse_bpart, part_c).to_csv(pulse_path, index=False)
     to_output_format(np_series, nonpulse_bpart, part_c).to_csv(np_path, index=False)
-    return [pulse_path, np_path]
+    written = [pulse_path, np_path]
+    if figures_dir is not None and default_rest_req is not None:
+        crossing = None
+        if actual_unimp is not None and not actual_unimp.dropna().empty:
+            crossing = threshold_crossing_years(actual_unimp, inflow)
+            print(f"Threshold-crossing restoration years: {crossing}")
+        written.extend(
+            plot_product_a_validation(
+                np_series, p_series, default_rest_req, figures_dir,
+                pulse_bpart=pulse_bpart, nonpulse_bpart=nonpulse_bpart,
+                crossing_years=crossing,
+            )
+        )
+    return written
 
 
 def infer_b_suffix(path: Path) -> str:
@@ -646,6 +744,12 @@ def main() -> None:
         default_rest_req = get_default_calsim_rest_req(dssfile=DSS_FILE)
 
         if args.product == "A":
+            # Actual DSS unimpaired flow, used to flag threshold-crossing years.
+            unimp_map = read_calsim_monthly_pairs(
+                DSS_FILE, [("UNIMP_SJ", "FLOW-UNIMPAIRED")])
+            actual_unimp = unimp_map.get(
+                ("UNIMP_SJ", "FLOW-UNIMPAIRED"), pd.Series(dtype=float))
+
             written.extend(
                 run_product_a(
                     product_a_csv=DEFAULT_PRODUCT_A,
@@ -654,6 +758,8 @@ def main() -> None:
                     nonpulse_bpart="REST_REQ_NP",
                     part_c="RELEASE-HYDROGRAPH",
                     default_rest_req=default_rest_req,
+                    figures_dir=DEFAULT_OUT_FIG_A,
+                    actual_unimp=actual_unimp,
                 )
             )
         else:
