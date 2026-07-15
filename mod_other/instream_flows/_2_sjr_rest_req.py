@@ -50,6 +50,7 @@ _gen = get_module_generated_dir("mod_other/instream_flows")
 DEFAULT_OUT_HIST = _gen / "output" / "_2_sjr_rest_req"
 DEFAULT_OUT_A = _gen / "output" / "_product_a_validation"
 DEFAULT_OUT_B = _gen / "output" / "_product_b_final"
+DEFAULT_OUT_FIG_A = _gen / "output" / "figures" / "product_a"
 
 #  Conversion Constants
 # -----------------------------------------------------------------------------
@@ -558,6 +559,61 @@ def _fill_leading_edge(
     return np_series, p_series
 
 
+def plot_product_a_validation(
+    np_series: pd.Series,
+    p_series: pd.Series,
+    actual_rest_req: dict[str, pd.Series],
+    figures_dir: Path,
+    pulse_bpart: str = "REST_REQ_P",
+    nonpulse_bpart: str = "REST_REQ_NP",
+    plot_start: str | pd.Timestamp = "1971-10-01",
+    plot_end: str | pd.Timestamp = "2018-09-30",
+) -> list[Path]:
+    """Write the canonical TS+CDF validation figures for Product A.
+
+    One ``<part_b>.png`` per component comparing the reconstruction against
+    the actual CalSim input, in the shared ``utils.validation_plots`` style.
+    Non-pulse compares monthly values; pulse compares April values only.
+    """
+    import matplotlib.pyplot as plt
+    from utils.validation_plots import Series, plot_ts_cdf
+
+    figures_dir = Path(figures_dir)
+    figures_dir.mkdir(parents=True, exist_ok=True)
+
+    start, end = pd.Timestamp(plot_start), pd.Timestamp(plot_end)
+    np_recon = np_series.loc[start:end]
+    p_recon = p_series.loc[start:end]
+    p_recon = p_recon[p_recon.index.month == 4]
+
+    written: list[Path] = []
+    for bpart, recon, title in (
+        (nonpulse_bpart, np_recon, nonpulse_bpart),
+        (pulse_bpart, p_recon, f"{pulse_bpart} (April values)"),
+    ):
+        actual = actual_rest_req.get(bpart, pd.Series(dtype=float)).reindex(recon.index)
+        if actual.dropna().empty:
+            print(f"  (skipping {bpart} figure: no actual DSS values in window)")
+            continue
+        out_path = figures_dir / f"{bpart}.png"
+        fig = plot_ts_cdf(
+            series=[
+                Series("Historical", recon.index, actual.to_numpy(dtype=float)),
+                Series("Product A", recon.index, recon.to_numpy(dtype=float)),
+            ],
+            title=title,
+            unit="TAF",
+            compute_metrics_from=0,
+        )
+        if bpart == pulse_bpart:
+            # One value per restoration year.
+            fig.axes[0].set_title("April Values by Restoration Year")
+        fig.savefig(out_path, bbox_inches="tight", facecolor="white", dpi=300)
+        plt.close(fig)
+        written.append(out_path)
+    return written
+
+
 def run_product_a(
     product_a_csv: Path,
     outdir: Path,
@@ -565,6 +621,7 @@ def run_product_a(
     nonpulse_bpart: str,
     part_c: str,
     default_rest_req: dict[str, pd.Series] | None = None,
+    figures_dir: Path | None = None,
 ) -> list[Path]:
     inflow = read_unimp_csv(product_a_csv)
     recon = reconstruct_rest_req(inflow)
@@ -576,7 +633,15 @@ def run_product_a(
     np_path = outdir / "_SJRRPreqNonPulse_productA_1972_2018.csv"
     to_output_format(p_series, pulse_bpart, part_c).to_csv(pulse_path, index=False)
     to_output_format(np_series, nonpulse_bpart, part_c).to_csv(np_path, index=False)
-    return [pulse_path, np_path]
+    written = [pulse_path, np_path]
+    if figures_dir is not None and default_rest_req is not None:
+        written.extend(
+            plot_product_a_validation(
+                np_series, p_series, default_rest_req, figures_dir,
+                pulse_bpart=pulse_bpart, nonpulse_bpart=nonpulse_bpart,
+            )
+        )
+    return written
 
 
 def infer_b_suffix(path: Path) -> str:
@@ -654,6 +719,7 @@ def main() -> None:
                     nonpulse_bpart="REST_REQ_NP",
                     part_c="RELEASE-HYDROGRAPH",
                     default_rest_req=default_rest_req,
+                    figures_dir=DEFAULT_OUT_FIG_A,
                 )
             )
         else:
