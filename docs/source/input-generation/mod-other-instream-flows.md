@@ -54,11 +54,16 @@ The reconstruction was evaluated with two comparisons that separate reproduction
 
 The second comparison drives the reconstruction with the Product A UNIMP_SJ series, produced by running the VIC hydrologic model on WGEN generated weather and quantile mapping the simulated flows to the CalSim rim inflow series ({doc}`mod-hydrology-rim-inflow`), and compares the result with the same reference inputs. In each figure below the left panel shows the series and the right panel their non-exceedance distributions. Over WY 1972-2018 the monthly non-pulse series achieves $R^2$ = 0.89, NSE = 0.88, and PBIAS = -4.7%; the April pulse values achieve $R^2$ = 0.80, NSE = 0.77, and PBIAS = -12.2%. Because the first comparison establishes near exact reproduction of the workbook logic, these differences primarily reflect differences between the Product A and historical estimates of San Joaquin River unimpaired runoff into Millerton Lake. Non-pulse discrepancies concentrate in years where the two runoff estimates fall on opposite sides of a discontinuous threshold (400 TAF, 670 TAF, or 2.5 MAF). Pulse discrepancies do not require a threshold crossing: between the Normal-Dry and Normal-Wet schedules the April 16-30 rate increases continuously with the annual allocation, from 350 to 4,000 CFS, so two runoff estimates that differ within this range map to substantially different pulse rates. In WY 1973, for example, the historical runoff estimate (2.0 MAF) yields the full 4,000 CFS pulse, while the Product A estimate (1.5 MAF) yields roughly 1,700 CFS. Negative PBIAS indicates the reconstruction is lower in aggregate than the reference, consistent with lower Product A runoff estimates in most divergent years.
 
+::::{tab-set}
+:::{tab-item} REST_REQ_NP
 ![REST_REQ_NP reconstruction](figures/s3-inputs_sjr-rest-req-np-validation.png)
 *`REST_REQ_NP` non-pulse restoration requirement reconstruction (WY 1972-2018). NSE = 0.88, PBIAS = -4.7%; Product A (orange) vs historical (blue). Statistics are computed from monthly values.*
-
+:::
+:::{tab-item} REST_REQ_P
 ![REST_REQ_P reconstruction](figures/s3-inputs_sjr-rest-req-p-validation.png)
 *`REST_REQ_P` pulse restoration requirement reconstruction, April values (WY 1972-2018; pulse flows apply only during April). NSE = 0.77, PBIAS = -12.2%; Product A (orange) vs historical (blue). Differences track runoff disagreement across the steep April ramp of the release schedules rather than threshold crossings. Statistics are computed from April values only.*
+:::
+::::
 
 
 ## Feather River Minimum Flows
