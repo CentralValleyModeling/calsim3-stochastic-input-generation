@@ -14,7 +14,7 @@ Instream flow and restoration release requirements for regulated rivers based on
 
 ### Methodology
 
-The San Joaquin River restoration release requirements are determined from annual unimpaired runoff, which classifies each year into one of six restoration year types and establishes the corresponding release schedule. Wetter year types generally require larger releases. This framework was established by the 2006 San Joaquin River Restoration Settlement and documented in the 2017 Restoration Flows Guidelines, Version 2.0 (SJRRP 2017). The implementation is based on the original Excel workbook used to develop the CalSim 3 input series. CalSim 3 represents the requirements using two inputs: REST_REQ_NP, which contains the non-pulse requirements, and REST_REQ_P, which contains the requirement applied during the April pulse period. 
+The San Joaquin River restoration release requirements are determined from annual unimpaired runoff into Millerton Lake, which classifies each year into one of six restoration year types and establishes the corresponding release schedule. Wetter year types generally require larger releases. This framework was established by the 2006 San Joaquin River Restoration Settlement and documented in the 2017 Restoration Flows Guidelines, Version 2.0 (SJRRP 2017). The implementation is based on the original Excel workbook used to develop the CalSim 3 input series. CalSim 3 represents the requirements using two inputs: REST_REQ_NP, which contains the non-pulse requirements, and REST_REQ_P, which contains the requirement applied during the April pulse period. 
 
 The workbook encodes the release schedules in conditional lookup tables covering the six principal restoration year types, from Critical-Low to Wet, together with transitional schedules between them. Because the relationship includes discontinuities at selected runoff thresholds, relatively small runoff differences near these thresholds can produce substantial changes in the resulting release schedule.
 
@@ -32,7 +32,7 @@ San Joaquin River unimpaired runoff into Millerton Lake is the sole hydrologic i
 
 The allocation is discontinuous at the 400 TAF, 670 TAF, and 2.5 MAF thresholds, so small runoff differences near these values can shift the schedule between year types.
 
-Second, the annual allocation is converted into a release schedule. The workbook defines twelve reference schedules, matching the Friant Dam default restoration flow schedules in Appendix C of the Guidelines, which tabulates the full release rates. Each reference schedule carries a fixed annual release total and prescribes a release rate for each of twelve sub-annual blocks:
+Second, the annual allocation is converted into a release schedule. The workbook defines twelve reference schedules, matching the Friant Dam default restoration flow schedules, which tabulates the full release rates. Each reference schedule carries a fixed annual release total and prescribes a release rate for each of twelve sub-annual blocks:
 
 ```{list-table}
 :widths: 30 70
