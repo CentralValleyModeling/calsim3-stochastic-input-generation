@@ -4,30 +4,66 @@
 :class: tip
 
 **Module:** `mod_other/instream_flows/`  
-Minimum instream flow requirements
+Instream flow and restoration release requirements
 ```
 
 
-Minimum instream flow requirements for regulated rivers based on biological opinions, settlement agreements, and operational constraints. The two primary reconstructions cover San Joaquin River Restoration flows below Friant Dam and Feather River minimum flows below Oroville. Both implementations translate original agreement methodologies into algorithms applicable to synthetic unimpaired flow sequences.
+Instream flow and restoration release requirements for regulated rivers based on biological opinions, settlement agreements, and operational constraints. The two primary reconstructions cover San Joaquin River Restoration flows below Friant Dam and Feather River minimum flows below Oroville. Both implementations translate original agreement methodologies into algorithms applicable to synthetic unimpaired flow sequences.
 
-## San Joaquin Restoration Flows
+## San Joaquin River Restoration Flows
 
 ### Methodology
 
-The San Joaquin River Restoration minimum instream flows follow the 2009 restoration settlement agreement, with implementation based on the original Excel workbook calculation methodology. The restoration releases divide into two components: non-pulse base flows providing year-round minimum requirements, and pulse flows adding elevated requirements during specific April periods. Monthly timestep calculations use weighted averages of both components.
+The San Joaquin River restoration release requirements are determined from annual unimpaired runoff into Millerton Lake, which classifies each year into one of six restoration year types and establishes the corresponding release schedule. Wetter year types generally require larger releases. This framework was established by the 2006 San Joaquin River Restoration Settlement and documented in the 2017 Restoration Flows Guidelines, Version 2.0 (SJRRP 2017). The implementation is based on the original Excel workbook used to develop the CalSim 3 input series. CalSim 3 represents the requirements using two inputs: REST_REQ_NP, which contains the non-pulse requirements, and REST_REQ_P, which contains the requirement applied during the April pulse period. 
 
-Reverse-engineering the original Excel workbook proved essential for understanding the conditional logic governing release schedules. The workbook embeds extensive nested IF statements with threshold-dependent lookup tables that differ between normal and restoration year types. Converting this logic to algorithmic form required carefully tracing cell references through multiple worksheets, with particular attention to edge cases near threshold boundaries where small differences in annual runoff can trigger substantially different release schedules.
+The workbook encodes the release schedules in conditional lookup tables covering the six principal restoration year types, from Critical-Low to Wet, together with transitional schedules between them. Because the relationship includes discontinuities at selected runoff thresholds, relatively small runoff differences near these thresholds can produce substantial changes in the resulting release schedule.
 
-Unimpaired runoff into Lake Millerton serves as the sole input variable, with threshold logic determining release requirements. Below 400 TAF annual runoff, minimum base flow requirements apply. Above 2.5 MAF annual runoff, the restoration schedule reaches maximum flow levels. Between these thresholds, linear interpolation provides intermediate flow requirements. The non-pulse component covers the first 14-15 days of April, while pulse flows apply to remaining days, with monthly values computed as day-weighted averages.
+San Joaquin River unimpaired runoff into Millerton Lake is the sole hydrologic input to the reconstruction, the method maps the October–September water-year runoff total to monthly release requirements in two stages. First, the water year (October through September) runoff total sets an annual release allocation by restoration year type:
+
+
+| Water year runoff (TAF) | Restoration year type | Annual release allocation (TAF) |
+|---|---|---|
+| below 400 | Critical-Low | 116.9 |
+| 400 to 670 | Critical-High | 187.8 |
+| 670 to 930 | Dry | 272.3 to 330.3, interpolated |
+| 930 to 1,450 | Normal-Dry | 330.3 to 400.3, interpolated |
+| 1,450 to 2,500 | Normal-Wet | 400.3 to 547.4, interpolated |
+| 2,500 and above | Wet | 673.5 |
+
+The allocation is discontinuous at the 400 TAF, 670 TAF, and 2.5 MAF thresholds, so small runoff differences near these values can shift the schedule between year types.
+
+Second, the annual allocation is converted into a release schedule. The workbook defines twelve reference schedules, matching the Friant Dam default restoration flow schedules, which tabulates the full release rates. Each reference schedule carries a fixed annual release total and prescribes a release rate for each of twelve sub-annual blocks:
+
+```{list-table}
+:widths: 30 70
+
+* - Reference schedules (driest to wettest)
+  - Critical-Low, Critical-High, CH to Dry 1 through 5, Dry, Normal-Dry, Normal-Wet, N-Wet (+), Wet
+* - Sub-annual blocks
+  - Mar 1-15, Mar 16-31, Apr 1-15, Apr 16-30, May-Jun, Jul-Aug, Sep, Oct, Nov 1-6, Nov 7-10, Nov 11-Dec 31, Jan-Feb
+```
+
+For a given year, the two reference schedules whose annual totals bracket the year's allocation are selected, and their block rates are interpolated linearly in proportion to the allocation.
+
+The resulting schedule applies over a restoration year running from March through February, keyed to the corresponding water year runoff total. Monthly CalSim inputs are obtained by weighting the block release rates by their number of days in each month and rounding to whole CFS. In April, the pulse rate is applied over the final 16 days and the non-pulse series receives the remaining volume, a convention adopted from the original Excel workbook.
+
 
 ### Results
 
-Validation over WY 1972-2018 achieves R^2 values between 0.85 and 0.90, demonstrating strong performance. Observed differences stem from differences in unimpaired inflow projections between CalSim baseline inputs and reconstructed VIC-based values. Years showing spikes in residuals correspond to cases where CalSim input annual runoff exceeded the 2.5 MAF threshold while reconstructed values remained below, or vice versa for low flow conditions. These threshold crossings create discrete step changes that explain apparent discrepancies while validating correct algorithm implementation.
+The reconstruction was evaluated with two comparisons that separate reproduction of the workbook logic from the effects of substituting the Product A hydrology. The first comparison drives the reconstruction with the same historical UNIMP_SJ series used to develop the CalSim 3 reference inputs (the DCR 2023 baseline), so remaining differences reflect the algorithm alone. Over WY 1922-2021 the reconstruction achieves NSE = 0.99 against the reference inputs for both the monthly non-pulse series and the April pulse values.
 
-:::{admonition} Suggested Plot
-:class: note
-Dual panels showing: (1) Time series of San Joaquin Restoration flows WY 1972-2018 with actual (gray) and reconstructed (blue) values, highlighting years where threshold crossings explain differences. (2) Scatter plot of actual vs reconstructed colored by WYT, with 1:1 line and 2.5 MAF / 0.4 MAF threshold regions annotated.
+The second comparison drives the reconstruction with the Product A UNIMP_SJ series, produced by running the VIC hydrologic model on WGEN generated weather and quantile mapping the simulated flows to the CalSim rim inflow series ({doc}`mod-hydrology-rim-inflow`), and compares the result with the same CalSim 3 reference inputs. In each figure below the left panel shows the series and the right panel their non-exceedance distributions. Over WY 1972-2018 the monthly non-pulse series achieves $R^2$ = 0.89, NSE = 0.88, and PBIAS = -4.7%; the April pulse values achieve $R^2$ = 0.80, NSE = 0.77, and PBIAS = -12.2%. Because the first comparison establishes near exact reproduction of the workbook logic, these differences primarily reflect differences between the Product A and historical San Joaquin River unimpaired runoff into Millerton Lake. Larger discrepancies concentrate in years where the two runoff estimates fall on opposite sides of a discontinuous threshold (400 TAF, 670 TAF, or 2.5 MAF). For the pulse requirement, the April 16-30 rate rises from 350 CFS in the Normal-Dry schedule to 4,000 CFS in the Normal-Wet schedule, so two runoff estimates that differ within this range map to substantially different pulse rates.
+
+::::{tab-set}
+:::{tab-item} REST_REQ_NP
+![REST_REQ_NP reconstruction](figures/s3-inputs_sjr-rest-req-np-validation.png)
+*`REST_REQ_NP` non-pulse restoration requirement reconstruction (WY 1972-2018). NSE = 0.88, PBIAS = -4.7%; Product A (orange) vs historical (blue). Statistics are computed from monthly values.*
 :::
+:::{tab-item} REST_REQ_P
+![REST_REQ_P reconstruction](figures/s3-inputs_sjr-rest-req-p-validation.png)
+*`REST_REQ_P` pulse restoration requirement reconstruction, April values (WY 1972-2018; pulse flows apply only during April). NSE = 0.77, PBIAS = -12.2%; Product A (orange) vs historical (blue). Differences track runoff disagreement across the steep April ramp of the release schedules.*
+:::
+::::
 
 
 ## Feather River Minimum Flows
@@ -58,7 +94,11 @@ Condition 4 from the original 1983 agreement was deliberately excluded from the 
 
 ### Results
 
-The reconstructed Feather River minimum flows achieve R^2 = 0.89 over the validation period, indicating strong replication of historical patterns. The threshold-based approach successfully captures the discrete operational rules while remaining applicable to novel hydrologic sequences not present in the training data.
+The reconstructed Feather River minimum flows achieve $R^2$ = 0.89 over the validation period, indicating strong replication of historical patterns. The threshold-based approach successfully captures the discrete operational rules while remaining applicable to novel hydrologic sequences not present in the training data.
 
 ![Feather MIF Validation](figures/s3-inputs_feather-mif-validation.png)
-*Feather River minimum required flow (CFS) validation, 1921--2021. Actual CalSim input DSS (blue) is available from approximately 1950 onward; reconstructed values (orange) cover the full period. Flow values step between discrete threshold levels (750, 800, 900, 1,000, 1,200, and 1,700 CFS) determined by the three-condition logic based on annual Oroville inflow. Strong agreement in the overlap period (R^2 = 0.89).*
+*Feather River minimum required flow (CFS) validation, 1921--2021. Actual CalSim input DSS (blue) is available from approximately 1950 onward; reconstructed values (orange) cover the full period. Flow values step between discrete threshold levels (750, 800, 900, 1,000, 1,200, and 1,700 CFS) determined by the three-condition logic based on annual Oroville inflow. Strong agreement in the overlap period ($R^2$ = 0.89).*
+
+## References
+
+San Joaquin River Restoration Program (SJRRP). 2017. *Restoration Flows Guidelines*, Version 2.0. February 2017. <https://restoresjr.net/>
