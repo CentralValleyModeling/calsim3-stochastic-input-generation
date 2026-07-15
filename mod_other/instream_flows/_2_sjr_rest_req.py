@@ -71,9 +71,6 @@ NORMAL_WET_RELEASE = 400.256
 NWET_PLUS_RELEASE = 547.444
 WET_RELEASE = 673.4872385
 
-# Runoff levels where annual_release_from_runoff jumps discontinuously.
-DISCONTINUITY_THRESHOLDS_TAF = (400.0, 670.0, 2500.0)
-
 # -----------------------------------------------------------------------------
 # release schedules from alpha sheet.
 # Periods:
@@ -562,23 +559,6 @@ def _fill_leading_edge(
     return np_series, p_series
 
 
-def threshold_crossing_years(
-    actual_unimp: pd.Series,
-    recon_unimp: pd.Series,
-) -> list[int]:
-    """Restoration years whose actual and reconstructed water year runoff
-    totals straddle a schedule discontinuity."""
-    act = build_water_year_totals(actual_unimp.dropna())
-    rec = build_water_year_totals(recon_unimp.dropna())
-    years: list[int] = []
-    for wy in sorted(set(act.index) & set(rec.index)):
-        lo = min(float(act.loc[wy]), float(rec.loc[wy]))
-        hi = max(float(act.loc[wy]), float(rec.loc[wy]))
-        if any(lo < t <= hi for t in DISCONTINUITY_THRESHOLDS_TAF):
-            years.append(int(wy))
-    return years
-
-
 def plot_product_a_validation(
     np_series: pd.Series,
     p_series: pd.Series,
@@ -588,15 +568,12 @@ def plot_product_a_validation(
     nonpulse_bpart: str = "REST_REQ_NP",
     plot_start: str | pd.Timestamp = "1971-10-01",
     plot_end: str | pd.Timestamp = "2018-09-30",
-    crossing_years: list[int] | None = None,
 ) -> list[Path]:
     """Write the canonical TS+CDF validation figures for Product A.
 
     One ``<part_b>.png`` per component comparing the reconstruction against
     the actual CalSim input, in the shared ``utils.validation_plots`` style.
     Non-pulse compares monthly values; pulse compares April values only.
-    ``crossing_years`` restoration years (Mar-Feb) are shaded on the
-    non-pulse panel.
     """
     import matplotlib.pyplot as plt
     from utils.validation_plots import Series, plot_ts_cdf
@@ -610,9 +587,9 @@ def plot_product_a_validation(
     p_recon = p_recon[p_recon.index.month == 4]
 
     written: list[Path] = []
-    for bpart, recon, title, shade in (
-        (nonpulse_bpart, np_recon, nonpulse_bpart, True),
-        (pulse_bpart, p_recon, f"{pulse_bpart} (April values)", False),
+    for bpart, recon, title in (
+        (nonpulse_bpart, np_recon, nonpulse_bpart),
+        (pulse_bpart, p_recon, f"{pulse_bpart} (April values)"),
     ):
         actual = actual_rest_req.get(bpart, pd.Series(dtype=float)).reindex(recon.index)
         if actual.dropna().empty:
@@ -629,19 +606,8 @@ def plot_product_a_validation(
             compute_metrics_from=0,
         )
         if bpart == pulse_bpart:
-            # One value per restoration year: mark the points and retitle.
-            ax_ts = fig.axes[0]
-            ax_ts.set_title("April Values by Restoration Year")
-            for line in ax_ts.lines:
-                line.set_marker("o")
-                line.set_markersize(2.8)
-        if shade:
-            ax_ts = fig.axes[0]
-            for ry in crossing_years or []:
-                band_lo = max(pd.Timestamp(ry, 3, 1), start)
-                band_hi = min(pd.Timestamp(ry + 1, 3, 1), end)
-                if band_lo < band_hi:
-                    ax_ts.axvspan(band_lo, band_hi, color="0.82", alpha=0.5, zorder=0)
+            # One value per restoration year.
+            fig.axes[0].set_title("April Values by Restoration Year")
         fig.savefig(out_path, bbox_inches="tight", facecolor="white", dpi=300)
         plt.close(fig)
         written.append(out_path)
@@ -656,7 +622,6 @@ def run_product_a(
     part_c: str,
     default_rest_req: dict[str, pd.Series] | None = None,
     figures_dir: Path | None = None,
-    actual_unimp: pd.Series | None = None,
 ) -> list[Path]:
     inflow = read_unimp_csv(product_a_csv)
     recon = reconstruct_rest_req(inflow)
@@ -670,15 +635,10 @@ def run_product_a(
     to_output_format(np_series, nonpulse_bpart, part_c).to_csv(np_path, index=False)
     written = [pulse_path, np_path]
     if figures_dir is not None and default_rest_req is not None:
-        crossing = None
-        if actual_unimp is not None and not actual_unimp.dropna().empty:
-            crossing = threshold_crossing_years(actual_unimp, inflow)
-            print(f"Threshold-crossing restoration years: {crossing}")
         written.extend(
             plot_product_a_validation(
                 np_series, p_series, default_rest_req, figures_dir,
                 pulse_bpart=pulse_bpart, nonpulse_bpart=nonpulse_bpart,
-                crossing_years=crossing,
             )
         )
     return written
@@ -751,12 +711,6 @@ def main() -> None:
         default_rest_req = get_default_calsim_rest_req(dssfile=DSS_FILE)
 
         if args.product == "A":
-            # Actual DSS unimpaired flow, used to flag threshold-crossing years.
-            unimp_map = read_calsim_monthly_pairs(
-                DSS_FILE, [("UNIMP_SJ", "FLOW-UNIMPAIRED")])
-            actual_unimp = unimp_map.get(
-                ("UNIMP_SJ", "FLOW-UNIMPAIRED"), pd.Series(dtype=float))
-
             written.extend(
                 run_product_a(
                     product_a_csv=DEFAULT_PRODUCT_A,
@@ -766,7 +720,6 @@ def main() -> None:
                     part_c="RELEASE-HYDROGRAPH",
                     default_rest_req=default_rest_req,
                     figures_dir=DEFAULT_OUT_FIG_A,
-                    actual_unimp=actual_unimp,
                 )
             )
         else:

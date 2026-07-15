@@ -32,34 +32,30 @@ San Joaquin River unimpaired runoff into Millerton Lake is the sole hydrologic i
 
 The allocation is discontinuous at the 400 TAF, 670 TAF, and 2.5 MAF thresholds, so small runoff differences near these values can shift the schedule between year types.
 
-Second, the annual allocation is converted into a release schedule. The workbook defines a reference schedule for each of the six principal year types, plus six transitional schedules between them, matching the Friant Dam default restoration flow schedules in Appendix C of the Guidelines. Each reference schedule carries a fixed annual release total and prescribes release rates over twelve sub-annual blocks; the block rates for the six principal year types are shown below in CFS. For a given year, the two reference schedules whose annual totals bracket the year's allocation are selected, and their block rates are interpolated linearly in proportion to the allocation.
+Second, the annual allocation is converted into a release schedule. The workbook defines twelve reference schedules, matching the Friant Dam default restoration flow schedules in Appendix C of the Guidelines, which tabulates the full release rates. Each reference schedule carries a fixed annual release total and prescribes a release rate for each of twelve sub-annual blocks:
 
-| Block | Critical-Low | Critical-High | Dry | Normal-Dry | Normal-Wet | Wet |
-|---|---|---|---|---|---|---|
-| Mar 1-15 | 130 | 500 | 500 | 500 | 500 | 500 |
-| Mar 16-31 | 130 | 1,500 | 1,500 | 1,500 | 1,500 | 1,500 |
-| Apr 1-15 | 150 | 200 | 350 | 2,500 | 2,500 | 2,500 |
-| Apr 16-30 | 150 | 200 | 350 | 350 | 4,000 | 4,000 |
-| May-Jun | 190 | 215 | 350 | 350 | 350 | 2,000 |
-| Jul-Aug | 230 | 255 | 350 | 350 | 350 | 350 |
-| Sep | 210 | 260 | 350 | 350 | 350 | 350 |
-| Oct | 160 | 160 | 350 | 350 | 350 | 350 |
-| Nov 1-6 | 130 | 400 | 700 | 700 | 700 | 700 |
-| Nov 7-10 | 120 | 120 | 700 | 700 | 700 | 700 |
-| Nov 11-Dec 31 | 120 | 120 | 350 | 350 | 350 | 350 |
-| Jan-Feb | 100 | 110 | 350 | 350 | 350 | 350 |
+```{list-table}
+:widths: 30 70
+
+* - Reference schedules (driest to wettest)
+  - Critical-Low, Critical-High, CH to Dry 1 through 5, Dry, Normal-Dry, Normal-Wet, N-Wet (+), Wet
+* - Sub-annual blocks
+  - Mar 1-15, Mar 16-31, Apr 1-15, Apr 16-30, May-Jun, Jul-Aug, Sep, Oct, Nov 1-6, Nov 7-10, Nov 11-Dec 31, Jan-Feb
+```
+
+For a given year, the two reference schedules whose annual totals bracket the year's allocation are selected, and their block rates are interpolated linearly in proportion to the allocation.
 
 The resulting schedule applies over a restoration year running from March through February, keyed to the corresponding water year runoff total. Monthly CalSim inputs are obtained by weighting the block release rates by their number of days in each month and rounding to whole CFS. In April, the pulse rate is applied over the final 16 days and the non-pulse series receives the remaining volume, following the April encoding described above.
 
 
 ### Results
 
-The reconstruction was evaluated with two comparisons that separate reproduction of the workbook logic from the effects of substituting VIC-based hydrology. The first comparison drives the reconstruction with the same historical UNIMP_SJ series used to develop the CalSim 3 reference inputs, so remaining differences reflect the algorithm alone. Over WY 1922-2021 the reconstruction achieves NSE = 0.99 against the reference inputs for both the monthly non-pulse series and the April pulse values.
+The reconstruction was evaluated with two comparisons that separate reproduction of the workbook logic from the effects of substituting the Product A hydrology. The first comparison drives the reconstruction with the same historical UNIMP_SJ series used to develop the CalSim 3 reference inputs, so remaining differences reflect the algorithm alone. Over WY 1922-2021 the reconstruction achieves NSE = 0.99 against the reference inputs for both the monthly non-pulse series and the April pulse values.
 
-The second comparison drives the reconstruction with the VIC-based UNIMP_SJ series developed for Product A and compares the result with the same reference inputs. In each figure below the left panel shows the series and the right panel their non-exceedance distributions. Over WY 1972-2018 the monthly non-pulse series achieves R^2 = 0.89, NSE = 0.88, and PBIAS = -4.7%; the April pulse values achieve R^2 = 0.80, NSE = 0.77, and PBIAS = -12.2%. Because the first comparison establishes near exact reproduction of the workbook logic, these differences primarily reflect differences between the VIC-based and historical estimates of San Joaquin River unimpaired runoff into Millerton Lake. Non-pulse discrepancies concentrate in years where the two runoff estimates fall on opposite sides of a discontinuous schedule threshold (shaded gray in the non-pulse figure). The effect is largest at the 2.5 MAF threshold, where the May-Jun rate steps from 350 to 2,000 CFS: a year whose historical runoff falls just above 2.5 MAF while the VIC-based runoff falls just below receives very different May and June requirements. The April pulse is instead sensitive across a wide runoff range. Its Apr 16-30 rate is 350 CFS in the Normal-Dry reference schedule and 4,000 CFS in the Normal-Wet reference schedule, so allocations between the two, corresponding to roughly 1.2 to 2.0 MAF of annual runoff, place the pulse on a steep interpolated ramp. Runoff disagreements within this range produce large pulse differences without any threshold crossing. In WY 1973, for example, the historical runoff estimate (2.0 MAF) yields the full 4,000 CFS pulse, while the VIC-based estimate (1.5 MAF) yields roughly 1,700 CFS. Negative PBIAS indicates the reconstruction is lower in aggregate than the reference, consistent with lower VIC-based runoff estimates in most divergent years.
+The second comparison drives the reconstruction with the Product A UNIMP_SJ series, produced by running the VIC hydrologic model on WGEN generated weather and quantile mapping the simulated flows to the CalSim rim inflow series ({doc}`mod-hydrology-rim-inflow`), and compares the result with the same reference inputs. In each figure below the left panel shows the series and the right panel their non-exceedance distributions. Over WY 1972-2018 the monthly non-pulse series achieves $R^2$ = 0.89, NSE = 0.88, and PBIAS = -4.7%; the April pulse values achieve $R^2$ = 0.80, NSE = 0.77, and PBIAS = -12.2%. Because the first comparison establishes near exact reproduction of the workbook logic, these differences primarily reflect differences between the Product A and historical estimates of San Joaquin River unimpaired runoff into Millerton Lake. Non-pulse discrepancies concentrate in years where the two runoff estimates fall on opposite sides of a discontinuous threshold (400 TAF, 670 TAF, or 2.5 MAF). Pulse discrepancies do not require a threshold crossing: between the Normal-Dry and Normal-Wet schedules the April 16-30 rate increases continuously with the annual allocation, from 350 to 4,000 CFS, so two runoff estimates that differ within this range map to substantially different pulse rates. In WY 1973, for example, the historical runoff estimate (2.0 MAF) yields the full 4,000 CFS pulse, while the Product A estimate (1.5 MAF) yields roughly 1,700 CFS. Negative PBIAS indicates the reconstruction is lower in aggregate than the reference, consistent with lower Product A runoff estimates in most divergent years.
 
 ![REST_REQ_NP reconstruction](figures/s3-inputs_sjr-rest-req-np-validation.png)
-*`REST_REQ_NP` non-pulse restoration requirement reconstruction (WY 1972-2018). NSE = 0.88, PBIAS = -4.7%; Product A (orange) vs historical (blue). Gray bands mark restoration years where the historical and VIC-based annual runoff estimates fall on opposite sides of a discontinuous schedule threshold (400 TAF, 670 TAF, or 2.5 MAF). Statistics are computed from monthly values.*
+*`REST_REQ_NP` non-pulse restoration requirement reconstruction (WY 1972-2018). NSE = 0.88, PBIAS = -4.7%; Product A (orange) vs historical (blue). Statistics are computed from monthly values.*
 
 ![REST_REQ_P reconstruction](figures/s3-inputs_sjr-rest-req-p-validation.png)
 *`REST_REQ_P` pulse restoration requirement reconstruction, April values (WY 1972-2018; pulse flows apply only during April). NSE = 0.77, PBIAS = -12.2%; Product A (orange) vs historical (blue). Differences track runoff disagreement across the steep April ramp of the release schedules rather than threshold crossings. Statistics are computed from April values only.*
@@ -93,10 +89,10 @@ Condition 4 from the original 1983 agreement was deliberately excluded from the 
 
 ### Results
 
-The reconstructed Feather River minimum flows achieve R^2 = 0.89 over the validation period, indicating strong replication of historical patterns. The threshold-based approach successfully captures the discrete operational rules while remaining applicable to novel hydrologic sequences not present in the training data.
+The reconstructed Feather River minimum flows achieve $R^2$ = 0.89 over the validation period, indicating strong replication of historical patterns. The threshold-based approach successfully captures the discrete operational rules while remaining applicable to novel hydrologic sequences not present in the training data.
 
 ![Feather MIF Validation](figures/s3-inputs_feather-mif-validation.png)
-*Feather River minimum required flow (CFS) validation, 1921--2021. Actual CalSim input DSS (blue) is available from approximately 1950 onward; reconstructed values (orange) cover the full period. Flow values step between discrete threshold levels (750, 800, 900, 1,000, 1,200, and 1,700 CFS) determined by the three-condition logic based on annual Oroville inflow. Strong agreement in the overlap period (R^2 = 0.89).*
+*Feather River minimum required flow (CFS) validation, 1921--2021. Actual CalSim input DSS (blue) is available from approximately 1950 onward; reconstructed values (orange) cover the full period. Flow values step between discrete threshold levels (750, 800, 900, 1,000, 1,200, and 1,700 CFS) determined by the three-condition logic based on annual Oroville inflow. Strong agreement in the overlap period ($R^2$ = 0.89).*
 
 ## References
 
