@@ -14,11 +14,12 @@ Instream flow and restoration release requirements for regulated rivers based on
 
 ### Methodology
 
-The San Joaquin River Restoration release requirements follow the runoff based year type structure of the restoration settlement, as summarized in the 2017 Restoration Flow Guidelines (Version 2.0), with implementation from the original Excel workbook used to generate the CalSim baseline inputs. The restoration releases divide into two CalSim input series: non-pulse base flows (REST_REQ_NP) providing minimum requirements throughout the year, and pulse flows (REST_REQ_P) adding elevated requirements during the second half of April.
+The San Joaquin River restoration release requirements are determined from annual unimpaired runoff, which classifies each year into one of six restoration year types and establishes the corresponding release schedule. Wetter year types generally require larger releases. This framework was established by the 2006 San Joaquin River Restoration Settlement and documented in the 2017 Restoration Flows Guidelines, Version 2.0 (SJRRP 2017). The implementation is based on the original Excel workbook used to develop the CalSim 3 input series. CalSim 3 represents the requirements using two inputs: REST_REQ_NP, which contains the non-pulse requirements, and REST_REQ_P, which contains the requirement applied during the April pulse period. 
 
-Reverse engineering the workbook proved essential for understanding the conditional logic governing release schedules. The workbook embeds extensive nested IF statements and lookup tables keyed to six restoration year types, ranging from Critical-Low through Wet, plus transitional schedules between adjacent types. Converting this logic to algorithmic form required carefully tracing cell references through multiple worksheets, with particular attention to edge cases near threshold boundaries where small differences in annual runoff can trigger substantially different release schedules.
+The workbook encodes the release schedules in conditional lookup tables covering the six principal restoration year types, from Critical-Low to Wet, together with transitional schedules between them. Because the relationship includes discontinuities at selected runoff thresholds, relatively small runoff differences near these thresholds can produce substantial changes in the resulting release schedule.
 
-Unimpaired runoff into Millerton Lake serves as the sole input variable, and the reconstruction maps it to release requirements in two stages. First, the water year (October through September) runoff total sets an annual release allocation by restoration year type:
+San Joaquin River unimpaired runoff into Millerton Lake is the sole hydrologic input to the reconstruction, the method maps the October–September water-year runoff total to monthly release requirements in two stages. First, the water year (October through September) runoff total sets an annual release allocation by restoration year type:
+
 
 | Water year runoff (TAF) | Restoration year type | Annual release allocation (TAF) |
 |---|---|---|
@@ -29,7 +30,26 @@ Unimpaired runoff into Millerton Lake serves as the sole input variable, and the
 | 1,450 to 2,500 | Normal-Wet | 400.3 to 547.4, interpolated |
 | 2,500 and above | Wet | 673.5 |
 
-The allocation jumps discretely at the 400 TAF, 670 TAF, and 2.5 MAF thresholds, while the 930 TAF and 1,450 TAF breakpoints change only the interpolation slope. Second, the annual allocation maps to a flow schedule by interpolating between twelve reference schedules matching the Friant Dam default restoration flow schedules in Appendix C of the Guidelines, each specifying flow rates over twelve sub-annual blocks (half-month blocks in March and April, a three-way split of November, and multi-month blocks elsewhere). The schedule spans a restoration year running March through February, keyed to the corresponding water year runoff total. Monthly CalSim inputs follow from weighting the block flow rates by their days in each month, with rates rounded to whole CFS. In April the pulse component covers the final 16 days of the month and the non-pulse component takes the remainder. This encoding follows the CalSim workbook rather than the Guidelines, which define the pulse block as April 16-30, a period of 15 days. The workbook applies the pulse rate over 16 days and assigns the remaining volume to the non-pulse series; the discrepancy reallocates volume between the two series without altering the April total. The reconstruction retains the workbook convention to preserve consistency with the CalSim baseline inputs.
+The allocation is discontinuous at the 400 TAF, 670 TAF, and 2.5 MAF thresholds, so small runoff differences near these values can shift the schedule between year types.
+
+Second, the annual allocation is converted into a release schedule. The workbook defines a reference schedule for each of the six principal year types, plus six transitional schedules between them, matching the Friant Dam default restoration flow schedules in Appendix C of the Guidelines. Each reference schedule carries a fixed annual release total and prescribes release rates over twelve sub-annual blocks; the block rates for the six principal year types are shown below in CFS. For a given year, the two reference schedules whose annual totals bracket the year's allocation are selected, and their block rates are interpolated linearly in proportion to the allocation.
+
+| Block | Critical-Low | Critical-High | Dry | Normal-Dry | Normal-Wet | Wet |
+|---|---|---|---|---|---|---|
+| Mar 1-15 | 130 | 500 | 500 | 500 | 500 | 500 |
+| Mar 16-31 | 130 | 1,500 | 1,500 | 1,500 | 1,500 | 1,500 |
+| Apr 1-15 | 150 | 200 | 350 | 2,500 | 2,500 | 2,500 |
+| Apr 16-30 | 150 | 200 | 350 | 350 | 4,000 | 4,000 |
+| May-Jun | 190 | 215 | 350 | 350 | 350 | 2,000 |
+| Jul-Aug | 230 | 255 | 350 | 350 | 350 | 350 |
+| Sep | 210 | 260 | 350 | 350 | 350 | 350 |
+| Oct | 160 | 160 | 350 | 350 | 350 | 350 |
+| Nov 1-6 | 130 | 400 | 700 | 700 | 700 | 700 |
+| Nov 7-10 | 120 | 120 | 700 | 700 | 700 | 700 |
+| Nov 11-Dec 31 | 120 | 120 | 350 | 350 | 350 | 350 |
+| Jan-Feb | 100 | 110 | 350 | 350 | 350 | 350 |
+
+The resulting schedule applies over a restoration year running from March through February, keyed to the corresponding water year runoff total. Monthly CalSim inputs are obtained by weighting the block release rates by their number of days in each month and rounding to whole CFS. In April, the pulse rate is applied over the final 16 days and the non-pulse series receives the remaining volume, following the April encoding described above.
 
 
 ### Results
@@ -77,3 +97,7 @@ The reconstructed Feather River minimum flows achieve R^2 = 0.89 over the valida
 
 ![Feather MIF Validation](figures/s3-inputs_feather-mif-validation.png)
 *Feather River minimum required flow (CFS) validation, 1921--2021. Actual CalSim input DSS (blue) is available from approximately 1950 onward; reconstructed values (orange) cover the full period. Flow values step between discrete threshold levels (750, 800, 900, 1,000, 1,200, and 1,700 CFS) determined by the three-condition logic based on annual Oroville inflow. Strong agreement in the overlap period (R^2 = 0.89).*
+
+## References
+
+San Joaquin River Restoration Program (SJRRP). 2017. *Restoration Flows Guidelines*, Version 2.0. February 2017. <https://restoresjr.net/>
