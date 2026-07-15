@@ -596,7 +596,7 @@ def plot_product_a_validation(
     the actual CalSim input, in the shared ``utils.validation_plots`` style.
     Non-pulse compares monthly values; pulse compares April values only.
     ``crossing_years`` restoration years (Mar-Feb) are shaded on the
-    non-pulse panel only; the crossings barely move the pulse.
+    non-pulse panel.
     """
     import matplotlib.pyplot as plt
     from utils.validation_plots import Series, plot_ts_cdf
@@ -628,6 +628,13 @@ def plot_product_a_validation(
             unit="TAF",
             compute_metrics_from=0,
         )
+        if bpart == pulse_bpart:
+            # One value per restoration year: mark the points and retitle.
+            ax_ts = fig.axes[0]
+            ax_ts.set_title("April Values by Restoration Year")
+            for line in ax_ts.lines:
+                line.set_marker("o")
+                line.set_markersize(2.8)
         if shade:
             ax_ts = fig.axes[0]
             for ry in crossing_years or []:
