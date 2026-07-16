@@ -591,7 +591,7 @@ def build_all_sources_column(counts: pd.DataFrame) -> pd.DataFrame:
 # box plots of per-block R-squared (one box per closure term)
 # -----------------------------
 # Proper display names where the CalSim variable name is truncated or has no
-# word boundaries (e.g. CT_PARDE_SV is Pardee Reservoir).
+# word boundaries (e.g. CT_PARDE_SV is Pardee.
 _DISPLAY_NAMES = {
     "BENDBRIDGE": "Bend Bridge",
     "BUTTECITY": "Butte City",
