@@ -590,6 +590,17 @@ def build_all_sources_column(counts: pd.DataFrame) -> pd.DataFrame:
 # -----------------------------
 # box plots of per-block R-squared (one box per closure term)
 # -----------------------------
+# Proper display names where the CalSim variable name is truncated or has no
+# word boundaries (e.g. CT_PARDE_SV is Pardee Reservoir).
+_DISPLAY_NAMES = {
+    "BENDBRIDGE": "Bend Bridge",
+    "BUTTECITY": "Butte City",
+    "FAIROAKS": "Fair Oaks",
+    "PARDE": "Pardee",
+    "WILKINSSL": "Wilkins Slough",
+}
+
+
 def _short_label(term: str) -> str:
     """CT_BENDBRIDGE_SV -> Bend Bridge, CT_FAIROAKS_SV -> Fair Oaks, etc."""
     name = term
@@ -597,7 +608,8 @@ def _short_label(term: str) -> str:
         name = name[3:]
     if name.endswith("_SV"):
         name = name[:-3]
-    # Insert space before each uppercase letter that follows a lowercase letter
+    if name in _DISPLAY_NAMES:
+        return _DISPLAY_NAMES[name]
     cleaned = name.replace("_", " ").title()
     return cleaned
 
