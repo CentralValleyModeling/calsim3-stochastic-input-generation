@@ -26,6 +26,7 @@ Inputs:
 
 Outputs are written under:
   <generated>/output/_1_wyt_index_curves/          (historical validation CSV + figures/historical/ per-series TS+CDF with R2/NSE/PBIAS)
+  <generated>/output/_1_wyt_index_curves/figures/product_a/  (Product A vs historical actuals per-series TS+CDF, --product A)
   <generated>/output/_product_a_validation/         (Product A)
   <generated>/output/_product_b_final/              (Product B)
 
@@ -58,6 +59,7 @@ _gen = get_module_generated_dir("mod_reservoir/storage_curves")
 BASE_RESULTS_DIR = _gen / "output"
 HIST_VALIDATION_DIR = BASE_RESULTS_DIR / "_1_wyt_index_curves"
 HIST_PLOT_DIR = HIST_VALIDATION_DIR / "figures" / "historical"
+PROD_A_PLOT_DIR = HIST_VALIDATION_DIR / "figures" / "product_a"
 PRODUCT_A_DIR = BASE_RESULTS_DIR / "_product_a_validation"
 PRODUCT_B_DIR = BASE_RESULTS_DIR / "_product_b_final"
 
@@ -369,6 +371,7 @@ def _plot_actual_vs_reconstructed(
     reconstructed: pd.Series,
     partb: str,
     out_path: Path,
+    recon_label: str = "Reconstructed",
 ) -> None:
     """Monthly time series + non-exceedance CDF for one series.
 
@@ -381,7 +384,7 @@ def _plot_actual_vs_reconstructed(
         series=[
             Series("Historical", dates, actual.to_numpy(dtype=float),
                    linewidth=0.8),
-            Series("Reconstructed", dates,
+            Series(recon_label, dates,
                    reconstructed.to_numpy(dtype=float)),
         ],
         title=f"{partb} (TAF)",
@@ -390,6 +393,49 @@ def _plot_actual_vs_reconstructed(
         out_path=out_path,
     )
     print(f"  [PLOT] {out_path.name}")
+
+
+def run_product_a_plots(
+    df: pd.DataFrame,
+    dss_data: Dict[Tuple[str, str], pd.Series],
+) -> None:
+    """Plot Product A targets against historical DSS actuals (WY 1972-2018).
+
+    Mirrors the historical validation figures but pairs the Product A series
+    (schedule targets applied to Product A WYT classifications) with the
+    historical CalSim inputs, labeled ``Historical`` vs ``Product A``.
+    Written to ``figures/product_a/<Part B>.png``.
+    """
+    print(f"\n{'='*60}")
+    print("Product A validation plots (actual vs Product A)")
+    print(f"{'='*60}")
+    PROD_A_PLOT_DIR.mkdir(parents=True, exist_ok=True)
+
+    tmp = df.copy()
+    tmp["date"] = pd.to_datetime(
+        tmp[["Year", "Month"]].assign(Day=1).rename(
+            columns={"Year": "year", "Month": "month", "Day": "day"}
+        )
+    ) + pd.offsets.MonthEnd(0)
+
+    plot_start = pd.Timestamp("1971-10-01")
+    plot_end = pd.Timestamp("2018-09-30")
+    for (partb, partc), sub in tmp.groupby(["Part B", "Part C"]):
+        key = (str(partb).strip().upper(), str(partc).strip().upper())
+        if key not in dss_data:
+            print(f"  [WARN] No DSS actuals for {partb}/{partc}; skipping plot")
+            continue
+        sub = sub.sort_values("date")
+        sub = sub[(sub["date"] >= plot_start) & (sub["date"] <= plot_end)]
+        actual_s = dss_data[key].reindex(sub["date"]).astype(float)
+        _plot_actual_vs_reconstructed(
+            dates=sub["date"],
+            actual=actual_s,
+            reconstructed=pd.to_numeric(sub["Value"], errors="coerce"),
+            partb=partb,
+            out_path=PROD_A_PLOT_DIR / f"{partb}.png",
+            recon_label="Product A",
+        )
 
 
 # -- HISTORICAL VALIDATION --------------------------------------------------
@@ -631,6 +677,7 @@ def main():
             )
             _fill_from_dss(df)
             _write_product_a(df, OUTPUT_PREFIX)
+            run_product_a_plots(df, dss_data)
 
         elif prod == "B":
             for i in range(1, 11):
