@@ -92,8 +92,29 @@ antecedent watershed wetness.
 Daily precipitation is first converted to a Feather River basin
 wetness index. The wetness index is then translated into a flood reservation
 requirement and, finally, into a daily top of conservation storage target.
-Monthly end of month values are written as the CalSim storage-level series
+End of month values are written as the CalSim storage-level series
 `S_OROVLLEVEL5`.
+
+```{mermaid}
+flowchart TD
+    PRECIP["Daily Feather River<br/>Basin Precipitation"] --> WET["Wetness Index<br/>x(t) = 0.97 x(t-1) + p(t)"]
+    WET --> RES["Required Flood Reservation R(x)<br/>368.2 - 737.3 TAF"]
+    RES --> SMIN["Flood Season Storage Target<br/>S_min = S_max - R(x)"]
+
+    SMIN --> SEASON
+    subgraph SEASON["Seasonal Rule Curve"]
+        direction LR
+        RAMP["Sep 15 - Oct 15<br/>Linear Drawdown to S_min"] --> HOLD["Oct 15 - Mar 31<br/>Target Follows S_min"] --> REFILL["Mar 31 - Sep 15<br/>Refill to S_max"]
+    end
+    SEASON --> EOM["End of Month Values"]
+
+    EOM --> OUT["CalSim Input Series<br/>S_OROVLLEVEL5"]
+
+    style PRECIP fill:#264653,color:#fff
+    style OUT fill:#2d6a4f,color:#fff
+```
+
+_Oroville Level 5 reconstruction workflow, from daily Feather River basin precipitation through the wetness index and seasonal rule curve to the monthly CalSim input series._
 
 #### Storage Capacity Adjustment
 
@@ -129,14 +150,14 @@ The flood reservation volume is interpolated between the adjusted endpoint
 values:
 
 $$
-R(x) = \text{interp}(x;\ [3.5, 11.0],\ [368.2, 737.3])
+R(x_t) = \text{interp}(x_t;\ [3.5, 11.0],\ [368.2, 737.3])
 $$
 
-where $R(x)$ is the required flood reservation in TAF. The corresponding
+where $R(x_t)$ is the required flood reservation in TAF. The corresponding
 minimum flood-season top-of-conservation storage is:
 
 $$
-S_{\min}(x) = S_{\max} - R(x)
+S_{\min}(x_t) = S_{\max} - R(x_t)
 $$
 
 where $S_{\max}$ is the adjusted maximum storage capacity.
@@ -153,6 +174,24 @@ Lake Oroville flood-control rule curve:
 - After March 31, the target refills toward the summer maximum at the
   prescribed refill rate, capped at $S_{\max}$.
 
+Following Knowles and Cronkite-Ratcliff (2018), the daily target storage
+is calculated as a function of date $t$ and wetness index $x_t$:
+
+$$
+S(x_t, t) =
+\begin{cases}
+S_{\max} + \dfrac{t - \text{Sep 15}}{\text{Oct 15} - \text{Sep 15}}
+\left( S_{\min}(x_t) - S_{\max} \right)
+& \text{Sep 15} \le t < \text{Oct 15} \\[8pt]
+S_{\min}(x_t)
+& \text{Oct 15} \le t < \text{Mar 31} \\[8pt]
+\min\left( S_{\max},\ S_{\min}(x_t) + b \, (t - \text{Mar 31}) \right)
+& \text{Mar 31} \le t < \text{Sep 15}
+\end{cases}
+$$
+
+where $b$ is the refill rate of 10 TAF per day.
+
 
 #### Synthetic Hydroclimate Implementation
 
@@ -160,16 +199,27 @@ For synthetic sequences, the same wetness index and rule curve calculation is ap
 
 #### Validation
 
-Validation against historical CalSim inputs shows that the wetness index approach
-captures the primary seasonal drawdown and refill behavior, with remaining
-differences largely reflecting the method’s sensitivity to daily precipitation
+Validation against the historical CalSim input over WY 1972-2018 shows
+that the wetness index approach closely reproduces the timing, magnitude,
+and distribution of the historical series, with $R^2 = 0.98$, NSE = 0.98,
+and negligible bias (PBIAS = -0.2%). The reconstruction captures the
+seasonal drawdown from the sedimentation corrected maximum of
+approximately 3,425 TAF to winter flood control levels of roughly
+2,700-3,050 TAF, as well as the spring refill.
+
+Remaining differences occur mainly in months when the rule curve
+transitions between conservation storage and flood control drawdown.
+They arise because the reconstruction estimates the required flood
+reservation from antecedent wetness derived from Product A precipitation
+over the Feather River basin rather than reproducing the historical
+CalSim input directly, making the result sensitive to daily precipitation
 timing and basin mean precipitation representation.
-
-
 
 ![Oroville Level 5 Validation](figures/s3-inputs_storage-orovl-level5-validation.png)
 
-*Oroville Level 5 (top of conservation / flood-control) storage target reconstruction, WY 1972-2018, shown as monthly time series and non-exceedance CDF. The historical CalSim input series is shown in blue and the Product A reconstruction is shown in orange. Product A closely reproduces the timing, magnitude, and distribution of the historical series, including the seasonal drawdown from the sedimentation-corrected maximum of approximately 3,425 TAF to winter flood-control levels of roughly 2,700-3,050 TAF. Agreement is strong across both the time series and distributional comparisons, with $R^2 = 0.98$, NSE = 0.98, and negligible bias (PBIAS = -0.2%). Remaining differences occur mainly during months when the rule curve transitions between conservation storage and flood-control drawdown, because the reconstruction estimates the required flood reservation from antecedent wetness derived from Product A precipitation over the Oroville/Feather River basin rather than reproducing the historical CalSim input series directly.*
+*Oroville Level 5 storage target validation, WY 1972-2018: the Product A
+reconstruction compared against the historical CalSim input, shown as
+monthly time series and non-exceedance CDF ($R^2 = 0.98$).*
 
 
 ---
