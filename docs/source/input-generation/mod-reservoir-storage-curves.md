@@ -62,24 +62,21 @@ over WY 1972-2018.
 
 #### Validation
 
-Validation achieved $R^2 = 0.78$, with the reconstruction following the
+Validation achieved $R^2 = 0.78$, with the Product A series following the
 timing and magnitude of the historical CalSim input across its seasonal
 range, from roughly 10-30 TAF in the drawdown months to peaks of
 120-124 TAF during the spring-summer refill, although some mid to high
 storage values are underestimated. Misalignments concentrate in two
 contexts: minimum storage values during September through February, and
 the 2012-2015 drought, when the historical input maintains storage
-consistently higher than the reconstruction. The drought departure
+consistently higher than Product A. The drought departure
 likely reflects maintenance or operational constraints in actual
-operations; the reconstruction does not attempt to replicate such
-anomalies, since a systematic reconstruction based on hydrologic
-relationships provides more defensible projections for the synthetic
-sequences.
+operations.
 
 ![Mammoth Pool QM Validation](figures/s3-inputs_storage-mammoth-qm-validation.png)
 
 *Mammoth Pool storage quantile mapping validation, WY 1972-2018:
-reconstructed series compared against the historical CalSim input
+the Product A series compared against the historical CalSim input
 ($R^2 = 0.78$).*
 
 ---
@@ -104,10 +101,10 @@ The USACE Oroville flood-control rule curve was originally based on a gross
 pool capacity of approximately 3,538 TAF at elevation 900 feet, with
 750 TAF allocated to flood-control storage. Recent DWR bathymetric mapping
 using 2021 LiDAR and 2022 multibeam-sonar data revised Lake Oroville’s
-capacity to 3,424,753 acre-feet, or approximately 3,424.8 TAF (DWR, 2024). This is about
-113 TAF, or 3 percent, less than the original 1968 estimate.
+capacity to approximately 3,424.8 TAF (DWR, 2024). This is about
+113 TAF, less than the original 1968 estimate.
 
-The updated bathymetry requires an explicit elevation to volume translation in the reconstruction. The USACE Water Control Manual defines the flood-control requirement in terms of reservoir elevation and required flood-reservation space, and its listed storage volumes are tied to the manual’s historical area-capacity curve. CalSim `S_OROVLLEVEL5` input is expressed as a storage volume. Because of the revised bathymetry, the elevation that historically corresponded to 3,538 TAF of gross pool capacity now corresponds to only 3,424.8 TAF. The volume-based rule curve must therefore be rescaled so that flood-control allocations remain consistent with the operating elevations specified in the USACE Water Control Manual, even though the underlying storage volumes have changed.
+The USACE Water Control Manual defines the flood-control requirement in terms of reservoir elevation and required flood-reservation space, and its listed storage volumes are tied to the manual’s historical area-capacity curve. CalSim `S_OROVLLEVEL5` input is expressed as a storage volume. Because of the revised bathymetry, the elevation that historically corresponded to 3,538 TAF of gross pool capacity now corresponds to only 3,424.8 TAF.
 
 
 #### Wetness Index Method
