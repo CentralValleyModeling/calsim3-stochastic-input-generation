@@ -49,7 +49,7 @@ Second, the annual allocation is converted into a release schedule. The workbook
 | Normal-Wet (+) | 563.0 |
 | Wet | 673.5 |
 
-or a given year, the two reference schedules whose annual totals bracket the year's allocation are selected, and each sub-annual block rate is linearly interpolated according to the allocation's position between them. Because the allocation steps from 187.8 to 272.3 TAF at the 670 TAF threshold, no allocation falls between these values, so the first three transitional schedules are never selected; they are listed to document the full set from the source workbook.
+For a given year, the two reference schedules whose annual totals bracket the year's allocation are selected, and each sub-annual block rate is linearly interpolated according to the allocation's position between them. Because the allocation steps from 187.8 to 272.3 TAF at the 670 TAF threshold, no allocation falls between these values, so the first three transitional schedules are never selected; they are listed to document the full set from the source workbook.
 
 The resulting schedule applies over a restoration year running from March through February, keyed to the corresponding water year runoff total. Monthly CalSim inputs are obtained by weighting the block release rates by their number of days in each month and rounding to whole CFS. In April, the pulse rate is applied over the final 16 days and the non-pulse series receives the remaining volume, a convention adopted from the source workbook.
 
