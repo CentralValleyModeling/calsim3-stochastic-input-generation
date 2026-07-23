@@ -8,6 +8,9 @@ from pathlib import Path
 # Make the project importable for autodoc (optional, expand as needed)
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
+# Make local Sphinx extensions (docs/_ext) importable (e.g. the WRESL lexer)
+sys.path.insert(0, str(Path(__file__).parent / '_ext'))
+
 # -- Project information -------------------------------------------------------
 project   = 'CalSim Stochastic Hydroclimate'
 copyright = '2026, California Department of Water Resources'
@@ -24,6 +27,7 @@ extensions = [
     'sphinx_copybutton',         # Copy button on code blocks
     'sphinxcontrib.mermaid',     # Mermaid diagram rendering
     'sphinx_design',             # Tabs, cards, grids
+    'wresl_lexer',               # Syntax highlighting for ```wresl code blocks
 ]
 
 # MyST parser options
