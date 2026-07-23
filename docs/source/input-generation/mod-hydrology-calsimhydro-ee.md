@@ -18,11 +18,11 @@ The External Elements module uses precipitation taken directly from WGEN data an
 
 ## Results
 
-The analysis showed maximum differences of approximately +100% for some exterior areas, reflecting the small baseline values in these boundary regions--often fractions of a TAF per year--which amplify relative differences even when absolute differences are minimal. The median absolute difference was less than 1 TAF/yr, a small magnitude when viewed in context of the overall system water balance.
+The analysis showed maximum differences of approximately +100% for some exterior areas, reflecting the small baseline values in these boundary regions (often fractions of a TAF per year), which amplify relative differences even when absolute differences are minimal. The median absolute difference was less than 1 TAF/yr, a small magnitude when viewed in context of the overall system water balance.
 
 The ET-driven and precipitation-driven effects mirror CalSimHydro's patterns at smaller magnitudes. Quantile-mapped ET produces the maximum +100% deep percolation difference, while slightly lower WGEN precipitation leads to correspondingly lower deep percolation. The dominant signal in EE output is the ET change rather than precipitation, consistent with CalSimHydro findings where ET changes proved more influential than precipitation changes.
 
-These boundary condition changes should have relatively minor effects on overall CalSim 3 results since the External Elements represent a small fraction of total system water balance. However, they ensure consistency between the stochastic inputs and the boundary conditions used in the groundwater modeling components.
+These boundary condition changes should have relatively minor effects on overall CalSim 3 results, since the External Elements are a small fraction of total system water balance, but they keep the stochastic inputs consistent with the boundary conditions used in the groundwater modeling components.
 
 ::::{tab-set}
 :::{tab-item} Monthly Differences

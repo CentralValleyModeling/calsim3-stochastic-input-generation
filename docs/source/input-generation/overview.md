@@ -1,8 +1,8 @@
 # Overview
 
-This section documents input generation across 15 input categories comprising 1,733 study variables for CalSim 3 stochastic generation. Each category represents a distinct component of California's water system modeling framework, from primary hydrologic drivers to water management constraints and operational rules.
+This section documents input generation across 15 input categories comprising 1,733 study variables for CalSim 3 stochastic generation. The categories cover hydrologic drivers, water management constraints, and operational rules.
 
-## Input Generation Summary by Category
+## Input generation summary by category
 
 Table 1 shows the final inventory of input categories and variable counts extracted from the master CalSim SV inventory. The following high-level observations can be drawn from the input inventory counts:
 
@@ -10,7 +10,7 @@ Table 1 shows the final inventory of input categories and variable counts extrac
 
 2. **Most variables require stochastic generation.** Of the 1,733 total, 1,465 (85%) require active generation from synthetic climate inputs. The remaining variables are either constant or repeating (130) or not used in the current baseline (138).
 
-3. **Upper Watershed Modules are largely pre-covered.** Despite 104 total variables, only 12 require new generation; the remaining 89 are already produced dynamically in the CalSim run with the upper watershed modules turned on, and 3 are held constant.
+3. **Upper Watershed Modules are largely pre-covered.** Despite 104 total variables, only 13 require new generation; the remaining 89 are already produced dynamically in the CalSim run with the upper watershed modules turned on, and 3 are held constant.
 
 4. **Miscellaneous variables are predominantly constant or repeating.** The Other category (143 variables) contains 111 constant or repeating values. Similarly, all 5 Salinity variables use repeating historical patterns.
    
@@ -59,11 +59,11 @@ _Water year type classification (Sac 40-30-30, SJ 60-20-20) is computed from the
 | [Other Variables](mod-other-other-variables.md) | 143 | 6 | 111 | 26 |
 | **Subtotal** | **315** | **65** | **128** | **122** |
 
-**TOTAL: 1,733 variables -- 1,465 generated, 130 constant/repeating, 138 not used.**
+**Total: 1,733 variables (1,465 generated, 130 constant/repeating, 138 not used).**
 
-## Data Flow Pipeline
+## Data flow pipeline
 
-The diagram below illustrates the end-to-end processing pipeline from WGEN climate generation through final DSS compilation. Modules are organized by processing tier, where each tier depends on outputs from the tier above.
+The diagram below shows the processing pipeline from WGEN climate generation through final DSS compilation. Modules are organized by processing tier, where each tier depends on outputs from the tier above.
 
 ```{mermaid}
 flowchart TD

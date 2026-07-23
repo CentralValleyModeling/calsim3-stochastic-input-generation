@@ -8,7 +8,7 @@ Quantile mapping of VIC inflows to CalSim rim inflow series
 ```
 
 
-Rim inflows represent streamflow entering the CalSim 3 model domain from surrounding mountain and foothill watersheds. They are major hydrologic drivers of reservoir inflows and downstream streamflows in the modeled river and tributary network, making their accurate reconstruction one of the most consequential components of the stochastic input generation effort. Of the 241 total rim inflow variables, 227 require stochastic generation (13 have missing historical data and 1 is unused).
+Rim inflows are the streamflow entering the CalSim 3 model domain from surrounding mountain and foothill watersheds. They are major hydrologic drivers of reservoir inflows and downstream streamflows in the modeled river and tributary network, which makes their accurate reconstruction one of the more important components of the stochastic input generation effort. Of the 241 total rim inflow variables, 227 require stochastic generation (13 have missing historical data and 1 is unused).
 
 Rim inflow generation proceeds in two stages. The VIC hydrologic model first simulates streamflow across the domain, and quantile mapping then corrects those simulations to the distribution of the historical CalSim 3 inputs. VIC is run in two configurations. Product A is forced with a WGEN historical-parallel climate sequence and is used to train and validate the quantile mapping; Product B is forced with WGEN's 1,000-year stochastic climate and produces the synthetic traces delivered to CalSim 3.
 
@@ -18,23 +18,23 @@ The quantile mapping is applied monthly, followed by basin level anchor adjustme
 
 The methodology has four parts: correlation analysis, model selection, applying quantile mapping to each rim inflow, and enforcing mass balance across tributaries through anchor watershed adjustments.
 
-### Correlation Analysis
+### Correlation analysis
 
 The methodology development began with a systematic correlation analysis, matching each of the 227 CalSim rim inflow variables against modeled streamflow locations from both SAC-SMA and VIC hydrologic models to identify the strongest statistical predictors. Every one of the 227 variables had a corresponding VIC simulated streamflow series, and the correlations were strong, with most variables exceeding an $R^2$ of 0.6 and more than half exceeding 0.7.
 
-### Model Selection
+### Model selection
 
 An early methodological choice involved selecting which hydrologic model would simulate the rim inflow streamflow: SAC-SMA or VIC. Both are rainfall-runoff models that convert climate forcings into streamflow. SAC-SMA produced higher average $R^2$ values against historical CalSim inputs, attributed to its watershed level calibration, whereas VIC is calibrated more broadly across the gridded domain. However, VIC remains the basis model for consistency with DWR's CalSim 3 climate change hydrology, which is likewise built on VIC (DWR 2023). Raw VIC streamflow tends to run wetter than the CalSim 3 historical inputs, but quantile mapping corrects this systematic bias. The VIC modeling process is described in [mod_forcing/vic](mod-forcing-vic.md).
 
-### Quantile Mapping Procedure
+### Quantile mapping procedure
 
-The rim inflow procedure follows the general quantile-mapping framework described in [Quantile Mapping](../methods.md#quantile-mapping). Quantile mapping is performed separately for each calendar month to preserve seasonal patterns in runoff. For each rim inflow variable, the corresponding VIC streamflow serves as the basis series (the series being corrected), and the historical CalSim 3 rim inflow (e.g., I_FOLSM, UNIMP_OROV) serves as the target series (the reference).
+The rim inflow procedure follows the general quantile-mapping framework described in [Quantile Mapping](../methods.md#quantile-mapping). Quantile mapping is performed separately for each calendar month to preserve seasonal patterns in runoff. For each rim inflow variable, the corresponding VIC streamflow is the basis series (the series being corrected), and the historical CalSim 3 rim inflow (e.g., I_FOLSM, UNIMP_OROV) is the target series (the reference).
 
 For the historical validation reported below, the mapping is trained on WY 1922-1971 and validated on WY 1972-2018, so the corrected Product A flows are scored against historical CalSim 3 inputs from outside the training period. For rim inflow generation, the Product B quantile mapping is trained on the full Product A overlap (Oct 1921-Dec 2018) and then applied to the 1,000-year stochastic VIC sequence.
 
 Within the historical range the quantile mapping uses empirical monthly quantiles, and for synthetic values outside that range it relies on Gamma-distribution tail extrapolation. When a synthetic value falls below the entire historical range, the lower tail is extrapolated by taking the smallest observed target value and subtracting an increment from the fitted Gamma distribution; for months whose flows are already near zero, this can push the result slightly below zero. Because negative rim inflows are not physically meaningful, any negative mapped values are reset to zero.
 
-### Anchor Watershed Mass Balance
+### Anchor watershed mass balance
 
 Because quantile mapping is applied independently to each rim inflow, the corrected upstream tributary flows no longer necessarily sum to their downstream aggregate watershed flow. To restore mass balance, an anchor watershed adjustment is applied. The approach recognizes that VIC model outputs are more reliable at integrated watershed scales than for individual small tributaries, so major downstream locations, represented by quantile-mapped unimpaired watershed flows (e.g., UNIMP_FOLS), serve as "anchor" control points, and upstream tributary flows (e.g., I_ALD002) are adjusted to ensure they sum correctly to the anchor totals.
 
@@ -48,7 +48,7 @@ $$\text{Trib}_{\text{adjust}} = \left(\text{Anchor}_{\text{QM}} - \sum \text{Tri
 
 $$\text{Trib}_{\text{final}} = \text{Trib}_{\text{QM}} + \text{Trib}_{\text{adjust}}$$
 
-This ensures that the downstream anchor flow equals the sum of all upstream tributary contributions, maintaining hydrologic mass balance while allowing individual tributary flows to reflect their quantile-mapped distributions.
+This ensures that the downstream anchor flow equals the sum of all upstream tributary contributions, which maintains hydrologic mass balance while individual tributary flows still reflect their quantile-mapped distributions.
 
 ```{mermaid}
 flowchart TD
@@ -95,7 +95,7 @@ _Monthly skill (normalized NSE) across all CalSim 3 rim inflow locations, sorted
 
 The validation shows that quantile mapping restores seasonal patterns and reduces bias in monthly exceedance across the rim inflow network. The NSE gains reflect improved timing and magnitude agreement at the monthly timestep.
 
-### Monthly Validation at Anchor Watersheds
+### Monthly validation at anchor watersheds
 The figures below compare average monthly error relative to the CalSim 3 historical record, alongside average monthly and annual flow at each anchor location. In the average monthly error bar chart, each anchor's bar rises above zero where the reconstructed flow overestimates the historical target and falls below zero where it underestimates the historical target. Quantile mapping sharply reduces the raw VIC errors across the anchor watersheds, most clearly the late spring underestimation seen in the raw VIC panel of the Average Monthly Error Relative to CalSim 3 figure below.
 
 Several challenges remain in the quantile-mapped flows. In the VIC-QMAP panel, a residual wet season overestimate is the most persistent issue at Bend Bridge, Oroville, and Yuba, where flows remain too high even after quantile mapping corrects distributional characteristics. At Oroville and Yuba this overestimate is concentrated in the April through June snowmelt runoff, sharpest in May, while at Bend Bridge it spans the broader December through May wet season and peaks earlier, around March and April. Folsom shows a modest negative bias after quantile mapping, concentrated in the winter months. San Joaquin shows a persistent dry bias across the year, largest in late spring around May and June, despite overall improvements.
@@ -150,7 +150,7 @@ VIC's overestimated spring peak and restores the missing summer baseflow. The Sh
 
 _Average monthly flow (left) and box plots of annual water year totals (right) at each anchor watershed, WY 1972-2018, for CS3 historical (black), raw VIC (blue), and VIC-QMAP (red)._
 
-### Annual Validation at Anchor Watersheds
+### Annual validation at anchor watersheds
 
 Relative to raw VIC, the quantile-mapped annual error shrinks markedly at some anchors (e.g.,
 Oroville) but grows or changes sign at others (e.g., Bend Bridge, Folsom, Trinity), reflecting

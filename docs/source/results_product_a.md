@@ -1,18 +1,18 @@
 # Results / Product A
 
-Product A validation proceeds in two stages. First, the reconstructed Product A SV variables are compared directly against their CalSim 3 baseline values over the WY 1972--2018 overlap period to verify that the input generation pipeline faithfully reproduces historical patterns. This comparison focuses on the time-varying generated variables -- the subset that carries a meaningful skill signal (see the variable-count breakdown below); constant, zero-valued, and annually repeating outputs are excluded from skill scoring. Second, the CalSim 3 model is run with the Product A mapped SV variable in the 1972-2018 range (i.e., CalSim baseline runs normally with unchanged SV from 1921 through September 1971 so that initial conditions are identical at the beginning of WY 1972). The resulting system outputs (deliveries, Delta flows, reservoir storage) for the 1972-2018 validation period are compared against the  CalSim baseline to evaluate how input differences propagate through operational logic.
+Product A validation proceeds in two stages. First, the reconstructed Product A SV variables are compared directly against their CalSim 3 baseline values over the WY 1972--2018 overlap period, to check that the input generation pipeline reproduces historical patterns. This comparison focuses on the time-varying generated variables, the subset that carries a meaningful skill signal (see the variable-count breakdown below); constant, zero-valued, and annually repeating outputs are excluded from skill scoring. Second, the CalSim 3 model is run with the Product A mapped SV variables over WY 1972--2018. The baseline runs normally with unchanged SV from 1921 through September 1971, so initial conditions are identical at the start of WY 1972. The resulting system outputs (deliveries, Delta flows, reservoir storage) over the validation period are compared against the CalSim baseline to see how input differences propagate through operational logic.
 
-## Full Summary
+## Full summary
 
-Product A validation demonstrates strong overall fidelity across both stages. At the input level, the reconstructed variables achieve a median $R^2$ of 0.98 and mean $R^2$ of 0.90 against historical CalSim values, with 71% of variables exceeding $R^2 \geq 0.90$. At the system level, a CalSim 3 run driven by Product A inputs produces annual-average deliveries, Delta flows, and reservoir storage within roughly 0--6% of the historical baseline over WY 1972--2018, with CVP total deliveries differing by only +0.5% and SWP total deliveries by -0.1%. However, during the 1987--1992 drought, differences are larger (SWP deliveries +30%, Banks exports +27%) because the wetter Product A conditions during this period. The sections below provide detailed validation for both the input generation and CalSim run stages.
+Product A validation shows good agreement at both stages. At the input level, the reconstructed variables reach a median $R^2$ of 0.98 and mean $R^2$ of 0.90 against historical CalSim values, with 71% of variables exceeding $R^2 \geq 0.90$. At the system level, a CalSim 3 run driven by Product A inputs produces annual-average deliveries, Delta flows, and reservoir storage within roughly 0--6% of the historical baseline over WY 1972--2018, with CVP total deliveries differing by only +0.5% and SWP total deliveries by -0.1%. During the 1987--1992 drought the differences are larger (SWP deliveries +30%, Banks exports +27%), because Product A conditions were wetter in that period. The sections below give detailed validation for both stages.
 
-## Input Validation Detail
+## Input validation detail
 
-All skill metrics on this page are computed for the **1,224 scored variables** only -- the time-varying generated outputs. The two larger inventory counts are given only to show where that scored set comes from:
+All skill metrics on this page are computed for the 1,224 scored variables only, the time-varying generated outputs. The two larger inventory counts are given to show where that scored set comes from:
 
-- **1,733** -- all variables in the CalSim 3 SV inventory (15 categories).
-- **1,465** -- the subset requiring stochastic generation; the other 268 are constant/repeating (130) or not used in the DCR 2023 baseline (138).
-- **1,224** -- the time-varying subset of those generated variables, **the only set scored here**. Constant, zero-valued, and annually repeating outputs carry no skill signal and are excluded (e.g., CalSimHydro contributes 655 time-varying outputs of its 746 generated).
+- **1,733**: all variables in the CalSim 3 SV inventory (15 categories).
+- **1,465**: the subset requiring stochastic generation; the other 268 are constant/repeating (130) or not used in the DCR 2023 baseline (138).
+- **1,224**: the time-varying subset of those generated variables, the only set scored here. Constant, zero-valued, and annually repeating outputs carry no skill signal and are excluded (e.g., CalSimHydro contributes 655 time-varying outputs of its 746 generated).
 
 Across these 1,224 scored variables, median $R^2$ is 0.98 and mean $R^2$ is 0.90. Approximately 71% achieve $R^2 \geq 0.90$, and 83% exceed $R^2 \geq 0.80$. About 46 variables (4%) fall below $R^2 = 0.50$.
 
@@ -22,20 +22,20 @@ Across these 1,224 scored variables, median $R^2$ is 0.98 and mean $R^2$ is 0.90
 
 Key observations from the figure:
 
-- **CalSimHydro** (n=655) shows the tightest distribution with the highest median, reflecting direct use of WGEN precipitation and VIC-derived ET in the CalSimHydro model. Urban demand and wastewater terms achieve $R^2 = 1.0$ because they are entirely determined by repeating non-climate inputs.
-- **Reservoir Evaporation** (n=95) achieves near-perfect agreement because the Hargreaves-Samani equation responds smoothly to temperature inputs with minimal sensitivity to precipitation timing.
+- **CalSimHydro** (n=655) shows the tightest distribution with the highest median, from its direct use of WGEN precipitation and VIC-derived ET in the CalSimHydro model. Urban demand and wastewater terms achieve $R^2 = 1.0$ because they are entirely determined by repeating non-climate inputs.
+- **Reservoir Evaporation** (n=95) scores very high because the Hargreaves-Samani equation responds smoothly to temperature inputs with minimal sensitivity to precipitation timing.
 - **Rim Inflow** (n=228) and **Delta Channel Depletion** (n=28) cluster around $R^2 \approx 0.80$ with moderate spread, consistent with quantile mapping from VIC-simulated flows.
-- **Small Watersheds** (n=118) and **Tulare Groundwater Terms** (n=14) show the widest distributions, reflecting WYT averaging for terms with weak VIC correlation. The median $R^2$ of ~0.70 for small watersheds is driven by lower WGEN precipitation producing a -3.0% median recharge reduction.
+- **Small Watersheds** (n=118) and **Tulare Groundwater Terms** (n=14) show the widest distributions, from WYT averaging on terms with weak VIC correlation. The median $R^2$ of ~0.70 for small watersheds reflects lower WGEN precipitation and a -3.0% median recharge reduction.
 - **Climate** (n=56) performs well overall, with slightly lower scores in VPD terms due to the quantile mapping step required for vapor pressure deficit.
 - **Upper Watershed Modules** (n=13) show moderate spread, with storage forecast terms and the S_PEDRO change-in-storage approach producing lower correlations due to the indirect relationship between flow indices and operational decisions.
 
-### Detailed Tables by Category
+### Detailed tables by category
 
-The following tables report the weighted-average $R^2$ and NSE for each variable type within a category, along with annual average values for the CalSim historical baseline and Product A reconstruction. Count indicates the number of non-zero, time-varying CalSim state variables represented by each row; counts may be lower than the full inventory totals because constant and zero-valued outputs are excluded from validation (e.g., CalSimHydro reports 655 varying outputs here versus 746 total outputs in the inventory). Absolute difference and percent difference are calculated as Product A minus Historical.
+The following tables report the weighted-average $R^2$ and NSE for each variable type within a category, along with annual average values for the CalSim historical baseline and Product A reconstruction. Count is the number of non-zero, time-varying CalSim state variables in each row; counts may be lower than the full inventory totals because constant and zero-valued outputs are excluded from validation. Absolute difference and percent difference are calculated as Product A minus Historical.
 
 #### CalSimHydro
 
-CalSimHydro represents the largest single category with 655 variables across Sacramento Valley water budget areas. The ET quantile mapping drives a +8.8% increase in deep percolation (driven by lower rangeland ET under WGEN climate) and a -5.8% decrease in surface runoff (driven by lower WGEN precipitation).
+CalSimHydro is the largest single category, with 655 variables across Sacramento Valley water budget areas. The ET quantile mapping drives a +8.8% increase in deep percolation (from lower rangeland ET under WGEN climate) and a -5.8% decrease in surface runoff (from lower WGEN precipitation).
 
 | Part C | Count | $R^2$ | NSE | Hist. Ann Avg | Prod. A Ann Avg | Abs Diff | Pct Diff |
 |--------|------:|------:|----:|-------------:|-----------:|---------:|---------:|
@@ -49,7 +49,7 @@ CalSimHydro represents the largest single category with 655 variables across Sac
 
 #### CalSimHydroEE
 
- CalsimHydro external elements show the largest percent difference of any category. The +83% deep percolation increase reflects small absolute values in each element area where even modest ET differences produce large percentage changes.
+CalSimHydro external elements show the largest percent difference of any category. The +83% deep percolation increase reflects small absolute values in each element area, where even modest ET differences produce large percentage changes.
 
 | Part C | Count | $R^2$ | NSE | Hist. Ann Avg | Prod. A Ann Avg | Abs Diff | Pct Diff |
 |--------|------:|------:|----:|-------------:|-----------:|---------:|---------:|
@@ -65,7 +65,7 @@ Rim inflow validation covers 203 individual flow terms (excluding unimpaired flo
 
 #### Rim Inflow (Unimpaired)
 
-Unimpaired flows for the nine major river systems show overall strong performance ($R^2$ range 0.87--0.94). Trinity stands out with -24% difference.
+Unimpaired flows for the nine major river systems perform well ($R^2$ range 0.87--0.94). Trinity is the largest outlier, at -24%.
 
 | Part B | $R^2$ | NSE | Hist. Ann Avg (TAF) | Prod. A Ann Avg (TAF) | Abs Diff (TAF) | Pct Diff |
 |--------|------:|----:|-------------:|-----------:|---------:|---------:|
@@ -110,7 +110,7 @@ Pumping terms ($R^2$ = 0.87) are better reproduced than deep percolation terms (
 
 #### Reservoir Evaporation
 
-Reservoir evaporation achieves excellent agreement with only +0.2% difference, confirming that the Hargreaves-Samani Python automation exactly replicates the original Excel methodology. The small remaining difference stems from Product A synthetic temperature being slightly lower than historical.
+Reservoir evaporation matches the baseline within +0.2%, confirming that the Hargreaves-Samani Python automation reproduces the original Excel methodology. The small remaining difference stems from Product A synthetic temperature being slightly lower than historical.
 
 | Part C | Count | $R^2$ | NSE | Hist. Ann Avg (in/yr) | Prod. A Ann Avg (in/yr) | Abs Diff | Pct Diff |
 |--------|------:|------:|----:|-------------:|-----------:|---------:|---------:|
@@ -132,7 +132,7 @@ Seven reservoir storage levels were reconstructed using a mix of quantile mappin
 
 #### Climate
 
-Climate inputs (precipitation, temperature, VPD) show strong performance. Differences stem from the WGEN base climate dataset. VPD shows -3.9% difference due to the quantile mapping transformation from temperature.
+Climate inputs (precipitation, temperature, VPD) reproduce the baseline closely. Differences stem from the WGEN base climate dataset. VPD shows -3.9% difference from the quantile mapping transformation of temperature.
 
 | Part C | Count | $R^2$ | NSE | Hist. Ann Avg | Prod. A Ann Avg | Abs Diff | Pct Diff |
 |--------|------:|------:|----:|-------------:|-----------:|---------:|---------:|
@@ -142,7 +142,7 @@ Climate inputs (precipitation, temperature, VPD) show strong performance. Differ
 
 #### Instream Flows
 
-San Joaquin Restoration flows and Feather River minimum instream flow show strong performance. Differences in restoration flows (-4.7% for non-pulse, -12.2% for pulse) trace to differences in the unimpaired inflow volumes used as input to the threshold logic.
+San Joaquin Restoration flows and Feather River minimum instream flow reproduce well. Differences in restoration flows (-4.7% for non-pulse, -12.2% for pulse) trace to differences in the unimpaired inflow volumes fed to the threshold logic.
 
 | Part B | Part C | $R^2$ | NSE | Hist. Ann Avg | Prod. A Ann Avg | Abs Diff | Pct Diff |
 |--------|--------|------:|----:|-------------:|-----------:|---------:|---------:|
@@ -152,7 +152,7 @@ San Joaquin Restoration flows and Feather River minimum instream flow show stron
 
 #### Other / Miscellaneous
 
-Miscellaneous terms span diverse methodologies. EBTML Loss ($R^2$ = 0.99) and NDOI Precipitation Accretion ($R^2$ = 0.89) show strong performance. Colusa Basin Drain and Knights Landing Ridge Cut benefit from the hybrid QM+WYT approach ($R^2$ = 0.69 and 0.76 respectively). The Tule Wetness Index ($R^2$ = 0.70) captures the seasonal pattern adequately for Friant operations.
+Miscellaneous terms use a range of methodologies. EBTML Loss ($R^2$ = 0.99) and NDOI Precipitation Accretion ($R^2$ = 0.89) reproduce well. Colusa Basin Drain and Knights Landing Ridge Cut benefit from the hybrid QM+WYT approach ($R^2$ = 0.69 and 0.76 respectively). The Tule Wetness Index ($R^2$ = 0.70) captures the seasonal pattern adequately for Friant operations.
 
 | Part B | Part C | $R^2$ | NSE | Hist. Ann Avg | Prod. A Ann Avg | Abs Diff | Pct Diff |
 |--------|--------|------:|----:|-------------:|-----------:|---------:|---------:|
@@ -184,27 +184,27 @@ Upper watershed terms show the most methodological diversity, spanning quantile 
 | S_PEDRO_SV | Storage | 0.392 | 0.389 | 16,760 | 16,814 | +53 | +0.3% |
 | UARPFORECASTRELEASE | Storage Forecast | 0.755 | 0.753 | 0.18 | -0.69 | -0.87 | -- |
 
-### Key Takeaways
+### Key takeaways
 
-1. **The overall framework performs well.** Median $R^2$ of 0.98 and mean $R^2$ of 0.90 demonstrates that the WGEN-VIC-QM pipeline captures the dominant variability in CalSim inputs. The synthetic input generation methodology successfully translates stochastic climate sequences into physically consistent model inputs.
+1. **Overall skill is high.** Median $R^2$ of 0.98 and mean $R^2$ of 0.90 show that the WGEN-VIC-QM pipeline captures the dominant variability in CalSim inputs. The pipeline turns stochastic climate sequences into physically consistent model inputs.
 
-2. **Reconstructed hydrology carries a significant net bias.** Two hydrologic sources dominate. First, ET quantile mapping raises CalSimHydro deep percolation by +8.8% (approximately 380 TAF/yr) through lower rangeland ET under VIC quantile-mapped inputs. Second, the rim inflows retain a residual VIC wet bias even after quantile mapping -- the 203-term aggregate runs +3.0% high (+904 TAF/yr), with major anchors biased upward (Bend Bridge +8.2%, Oroville +7.2%, Yuba +10.3%). These biases compound at the system scale, lifting Delta inflow +4.5% and Delta outflow +5.7% above the historical baseline in the CalSim run.
+2. **Reconstructed hydrology carries a net bias.** Two hydrologic sources dominate. First, ET quantile mapping raises CalSimHydro deep percolation by +8.8% (approximately 380 TAF/yr) through lower rangeland ET under VIC quantile-mapped inputs. Second, the rim inflows retain a residual VIC wet bias even after quantile mapping: the 203-term aggregate runs +3.0% high (+904 TAF/yr), with major anchors biased upward (Bend Bridge +8.2%, Oroville +7.2%, Yuba +10.3%). These biases compound at the system scale and lift Delta inflow +4.5% and Delta outflow +5.7% above the historical baseline in the CalSim run.
 
 3. **WGEN precipitation drives a consistent drying signal.** Surface runoff (-6%), small watershed recharge (-3%), delta channel depletion terms (-1.5% to -4.6%), and NDOI accretion (-6.1%) all show slight negative bias consistent with the WGEN historical period (1948--2018) producing mildly different precipitation patterns than the full CalSim baseline period.
 
 4. **Model-driven categories outperform index-based categories.** Variables produced by physical models (CalSimHydro, reservoir evaporation, delta channel depletion) consistently achieve higher $R^2$ than variables reconstructed through statistical relationships (WYT averaging, quantile mapping of indices). This is expected: model-driven terms respond deterministically to climate inputs, while index-based terms rely on statistical associations that introduce additional uncertainty.
 
-5. **Categories with weak hydrologic correlation accept appropriate limitations.** Tulare groundwater terms ($R^2$ = 0.50 for deep percolation), CalSimHydroEE ($R^2$ = 0.72 with negative NSE), and S_PEDRO storage ($R^2$ = 0.39) represent terms where the chosen methodology is the best available given project constraints. These terms are either approximate placeholders (Tulare GW), involve very small absolute values (CalSimHydroEE), or represent operational decisions with limited hydrologic predictability (S_PEDRO).
+5. **Categories with weak hydrologic correlation have inherent limitations.** Tulare groundwater terms ($R^2$ = 0.50 for deep percolation), CalSimHydroEE ($R^2$ = 0.72 with negative NSE), and S_PEDRO storage ($R^2$ = 0.39) are terms where the chosen methodology is the best available given project constraints. These terms are either approximate placeholders (Tulare GW), involve very small absolute values (CalSimHydroEE), or represent operational decisions with limited hydrologic predictability (S_PEDRO).
 
 6. **Trinity anomaly requires investigation.** The -24% difference in UNIMP_TRIN ($R^2$ = 0.87) is the largest among unimpaired flows and traces to a potential grid file discrepancy with CalSim-3 forecast DLL's spatial averaging domain.
 
 7. **Threshold-based terms are sensitive to near-threshold years.** Instream flows, PG&E allocation, and water year type classifications all employ threshold logic where small differences in input flows can cause discrete category shifts. The Solver-optimized approach for PG&E allocation ($R^2$ = 0.70, improved from 0.75 with manual thresholds to 0.90 with optimization) demonstrates that systematic threshold calibration meaningfully improves results.
 
-## CalSim Run Validation
+## CalSim run validation
 
 CalSim 3 was run with the full Product A input set (WY 1922--2021) and compared against the historical baseline CalSim run (DCR 2023). The tables below report average annual values in TAF for key system metrics across two evaluation windows: the full WY 1972--2018 validation period and the WY 1987--1992 drought period. Figures show monthly time series and non-exceedance probability distributions for each metric.
 
-### Long-Term Performance (WY 1972--2018)
+### Long-term performance (WY 1972--2018)
 
 | Group | Metric | Baseline Avg (TAF/yr) | Product A Avg (TAF/yr) | Diff (TAF) | Diff (%) |
 |-------|--------|---------:|---------:|---------:|---------:|
@@ -223,7 +223,7 @@ CalSim 3 was run with the full Product A input set (WY 1922--2021) and compared 
 
 Total deliveries (CVP + SWP) average 7,140 TAF/yr under Product A versus 7,117 TAF/yr under the baseline, a combined difference of +0.3%. Delta inflow increases by +4.5% and Delta outflow by +5.7%, consistent with the +3.0% rim inflow increase propagating through the system. Reservoir storage levels show modest positive bias (+1.5% to +3.6%) reflecting the slightly wetter input signal. The largest outlier is Cache Slough (+18.5%), which amplifies the precipitation-driven differences in local Delta channel depletion terms. SJR at Vernalis (-15.2%) traces to the San Joaquin rim inflow deficit described in the input validation section.
 
-### Drought Period (WY 1987--1992)
+### Drought period (WY 1987--1992)
 
 | Group | Metric | Baseline Avg (TAF/yr) | Product A Avg (TAF/yr) | Diff (TAF) | Diff (%) |
 |-------|--------|---------:|---------:|---------:|---------:|
@@ -242,7 +242,7 @@ Total deliveries (CVP + SWP) average 7,140 TAF/yr under Product A versus 7,117 T
 
 During the 1987--1992 drought, differences are substantially larger than the long-term averages. SWP total deliveries increase by +30.3% and Banks exports by +26.5% because the Product A inputs produce modestly wetter conditions during these critical years, which relaxes operational constraints on exports and deliveries. Oroville storage is +27.7% higher and Shasta +16.4% higher, consistent with higher rim inflows maintaining reservoir levels above historical drought lows. These differences illustrate the sensitivity of drought-period operations to the input signal: small differences in inflow timing and magnitude during drought years propagate nonlinearly through reservoir operating rules and export constraints.
 
-### Full Validation Figures (WY 1972--2018)
+### Full validation figures (WY 1972--2018)
 
 ::::{tab-set}
 :::{tab-item} CVP Total Delivery
@@ -283,7 +283,7 @@ During the 1987--1992 drought, differences are substantially larger than the lon
 :::
 ::::
 
-### Drought Period Figures (WY 1987--1992)
+### Drought period figures (WY 1987--1992)
 
 ::::{tab-set}
 :::{tab-item} CVP Total Delivery

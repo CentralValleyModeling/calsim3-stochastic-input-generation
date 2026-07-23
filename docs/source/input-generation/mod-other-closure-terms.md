@@ -14,7 +14,7 @@ For the DCR 2023-based inventory screened for this project, 26 closure-term inpu
 
 ## Methodology
 
-Initial investigation attempted to correlate closure terms with nearest upstream unimpaired flow predictors and water year type (WYT) indices. Monthly Pearson correlations were generally weak, with Bend Bridge showing the strongest relationship at approximately r=0.50. These relationships were not considered sufficient to support quantile mapping. Annual sum correlation was higher, but the annual signal is too coarse to use directly because of strong month to month variation, for example, January can be highly positive while February may be negative, and the annual signal cannot capture these monthly fluctuations.
+Initial investigation attempted to correlate closure terms with nearest upstream unimpaired flow predictors and water year type (WYT) indices. Monthly Pearson correlations were generally weak, with Bend Bridge showing the strongest relationship at approximately r=0.50. These relationships were not considered sufficient to support quantile mapping. Annual sum correlation was higher, but the annual signal is too coarse to use directly because of strong month to month variation. For example, January can be highly positive while February may be negative.
 
 ::::{tab-set}
 :::{tab-item} Sacramento Valley Map
@@ -68,7 +68,7 @@ Initial investigation attempted to correlate closure terms with nearest upstream
 
 Given these limitations, a weighted average methodology based on WGEN sampling dates was adopted to generate the 13 nonrepeating closure terms. For each synthetic month, the method extracts the WGEN sampled dates, calculates the percentage of days drawn from each historical month and year combination, retrieves the historical closure term values for those contributing periods, and combines them into a weighted average using the sampling percentages as weights.
 
-WGEN constructs each synthetic month by sampling historical days, and those sampling dates are recorded, the closure terms can be reconstructed by applying the same temporal mixing. For example, synthetic May of simulation year 2036 draws 21 of its 31 days from historical May 1972, 6 days from May 1957, and the remaining 4 days from June 1952. As this example shows, donor periods can sometimes differ from the synthetic month in calendar month. The figure below illustrates the resulting weighted average using the Bend Bridge closure term values for these donor periods. This reconstruction preserves the temporal association between WGEN donor dates and historical closure term values; it does not identify or simulate the physical, operational, or data related causes of the residuals.
+WGEN constructs each synthetic month by sampling historical days, and those sampling dates are recorded, the closure terms can be reconstructed by applying the same temporal mixing. For example, synthetic May of simulation year 2036 draws 21 of its 31 days from historical May 1972, 6 days from May 1957, and the remaining 4 days from June 1952. Donor periods can sometimes differ from the synthetic month in calendar month. The figure below illustrates the resulting weighted average using the Bend Bridge closure term values for these donor periods. This reconstruction preserves the temporal association between WGEN donor dates and historical closure term values; it does not identify or simulate the physical, operational, or data related causes of the residuals.
 
 ```{mermaid}
 flowchart LR

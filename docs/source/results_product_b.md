@@ -11,9 +11,9 @@ outputs (deliveries, Delta flows, reservoir storage) are examined across the ten
 
 ## Summary
 
-The Product B ensemble runs wetter than the CalSim baseline in its central tendency, driven by the
-WGEN sampling pool and the rim-inflow hydrology bias, while its spread still extends beyond the
-historical envelope in both directions. At the input level, the 10-trace ensemble mean
+In its central tendency, the Product B ensemble runs wetter than the CalSim baseline, driven by the
+WGEN sampling pool and the rim-inflow hydrology bias. Its spread still extends beyond the
+historical range in both directions. At the input level, the 10-trace ensemble mean
 reproduces the baseline for most categories within a few percent and shows the same signed biases
 found in Product A. The largest is a wet rim-inflow bias (ensemble median +7%, weighted +9%) carried
 over from the WGEN post-1948 sampling pool and the VIC-to-CalSim quantile mapping. At the system
@@ -24,7 +24,7 @@ storage. The CalSim runs also surfaced operational edge cases. Eight of ten trac
 the San Joaquin restoration cycle under extreme flows and required targeted WRESL fixes, documented
 separately in the {doc}`infeasibility report </source/calsim-run/sjr_infeasibility_report>`.
 
-## Input Distribution Comparison
+## Input distribution comparison
 
 This stage compares the compiled Product B input ensemble against the CalSim 3 baseline monthly
 means. Because no held-out truth exists for the stochastic sequences, the comparison is
@@ -33,7 +33,7 @@ mean, and differences are aggregated by input category. The underlying data are 
 `postprocessing/sv_compile/product_b_compilation.py`
 (`product_b_vs_calsim_base_comparison.csv` and the water-year exceedance summaries).
 
-### Summary by Category
+### Summary by category
 
 ![Weighted annual percent difference by input category](figures/results-product-b/input-distribution/weighted_annual_pctdiff_by_category.png)
 *Distribution of annual percent difference (Product B chunk vs CalSim baseline) by input category,
@@ -80,7 +80,7 @@ Key observations:
   by the repeating-pattern fill applied to salinity, not by broad ensemble bias (their median
   per-variable differences are near zero).
 
-### Water-Year Exceedance Behavior
+### Water-year exceedance behavior
 
 Beyond mean differences, the exceedance analysis checks whether each Product B trace preserves the
 *shape* of the baseline distribution, that is, whether wet and dry water years land at the right
@@ -118,7 +118,7 @@ its displacement from the matching baseline percentile is measured.*
 :::
 ::::
 
-### Chunk-to-Chunk Spread
+### Chunk-to-chunk spread
 
 The ten traces are independent 100-year realizations, so their chunk means vary around the ensemble
 mean. The figures below show, for representative categories, how the per-variable percent difference
@@ -142,14 +142,14 @@ repeats of one another.
 :::
 ::::
 
-## CalSim Run Validation
+## CalSim run validation
 
 The full Product B ensemble was run through CalSim 3 as ten 100-year traces, each reinitialized from
 the common DCR 2023 baseline starting state (October 1, 1921). See
 {doc}`CalSim Runs overview </source/calsim-run/overview>` for the rationale behind the 10 x 100-year
 structure and the distributional (CDF-based) evaluation framing.
 
-### Solver Feasibility
+### Solver feasibility
 
 Extended stochastic sequences pushed CalSim's operational rules outside their historical design
 range. Eight of the ten traces initially failed during the San Joaquin restoration cycle, in four
@@ -161,7 +161,7 @@ through a one-month baseline data restore. The full diagnosis, constraint-level 
 are in the {doc}`infeasibility report </source/calsim-run/sjr_infeasibility_report>`. These failures
 are documented as operational edge cases for Phase II rather than input defects.
 
-### Ensemble System Performance
+### Ensemble system performance
 
 The table reports the historical baseline annual average against the range of the ten trace-level
 annual averages, with the corresponding percent-difference bracket. The ensemble runs consistently
@@ -189,7 +189,7 @@ Although every trace averages wetter than history, individual traces reach singl
 SWP delivery at 274 TAF (vs 419), Banks exports at 421 TAF (vs 666), and Oroville storage at 26 TAF
 (vs 171).
 
-### Annual Distribution (CDF) by Metric
+### Annual distribution (CDF) by metric
 
 Each panel overlays the ten trace annual cumulative distribution functions against the historical
 baseline CDF. The traces should bracket the baseline and extend its tails.
@@ -233,7 +233,7 @@ baseline CDF. The traces should bracket the baseline and extend its tails.
 :::
 ::::
 
-### Per-Trace Distribution (Block Boxplots)
+### Per-trace distribution (block boxplots)
 
 The boxplots show the annual distribution within each 100-year trace (n01--n10) alongside the
 historical baseline, making trace-to-trace variability and outliers directly comparable.
@@ -277,7 +277,7 @@ historical baseline, making trace-to-trace variability and outliers directly com
 :::
 ::::
 
-### Stitched 1,000-Year Time Series
+### Stitched 1,000-year time series
 
 Stitching the ten traces end to end produces a continuous 1,000-year annual series for each metric.
 The historical baseline is plotted first for reference, followed by traces n01 through n10 in
@@ -323,7 +323,7 @@ sustained wet and dry periods than the historical record.
 :::
 ::::
 
-### Worst Drought Sequences (2- and 5-Year)
+### Worst drought sequences (2- and 5-year)
 
 For each metric, the postprocessing finds the driest 2-year and 5-year rolling-average window in
 every trace and in the historical record. The panels overlay each trace's worst window (gray) on
@@ -381,7 +381,7 @@ severe stochastic droughts fall below the worst sustained dry period in the hist
 :::
 ::::
 
-### Range of 100-Year Block Means
+### Range of 100-year block means
 
 ![Range of 100-year block means vs historical](figures/results-product-b/calsim-run/range/range_100yr_block_means_vs_historical.png)
 *Distribution of 100-year block means across the ten traces relative to the historical baseline for
@@ -393,7 +393,7 @@ how much a single 100-year planning sequence can deviate from the long-term cent
 (columns). Warmer cells mark traces running wetter than history; the SJR-at-Vernalis row shows the
 only consistent drier-than-history traces (n02, n07, n09).*
 
-## Key Takeaways
+## Key takeaways
 
 1. **The ensemble brackets and extends the historical record.** Trace means run wetter than the
    baseline while single-year extremes reach below the historical worst year for deliveries,
