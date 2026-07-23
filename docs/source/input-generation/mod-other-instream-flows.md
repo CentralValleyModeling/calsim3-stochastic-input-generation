@@ -32,20 +32,26 @@ San Joaquin River unimpaired runoff into Millerton Lake is the sole hydrologic i
 
 The allocation is discontinuous at the 400 TAF, 670 TAF, and 2.5 MAF thresholds, so small runoff differences near these values can shift the schedule between year types.
 
-Second, the annual allocation is converted into a release schedule. The workbook defines twelve reference schedules, matching the Friant Dam default restoration flow schedules, which tabulates the full release rates. Each reference schedule carries a fixed annual release total and prescribes a release rate for each of twelve sub-annual blocks:
+Second, the annual allocation is converted into a release schedule. The workbook defines twelve reference schedules, matching the Friant Dam default restoration flow schedules. Each carries a fixed annual release total and prescribes a release rate for each of twelve sub-annual blocks (Mar 1-15, Mar 16-31, Apr 1-15, Apr 16-30, May-Jun, Jul-Aug, Sep, Oct, Nov 1-6, Nov 7-10, Nov 11-Dec 31, Jan-Feb):
 
-```{list-table}
-:widths: 30 70
+| Reference schedule (driest to wettest) | Schedule annual total (TAF) |
+|---|---|
+| Critical-Low | 116.9 |
+| Critical-High | 187.8 |
+| Critical-High to Dry 1 | 196.7 |
+| Critical-High to Dry 2 | 218.1 |
+| Critical-High to Dry 3 | 238.8 |
+| Critical-High to Dry 4 | 266.9 |
+| Critical-High to Dry 5 | 294.9 |
+| Dry | 301.3 |
+| Normal-Dry | 365.3 |
+| Normal-Wet | 473.9 |
+| Normal-Wet (+) | 563.0 |
+| Wet | 673.5 |
 
-* - Reference schedules (driest to wettest)
-  - Critical-Low, Critical-High, CH to Dry 1 through 5, Dry, Normal-Dry, Normal-Wet, N-Wet (+), Wet
-* - Sub-annual blocks
-  - Mar 1-15, Mar 16-31, Apr 1-15, Apr 16-30, May-Jun, Jul-Aug, Sep, Oct, Nov 1-6, Nov 7-10, Nov 11-Dec 31, Jan-Feb
-```
+or a given year, the two reference schedules whose annual totals bracket the year's allocation are selected, and each sub-annual block rate is linearly interpolated according to the allocation's position between them. Because the allocation steps from 187.8 to 272.3 TAF at the 670 TAF threshold, no allocation falls between these values, so the first three transitional schedules are never selected; they are listed to document the full set from the source workbook.
 
-For a given year, the two reference schedules whose annual totals bracket the year's allocation are selected, and their block rates are interpolated linearly in proportion to the allocation.
-
-The resulting schedule applies over a restoration year running from March through February, keyed to the corresponding water year runoff total. Monthly CalSim inputs are obtained by weighting the block release rates by their number of days in each month and rounding to whole CFS. In April, the pulse rate is applied over the final 16 days and the non-pulse series receives the remaining volume, a convention adopted from the original Excel workbook.
+The resulting schedule applies over a restoration year running from March through February, keyed to the corresponding water year runoff total. Monthly CalSim inputs are obtained by weighting the block release rates by their number of days in each month and rounding to whole CFS. In April, the pulse rate is applied over the final 16 days and the non-pulse series receives the remaining volume, a convention adopted from the source workbook.
 
 
 ### Results
