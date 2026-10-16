@@ -5,7 +5,7 @@ All paths below are relative to the repo root (`calsim3-stochastic-input-generat
 - **Scripts**: `mod_forcing/vic/`
 - **Base data**: `data/BASE/` (`get_base_dir()`)
 - **Generated data**: `data/GENERATED/mod_hydrology/vic/` (`get_module_generated_dir("mod_hydrology/vic")`)
-- **Grid info**: `mod_forcing/vic/reference/GridInfo/`
+- **Grid info**: `mod_forcing/climate/reference/GridInfo/`
 
 ## 1. Append Wind to WGEN Climate Data
 
@@ -105,7 +105,7 @@ python mod_forcing/vic/_2_compile_rim_inflows.py --product B \
     --output_path data/GENERATED/mod_hydrology/vic/output/routed/Product_B/1
 ```
 
-Grid info defaults to `mod_forcing/vic/reference/GridInfo/` (override with `--grid_info_path`).
+Grid info defaults to `mod_forcing/climate/reference/GridInfo/` (override with `--grid_info_path`).
 
 **Product B chunking:**
 - Skips first 9 months to align to October (water year start)

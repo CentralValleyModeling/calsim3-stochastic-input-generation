@@ -217,7 +217,7 @@ def main():
     _script_dir = Path(__file__).resolve().parent
 
     parser = argparse.ArgumentParser(description="Compile rim inflows from VIC fluxes.")
-    parser.add_argument('--grid_info_path', type=str, default=None, help='Path to grid info directory (default: reference/GridInfo)')
+    parser.add_argument('--grid_info_path', type=str, default=None, help='Path to grid info directory (default: mod_forcing/climate/reference/GridInfo)')
     parser.add_argument('--fluxes_path', type=str, default=None, help='Path to VIC fluxes directory')
     parser.add_argument('--full_vic', action='store_true', help='If set, use full VIC output (default is trimmed).')
     parser.add_argument('--output_path', type=str, default=None, help='Path to output directory')
@@ -232,7 +232,7 @@ def main():
                              'A (WGEN historical 1915-2018), or B (stochastic 1000-yr chunks).')
     args = parser.parse_args()
 
-    grid_info_path = args.grid_info_path or str(_script_dir / 'reference' / 'GridInfo')
+    grid_info_path = args.grid_info_path or str(_script_dir.parent / 'climate' / 'reference' / 'GridInfo')
 
     product_b = args.product == 'B'
     if product_b:
@@ -270,11 +270,11 @@ def main():
 
 if __name__ == "__main__":
     # Historical:
-    # python _2_compile_rim_inflows.py --product Historical --grid_info_path ./reference/GridInfo --fluxes_path ./output/fluxes/Historical --output_path ./output/routed/Historical --watersheds CS3_8RI_DPR_I
+    # python _2_compile_rim_inflows.py --product Historical --grid_info_path ../climate/reference/GridInfo --fluxes_path ./output/fluxes/Historical --output_path ./output/routed/Historical --watersheds CS3_8RI_DPR_I
     # Historical_Unsplit:
-    # python _2_compile_rim_inflows.py --product Historical_Unsplit --grid_info_path ./reference/GridInfo --fluxes_path ./output/fluxes/Historical_Unsplit --output_path ./output/routed/Historical_Unsplit --watersheds CS3_8RI_DPR_I
+    # python _2_compile_rim_inflows.py --product Historical_Unsplit --grid_info_path ../climate/reference/GridInfo --fluxes_path ./output/fluxes/Historical_Unsplit --output_path ./output/routed/Historical_Unsplit --watersheds CS3_8RI_DPR_I
     # Product A:
-    # python _2_compile_rim_inflows.py --product A --grid_info_path ./reference/GridInfo --fluxes_path ./output/fluxes/Product_A/1 --output_path ./output/routed/Product_A/1 --watersheds CS3_8RI_OROVI
+    # python _2_compile_rim_inflows.py --product A --grid_info_path ../climate/reference/GridInfo --fluxes_path ./output/fluxes/Product_A/1 --output_path ./output/routed/Product_A/1 --watersheds CS3_8RI_OROVI
     # Product B (writes 10 chunk files per watershed):
-    # python _2_compile_rim_inflows.py --product B --grid_info_path ./reference/GridInfo --fluxes_path ./output/fluxes/Product_B/1 --output_path ./output/routed/Product_B/1 --watersheds CS3_8RI_OROVI
+    # python _2_compile_rim_inflows.py --product B --grid_info_path ../climate/reference/GridInfo --fluxes_path ./output/fluxes/Product_B/1 --output_path ./output/routed/Product_B/1 --watersheds CS3_8RI_OROVI
     main()

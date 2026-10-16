@@ -2,10 +2,10 @@
 Build the CS3_8RI_SRBB Composite GridInfo (rim + valley floor)
 ==============================================================
 One-off generator for ``GridInfo/CS3_8RI_SRBB_GridInfo.txt``, the grid-weight
-file that lets ``_2_compile_rim_inflows.py`` route the Sacramento River at Bend
-Bridge (CalSim node SAC257, anchor for UNIMP_SRBB) directly -- the same way any
-other rim point is routed -- instead of summing pre-routed component series
-afterward.
+file that lets ``mod_forcing/vic/_2_compile_rim_inflows.py`` route the Sacramento
+River at Bend Bridge (CalSim node SAC257, anchor for UNIMP_SRBB) directly -- the
+same way any other rim point is routed -- instead of summing pre-routed component
+series afterward.
 
 The Shasta-only routing (CS3_I_SHSTA) stops at the dam and under-represents Bend
 Bridge by roughly 30 percent. Bend Bridge drains Shasta inflow plus everything
@@ -56,8 +56,8 @@ CS3_8RI_SRBB_GridInfo.txt is what the pipeline actually consumes.
 Usage
 -----
     # gpkg defaults to <data_dir>/BASE/CalSim3/calsim3.gpkg (resolved from config.json)
-    python mod_forcing/vic/reference/build_8RI_SRBB_gridinfo.py
-    python mod_forcing/vic/reference/build_8RI_SRBB_gridinfo.py --gpkg /path/to/calsim3.gpkg
+    python mod_forcing/climate/reference/build_8RI_SRBB_gridinfo.py
+    python mod_forcing/climate/reference/build_8RI_SRBB_gridinfo.py --gpkg /path/to/calsim3.gpkg
 """
 
 import argparse

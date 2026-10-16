@@ -70,7 +70,6 @@ PRODUCT_A_SCRIPTS = [
     "mod_hydrology/calsimhydro_ee/_1_compile_precip_EE.py",
     "mod_hydrology/delta_channel_depletion/_1_compile_precip_DETAW.py",
     "mod_hydrology/small_watersheds/_1_compile_precip_sws.py",
-    "mod_hydrology/rim_inflow/_2_qmap_historical_validation.py",
     "mod_hydrology/rim_inflow/_1_build_rim_inflow.py",
     "mod_hydrology/rim_inflow/_2_skill_evaluation.py",
     "mod_hydrology/water_year_types/_1_calc_WYTs.py",
@@ -107,12 +106,11 @@ PRODUCT_A_SCRIPTS = [
 # Canonical Product B pipeline (Product_B_Production_Manifest.md section A
 # "End-to-end ordering"). Numbered pipeline scripts only -- shared utils/
 # library modules are exempt; scripts shared between A and B (compile_precip,
-# rim_inflow QM historical validation, water_year_types, the merged
+# the rim-inflow forcing and builder, water_year_types, the merged
 # --product-flagged qmap wrappers in upper_watershed/miscellaneous/
 # storage_curves, etc.) live in the Product A list above and are not
 # duplicated here.
 PRODUCT_B_SCRIPTS = [
-    "mod_hydrology/rim_inflow/_3_qmap_productB.py",
     "mod_hydrology/calsimhydro/_4_postprocess_product_b.py",
     "mod_hydrology/calsimhydro_ee/_3_postprocess_product_b.py",
     "mod_hydrology/delta_channel_depletion/_3_postprocess_product_b.py",
@@ -133,7 +131,6 @@ EXEMPT_SCRIPTS = [
     "mod_hydrology/calsimhydro/_0_compare_et_cshydro_vic.py",       # diagnostic
     "mod_hydrology/rim_inflow/_0_stochastic_inflow_explore.py",     # exploration
     "mod_hydrology/rim_inflow/_0_stochastic_precipitation.py",      # exploration
-    "mod_hydrology/rim_inflow/_1_calc_correlations.py",             # diagnostic
     "mod_hydrology/small_watersheds/_1b_check_precip_output.py",    # diagnostic
     "mod_hydrology/water_year_types/_2_compare_wyts.py",            # diagnostic
     "mod_other/day_volume_fractions/_1_vol_fractions_analysis.py",  # diagnostic
