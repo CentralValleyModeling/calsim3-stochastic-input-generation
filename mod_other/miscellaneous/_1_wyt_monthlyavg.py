@@ -4,6 +4,10 @@ Miscellaneous Terms - WYT Monthly-Average Reconstruction
 Runner that defines the miscellaneous term specs, calls the shared WYT
 monthly-average framework, and writes the Product A / Product B outputs.
 
+It also builds the rim-inflow SV I_JBP006 (James Bypass inflow) as a San
+Joaquin year-type average: the year types come from the rim inflows, so
+mod_hydrology/rim_inflow cannot build it itself.
+
 Inputs
 ------
 - CalSim baseline DSS (historical term series)

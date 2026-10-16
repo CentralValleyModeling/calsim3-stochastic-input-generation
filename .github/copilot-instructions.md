@@ -184,7 +184,7 @@ WGEN -> VIC (append wind, run model) -> VIC outputs -> [calsimhydro, calsimhydro
 
 | Script | Purpose | Product |
 |--------|---------|---------|
-| `_1_calc_WYTs.py` | Sac (40-30-30) and SJ (60-20-20) WYT indices | A & B (`--product`) |
+| `_1_calc_WYTs.py` | Sac (40-30-30) and SJ (60-20-20) WYT indices | historical, A & B (`--product`) |
 | `_2_compare_wyts.py` | Compare WYT outputs (diagnostic) | Comparison |
 
 Rim components: Sac (SRBB+OROV+YUBA+FOLS), SJ (ST+TU+ME+SJ).

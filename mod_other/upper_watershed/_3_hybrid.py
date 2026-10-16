@@ -18,11 +18,9 @@ Inputs
 - WYT target by product:
     * A: ``mod_hydrology/water_year_types/output/_1_calc_WYTs/Product_A/``
     * B: ``mod_hydrology/water_year_types/output/_1_calc_WYTs/Product_B/``
-- Rim inflow simulation:
-    * A: ``mod_hydrology/rim_inflow/output/_2_qmap_historical_validation/
-      _product_a_validation/_riminflow_productA_1972_2018.csv``
-    * B: ``mod_hydrology/rim_inflow/output/_3_qmap_product_b/
-      <PartB>_qmo_n{01..10}.csv``
+- Rim inflow simulation (utils.paths.get_rim_inflow_outputs):
+    * A: ``_riminflow_productA_1972_2018.csv``
+    * B: ``<PartB>_qmo_n{01..10}.csv``
 
 Outputs
 -------
@@ -60,7 +58,7 @@ from pathlib import Path
 import pandas as pd
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
-from utils.paths import get_base_dir, get_module_generated_dir
+from utils.paths import get_base_dir, get_module_generated_dir, get_rim_inflow_outputs
 from utils.wyt_monthlyavg_framework import (
     compute_wyt_pattern,
     compute_product_targets,
@@ -79,7 +77,6 @@ from utils.qmap_product_b_from_pairs import (
 _REPO_DIR = Path(__file__).resolve().parents[2]
 _gen = get_module_generated_dir("mod_other/upper_watershed")
 _wyt_gen = get_module_generated_dir("mod_hydrology/water_year_types")
-_rim_gen = get_module_generated_dir("mod_hydrology/rim_inflow")
 
 # -- Config (shared) ---------------------------------------------------
 DSS_FILE = str(get_base_dir() / "CalSim3" / "__calsim_sv_default__.dss")
@@ -94,10 +91,7 @@ WYT_HIST_DIR = str(_REPO_DIR / "mod_hydrology" / "water_year_types" / "reference
 
 # -- Config (Product A specific) ---------------------------------------
 WYT_PRODUCT_A_DIR = str(_wyt_gen / "output" / "_1_calc_WYTs" / "Product_A")
-PRODUCT_A_RIM_CSV = (
-    _rim_gen / "output" / "_2_qmap_historical_validation"
-    / "_product_a_validation" / "_riminflow_productA_1972_2018.csv"
-)
+PRODUCT_A_RIM_CSV = get_rim_inflow_outputs("A")["sv"]
 TRAIN_START_A = "1921-10-01"
 TRAIN_END_A = "1971-09-30"
 SIM_START_A = "1971-10-01"
@@ -107,7 +101,7 @@ PRODUCT_A_END_WY = 2018
 
 # -- Config (Product B specific) ---------------------------------------
 WYT_PRODUCT_B_DIR = str(_wyt_gen / "output" / "_1_calc_WYTs" / "Product_B")
-SIM_IN_DIR_B = _rim_gen / "output" / "_3_qmap_product_b"
+SIM_IN_DIR_B = get_rim_inflow_outputs("B")["dir"]
 TRAIN_START_B = "1921-10-01"
 TRAIN_END_B = "2021-09-30"
 PRODUCT_B_START = "1921-10-31"

@@ -20,10 +20,8 @@ Inputs
 ------
 - ``reference/qmap_pairs.csv`` (pair definitions; shared by A and B)
 - CalSim baseline DSS: ``BASE/CalSim3/__calsim_sv_default__.dss``
-- Product A: ``mod_hydrology/rim_inflow/output/_2_qmap_historical_validation/
-  _product_a_validation/_riminflow_productA_1972_2018.csv``
-- Product B: ``mod_hydrology/rim_inflow/output/_3_qmap_product_b/
-  <PartB>_qmo_n{01..10}.csv``
+- Rim-inflow predictors (utils.paths.get_rim_inflow_outputs): Product A
+  ``_riminflow_productA_1972_2018.csv``; Product B ``<PartB>_qmo_n{01..10}.csv``
 
 Outputs
 -------
@@ -53,7 +51,7 @@ from pathlib import Path
 import pandas as pd
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
-from utils.paths import get_base_dir, get_module_generated_dir
+from utils.paths import get_base_dir, get_module_generated_dir, get_rim_inflow_outputs
 from utils.qmap_product_a_from_pairs import run_product_a_qmap_from_pairs
 from utils.qmap_product_b_from_pairs import (
     run_product_b_qmap_from_pairs,
@@ -116,7 +114,6 @@ def main() -> None:
 
     script_dir = Path(__file__).resolve().parent
     gen = get_module_generated_dir("mod_reservoir/storage_curves")
-    rim_gen = get_module_generated_dir("mod_hydrology/rim_inflow")
     pair_csv = script_dir / "reference" / "qmap_pairs.csv"
     dss_file = get_base_dir() / "CalSim3" / "__calsim_sv_default__.dss"
 
@@ -124,10 +121,7 @@ def main() -> None:
         run_product_a_qmap_from_pairs(
             pair_csv=pair_csv,
             dss_file=dss_file,
-            product_a_rim_csv=(
-                rim_gen / "output" / "_2_qmap_historical_validation"
-                / "_product_a_validation" / "_riminflow_productA_1972_2018.csv"
-            ),
+            product_a_rim_csv=get_rim_inflow_outputs("A")["sv"],
             output_dir=gen / "output" / "_2_qmap" / "product_a",
             validation_dir=gen / "output" / "_product_a_validation",
             allow_negative=ALLOW_NEGATIVE,
@@ -135,7 +129,7 @@ def main() -> None:
         return
 
     # --product B
-    sim_in_dir = rim_gen / "output" / "_3_qmap_product_b"
+    sim_in_dir = get_rim_inflow_outputs("B")["dir"]
     out_dir = gen / "output" / "_2_qmap" / "product_b"
     final_dir = gen / "output" / "_product_b_final"
 

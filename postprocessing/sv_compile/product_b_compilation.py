@@ -73,7 +73,8 @@ from collections import OrderedDict
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 from utils import dss_io
-from utils.paths import get_base_dir, get_generated_dir, get_module_generated_dir, get_inventory_dir
+from utils.paths import (get_base_dir, get_generated_dir, get_module_generated_dir, get_inventory_dir,
+                         get_rim_inflow_outputs)
 
 warnings.filterwarnings("ignore", message="Mean of empty slice")
 warnings.filterwarnings("ignore", message="All-NaN slice encountered")
@@ -150,7 +151,7 @@ _gen_dir = get_generated_dir()
 
 # label -> (path to _product_b_final dir, inventory Input_Category, reader_type)
 # reader_type: "standard" = Part B, Part C, Year, Month, Value
-#              "rim_inflow" = CalSim, Matched_inflow, Year, Month, ..., qmap_postAdj
+#              "rim_inflow" = CalSim, Matched_inflow, Year, Month, qmap_postAdj
 MODULE_CONFIG_B = OrderedDict([
     ("calsimhydro", (
         _gen_dir / "mod_hydrology/calsimhydro/output/_4_postprocess_product_b/_product_b_final",
@@ -162,7 +163,7 @@ MODULE_CONFIG_B = OrderedDict([
         _gen_dir / "mod_reservoir/evaporation/output/_2_run_reservoir_evap/_product_b_final",
         "Reservoir Evaporation", "standard")),
     ("rim_inflow", (
-        _gen_dir / "mod_hydrology/rim_inflow/output/_3_qmap_product_b",
+        get_rim_inflow_outputs("B")["dir"],
         "Rim Inflow", "rim_inflow")),
     ("delta_channel_depletion", (
         _gen_dir / "mod_hydrology/delta_channel_depletion/output/_3_postprocess_product_b/_product_b_final",
@@ -315,7 +316,7 @@ def read_standard_csv(csv_path: Path) -> pd.DataFrame:
 def read_rim_inflow_csv(csv_path: Path) -> pd.DataFrame:
     """Read a rim_inflow non-standard CSV and normalise to standard format.
 
-    Input columns:  CalSim, Matched_inflow, Year, Month, vic_val, qmap_preAdj, qmap_postAdj
+    Input columns:  CalSim, Matched_inflow, Year, Month, qmap_postAdj
     Output columns: Part B, Part C, Year, Month, Value
     """
     _p = str(csv_path)

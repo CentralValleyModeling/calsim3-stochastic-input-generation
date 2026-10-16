@@ -2,17 +2,20 @@
 Calculate Water Year Types (WYTs)
 =================================
 Sacramento 40-30-30 Index and San Joaquin 60-20-20 Index calculations based
-on rim-inflow aggregations with recursive index formulas. Supports Product A
-(historical validation) and Product B (stochastic 1000-year).
+on rim-inflow aggregations with recursive index formulas, over every water year
+of the rim inflows: the historical unsplit weather and Product A (WY1916-2018)
+and Product B (ten 100-year chunks).
 
 Inputs
 ------
-- Rim-inflow QM time series (rim_inflow calsim_qmap_validation_TS.csv)
+- Rim-inflow SVs (utils.paths.get_rim_inflow_outputs): historical and Product A
+  calsim_qmap_validation_TS.csv, Product B <CalSim>_qmo_nXX.csv
 
 Outputs
 -------
-- <generated>/output/_1_calc_WYTs/Product_A/  (Sac + SJ WYT indices)
-- <generated>/output/_1_calc_WYTs/Product_B/  (with --product B)
+- <generated>/output/_1_calc_WYTs/Historical_Unsplit/  (_SacWYT.csv, _SJWYT.csv)
+- <generated>/output/_1_calc_WYTs/Product_A/           (_SacWYT.csv, _SJWYT.csv)
+- <generated>/output/_1_calc_WYTs/Product_B/           (_SacWYT_nXX.csv, _SJWYT_nXX.csv)
 
 Dependencies
 ------------
@@ -20,17 +23,13 @@ Dependencies
 
 Usage
 -----
-# Process Product A:
+    python mod_hydrology/water_year_types/_1_calc_WYTs.py --product historical
     python mod_hydrology/water_year_types/_1_calc_WYTs.py --product A
-
-# Process Product B:
     python mod_hydrology/water_year_types/_1_calc_WYTs.py --product B
 
-# Override input/output paths:
-    python mod_hydrology/water_year_types/_1_calc_WYTs.py \
-        --product A \
-        --product_a_input path/to/calsim_qmap_validation_TS.csv \
-        --product_a_output path/to/output
+# Override the input (the TS file, or Product B's folder) and the output folder:
+    python mod_hydrology/water_year_types/_1_calc_WYTs.py --product A \
+        --input path/to/calsim_qmap_validation_TS.csv --output path/to/output
 """
 
 import argparse
@@ -40,10 +39,16 @@ from pathlib import Path
 import pandas as pd
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
-from utils.paths import get_module_generated_dir
+from utils.paths import get_module_generated_dir, get_rim_inflow_outputs
 
-_rim_gen = get_module_generated_dir("mod_hydrology/rim_inflow")
 _wyt_gen = get_module_generated_dir("mod_hydrology/water_year_types")
+
+OUT_DIRS = {"historical": "Historical_Unsplit", "A": "Product_A", "B": "Product_B"}
+
+# CDEC (Sacramento, San Joaquin) index by water year (reference/cdec_wyt.txt), which seeds
+# the recursion with the year before the first. Every Product B chunk is mapped to a WY1922
+# start.
+CDEC_INDEX = {1915: (10.99, 4.10), 1921: (9.20, 3.23)}
 
 
 # Rim inflow component CalSim names (as they appear in the data)
@@ -275,17 +280,26 @@ def calculate_wyts(df, thresholds, sac_initial_index=None, sj_initial_index=None
     return result
 
 
-def process_product_a(input_path, output_dir, thresholds):
+def write_wyts(wyt_df, output_dir, tag=""):
+    """Write the Sacramento and San Joaquin columns of ``wyt_df`` as _SacWYT{tag}.csv and
+    _SJWYT{tag}.csv (water_year, index, wyt, wyt_label)."""
+    for basin, name in (("sac", "_SacWYT"), ("sj", "_SJWYT")):
+        out = wyt_df[["water_year", f"{basin}_index", f"{basin}_wyt", f"{basin}_wyt_label"]]
+        out.columns = ["water_year", "index", "wyt", "wyt_label"]
+        out.to_csv(Path(output_dir) / f"{name}{tag}.csv", index=False)
+
+
+def process_ts(input_path, output_dir, thresholds):
     """
-    Process Product A (historical validation) data.
-    
+    Process the historical or Product A rim inflows (one long TS table).
+
     Args:
         input_path: Path to calsim_qmap_validation_TS.csv
         output_dir: Directory for output CSV files
         thresholds: Dict of WYT thresholds
     """
-    print(f"Processing Product A: {input_path}")
-    
+    print(f"Processing {input_path}")
+
     # Read data (long format with CalSim column identifying the component)
     df_long = pd.read_csv(input_path)
     
@@ -307,31 +321,17 @@ def process_product_a(input_path, output_dir, thresholds):
     missing = set(all_components) - set(df_wide.columns)
     if missing:
         print(f"  WARNING: Missing components: {missing}")
-    
-    # Calculate WYTs with 1971 initial index values (previous year for 1972 start)
-    # From CDEC historical WYT data: 1971 Sac Index = 10.37, SJ Index = 2.89
-    wyt_df = calculate_wyts(df_wide, thresholds, 
-                           sac_initial_index=10.37, 
-                           sj_initial_index=2.89)
-    
-    # Save separate outputs for Sacramento and San Joaquin
-    output_dir = Path(output_dir)
-    output_dir.mkdir(parents=True, exist_ok=True)
-    
-    # Sacramento WYT
-    sac_df = wyt_df[['water_year', 'sac_index', 'sac_wyt', 'sac_wyt_label']].copy()
-    sac_df.columns = ['water_year', 'index', 'wyt', 'wyt_label']
-    sac_output = output_dir / '_SacWYT.csv'
-    sac_df.to_csv(sac_output, index=False)
-    print(f"  Saved Sacramento: {sac_output}")
-    
-    # San Joaquin WYT
-    sj_df = wyt_df[['water_year', 'sj_index', 'sj_wyt', 'sj_wyt_label']].copy()
-    sj_df.columns = ['water_year', 'index', 'wyt', 'wyt_label']
-    sj_output = output_dir / '_SJWYT.csv'
-    sj_df.to_csv(sj_output, index=False)
-    print(f"  Saved San Joaquin: {sj_output}")
-    
+
+    first = df_wide.index.min()
+    if first.month != 10:
+        raise ValueError(f"the rim inflows start in {first:%b %Y}, not at a water year's start")
+    if first.year not in CDEC_INDEX:
+        raise ValueError(f"no CDEC index for WY{first.year} to seed WY{first.year + 1}")
+    wyt_df = calculate_wyts(df_wide, thresholds, *CDEC_INDEX[first.year])
+
+    Path(output_dir).mkdir(parents=True, exist_ok=True)
+    write_wyts(wyt_df, output_dir)
+    print(f"  Saved _SacWYT.csv and _SJWYT.csv in {output_dir}")
     print(f"  Water years: {wyt_df['water_year'].min()} - {wyt_df['water_year'].max()}")
     print(f"  Total years: {len(wyt_df)}")
 
@@ -382,68 +382,43 @@ def process_product_b(input_dir, output_dir, thresholds):
         if missing:
             print(f"    WARNING: Missing components: {missing}")
         
-        # Calculate WYTs for this chunk.
-        # Each chunk is an independent 100-year sequence mapped to a WY1922 start,
-        # so every chunk seeds the recursion with the 1921 index values (the year
-        # preceding WY1922). From CDEC historical WYT data: 1921 Sac Index = 9.20,
-        # SJ Index = 3.23.
-        wyt_df = calculate_wyts(df_chunk, thresholds,
-                               sac_initial_index=9.20,
-                               sj_initial_index=3.23)
-        
+        wyt_df = calculate_wyts(df_chunk, thresholds, *CDEC_INDEX[1921])
+
         # Remap water years to CalSim convention (WY 1922-2021)
         wyt_df['water_year'] = list(range(1922, 1922 + len(wyt_df)))
-        
-        # Save separate outputs for Sacramento and San Joaquin
-        # Sacramento WYT
-        sac_df = wyt_df[['water_year', 'sac_index', 'sac_wyt', 'sac_wyt_label']].copy()
-        sac_df.columns = ['water_year', 'index', 'wyt', 'wyt_label']
-        sac_output = output_path / f'_SacWYT_n{chunk_num:02d}.csv'
-        sac_df.to_csv(sac_output, index=False)
-        
-        # San Joaquin WYT
-        sj_df = wyt_df[['water_year', 'sj_index', 'sj_wyt', 'sj_wyt_label']].copy()
-        sj_df.columns = ['water_year', 'index', 'wyt', 'wyt_label']
-        sj_output = output_path / f'_SJWYT_n{chunk_num:02d}.csv'
-        sj_df.to_csv(sj_output, index=False)
-        
-        print(f"    Saved Sacramento: {sac_output.name}")
-        print(f"    Saved San Joaquin: {sj_output.name}")
-        print(f"    Water years: {wyt_df['water_year'].min()} - {wyt_df['water_year'].max()}")
+
+        write_wyts(wyt_df, output_path, f"_n{chunk_num:02d}")
+        print(f"    Saved _SacWYT_n{chunk_num:02d}.csv and _SJWYT_n{chunk_num:02d}.csv, "
+              f"water years {wyt_df['water_year'].min()} - {wyt_df['water_year'].max()}")
 
 
 def main():
     parser = argparse.ArgumentParser(description='Calculate Water Year Types for CalSim')
-    parser.add_argument('--product', choices=['A', 'B'], required=True,
-                        help='Product to generate: A (historical 1921-2018) or B (stochastic 1000-yr chunks).')
-    parser.add_argument('--product_a_input', 
-                        default=str(_rim_gen / 'output' / '_2_qmap_historical_validation' / 'calsim_qmap_validation_TS.csv'),
-                        help='Path to Product A input CSV')
-    parser.add_argument('--product_a_output',
-                        default=str(_wyt_gen / 'output' / '_1_calc_WYTs' / 'Product_A'),
-                        help='Directory for Product A output CSVs')
-    parser.add_argument('--product_b_input',
-                        default=str(_rim_gen / 'output' / '_3_qmap_product_b'),
-                        help='Directory containing Product B input CSVs')
-    parser.add_argument('--product_b_output',
-                        default=str(_wyt_gen / 'output' / '_1_calc_WYTs' / 'Product_B'),
-                        help='Directory for Product B output CSVs')
-    
+    parser.add_argument('--product', choices=['historical', 'A', 'B'], required=True,
+                        help='historical (unsplit weather) or A, WY1916-2018, '
+                             'or B (ten 100-year chunks)')
+    parser.add_argument('--input',
+                        help="The rim-inflow TS file (historical, A) or folder (B); default: "
+                             "the builder's output for the product")
+    parser.add_argument('--output',
+                        help='Folder for the WYT CSVs; default: '
+                             '_1_calc_WYTs/<Historical_Unsplit|Product_A|Product_B>')
     args = parser.parse_args()
-    
-    # Use hardcoded thresholds
+
+    rim = get_rim_inflow_outputs(args.product)
+    input_path = args.input or rim['dir' if args.product == 'B' else 'ts']
+    output_dir = args.output or _wyt_gen / 'output' / '_1_calc_WYTs' / OUT_DIRS[args.product]
+
     print("Using WYT thresholds (MAF):")
     print(f"  Sacramento: {THRESHOLDS['sacramento']}")
     print(f"  San Joaquin: {THRESHOLDS['san_joaquin']}")
     print()
-    
-    if args.product == 'A':
-        process_product_a(args.product_a_input, args.product_a_output, THRESHOLDS)
-        print()
+
+    if args.product == 'B':
+        process_product_b(input_path, output_dir, THRESHOLDS)
     else:
-        process_product_b(args.product_b_input, args.product_b_output, THRESHOLDS)
-        print()
-    
+        process_ts(input_path, output_dir, THRESHOLDS)
+    print()
     print("Done!")
 
 

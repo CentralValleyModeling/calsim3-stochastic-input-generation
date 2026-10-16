@@ -80,7 +80,8 @@ from collections import OrderedDict
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 from utils import dss_io
-from utils.paths import get_base_dir, get_generated_dir, get_module_generated_dir, get_inventory_dir
+from utils.paths import (get_base_dir, get_generated_dir, get_module_generated_dir, get_inventory_dir,
+                         get_rim_inflow_outputs)
 
 # Suppress noisy warnings from empty slices (e.g. all-NaN columns in stats)
 warnings.filterwarnings("ignore", message="Mean of empty slice")
@@ -177,7 +178,7 @@ MODULE_CONFIG = OrderedDict([
         "CalSimHydroEE")),
     ("evaporation",              (_gen_dir / "mod_reservoir/evaporation/output/_2_run_reservoir_evap/_product_a_validation",   
         "Reservoir Evaporation")),
-    ("rim_inflow",               (_gen_dir / "mod_hydrology/rim_inflow/output/_2_qmap_historical_validation/_product_a_validation", 
+    ("rim_inflow",               (get_rim_inflow_outputs("A")["sv_dir"],
         "Rim Inflow")),
     ("delta_channel_depletion",  (_gen_dir / "mod_hydrology/delta_channel_depletion/output/_2_postprocess_product_a/_product_a_validation", 
         "Delta Channel Depletion")),
