@@ -6,16 +6,12 @@ standard SV format ``Part B, Part C, Year, Month, Value``.
 
 Behavior-preservation note
 --------------------------
-``load_sv_series`` and ``to_validation_df`` are *faithful copies* of two
-pre-existing functions and must keep their exact behavior (no tests exist):
-
-- ``load_sv_series`` reproduces
-  ``utils/qmap_product_a_from_pairs.load_product_a_rim_series``.  It uses a
-  plain ``pd.read_csv`` (NOT the normalized :func:`read_sv_csv`) on purpose --
-  routing it through the normalized reader would change its behavior.
-- ``to_validation_df`` reproduces
-  ``mod_hydrology/calsimhydro/_3_postprocess_product_a.to_validation_csv``
-  (water-year window filter, column order, sort, empty-frame shape).
+``to_validation_df`` is a *faithful copy* of a pre-existing function and must
+keep its exact behavior (no tests exist): it reproduces
+``mod_hydrology/calsimhydro/_3_postprocess_product_a.to_validation_csv``
+(water-year window filter, column order, sort, empty-frame shape).
+``load_sv_series`` reads with a plain ``pd.read_csv``, not the normalized
+:func:`read_sv_csv`, which would change what it returns.
 
 ``read_sv_csv`` captures the ``pd.read_csv(skipinitialspace=True)`` +
 strip-column-names idiom used by ``read_qmap_pairs`` and many numbered
@@ -45,15 +41,13 @@ def read_sv_csv(path) -> pd.DataFrame:
     return df
 
 
-# -- Series loader (faithful copy of load_product_a_rim_series) ---------------
+# -- Series loader -------------------------------------------------------------
 
 def load_sv_series(csv_path, part_b, part_c) -> pd.Series:
     """Load one Part B + Part C series from a standard SV CSV.
 
     Returns a monthly ``pd.Series`` with a month-end ``DatetimeIndex`` (empty
-    float Series if the pair is absent).  Faithful copy of
-    ``qmap_product_a_from_pairs.load_product_a_rim_series`` -- uses a plain
-    ``pd.read_csv`` to preserve that function's exact behavior.
+    float Series if the pair is absent).
     """
     csv_path = Path(csv_path)
     df = pd.read_csv(csv_path)

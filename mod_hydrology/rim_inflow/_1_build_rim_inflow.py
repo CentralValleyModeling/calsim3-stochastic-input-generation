@@ -68,6 +68,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 from utils import dss_io
 from utils.paths import (INFLOW_PROVENANCE, get_arc_inflows, get_base_dir, get_inventory_dir,
                          get_rim_inflow_outputs, remove_tree, require_pinned_run)
+from utils.qmap_fit import FIT_WY
 from utils.quantile_mapping import qmap_single
 
 _SCRIPT_DIR = Path(__file__).resolve().parent
@@ -76,7 +77,6 @@ DSS_FILE = get_base_dir() / "CalSim3" / "__calsim_sv_default__.dss"
 INVENTORY_XLSX = get_inventory_dir() / "_MASTER_INVENTORY_FOR_STOCHASTIC_INPUT_GENERATION_.xlsx"
 
 METHODS = ("arc", "sum", "qmap", "zero", "wyt", "none")
-FIT_WY = (1950, 2018)
 PRODUCT_WY = {"A": (1972, 2018), "historical": (1916, 2018)}
 
 
