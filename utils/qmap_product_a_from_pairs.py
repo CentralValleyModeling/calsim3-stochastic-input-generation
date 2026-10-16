@@ -1,17 +1,21 @@
 """
-Reusable Product A split-sample quantile-mapping validation
-===========================================================
-Driven by a ``qmap_pairs.csv`` file, this module trains quantile mapping on
-the first half of the overlap period and validates on the second half.
+Reusable Product A quantile mapping driven by qmap_pairs.csv
+============================================================
+Maps the rim-inflow model's Product A predictor onto each target of a
+``qmap_pairs.csv`` file, and compares the result with the CalSim3 target.
 
 Workflow per (target, predictor) pair
 -------------------------------------
-1. Read CalSim baseline DSS for predictor and target (full historical).
-2. Train quantile mapping on the training window (default 1921-1971).
-3. Load Product A QMAP'd predictor from a rim-inflow CSV for the
-   simulation window (default 1972-2018).
-4. Apply quantile mapping to produce a synthetic target.
-5. Validate against the actual CalSim target (R2, NSE, PBIAS).
+1. Read the CalSim3 target from the baseline DSS, and the training predictor
+   by the pair's ``fit`` (``utils.qmap_fit``): the CalSim3 predictor (pass)
+   or the model's historical-unsplit predictor (absorb).
+2. Fit the quantile map on WY1950-2018 (``utils.qmap_fit.FIT_WY``).
+3. Load the model's Product A predictor from the rim-inflow SV CSV for the
+   simulation window (default 1972-2018). A ``+`` predictor is summed.
+4. Apply the map to produce the Product A target.
+5. Compare with the CalSim3 target (R2, NSE, PBIAS). The fit window covers the
+   simulation window and Product A weather is detrended, so this is a
+   comparison, not a held-out validation.
 6. Write detail CSVs, CalSim-format validation CSVs, and three plot types.
 
 """
@@ -25,6 +29,10 @@ import numpy as np
 import pandas as pd
 
 from utils import csv_io, dss_io
+from utils.qmap_fit import (
+    FIT_END, FIT_START, FIT_WY, predictor_label, predictor_parts, read_fit_column,
+    read_historical_predictors, sum_parts, training_basis,
+)
 from utils.validation_plots import (
     Series, format_metric_line, nse, pbias, plot_monthly_box, plot_ts_cdf, r2,
 )
@@ -35,8 +43,6 @@ _REQUIRED_COLS = ["target_part_b", "target_part_c",
 _OPTIONAL_COLS = ["lower_bound", "upper_bound", "allow_negative"]
 
 # -- Defaults -----------------------------------------------------------------
-TRAIN_START = "1921-10-01"
-TRAIN_END = "1971-09-30"
 SIM_START = "1971-10-01"
 SIM_END = "2018-09-30"
 DSS_READ_START = "1915-01-31"
@@ -61,7 +67,10 @@ def read_qmap_pairs(pair_csv: str | Path) -> pd.DataFrame:
     """Read and validate qmap_pairs.csv.
 
     Required columns:
-      target_part_b, target_part_c, predictor_part_b, predictor_part_c
+      target_part_b, target_part_c, predictor_part_b, predictor_part_c,
+      fit (pass or absorb, see utils.qmap_fit)
+
+    A predictor_part_b of the form ``I_A+I_B`` is the sum of those SVs.
 
     Optional columns (created with defaults if missing):
       lower_bound, upper_bound, allow_negative (True/False, default False)
@@ -72,6 +81,7 @@ def read_qmap_pairs(pair_csv: str | Path) -> pd.DataFrame:
     missing = [c for c in _REQUIRED_COLS if c not in df.columns]
     if missing:
         raise KeyError(f"qmap_pairs.csv missing required columns: {missing}")
+    df["fit"] = read_fit_column(df, pair_csv.name)
 
     for col in _OPTIONAL_COLS:
         if col not in df.columns:
@@ -168,24 +178,6 @@ def ser_to_df(series):
     })
 
 
-# -- Filesystem helpers -------------------------------------------------------
-
-def _safe_makedirs(path):
-    """Delegates to ``utils.dss_io.safe_makedirs`` (faithful copy)."""
-    dss_io.safe_makedirs(path)
-
-
-# -- Data loading -------------------------------------------------------------
-
-def load_product_a_rim_series(csv_path, part_b, part_c):
-    """Load a specific Part B + Part C series from the Product A rim inflow CSV.
-
-    Returns a monthly ``pd.Series`` with month-end ``DatetimeIndex``.
-    Delegates to ``utils.csv_io.load_sv_series`` (faithful copy).
-    """
-    return csv_io.load_sv_series(csv_path, part_b, part_c)
-
-
 # -- Plotting -----------------------------------------------------------------
 
 def _plot_timeseries_cdf(common_sim, actual_vals, qmap_vals, target_b,
@@ -225,32 +217,28 @@ def run_product_a_qmap_from_pairs(
     product_a_rim_csv,
     output_dir,
     validation_dir,
-    train_start=TRAIN_START,
-    train_end=TRAIN_END,
     sim_start=SIM_START,
     sim_end=SIM_END,
     dss_read_start=DSS_READ_START,
     dss_read_end=DSS_READ_END,
     allow_negative=ALLOW_NEGATIVE,
 ):
-    """Run Product A split-sample QM validation for all pairs in a CSV.
+    """Run Product A QM for all pairs in a CSV, fitted on WY1950-2018.
 
     Parameters
     ----------
     pair_csv : str or Path
-        Path to qmap_pairs.csv (target/predictor definitions).
+        Path to qmap_pairs.csv (target/predictor definitions and fit).
     dss_file : str or Path
-        Path to CalSim baseline DSS.
+        Path to CalSim baseline DSS (targets; predictors of pass fits).
     product_a_rim_csv : str or Path
-        Path to Product A QMAP'd rim inflow CSV (simulation predictor source).
+        Path to the Product A rim-inflow SV CSV (simulation predictor source).
     output_dir : str or Path
         Per-context directory (caller is expected to encode the context, e.g.
         ``.../_2_qmap/product_a``). Detail CSVs and a ``figures/`` subdir are
         written here.
     validation_dir : str or Path
         Directory for CalSim-format validation CSVs.
-    train_start, train_end : str
-        Training period boundaries (default 1921-10 to 1971-09).
     sim_start, sim_end : str
         Simulation/validation period boundaries (default 1971-10 to 2018-09).
     dss_read_start, dss_read_end : str
@@ -270,9 +258,8 @@ def run_product_a_qmap_from_pairs(
     validation_dir = str(validation_dir)
     plots_dir = os.path.join(output_dir, "figures")
 
-    _safe_makedirs(output_dir)
-    _safe_makedirs(plots_dir)
-    _safe_makedirs(validation_dir)
+    for d in (output_dir, plots_dir, validation_dir):
+        dss_io.safe_makedirs(d)
 
     # -- Derive WY labels for output filenames --------------------------------
     _sim_start_dt = pd.Timestamp(sim_start)
@@ -285,10 +272,17 @@ def run_product_a_qmap_from_pairs(
     print(f"Loaded {len(df_pairs)} pair(s) from {pair_csv.name}")
 
     # -- Batch-read all needed DSS series -------------------------------------
+    # Targets always; predictors only for pass fits (absorb fits train on the
+    # model's historical-unsplit run).
     dss_specs = []
+    absorb_parts = set()
     for _, row in df_pairs.iterrows():
-        dss_specs.append((row["predictor_part_b"], row["predictor_part_c"]))
         dss_specs.append((row["target_part_b"], row["target_part_c"]))
+        for part in predictor_parts(row["predictor_part_b"]):
+            if row["fit"] == "pass":
+                dss_specs.append((part, row["predictor_part_c"]))
+            else:
+                absorb_parts.add(part)
 
     print(f"Scanning DSS: {dss_file}")
     dss_data = read_calsim_monthly_pairs(
@@ -298,6 +292,7 @@ def run_product_a_qmap_from_pairs(
         dss_read_end=dss_read_end,
     )
     print(f"  Read {len(dss_data)} monthly DSS series")
+    historical = read_historical_predictors(absorb_parts) if absorb_parts else {}
 
     # -- Process each pair ----------------------------------------------------
     pairs_processed = 0
@@ -308,24 +303,27 @@ def run_product_a_qmap_from_pairs(
         target_c = row["target_part_c"]
         pred_b = row["predictor_part_b"]
         pred_c = row["predictor_part_c"]
+        fit = row["fit"]
+        parts = predictor_parts(pred_b)
         lb = row["lower_bound"]
         ub = row["upper_bound"]
         pair_allow_neg = row.get("allow_negative", allow_negative)
 
         print(f"\n{'='*60}")
         print(f"Target: {target_b} / {target_c}")
-        print(f"Predictor: {pred_b} / {pred_c}")
+        print(f"Predictor: {predictor_label(pred_b)} / {pred_c}")
+        print(f"Fit: {fit}, WY{FIT_WY[0]}-{FIT_WY[1]} "
+              f"({'CalSim3' if fit == 'pass' else 'model historical'} predictor)")
         print(f"Bounds: [{lb}, {ub}]")
 
-        # 1) Lookup CalSim DSS series
-        pred_key = (pred_b.strip().upper(), pred_c.strip().upper())
+        # 1) Training predictor by fit, CalSim3 target
         tgt_key = (target_b.strip().upper(), target_c.strip().upper())
 
-        predictor_full = dss_data.get(pred_key)
+        predictor_full = training_basis(fit, parts, pred_c, dss_data, historical)
         target_full = dss_data.get(tgt_key)
 
         if predictor_full is None or predictor_full.dropna().empty:
-            print(f"  WARNING: No DSS data for predictor "
+            print(f"  WARNING: No {fit} training data for predictor "
                   f"{pred_b}/{pred_c}, skipping.")
             pairs_skipped += 1
             continue
@@ -335,9 +333,9 @@ def run_product_a_qmap_from_pairs(
             pairs_skipped += 1
             continue
 
-        # 2) Slice training period
-        pred_train = predictor_full.loc[train_start:train_end].dropna()
-        tgt_train = target_full.loc[train_start:train_end].dropna()
+        # 2) Slice the fit window
+        pred_train = predictor_full.loc[FIT_START:FIT_END].dropna()
+        tgt_train = target_full.loc[FIT_START:FIT_END].dropna()
 
         common_train = pred_train.index.intersection(tgt_train.index)
         if common_train.empty:
@@ -350,10 +348,15 @@ def run_product_a_qmap_from_pairs(
         print(f"  Training: {len(pred_train)} months "
               f"({common_train.min().date()} to {common_train.max().date()})")
 
-        # 3) Load Product A simulation predictor
-        pred_sim = load_product_a_rim_series(
-            product_a_rim_csv, pred_b, pred_c,
+        # 3) Load Product A simulation predictor (summed over its parts)
+        pred_sim = sum_parts(
+            parts, lambda p: csv_io.load_sv_series(product_a_rim_csv, p, pred_c),
         )
+        if pred_sim is None:
+            print(f"  WARNING: No Product A data for a part of predictor "
+                  f"{pred_b}/{pred_c}, skipping.")
+            pairs_skipped += 1
+            continue
         pred_sim = pred_sim.loc[sim_start:sim_end].dropna()
 
         if pred_sim.empty:
@@ -401,6 +404,7 @@ def run_product_a_qmap_from_pairs(
         detail = pd.DataFrame({
             "target_historical_train": target_b,
             "basis_historical_train": pred_b,
+            "fit": fit,
             "year": common_sim.year.astype(int),
             "month": common_sim.month.astype(int),
             "basis_qm_sim": pred_sim.values,

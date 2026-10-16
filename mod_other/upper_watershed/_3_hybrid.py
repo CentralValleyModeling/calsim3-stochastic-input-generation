@@ -9,11 +9,17 @@ Three logical parts run in sequence:
   2. Quantile mapping (calls the Product A or Product B engine).
   3. Average the two intermediate per-term results to produce the final SV.
 
+The QM part follows each term's ``fit`` column (utils.qmap_fit) and is
+fitted on WY1950-2018, one fit for A and B: ``pass`` trains on the CalSim3
+predictor, ``absorb`` on the rim-inflow model's historical-unsplit
+predictor. The WYT part keeps the CalSim3 pattern and follows the year
+types computed from the model's flows.
+
 Inputs
 ------
 - ``reference/hybrid_terms_upper_watershed.csv``
-- ``BASE/CalSim3/__calsim_sv_default__.dss`` (historical training basis /
-  target series for both A and B)
+- ``BASE/CalSim3/__calsim_sv_default__.dss`` (targets, WYT patterns and the
+  predictors of pass fits, for both A and B)
 - WYT historical reference: ``mod_hydrology/water_year_types/reference/``
 - WYT target by product:
     * A: ``mod_hydrology/water_year_types/output/_1_calc_WYTs/Product_A/``
@@ -21,6 +27,7 @@ Inputs
 - Rim inflow simulation (utils.paths.get_rim_inflow_outputs):
     * A: ``_riminflow_productA_1972_2018.csv``
     * B: ``<PartB>_qmo_n{01..10}.csv``
+    * the historical-unsplit run, for absorb fits
 
 Outputs
 -------
@@ -92,8 +99,6 @@ WYT_HIST_DIR = str(_REPO_DIR / "mod_hydrology" / "water_year_types" / "reference
 # -- Config (Product A specific) ---------------------------------------
 WYT_PRODUCT_A_DIR = str(_wyt_gen / "output" / "_1_calc_WYTs" / "Product_A")
 PRODUCT_A_RIM_CSV = get_rim_inflow_outputs("A")["sv"]
-TRAIN_START_A = "1921-10-01"
-TRAIN_END_A = "1971-09-30"
 SIM_START_A = "1971-10-01"
 SIM_END_A = "2018-09-30"
 PRODUCT_A_START_WY = 1972
@@ -102,8 +107,6 @@ PRODUCT_A_END_WY = 2018
 # -- Config (Product B specific) ---------------------------------------
 WYT_PRODUCT_B_DIR = str(_wyt_gen / "output" / "_1_calc_WYTs" / "Product_B")
 SIM_IN_DIR_B = get_rim_inflow_outputs("B")["dir"]
-TRAIN_START_B = "1921-10-01"
-TRAIN_END_B = "2021-09-30"
 PRODUCT_B_START = "1921-10-31"
 PRODUCT_B_END = "2021-09-30"
 
@@ -115,7 +118,7 @@ def prepare_hybrid_input_files(input_csv: Path) -> tuple[pd.DataFrame, pd.DataFr
     df.columns = [str(c).strip().lower() for c in df.columns]
 
     required = ["term_part_b", "term_part_c", "basin_wyt",
-                "predictor_part_b", "predictor_part_c"]
+                "predictor_part_b", "predictor_part_c", "fit"]
     missing = [c for c in required if c not in df.columns]
     if missing:
         raise ValueError(
@@ -133,7 +136,7 @@ def prepare_hybrid_input_files(input_csv: Path) -> tuple[pd.DataFrame, pd.DataFr
         working[
             [
                 "term_part_b", "term_part_c",
-                "predictor_part_b", "predictor_part_c",
+                "predictor_part_b", "predictor_part_c", "fit",
                 "lower_bound", "upper_bound",
             ]
         ]
@@ -259,8 +262,6 @@ def run_qmap_a(qmap_pairs_df: pd.DataFrame, base_dir: Path,
             product_a_rim_csv=PRODUCT_A_RIM_CSV,
             output_dir=_tmp_detail,
             validation_dir=str(qmap_intermediate_dir),
-            train_start=TRAIN_START_A,
-            train_end=TRAIN_END_A,
             sim_start=SIM_START_A,
             sim_end=SIM_END_A,
         )
@@ -281,8 +282,6 @@ def run_qmap_b(qmap_pairs_df: pd.DataFrame, base_dir: Path,
         dss_file=DSS_FILE,
         sim_in_dir=str(SIM_IN_DIR_B),
         out_dir=str(base_dir),
-        train_start=TRAIN_START_B,
-        train_end=TRAIN_END_B,
         product_b_start=PRODUCT_B_START,
         product_b_end=PRODUCT_B_END,
         output_tag="qmap",

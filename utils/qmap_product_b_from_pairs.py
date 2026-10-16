@@ -8,8 +8,12 @@ supplying different qmap_pairs.csv files from different directories.
 
 Core assumptions
 ----------------
-- Training basis and target are both read from a CalSim DSS file using the
-  B-part and C-part specified in qmap_pairs.csv.
+- The target is read from a CalSim DSS file using the B-part and C-part
+  specified in qmap_pairs.csv. The training basis follows the pair's ``fit``
+  (``utils.qmap_fit``): the CalSim DSS predictor (pass) or the rim-inflow
+  model's historical-unsplit predictor (absorb). Every fit uses WY1950-2018.
+- A predictor_part_b of the form ``I_A+I_B`` is the sum of those series, on
+  the training side and the simulation side.
 - Simulation basis files are monthly Product-B CSVs stored as:
       <predictor_part_b>_qmo_<timeseries>.csv
 - Simulation value column is ``qmap_postAdj``.
@@ -25,6 +29,10 @@ import numpy as np
 import pandas as pd
 from pydsstools.heclib.dss import HecDss
 
+from utils.qmap_fit import (
+    FIT_END, FIT_START, predictor_label, predictor_parts, read_fit_column,
+    read_historical_predictors, sum_parts, training_basis,
+)
 from utils.quantile_mapping import qmap_single
 
 # -----------------------------------------------------------------------------
@@ -34,8 +42,6 @@ PRODUCT_B_START = pd.Timestamp("1921-10-31")
 PRODUCT_B_END = pd.Timestamp("2021-09-30")
 DSS_READ_START = "1915-01-31"
 DSS_READ_END = "2021-12-31"
-TRAIN_START = "1921-10-01"
-TRAIN_END = "2021-09-30"
 OUTPUT_TAG = "qmap"
 SIM_VALUE_COLUMN = "qmap_postAdj"
 
@@ -116,7 +122,8 @@ def read_qmap_pairs(pair_csv: str | Path) -> pd.DataFrame:
     Read and validate qmap_pairs.csv.
 
     Required columns:
-      target_part_b, target_part_c, predictor_part_b, predictor_part_c
+      target_part_b, target_part_c, predictor_part_b, predictor_part_c,
+      fit (pass or absorb, see utils.qmap_fit)
 
     Optional columns (created as NaN if missing):
       lower_bound, upper_bound
@@ -128,6 +135,7 @@ def read_qmap_pairs(pair_csv: str | Path) -> pd.DataFrame:
     missing = [c for c in _REQUIRED_COLS if c not in df.columns]
     if missing:
         raise KeyError(f"qmap_pairs.csv missing required columns: {missing}")
+    df["fit"] = read_fit_column(df, pair_csv.name)
 
     for col in _OPTIONAL_COLS:
         if col not in df.columns:
@@ -297,19 +305,24 @@ def load_product_b_all_timeseries(
     product_b_end: str | pd.Timestamp = PRODUCT_B_END,
 ) -> pd.DataFrame:
     """
-    Load and concatenate all Product-B realizations for one basis term.
+    Load and concatenate all Product-B realizations for one basis term. A
+    ``I_A+I_B`` basis is the sum of its parts; a realization missing a part is
+    skipped.
 
     Returns columns:
       timeseries, year, month, basis_sim
     """
     blocks = []
     for ts in timeseries_list:
-        sim_ser = load_product_b_basis_series(
-            basis_partb=basis_partb,
-            sim_dir=sim_dir,
-            timeseries=ts,
-            product_b_start=product_b_start,
-            product_b_end=product_b_end,
+        sim_ser = sum_parts(
+            predictor_parts(basis_partb),
+            lambda part: load_product_b_basis_series(
+                basis_partb=part,
+                sim_dir=sim_dir,
+                timeseries=ts,
+                product_b_start=product_b_start,
+                product_b_end=product_b_end,
+            ),
         )
         if sim_ser is None:
             continue
@@ -334,11 +347,14 @@ def load_product_b_all_timeseries(
 def build_training_pairs(
     df_pairs: pd.DataFrame,
     dss_data: dict[tuple[str, str], pd.Series],
-    train_start: str = TRAIN_START,
-    train_end: str = TRAIN_END,
+    historical: dict[str, pd.Series],
 ) -> tuple[dict[tuple[str, str], dict[str, object]], list[tuple[str, str, str]]]:
     """
-    Build training vectors for each target/predictor pair in qmap_pairs.csv.
+    Build training vectors for each target/predictor pair in qmap_pairs.csv,
+    over the fit window (utils.qmap_fit.FIT_START to FIT_END).
+
+    The basis is the CalSim DSS predictor for a pass fit and the model's
+    historical-unsplit predictor (``historical``) for an absorb fit.
 
     Returns
     -------
@@ -356,28 +372,29 @@ def build_training_pairs(
         target_c = row["target_part_c"]
         basis_b = row["predictor_part_b"]
         basis_c = row["predictor_part_c"]
+        fit = row["fit"]
         lower_bound = row["lower_bound"]
         upper_bound = row["upper_bound"]
 
-        basis_key = (norm_token(basis_b), norm_token(basis_c))
         target_key = (norm_token(target_b), norm_token(target_c))
+        basis = training_basis(fit, predictor_parts(basis_b), basis_c, dss_data, historical)
 
-        if basis_key not in dss_data:
-            skipped_rows.append((target_b, basis_b, f"missing DSS basis {basis_key}"))
+        if basis is None:
+            skipped_rows.append((target_b, basis_b, f"missing {fit} training basis"))
             continue
         if target_key not in dss_data:
             skipped_rows.append((target_b, basis_b, f"missing DSS target {target_key}"))
             continue
 
-        joined = pd.concat([dss_data[basis_key], dss_data[target_key]], axis=1, join="inner").dropna()
+        joined = pd.concat([basis, dss_data[target_key]], axis=1, join="inner").dropna()
         if joined.empty:
-            skipped_rows.append((target_b, basis_b, "no overlapping non-NaN DSS training data"))
+            skipped_rows.append((target_b, basis_b, "no overlapping non-NaN training data"))
             continue
 
         joined.columns = ["basis", "target"]
-        train = joined.loc[train_start:train_end]
+        train = joined.loc[FIT_START:FIT_END]
         if train.empty:
-            skipped_rows.append((target_b, basis_b, f"no DSS training rows in {train_start} to {train_end}"))
+            skipped_rows.append((target_b, basis_b, f"no training rows in {FIT_START} to {FIT_END}"))
             continue
 
         b_train = train["basis"]
@@ -393,6 +410,7 @@ def build_training_pairs(
             "upper_bound": upper_bound,
             "target_c": target_c,
             "basis_c": basis_c,
+            "fit": fit,
         }
 
     return training, skipped_rows
@@ -408,8 +426,6 @@ def run_product_b_qmap_from_pairs(
     dss_file: str | Path,
     sim_in_dir: str | Path,
     out_dir: str | Path,
-    train_start: str = TRAIN_START,
-    train_end: str = TRAIN_END,
     product_b_start: str | pd.Timestamp = PRODUCT_B_START,
     product_b_end: str | pd.Timestamp = PRODUCT_B_END,
     output_tag: str = OUTPUT_TAG,
@@ -417,20 +433,20 @@ def run_product_b_qmap_from_pairs(
     dss_read_end: str = DSS_READ_END,
 ) -> dict[str, int]:
     """
-    Run Product-B quantile mapping for all rows in a qmap_pairs.csv file.
+    Run Product-B quantile mapping for all rows in a qmap_pairs.csv file,
+    fitted on WY1950-2018 (utils.qmap_fit).
 
     Parameters
     ----------
     pair_csv
         Path to qmap_pairs.csv. This can be anywhere in the repository.
     dss_file
-        Path to CalSim DSS file containing training basis and target series.
+        Path to CalSim DSS file containing the targets and the predictors of
+        pass fits.
     sim_in_dir
         Directory containing Product-B basis CSVs.
     out_dir
         Directory where mapped target CSVs will be written.
-    train_start, train_end
-        Training window used to build the basis and target distributions.
     product_b_start, product_b_end
         Canonical monthly time axis for Product-B basis files.
     output_tag
@@ -458,10 +474,17 @@ def run_product_b_qmap_from_pairs(
 
     df_pairs = read_qmap_pairs(pair_csv)
 
+    # Targets always; predictors only for pass fits (absorb fits train on the
+    # model's historical-unsplit run).
     dss_specs: list[tuple[str, str]] = []
+    absorb_parts: set[str] = set()
     for _, row in df_pairs.iterrows():
-        dss_specs.append((row["predictor_part_b"], row["predictor_part_c"]))
         dss_specs.append((row["target_part_b"], row["target_part_c"]))
+        for part in predictor_parts(row["predictor_part_b"]):
+            if row["fit"] == "pass":
+                dss_specs.append((part, row["predictor_part_c"]))
+            else:
+                absorb_parts.add(part)
 
     dss_data = read_calsim_monthly_pairs(
         dssfile=dss_file,
@@ -470,6 +493,7 @@ def run_product_b_qmap_from_pairs(
         dss_read_end=dss_read_end,
     )
     print(f"  {len(df_pairs)} pair(s) requested, {len(dss_data)} monthly DSS series found")
+    historical = read_historical_predictors(absorb_parts) if absorb_parts else {}
 
     timeseries_list = find_timeseries_in_dir(sim_in_dir)
     if not timeseries_list:
@@ -480,14 +504,13 @@ def run_product_b_qmap_from_pairs(
     training, skipped_rows = build_training_pairs(
         df_pairs=df_pairs,
         dss_data=dss_data,
-        train_start=train_start,
-        train_end=train_end,
+        historical=historical,
     )
 
     if skipped_rows:
         print("  Skipped pair(s):")
         for target_b, basis_b, reason in skipped_rows:
-            print(f"    {target_b:<30s} <- {basis_b:<20s} {reason}")
+            print(f"    {target_b:<30s} <- {predictor_label(basis_b):<20s} {reason}")
 
     if not training:
         raise RuntimeError("No valid DSS training pairs available.")
@@ -520,7 +543,7 @@ def run_product_b_qmap_from_pairs(
             sim_all = basis_cache[basis_b]
             if sim_all.empty:
                 elapsed = time.perf_counter() - t_qmap
-                print(f"  [{i:>{width}}/{n_pairs}] {target_b:<30s} <- {basis_b:<20s} skip ({elapsed:.1f}s)")
+                print(f"  [{i:>{width}}/{n_pairs}] {target_b:<30s} <- {predictor_label(basis_b):<20s} skip ({elapsed:.1f}s)")
                 continue
 
             simulation_df = sim_all[["year", "month", "basis_sim"]].rename(columns={"basis_sim": "value"})
@@ -554,12 +577,12 @@ def run_product_b_qmap_from_pairs(
             tag = "ok"
         except Exception as exc:
             elapsed = time.perf_counter() - t_qmap
-            print(f"  [{i:>{width}}/{n_pairs}] {target_b:<30s} <- {basis_b:<20s} ERROR ({elapsed:.1f}s)")
+            print(f"  [{i:>{width}}/{n_pairs}] {target_b:<30s} <- {predictor_label(basis_b):<20s} ERROR ({elapsed:.1f}s)")
             print(f"      {type(exc).__name__}: {exc}")
             continue
 
         elapsed = time.perf_counter() - t_qmap
-        print(f"  [{i:>{width}}/{n_pairs}] {target_b:<30s} <- {basis_b:<20s} {tag} ({elapsed:.1f}s)")
+        print(f"  [{i:>{width}}/{n_pairs}] {target_b:<30s} <- {predictor_label(basis_b):<20s} {tag} ({elapsed:.1f}s)")
 
     print(f"  Mapped {len(qmap_cache)}/{n_pairs} pair(s) ({time.perf_counter() - t_qmap:.1f}s)")
 
@@ -584,6 +607,7 @@ def run_product_b_qmap_from_pairs(
                 {
                     "target_historical_train": target_b,
                     "basis_historical_train": basis_b,
+                    "fit": training[(target_b, basis_b)]["fit"],
                     "year": block["year"].astype(int).to_numpy(),
                     "month": block["month"].astype(int).to_numpy(),
                     "basis_qm_sim": block["basis_sim"].astype(float).to_numpy(),

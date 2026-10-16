@@ -2,25 +2,28 @@
 Upper Watershed Quantile Mapping (Product A or Product B)
 =========================================================
 Thin driver around the shared QM engines. For ``--product A`` it calls
-``utils.qmap_product_a_from_pairs.run_product_a_qmap_from_pairs`` (1921-1971
-train, 1972-2018 simulate / validate). For ``--product B`` it calls
+``utils.qmap_product_a_from_pairs.run_product_a_qmap_from_pairs`` (1972-2018
+simulation). For ``--product B`` it calls
 ``utils.qmap_product_b_from_pairs.run_product_b_qmap_from_pairs`` for each
 of the 10 stochastic chunks, then reformats the per-chunk detail CSVs into
 final ``Part B, Part C, Year, Month, Value`` files.
 
 For each (target, predictor) pair in ``reference/qmap_pairs.csv``:
 
-- Training (1921-1971 for A; 1921-2021 for B) uses CalSim baseline DSS for
-  both basis and target.
-- Simulation (A: 1972-2018; B: 10 chunks of 100 WY each) maps the matched
-  rim-inflow predictor onto the target domain.
+- The map is fitted on WY1950-2018, the same fit for A and B, by the pair's
+  ``fit`` (utils.qmap_fit): ``pass`` trains on the CalSim3 predictor,
+  ``absorb`` on the rim-inflow model's historical-unsplit predictor. The
+  target is CalSim3's. A ``+`` predictor is summed on both sides.
+- Simulation (A: 1972-2018; B: 10 chunks of 100 WY each) maps the
+  rim-inflow model's predictor onto the target domain.
 
 Inputs
 ------
-- ``reference/qmap_pairs.csv`` (pair definitions; shared by A and B)
+- ``reference/qmap_pairs.csv`` (pair definitions and fit; shared by A and B)
 - CalSim baseline DSS: ``BASE/CalSim3/__calsim_sv_default__.dss``
 - Rim-inflow predictors (utils.paths.get_rim_inflow_outputs): Product A
-  ``_riminflow_productA_1972_2018.csv``; Product B ``<PartB>_qmo_n{01..10}.csv``
+  ``_riminflow_productA_1972_2018.csv``; Product B ``<PartB>_qmo_n{01..10}.csv``;
+  the historical-unsplit run for absorb fits
 
 Outputs
 -------
@@ -106,8 +109,8 @@ def main() -> None:
     )
     parser.add_argument(
         "--product", choices=["A", "B"], required=True,
-        help="Product to generate: A (split-sample 1921-1971 train / 1972-2018 "
-             "simulate-and-validate) or B (10 stochastic chunks).",
+        help="Product to generate: A (1972-2018) or B (10 stochastic chunks); "
+             "both use the WY1950-2018 fit.",
     )
     args = parser.parse_args()
 
@@ -137,8 +140,6 @@ def main() -> None:
         dss_file=str(dss_file),
         sim_in_dir=str(sim_in_dir),
         out_dir=str(out_dir),
-        train_start="1921-10-01",
-        train_end="2021-09-30",
         product_b_start="1921-10-31",
         product_b_end="2021-09-30",
         output_tag="qmap",
