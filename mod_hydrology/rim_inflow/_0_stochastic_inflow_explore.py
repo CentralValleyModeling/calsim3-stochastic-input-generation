@@ -64,7 +64,7 @@ MINOR_GRID_KW = dict(alpha=0.08, color='k', linestyle='-',  linewidth=0.3)
 COLORS  = dict(cs3='steelblue', hist='indianred', synth='#d4aaaa')
 
 _gen = get_module_generated_dir("mod_hydrology/rim_inflow")
-_VIC_GRID_DIR = REPO_ROOT / "mod_forcing" / "vic" / "reference" / "GridInfo"
+_GRID_DIR = REPO_ROOT / "mod_forcing" / "climate" / "reference" / "GridInfo"
 
 # %% settings
 LOCATION    = 'CS3_8RI_OROVI'   # CS3_8RI_OROVI | CS3_I_SHSTA
@@ -73,7 +73,7 @@ CS3_DSS     = str(get_base_dir() / "CalSim3" / "__calsim_sv_default__.dss")
 CALSIM_KEY  = CS3_PATH.split('/')[0]                # e.g., 'UNIMP_OROV'
 HIST_CSV    = str(get_rim_inflow_outputs("A")["ts"])
 STOCH_DIR   = str(get_rim_inflow_outputs("B")["dir"])
-GRID_INFO   = str(_VIC_GRID_DIR / f'{LOCATION}_GridInfo.txt')
+GRID_INFO   = str(_GRID_DIR / f'{LOCATION}_GridInfo.txt')
 METEO_COLS = ['Year', 'Month', 'Day', 'PRECIP', 'TMAX', 'TMIN']
 _FIG_DIR = str(_gen / "output" / "_0_stochastic_inflow_explore")
 os.makedirs(_FIG_DIR, exist_ok=True)

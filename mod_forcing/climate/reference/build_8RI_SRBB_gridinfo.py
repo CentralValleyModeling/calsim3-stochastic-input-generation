@@ -2,10 +2,10 @@
 Build the CS3_8RI_SRBB Composite GridInfo (rim + valley floor)
 ==============================================================
 One-off generator for ``GridInfo/CS3_8RI_SRBB_GridInfo.txt``, the grid-weight
-file that lets ``_2_compile_rim_inflows.py`` route the Sacramento River at Bend
-Bridge (CalSim node SAC257, anchor for UNIMP_SRBB) directly -- the same way any
-other rim point is routed -- instead of summing pre-routed component series
-afterward.
+file that let the v1.0 VIC routing (mod_forcing/vic, now retired) route the
+Sacramento River at Bend Bridge (CalSim node SAC257, anchor for UNIMP_SRBB)
+directly -- the same way any other rim point is routed -- instead of summing
+pre-routed component series afterward.
 
 The Shasta-only routing (CS3_I_SHSTA) stops at the dam and under-represents Bend
 Bridge by roughly 30 percent. Bend Bridge drains Shasta inflow plus everything
@@ -38,7 +38,7 @@ same units as every committed GridInfo file (a 1/16-degree cell at 42.4N is
 SQ_MI to within 0.1 sq mi, so both halves are rasterized consistently.
 
 The GridInfo ``id`` is a legacy GIS raster index the runtime is indifferent to --
-``_2_compile_rim_inflows.py`` matches cells to VIC flux files by lat/lon, never by
+the retired VIC routing matched cells to VIC flux files by lat/lon, never by
 id. Valley cells that already appear in a committed GridInfo keep their canonical
 id and f1; valley-only cells (outside every existing rim delineation) get a
 computed f1 and a synthetic id in a reserved block (>= VALLEY_ID_BASE),
@@ -50,14 +50,13 @@ area normalization in compile_rim_inflows.compute_runoff, and is the physically
 consistent result since every cell is now weighted once against the whole basin.
 
 This is a build-time artifact generator, not part of the runtime pipeline. Run
-it only if the component delineations change; the committed
-CS3_8RI_SRBB_GridInfo.txt is what the pipeline actually consumes.
+it only if the component delineations change.
 
 Usage
 -----
     # gpkg defaults to <data_dir>/BASE/CalSim3/calsim3.gpkg (resolved from config.json)
-    python mod_forcing/vic/reference/build_8RI_SRBB_gridinfo.py
-    python mod_forcing/vic/reference/build_8RI_SRBB_gridinfo.py --gpkg /path/to/calsim3.gpkg
+    python mod_forcing/climate/reference/build_8RI_SRBB_gridinfo.py
+    python mod_forcing/climate/reference/build_8RI_SRBB_gridinfo.py --gpkg /path/to/calsim3.gpkg
 """
 
 import argparse
