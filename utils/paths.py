@@ -16,7 +16,11 @@ Quick start
     output   = get_module_generated_dir("mod_hydrology/calsimhydro") / "output"
 """
 
+import hashlib
 import json
+import os
+import shutil
+import stat
 import sys
 from pathlib import Path
 
@@ -106,20 +110,92 @@ def get_archive_dir() -> Path:
     return DATA_DIR / _CFG["archive_dir"]
 
 
-def get_sacsma_repo() -> Path:
-    """Return the SAC-SMA repository (``sacsma_repo``, relative to the repo root or absolute)."""
-    p = Path(_CFG["sacsma_repo"])
+def get_inflow_model() -> str:
+    """Return the rim-inflow model (``inflow_model``), the name of its adapter in
+    ``mod_forcing/inflows/adapters``."""
+    return _CFG["inflow_model"]
+
+
+def get_inflow_repo() -> Path:
+    """Return the rim-inflow model's git repository (``inflow_repo``, relative to the repo root
+    or absolute)."""
+    p = Path(_CFG["inflow_repo"])
     return p if p.is_absolute() else (REPO_ROOT / p).resolve()
 
 
-def get_sacsma_env() -> str:
-    """Return the conda environment SAC-SMA runs in (``sacsma_env``)."""
-    return _CFG["sacsma_env"]
+def get_inflow_env() -> str:
+    """Return the environment the rim-inflow model runs in (``inflow_env``)."""
+    return _CFG["inflow_env"]
 
 
-def get_sacsma_commit() -> str:
-    """Return the SAC-SMA commit the rim-inflow product is pinned to (``sacsma_commit``)."""
-    return _CFG["sacsma_commit"]
+def get_inflow_commit() -> str:
+    """Return the commit of ``inflow_repo`` the rim-inflow product is pinned to (``inflow_commit``)."""
+    return _CFG["inflow_commit"]
+
+
+#: Forcings of the rim-inflow model (``mod_forcing/inflows``) -> their output subfolder.
+#: Product B arrives in phase P3 of the SAC-SMA swap.
+INFLOW_FORCINGS = {
+    "historical": Path("Historical_Unsplit"),
+    "A": Path("Product_A") / "1",
+    "B": Path("Product_B") / "1",
+}
+
+def get_arc_inflows(forcing: str) -> Path:
+    """Return the rim-inflow model's monthly arc flows for ``forcing`` (a key of
+    ``INFLOW_FORCINGS``): the ``arc_inflow_monthly.csv`` written by
+    ``mod_forcing/inflows/_2_run_product.py``."""
+    return (get_module_generated_dir("mod_forcing/inflows") / "output" / "_2_run_product"
+            / INFLOW_FORCINGS[forcing] / "arc_inflow_monthly.csv")
+
+
+#: Beside ``arc_inflow_monthly.csv``, and copied into each rim-inflow SV folder: the manifest
+#: of the rim-inflow model run the files come from (model, commit, forcing, hashes, G1, G2).
+INFLOW_PROVENANCE = "run_manifest.json"
+
+
+def require_pinned_run(folder: Path) -> dict:
+    """Return the run manifest of the rim-inflow model outputs in ``folder``, and stop unless
+    they come from the configured model (``inflow_model``) at the pinned commit
+    (``inflow_commit``), in a run that did not fail G1. Outputs left over from another model or
+    an earlier pin, or from a step that was not re-run after the config changed, fail here."""
+    path = folder / INFLOW_PROVENANCE
+    if not path.exists():
+        raise FileNotFoundError(f"{folder}: no {INFLOW_PROVENANCE}, so the run behind these "
+                                "outputs is unknown; re-run mod_forcing/inflows and the "
+                                "rim-inflow builder")
+    manifest = json.loads(path.read_text())
+    if (manifest.get("g1") or {}).get("pass") is False:
+        raise RuntimeError(f"{path}: the run failed G1")
+    run = (manifest.get("inflow_model"), manifest.get("model_commit"))
+    pin = (get_inflow_model(), get_inflow_commit())
+    if run != pin:
+        raise RuntimeError(f"{folder}: built from {run[0]} at {run[1]}, but the config names "
+                           f"{pin[0]} at {pin[1]} (inflow_model, inflow_commit); re-run "
+                           "mod_forcing/inflows and the rim-inflow builder")
+    return manifest
+
+
+def _clear_readonly(func, path, _exc_info):
+    os.chmod(path, stat.S_IWRITE)
+    func(path)
+
+
+def sha256_file(path: Path) -> str:
+    """The sha256 of a file, read in 16 MB blocks."""
+    h = hashlib.sha256()
+    with open(path, "rb") as f:
+        for block in iter(lambda: f.read(1 << 24), b""):
+            h.update(block)
+    return h.hexdigest()
+
+
+def remove_tree(path: Path) -> None:
+    """Delete an output folder before it is regenerated. OneDrive marks the folders it has
+    synced read-only, which makes Windows refuse to remove them, so the flag is cleared on
+    the way."""
+    if path.exists():
+        shutil.rmtree(path, onerror=_clear_readonly)
 
 
 def get_inventory_dir() -> Path:

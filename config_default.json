@@ -2,7 +2,8 @@
     "_comment": "Default configuration for CalSim Synthetic Hydroclimate. Copy this file to 'config.json' and edit the data_dir to point to your local data directory. Keys in config.json override these defaults one by one.",
     "data_dir": "./data",
     "archive_dir": "GENERATED_v1.0",
-    "sacsma_repo": "../SAC-SMA",
-    "sacsma_env": "sacsma",
-    "sacsma_commit": "1443ae0e616df71d1ae77029f8092e7f7ed90c78"
+    "inflow_model": "sacsma",
+    "inflow_repo": "../SAC-SMA",
+    "inflow_env": "sacsma",
+    "inflow_commit": "f6f79a6228bb26493c1368933517fde7bf45be44"
 }
