@@ -29,8 +29,8 @@ cells fully outside are eliminated, matching "eliminate grids outside the
 reference". Kept cells retain their exact id/lat/lon/f1/f2 from the source, so
 the non-Goose portion is byte-identical to the parent.
 
-Outputs go to GridInfo/, so _2_compile_rim_inflows.py routes them like any other
-watershed (CS3_I_SHSTA_no_gooselake_qmo.csv, CS3_8RI_SRBB_no_gooselake_qmo.csv).
+Outputs go to GridInfo/, so mod_forcing/vic/_2_compile_rim_inflows.py routes them like any
+other watershed (CS3_I_SHSTA_no_gooselake_qmo.csv, CS3_8RI_SRBB_no_gooselake_qmo.csv).
 
 Run the SRBB target after build_8RI_SRBB_gridinfo.py (it reads that output). Like
 the valley generator, this needs geopandas and runs under a GIS env, not
@@ -39,9 +39,9 @@ csstochastic.
 Usage
 -----
     # gpkg defaults to <data_dir>/BASE/CalSim3/calsim3.gpkg (resolved from config.json)
-    python mod_forcing/vic/reference/build_no_gooselake_gridinfo.py            # both targets
-    python mod_forcing/vic/reference/build_no_gooselake_gridinfo.py --target I_SHSTA
-    python mod_forcing/vic/reference/build_no_gooselake_gridinfo.py --gpkg /path/to/calsim3.gpkg
+    python mod_forcing/climate/reference/build_no_gooselake_gridinfo.py            # both targets
+    python mod_forcing/climate/reference/build_no_gooselake_gridinfo.py --target I_SHSTA
+    python mod_forcing/climate/reference/build_no_gooselake_gridinfo.py --gpkg /path/to/calsim3.gpkg
 """
 
 import argparse

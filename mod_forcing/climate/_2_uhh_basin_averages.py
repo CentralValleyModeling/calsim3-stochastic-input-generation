@@ -3,7 +3,7 @@ Extract Monthly Basin-Averaged Climate for UHH Locations
 ========================================================
 Computes weighted-average monthly precipitation, temperature, and VPD for
 UHH (Upper Headwater Hydrology) locations specified in reference/uhh_locations.csv.
-Grid cell weights are read from mod_forcing/vic/reference/GridInfo/ files.
+Grid cell weights are read from reference/GridInfo/ files.
 VPD is derived via quantile mapping from temperature using CalSim historical VPD.
 
 Product A / Historical: one CSV per variable per location.
@@ -12,7 +12,7 @@ Product B: 10 long-format chunk CSVs per variable (100 WY each, Oct 1921 - Sep 2
 Inputs
 ------
 - reference/uhh_locations.csv
-- mod_forcing/vic/reference/GridInfo/<location>_GridInfo.txt
+- reference/GridInfo/<location>_GridInfo.txt
 - WGEN/Product_A/1/  or  WGEN/Product_B/1/  or  Historical_Climate_LTO/  (meteo files)
 - reference/calsim_climate_sv.xlsx  (historical VPD target for quantile mapping)
 
@@ -1551,7 +1551,7 @@ def run_compare_historical_productB(args):
     script_dir = Path(__file__).parent.resolve()
     gen_dir = get_module_generated_dir("mod_forcing/climate")
     repo_root = Path(__file__).resolve().parents[2]
-    grid_info_folder = repo_root / "mod_forcing" / "vic" / "reference" / "GridInfo"
+    grid_info_folder = repo_root / "mod_forcing" / "climate" / "reference" / "GridInfo"
 
     productB_dir = gen_dir / "output" / "_product_b_final"
     if not productB_dir.exists():
@@ -1840,7 +1840,7 @@ def main():
     if not excel_file.exists():
         excel_file = script_dir / "input" / "calsim_climate_sv.xlsx"
     repo_root = Path(__file__).resolve().parents[2]
-    grid_info_folder = repo_root / "mod_forcing" / "vic" / "reference" / "GridInfo"
+    grid_info_folder = repo_root / "mod_forcing" / "climate" / "reference" / "GridInfo"
     
     # Build data path based on source type
     if args.source == "Historical":

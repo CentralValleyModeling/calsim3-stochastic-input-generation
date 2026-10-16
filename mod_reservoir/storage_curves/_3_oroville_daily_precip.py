@@ -12,7 +12,7 @@ For Product_A and Historical: single output files.
 Inputs
 ------
 - WGEN weather data (Product_A / Product_B / Historical)
-- mod_forcing/vic/reference/GridInfo/CS3_8RI_OROVI_GridInfo.txt (override with --grid_info)
+- mod_forcing/climate/reference/GridInfo/CS3_8RI_OROVI_GridInfo.txt (override with --grid_info)
 
 Outputs
 -------
@@ -42,7 +42,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 from utils.paths import get_base_dir, get_module_generated_dir
 
 _gen = get_module_generated_dir("mod_reservoir/storage_curves")
-_ref = Path(__file__).resolve().parents[2] / 'mod_forcing' / 'vic' / 'reference' / 'GridInfo'
+_ref = Path(__file__).resolve().parents[2] / 'mod_forcing' / 'climate' / 'reference' / 'GridInfo'
 
 
 def parse_grid_info_file(grid_info_path):

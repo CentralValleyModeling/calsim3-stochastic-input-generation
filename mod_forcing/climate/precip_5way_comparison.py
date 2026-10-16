@@ -10,8 +10,8 @@ each UHH location, with Trinity (TR_UHH) highlighted for GitHub issue #78:
   5. LIVNEH_SPLIT    Livneh "split" forcing       (Historical_Climate_LTO/1_Historical, col 0)
 
 The four gridded per-cell sources (all named data_<lat>_<lon>) are area-weighted
-to each UHH location using the GridInfo weights (mod_forcing/vic/reference/
-GridInfo); Hist_CalSim is read per location from the default CalSim SV DSS. All
+to each UHH location using the GridInfo weights (mod_forcing/climate/
+reference/GridInfo); Hist_CalSim is read per location from the default CalSim SV DSS. All
 series are annual WY totals in inches.
 
 Repo data is resolved through utils.paths (so it follows config.json). The DSS
@@ -52,7 +52,7 @@ SPLIT_DIR    = os.path.normpath(str(BASE / "Historical_Climate_LTO" / "1_Histori
 UNSPLIT_DIR  = os.path.normpath(str(BASE / "WGEN" / "Historical_Unsplit"))          # col 3 = prcp
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
-GRIDINFO_DIR = REPO_ROOT / "mod_forcing" / "vic" / "reference" / "GridInfo"
+GRIDINFO_DIR = REPO_ROOT / "mod_forcing" / "climate" / "reference" / "GridInfo"
 LOCS_CSV = Path(__file__).resolve().parent / "reference" / "uhh_locations.csv"
 
 MM_PER_IN = 25.4

@@ -13,13 +13,13 @@ Plots
 Configuration
 -------------
 Set LOCATION at the top to switch basins (e.g. CS3_8RI_OROVI, CS3_I_SHSTA).
-Grid info is read from mod_forcing/vic/reference/GridInfo/.
+Grid info is read from mod_forcing/climate/reference/GridInfo/.
 
 Inputs
 ------
 - Product A WGEN meteo:  WGEN/Product_A/1/
 - Product B WGEN meteo:  WGEN/Product_B/1/
-- VIC grid info:         mod_forcing/vic/reference/GridInfo/<LOCATION>_GridInfo.txt
+- Grid info:             mod_forcing/climate/reference/GridInfo/<LOCATION>_GridInfo.txt
 
 Outputs
 -------
@@ -60,11 +60,11 @@ MINOR_GRID_KW = dict(alpha=0.08, color='k', linestyle='-',  linewidth=0.3)
 COLORS  = dict(cs3='steelblue', hist='indianred', synth='#d4aaaa')
 
 _gen = get_module_generated_dir("mod_hydrology/rim_inflow")
-_VIC_GRID_DIR = REPO_ROOT / "mod_forcing" / "vic" / "reference" / "GridInfo"
+_GRID_DIR = REPO_ROOT / "mod_forcing" / "climate" / "reference" / "GridInfo"
 
 # %% settings
 LOCATION   = 'CS3_8RI_OROVI'   # CS3_8RI_OROVI | CS3_I_SHSTA
-GRID_INFO  = str(_VIC_GRID_DIR / f'{LOCATION}_GridInfo.txt')
+GRID_INFO  = str(_GRID_DIR / f'{LOCATION}_GridInfo.txt')
 METEO_COLS = ['Year', 'Month', 'Day', 'PRECIP', 'TMAX', 'TMIN']
 _FIG_DIR = _gen / "output" / "_0_stochastic_precipitation"
 _FIG_DIR.mkdir(parents=True, exist_ok=True)
