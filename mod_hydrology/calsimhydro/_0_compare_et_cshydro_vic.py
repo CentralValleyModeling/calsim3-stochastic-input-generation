@@ -12,7 +12,7 @@ from statsmodels.distributions.empirical_distribution import ECDF
 
 # %% add repo root to path for utils imports
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
-from utils.paths import get_base_dir, get_module_generated_dir
+from utils.paths import get_archive_dir, get_base_dir, get_module_generated_dir
 
 # %% quantile mapping
 import utils.quantile_mapping as qmap
@@ -40,7 +40,7 @@ cshydro_file = "CS3_RefETo.dss" # "CS3_PanEvapGerber.dss" "CS3_ET.dss" "CS3_RefE
 gridinfo_dir = str(_script_dir / "reference")
 startDate_dss = "31OCT1920 00:00:00"
 endDate_dss = "30SEP2021 24:00:00"
-vic_output_dir = str(get_module_generated_dir("mod_forcing/vic") / "output" / "fluxes" / "Product_A" / "1")
+vic_output_dir = str(get_archive_dir() / "mod_forcing" / "vic" / "output" / "fluxes" / "Product_A" / "1")
 _out_dir = get_module_generated_dir("mod_hydrology/calsimhydro") / "output" / "_0_compare_et_cshydro_vic"
 _out_dir.mkdir(parents=True, exist_ok=True)
 vic_et_col =  7 #7 # column index for Short Grass ET in VIC output

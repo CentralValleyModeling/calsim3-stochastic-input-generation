@@ -45,7 +45,7 @@ from pydsstools.core import TimeSeriesContainer
 # Add repo root to path for utils imports
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 from utils import dss_io
-from utils.paths import get_module_generated_dir
+from utils.paths import get_archive_dir, get_module_generated_dir
 
 # Local quantile mapping utility
 from utils.quantile_mapping import qmap_single
@@ -661,7 +661,8 @@ def main():
 
 	# Resolve Product-dependent defaults
 	_script_dir = Path(__file__).resolve().parent
-	_vic_gen = get_module_generated_dir("mod_forcing/vic")
+	# VIC fluxes live only in the v1.0 archive; ET reads them there until the new ET method.
+	_vic_gen = get_archive_dir() / "mod_forcing" / "vic"
 	_cshydro_gen = get_module_generated_dir("mod_hydrology/calsimhydro")
 
 	# Resolve grid_info_file and DSS defaults from reference/ folder

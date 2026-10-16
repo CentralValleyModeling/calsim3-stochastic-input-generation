@@ -50,9 +50,13 @@ _DEFAULT_CFG = REPO_ROOT / "config_default.json"
 
 
 def _load_config() -> dict:
-    cfg_path = _USER_CFG if _USER_CFG.exists() else _DEFAULT_CFG
-    with open(cfg_path, "r") as f:
-        return json.load(f)
+    """Defaults from ``config_default.json``, overridden key by key by ``config.json``."""
+    with open(_DEFAULT_CFG, "r") as f:
+        cfg = json.load(f)
+    if _USER_CFG.exists():
+        with open(_USER_CFG, "r") as f:
+            cfg.update(json.load(f))
+    return cfg
 
 
 _CFG = _load_config()
@@ -91,6 +95,31 @@ def get_module_generated_dir(module: str) -> Path:
         or ``"mod_climate"``.
     """
     return get_generated_dir() / module
+
+
+def get_archive_dir() -> Path:
+    """Return ``<data_dir>/<archive_dir>``: the read-only v1.0 GENERATED tree.
+
+    Holds the VIC-based release (git tag ``v1.0``).  Read it, never write to it:
+    the VIC fluxes for ET (until the new ET method) and comparisons against v1.0.
+    """
+    return DATA_DIR / _CFG["archive_dir"]
+
+
+def get_sacsma_repo() -> Path:
+    """Return the SAC-SMA repository (``sacsma_repo``, relative to the repo root or absolute)."""
+    p = Path(_CFG["sacsma_repo"])
+    return p if p.is_absolute() else (REPO_ROOT / p).resolve()
+
+
+def get_sacsma_env() -> str:
+    """Return the conda environment SAC-SMA runs in (``sacsma_env``)."""
+    return _CFG["sacsma_env"]
+
+
+def get_sacsma_commit() -> str:
+    """Return the SAC-SMA commit the rim-inflow product is pinned to (``sacsma_commit``)."""
+    return _CFG["sacsma_commit"]
 
 
 def get_inventory_dir() -> Path:
