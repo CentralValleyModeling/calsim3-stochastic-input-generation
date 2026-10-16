@@ -12,7 +12,7 @@ volume interpolation so the monthly sum stays 1.
 Dependencies
 ------------
 Upstream scripts that must run first:
-  - mod_hydrology/rim_inflow/_3_qmap_productB.py  (Product B qmap inflows)
+  - mod_hydrology/rim_inflow/_1_build_rim_inflow.py  (Product B rim inflows)
 
 Inputs
 ------
@@ -20,7 +20,7 @@ Inputs
     VOL-FRACTION records (Part C) and reference inflow series
 - Reference inflows:    reference/reference_inflows.csv
     Part B / Part C pairs defining the annual flow index components
-- Product B rim inflows: GENERATED/mod_hydrology/rim_inflow/output/_3_qmap_product_b/
+- Product B rim inflows (utils.paths.get_rim_inflow_outputs):
     <PartB>_qmo_n01.csv ... n10.csv (qmap_postAdj or qmap_preAdj)
 
 Outputs
@@ -49,13 +49,13 @@ import pandas as pd
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 from utils import dss_io
-from utils.paths import get_base_dir, get_module_generated_dir
+from utils.paths import get_base_dir, get_module_generated_dir, get_rim_inflow_outputs
 
 # Paths
 _GEN_DIR = get_module_generated_dir("mod_other/day_volume_fractions")
 DEFAULT_DSS = get_base_dir() / "CalSim3" / "__calsim_sv_default__.dss"
 REFERENCE_CSV = Path(__file__).resolve().parent / "reference" / "reference_inflows.csv"
-RIM_INFLOW_DIR = get_module_generated_dir("mod_hydrology/rim_inflow") / "output" / "_3_qmap_product_b"
+RIM_INFLOW_DIR = get_rim_inflow_outputs("B")["dir"]
 
 script_name = Path(__file__).stem
 DEFAULT_OUTDIR = _GEN_DIR / "output" / script_name

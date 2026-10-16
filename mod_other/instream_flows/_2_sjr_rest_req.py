@@ -6,14 +6,11 @@ flow data, for historical comparison, Product A, and Product B.
 
 Dependencies
 ------------
-- mod_hydrology/rim_inflow/_2_qmap_historical_validation.py
-    Product A UNIMP_SJ is read from the CalSim-format validation CSV:
-    ``data/GENERATED/mod_hydrology/rim_inflow/output/_2_qmap_historical_validation/_product_a_validation/_riminflow_productA_1972_2018.csv``
-    (filtered by Part B == UNIMP_SJ)
-
-- mod_hydrology/rim_inflow/_3_qmap_productB.py
-    Product B UNIMP_SJ is read from per-chunk CSVs:
-    ``data/GENERATED/mod_hydrology/rim_inflow/output/_3_qmap_product_b/UNIMP_SJ_qmo_n*.csv``
+- mod_hydrology/rim_inflow/_1_build_rim_inflow.py, files found through
+  utils.paths.get_rim_inflow_outputs:
+    Product A UNIMP_SJ is read from the CalSim-format validation CSV
+    ``_riminflow_productA_1972_2018.csv`` (filtered by Part B == UNIMP_SJ).
+    Product B UNIMP_SJ is read from per-chunk CSVs ``UNIMP_SJ_qmo_n*.csv``.
 
 Usage
 -----
@@ -34,7 +31,7 @@ import pandas as pd
 
 # Add repo root to path for utils imports
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
-from utils.paths import get_base_dir, get_module_generated_dir
+from utils.paths import get_base_dir, get_module_generated_dir, get_rim_inflow_outputs
 from utils import dss_io
 
 # -----------------------------------------------------------------------------
@@ -43,9 +40,8 @@ from utils import dss_io
 DSS_FILE = get_base_dir() / "CalSim3" / "__calsim_sv_default__.dss"
 DEFAULT_DSS_READ_START = "1915-01-31"
 DEFAULT_DSS_READ_END = "2021-12-31"
-_rim_gen = get_module_generated_dir("mod_hydrology/rim_inflow")
-DEFAULT_PRODUCT_A = _rim_gen / "output" / "_2_qmap_historical_validation" /"_product_a_validation"/"_riminflow_productA_1972_2018.csv"
-DEFAULT_PRODUCT_B_DIR = _rim_gen / "output" / "_3_qmap_product_b"
+DEFAULT_PRODUCT_A = get_rim_inflow_outputs("A")["sv"]
+DEFAULT_PRODUCT_B_DIR = get_rim_inflow_outputs("B")["dir"]
 _gen = get_module_generated_dir("mod_other/instream_flows")
 DEFAULT_OUT_HIST = _gen / "output" / "_2_sjr_rest_req"
 DEFAULT_OUT_A = _gen / "output" / "_product_a_validation"

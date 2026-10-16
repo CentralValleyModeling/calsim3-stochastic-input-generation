@@ -2,7 +2,7 @@
 Stochastic Inflow Exploration Plots
 ====================================
 Interactive exploration of a single rim inflow location across CS3 baseline,
-Product A (historical qmap), and Product B (stochastic qmap) outputs.
+Product A (historical) and Product B (stochastic) outputs.
 
 Plots
 -----
@@ -18,8 +18,8 @@ Set LOCATION and CS3_PATH at the top to switch inflow locations.
 Inputs
 ------
 - CalSim baseline DSS:  CalSim3/__calsim_sv_default__.dss
-- Product A qmap CSV:   _2_qmap_historical_validation/Product_A/calsim_qmap_validation_TS.csv
-- Product B qmap CSVs:  _3_qmap_product_b/<CalSim>_<VIC>_qmo_n*.csv
+- Rim-inflow SVs (utils.paths.get_rim_inflow_outputs): Product A
+  calsim_qmap_validation_TS.csv, Product B <CalSim>_qmo_n*.csv
 
 Outputs
 -------
@@ -45,7 +45,7 @@ from pydsstools.heclib.dss import HecDss
 
 # Add repo root to path for utils imports
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
-from utils.paths import get_base_dir, get_module_generated_dir, REPO_ROOT
+from utils.paths import get_base_dir, get_module_generated_dir, get_rim_inflow_outputs, REPO_ROOT
 
 # %% style
 sns.set_style("ticks")
@@ -70,10 +70,9 @@ _VIC_GRID_DIR = REPO_ROOT / "mod_forcing" / "vic" / "reference" / "GridInfo"
 LOCATION    = 'CS3_8RI_OROVI'   # CS3_8RI_OROVI | CS3_I_SHSTA
 CS3_PATH    = 'UNIMP_OROV/FLOW-UNIMPAIRED'
 CS3_DSS     = str(get_base_dir() / "CalSim3" / "__calsim_sv_default__.dss")
-MATCHED_KEY = LOCATION.replace('CS3_', '')          # e.g., '8RI_OROVI'
 CALSIM_KEY  = CS3_PATH.split('/')[0]                # e.g., 'UNIMP_OROV'
-HIST_CSV    = str(_gen / "output" / "_2_qmap_historical_validation" / "calsim_qmap_validation_TS.csv")
-STOCH_DIR   = str(_gen / "output" / "_3_qmap_product_b")
+HIST_CSV    = str(get_rim_inflow_outputs("A")["ts"])
+STOCH_DIR   = str(get_rim_inflow_outputs("B")["dir"])
 GRID_INFO   = str(_VIC_GRID_DIR / f'{LOCATION}_GridInfo.txt')
 METEO_COLS = ['Year', 'Month', 'Day', 'PRECIP', 'TMAX', 'TMIN']
 _FIG_DIR = str(_gen / "output" / "_0_stochastic_inflow_explore")
@@ -139,19 +138,15 @@ cs3 = pd.DataFrame(
 cs3 = cs3.loc[cs3.index <= '2021-09-30']
 cs3_annual = cs3.resample('YS-OCT').sum()
 
-# WGEN historical (qmap-adjusted)
+# WGEN historical (Product A)
 _hist_all = pd.read_csv(HIST_CSV)
-_hist = _hist_all.loc[
-    (_hist_all['CalSim'] == CALSIM_KEY) & (_hist_all['Matched_inflow'] == MATCHED_KEY),
-    ['Year', 'Month', 'qmap_postAdj']
-].copy()
+_hist = _hist_all.loc[_hist_all['CalSim'] == CALSIM_KEY, ['Year', 'Month', 'qmap_postAdj']].copy()
 _hist.index = pd.to_datetime(_hist['Year'].astype(str) + '-' + _hist['Month'].astype(str) + '-01')
 wgen_hist = _hist[['qmap_postAdj']].rename(columns={'qmap_postAdj': LOCATION})
 wgen_hist_annual = wgen_hist.resample('YS-OCT').sum()
 wgen_hist_annual = wgen_hist_annual.loc[(wgen_hist_annual.index.year >= 1915) & (wgen_hist_annual.index.year <= 2017)]
 
-# WGEN stochastic (qmap-adjusted)
-# Product B files are named <CALSIM_KEY>_qmo_n*.csv (no VIC name appended)
+# WGEN stochastic (Product B), files named <CALSIM_KEY>_qmo_n*.csv
 _files = sorted(glob.glob(os.path.join(STOCH_DIR, f'{CALSIM_KEY}_qmo_n*.csv')))
 _chunks = []
 for i, f in enumerate(_files):

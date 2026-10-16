@@ -7,7 +7,8 @@ on rim-inflow aggregations with recursive index formulas. Supports Product A
 
 Inputs
 ------
-- Rim-inflow QM time series (rim_inflow calsim_qmap_validation_TS.csv)
+- Rim-inflow SVs (utils.paths.get_rim_inflow_outputs): Product A calsim_qmap_validation_TS.csv,
+  Product B <CalSim>_qmo_nXX.csv
 
 Outputs
 -------
@@ -40,9 +41,8 @@ from pathlib import Path
 import pandas as pd
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
-from utils.paths import get_module_generated_dir
+from utils.paths import get_module_generated_dir, get_rim_inflow_outputs
 
-_rim_gen = get_module_generated_dir("mod_hydrology/rim_inflow")
 _wyt_gen = get_module_generated_dir("mod_hydrology/water_year_types")
 
 
@@ -417,13 +417,13 @@ def main():
     parser.add_argument('--product', choices=['A', 'B'], required=True,
                         help='Product to generate: A (historical 1921-2018) or B (stochastic 1000-yr chunks).')
     parser.add_argument('--product_a_input', 
-                        default=str(_rim_gen / 'output' / '_2_qmap_historical_validation' / 'calsim_qmap_validation_TS.csv'),
+                        default=str(get_rim_inflow_outputs('A')['ts']),
                         help='Path to Product A input CSV')
     parser.add_argument('--product_a_output',
                         default=str(_wyt_gen / 'output' / '_1_calc_WYTs' / 'Product_A'),
                         help='Directory for Product A output CSVs')
     parser.add_argument('--product_b_input',
-                        default=str(_rim_gen / 'output' / '_3_qmap_product_b'),
+                        default=str(get_rim_inflow_outputs('B')['dir']),
                         help='Directory containing Product B input CSVs')
     parser.add_argument('--product_b_output',
                         default=str(_wyt_gen / 'output' / '_1_calc_WYTs' / 'Product_B'),

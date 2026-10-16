@@ -19,18 +19,16 @@ Thresholds (annual unimpaired Folsom flow, TAF):
 
 Products:
   - Product A (historical-length, WY 1972-2018): Uses FOLSM_INFLOW from the
-    Product A QMap validation output (calsim_qmap_validation_TS.csv).
+    Product A rim-inflow output (calsim_qmap_validation_TS.csv).
   - Product B (1000-yr stochastic, 10 chunks): Uses synthetic FOLSM_INFLOW
-    from _10_RimInflow QMap output with the same thresholds applied directly.
+    from the Product B rim-inflow output with the same thresholds applied directly.
 
 Input files (in ./reference/):
   - PGE_WY_ALLOCATION_config.json            : Thresholds & configuration
 
-External dependencies:
-  - rim_inflow/output/_2_qmap_historical_validation/
-       calsim_qmap_validation_TS.csv  (Product A FOLSM_INFLOW)
-  - rim_inflow/output/_3_qmap_product_b/
-       FOLSM_INFLOW_qmo_n01.csv ... n10.csv  (Product B inflows)
+External dependencies (utils.paths.get_rim_inflow_outputs):
+  - calsim_qmap_validation_TS.csv  (Product A FOLSM_INFLOW)
+  - FOLSM_INFLOW_qmo_n01.csv ... n10.csv  (Product B inflows)
 
 Output:
   - output/_product_a_validation/
@@ -54,7 +52,7 @@ import pandas as pd
 
 # Add repo root to path for utils imports
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
-from utils.paths import get_module_generated_dir
+from utils.paths import get_module_generated_dir, get_rim_inflow_outputs
 
 # ------------------------------------------------------------------------------
 # Configuration
@@ -72,12 +70,9 @@ PRODUCT_B_NCHUNKS = 10
 REFERENCE_DIR = RUN_DIR / "reference"
 CONFIG_JSON = REFERENCE_DIR / "PGE_WY_ALLOCATION_config.json"
 
-# RimInflow directories
-_rim_gen = get_module_generated_dir("mod_hydrology/rim_inflow")
-RIM_INFLOW_PRODUCT_A_CSV = (
-    _rim_gen / "output" / "_2_qmap_historical_validation" / "calsim_qmap_validation_TS.csv"
-)
-RIM_INFLOW_PRODUCT_B_DIR = _rim_gen / "output" / "_3_qmap_product_b"
+# RimInflow files
+RIM_INFLOW_PRODUCT_A_CSV = get_rim_inflow_outputs("A")["ts"]
+RIM_INFLOW_PRODUCT_B_DIR = get_rim_inflow_outputs("B")["dir"]
 
 # Output directories
 _GEN_DIR = get_module_generated_dir("mod_other/upper_watershed")
