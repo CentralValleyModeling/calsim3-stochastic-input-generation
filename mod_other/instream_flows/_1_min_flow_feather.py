@@ -57,12 +57,14 @@ INPUTS / OUTPUTS
     thresholds and the Value_Spreadsheet reference column.
 
   Product A  <-  rim-inflow Product A CSV  _riminflow_productA_1972_2018.csv
-    Quantile-mapped UNIMP_OROV (WY 1972-2018).  Leading months that predate
+    UNIMP_OROV (WY 1972-2018).  Leading months that predate
     the first classifiable cycle are filled from the baseline MINFLOWFEATHER.
 
   Product B  <-  rim-inflow Product B chunks  UNIMP_OROV_qmo_n01..n10.csv
-    Quantile-mapped UNIMP_OROV; the WY-1921 rolling-average seed comes from
+    UNIMP_OROV; the WY-1921 rolling-average seed comes from
     the CalSim SV DSS.
+
+  Rim-inflow files are found through utils.paths.get_rim_inflow_outputs.
 
   Output 1 - Validation (WY 1922-2021)
     Classifies with historical CS3 data; dates from Oct 1921 - Sep 2021.
@@ -112,14 +114,13 @@ import numpy as np
 
 # Add repo root to path for utils imports
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
-from utils.paths import get_base_dir, get_module_generated_dir
+from utils.paths import get_base_dir, get_module_generated_dir, get_rim_inflow_outputs
 from utils import dss_io
 
 # -----------------------------------------------------------------------------
 # Paths
 # -----------------------------------------------------------------------------
 _SCRIPT_DIR = Path(__file__).resolve().parent
-_rim_gen    = get_module_generated_dir("mod_hydrology/rim_inflow")
 _gen        = get_module_generated_dir("mod_other/instream_flows")
 
 # CalSim SV DSS: source of the validation input UNIMP_OROV, the Product B
@@ -131,14 +132,12 @@ DSS_READ_END     = "2021-12-31"
 UNIMP_OROV_KEY = ("UNIMP_OROV", "FLOW-UNIMPAIRED")        # baseline inflow input
 MINFLOW_KEY    = ("MINFLOWFEATHER", "FLOW-MIN-REQUIRED")  # CS3 actual (Value_CS3)
 
-# Product A quantile-mapped UNIMP_OROV (WY 1972-2018), from the rim-inflow
-# Product A CSV (Part B == UNIMP_OROV).
-PATH_PRODUCT_A_CSV = (_rim_gen / "output" / "_2_qmap_historical_validation"
-                      / "_product_a_validation"
-                      / "_riminflow_productA_1972_2018.csv")
+# Product A UNIMP_OROV (WY 1972-2018), from the rim-inflow Product A CSV
+# (Part B == UNIMP_OROV).
+PATH_PRODUCT_A_CSV = get_rim_inflow_outputs("A")["sv"]
 
 # Product B directory (10 chunk CSVs)
-PATH_UNIMP_OROV_PB_DIR = _rim_gen / "output" / "_3_qmap_product_b"
+PATH_UNIMP_OROV_PB_DIR = get_rim_inflow_outputs("B")["dir"]
 
 # Spreadsheet with original computed schedule (for 3-way validation comparison)
 PATH_XLSX = _gen / "term_development" / "MINFLOWFEATHER" / "MIF_FEATHER_Logic_Reconstruction.xlsx"

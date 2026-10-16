@@ -71,6 +71,8 @@ PRODUCT_A_SCRIPTS = [
     "mod_hydrology/delta_channel_depletion/_1_compile_precip_DETAW.py",
     "mod_hydrology/small_watersheds/_1_compile_precip_sws.py",
     "mod_hydrology/rim_inflow/_2_qmap_historical_validation.py",
+    "mod_hydrology/rim_inflow/_1_build_rim_inflow.py",
+    "mod_hydrology/rim_inflow/_2_skill_evaluation.py",
     "mod_hydrology/water_year_types/_1_calc_WYTs.py",
     "mod_hydrology/calsimhydro/_3_postprocess_product_a.py",
     "mod_hydrology/calsimhydro_ee/_2_postprocess_product_a.py",

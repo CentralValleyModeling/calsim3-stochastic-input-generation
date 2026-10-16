@@ -176,6 +176,31 @@ def require_pinned_run(folder: Path) -> dict:
     return manifest
 
 
+def get_rim_inflow_outputs(product: str) -> dict:
+    """Return the rim-inflow SV files of ``product`` (``historical``, ``A`` or ``B``) written by
+    ``mod_hydrology/rim_inflow/_1_build_rim_inflow.py``. Every reader of rim inflows goes
+    through this helper.
+
+    - ``dir``: the product's folder. Product B holds ``<CalSim>_qmo_n01.csv`` ...
+      ``_n10.csv`` there (CalSim, Matched_inflow, Year, Month, qmap_postAdj).
+    - ``ts`` (historical, A): ``calsim_qmap_validation_TS.csv``, one long table of every SV
+      (CalSim, Matched_inflow, Year, Month, qmap_postAdj). Product A covers WY1972-2018,
+      historical WY1916-2018.
+    - ``sv``, ``sv_dir`` (A): the Product A values in SV format (Part B, Part C, Year, Month,
+      Value), ``_riminflow_productA_1972_2018.csv``, and its folder, which the Product A
+      compiler scans.
+    """
+    root = (get_module_generated_dir("mod_hydrology/rim_inflow") / "output"
+            / "_1_build_rim_inflow" / INFLOW_FORCINGS[product])
+    out = {"dir": root}
+    if product != "B":
+        out["ts"] = root / "calsim_qmap_validation_TS.csv"
+    if product == "A":
+        out["sv_dir"] = root / "_product_a_validation"
+        out["sv"] = out["sv_dir"] / "_riminflow_productA_1972_2018.csv"
+    return out
+
+
 def _clear_readonly(func, path, _exc_info):
     os.chmod(path, stat.S_IWRITE)
     func(path)
