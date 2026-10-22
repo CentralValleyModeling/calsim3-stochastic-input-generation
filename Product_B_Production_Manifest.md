@@ -38,10 +38,14 @@
 
 ```
 Tier 1  FORCING (mod_forcing)
-    VIC:
-        python mod_forcing/vic/_1_append_wind_wgen_hist.py
-        -> [EXTERNAL] VIC hydrologic model run
-        python mod_forcing/vic/_2_compile_rim_inflows.py --product B
+    Rim-inflow model (config inflow_*; SAC-SMA, in 10 segments):
+        python mod_forcing/inflows/_1_build_forcing.py --forcing B --cells all
+        python mod_forcing/inflows/_2_run_product.py --forcing B
+    Historical run of the same model, which the absorb fits of the second stage read
+    (once per pin; skip if Product A already ran it at this pin):
+        python mod_forcing/inflows/_1_build_forcing.py --forcing historical --cells all
+        python mod_forcing/inflows/_2_run_product.py --forcing historical
+        python mod_hydrology/rim_inflow/_1_build_rim_inflow.py --product historical
     Climate:
         python mod_forcing/climate/_1_pp_point_locations.py --source Product_B --scenario 1
         python mod_forcing/climate/_2_uhh_basin_averages.py --source Product_B --scenario 1
@@ -57,7 +61,7 @@ Tier 2  CORE HYDROLOGY (mod_hydrology)
         -> [EXTERNAL] CalSimHydroEE model run (10 chunks)
         python mod_hydrology/calsimhydro_ee/_3_postprocess_product_b.py
     Rim Inflow:
-        python mod_hydrology/rim_inflow/_3_qmap_productB.py
+        python mod_hydrology/rim_inflow/_1_build_rim_inflow.py --product B
     Small Watersheds:
         python mod_hydrology/small_watersheds/_1_compile_precip_sws.py --product B
         -> [EXTERNAL] Small Watersheds model run (10 chunks)
@@ -74,7 +78,10 @@ Tier 4  DEPENDENT MODULES
     Reservoir Evaporation:=
         python mod_reservoir/evaporation/_2_run_reservoir_evap.py --product B
     Reservoir Storage Curves:
+        python mod_reservoir/storage_curves/_1_wyt_index_curves.py --product B
         python mod_reservoir/storage_curves/_2_qmap.py --product B
+        python mod_reservoir/storage_curves/_3_oroville_daily_precip.py --source Product_B
+        python mod_reservoir/storage_curves/_4_oroville_level5.py --product B
     Tulare Groundwater Terms:
         python mod_hydrology/tulare_gw_terms/_1_wyt_monthlyavg.py --product B
     Instream Flows:
@@ -112,6 +119,8 @@ Tier 5  FINAL COMPILATION (postprocessing)
           --chunks N [N ...]   Process specific chunks (default: all 10).
           --skip-comparison    Skip the Product A vs B comparison step.
           --skip-dss           Skip DSS file generation (CSV only).
+          --allow-missing      Compile even if a module or chunk has no CSVs
+                               (the baseline then fills its SVs).
           --summary-figures    Regenerate figures from a previous compare CSV.
 
         (optional, post external CalSim 3.0 run consuming the SV DSS files:
@@ -142,9 +151,9 @@ Rept pathway (`Constant_Rept = T` in the master inventory).
   accounting (shared with Product A).
 - `<module>/reference/qmap_pairs.csv` -- QM target/predictor pairs
   (shared with Product A; same file drives both pipelines).
-- `mod_hydrology/rim_inflow/reference/CalSim3_VIC_name_mapping.csv`,
-  `RimInflowAnchor.xlsx` -- rim QM pairing + anchor/tributary mass
-  balance (shared with Product A).
+- `mod_hydrology/rim_inflow/reference/CalSim3_inflow_mapping.csv` -- the
+  method of each rim-inflow SV: model arc, anchor sum, pass-through QM
+  (shared with Product A).
 - `BASE/WGEN/resampled.dates_Product_B_1000yr.csv` -- WGEN day-to-history
   mapping consumed by closure_terms and day_volume_fractions.
 - `.github/copilot-instructions.md` -- per-module script tables and the
@@ -160,9 +169,9 @@ byte-identical run-to-run on identical inputs.
 
 | Script | Command | Inputs | Outputs |
 |---|---|---|---|
-| vic/_1 | `python mod_forcing/vic/_1_append_wind_wgen_hist.py` | WGEN `Product_B` met files; historical wind | wind-appended VIC forcing |
-| [EXTERNAL] VIC | manual VIC model run (10 chunks) | wind-appended forcing | VIC flux files (RUNOFF + BASEFLOW) per chunk |
-| vic/_2 | `python mod_forcing/vic/_2_compile_rim_inflows.py --product B` | VIC fluxes; grid weights (incl. composite `CS3_8RI_SRBB_GridInfo.txt`) | routed monthly rim inflows `CS3_*_qmo_n{01..10}.csv` (+ DSS per chunk), incl. Bend Bridge `CS3_8RI_SRBB_qmo_n{01..10}.csv` (Shasta + above-SAC257 tributaries) |
+| inflows/_1 | `python mod_forcing/inflows/_1_build_forcing.py --forcing B --cells all` | WGEN `Product_B` met files | the model's input (SAC-SMA: 10 segment stores, one per chunk) and its G2 check against BASE |
+| inflows/_2 historical | `python mod_forcing/inflows/_1_build_forcing.py --forcing historical --cells all` (G2 on the store at the pin), `python mod_forcing/inflows/_2_run_product.py --forcing historical`, then `python mod_hydrology/rim_inflow/_1_build_rim_inflow.py --product historical` | the model checkout at the pin; its historical store | the historical rim inflows the absorb fits of the second stage read (`utils/qmap_fit.py`); they refuse a run from another pin. Once per pin, shared with Product A |
+| inflows/_2 | `python mod_forcing/inflows/_2_run_product.py --forcing B` | the model checkout at the pin; the inputs above | `arc_inflow_monthly.csv` (chunk, date, WY, month, arc, taf, kind; each chunk labelled WY1922-2021), `run_manifest.json` (with G6: each segment starts from the model state the one before kept) |
 | climate/_1 | `python mod_forcing/climate/_1_pp_point_locations.py --source Product_B --scenario 1` | WGEN met files; PP point reference | per-location monthly precip CSVs (per chunk) |
 | climate/_2 | `python mod_forcing/climate/_2_uhh_basin_averages.py --source Product_B --scenario 1` | WGEN met files; CS3 baseline DSS (UHH precip); grid weights | basin-average precip/Tmax/Tmin/VPD + `_product_b_final/` SV CSVs |
 
@@ -210,14 +219,14 @@ chunk CSVs under `_product_b_final/`.
    - **Outputs:** `_cshydroEE_productB_n{01..10}.csv`
      (+ merged/summary/boxplots) and `_product_b_final/*.csv`
 
-### Rim Inflow (227 vars)
+### Rim Inflow (228 vars)
 
-1. `python mod_hydrology/rim_inflow/_3_qmap_productB.py`
-   - **Inputs:** VIC routed inflows (vic/_2); CS3 baseline DSS;
-     `CalSim3_VIC_name_mapping.csv`; `RimInflowAnchor.xlsx`
-   - **Outputs:** per-chunk QM'd rim inflows
-     `output/_3_qmap_product_b/<PartB>_qmo_n{01..10}.csv` (consumed by
-     several Tier 4 modules + the final compiler)
+1. `python mod_hydrology/rim_inflow/_1_build_rim_inflow.py --product B`
+   - **Inputs:** the arc flows of inflows/_2 (only from a run at the pin);
+     `CalSim3_inflow_mapping.csv`; CS3 baseline DSS (pass-through QM fits)
+   - **Outputs:** per-chunk rim inflows
+     `output/_1_build_rim_inflow/Product_B/1/<PartB>_qmo_n{01..10}.csv`
+     (consumed by several Tier 4 modules + the final compiler)
 
 ### Small Watersheds (210 vars)
 
@@ -271,14 +280,22 @@ chunk CSVs under `_product_b_final/`.
 
 ### Reservoir Storage Curves (7 vars)
 
-1. `python mod_reservoir/storage_curves/_2_qmap.py --product B`
-   - **Inputs:** CS3 baseline DSS; rim inflows (rim_inflow/_3); `reference/qmap_pairs.csv`
+1. `python mod_reservoir/storage_curves/_1_wyt_index_curves.py --product B`
+   - **Inputs:** WYT indices (water_year_types/_1 Product B);
+     `reference/reservoir_schedule_monthly.csv`, `reference/reservoir_schedule_wyt.csv`
+   - **Outputs:** `_product_b_final/` S_FOLSMLEVEL2, S_PEDROLEVEL4,
+     S_SHSTALEVEL2, S_TRNTYLEVEL2 and S_TRNTYLEVEL3 per chunk
+2. `python mod_reservoir/storage_curves/_2_qmap.py --product B`
+   - **Inputs:** CS3 baseline DSS; rim inflows (rim_inflow/_1 --product B); `reference/qmap_pairs.csv`
    - **Outputs:** intermediate detail CSVs in `_2_qmap/product_b/` +
      `_product_b_final/*.csv` per chunk
-
-*Storage Curves `_1_wyt_index_curves.py`, `_3_oroville_daily_precip.py`,
-and `_4_oroville_level5.py` are Product A-only diagnostic / calibration
-tools and are not part of the Product B pipeline.*
+3. `python mod_reservoir/storage_curves/_3_oroville_daily_precip.py --source Product_B`
+   - **Inputs:** WGEN Product B met files; `CS3_8RI_OROVI_GridInfo.txt`
+     (mod_forcing/climate/reference/GridInfo)
+   - **Outputs:** `_3_oroville_daily_precip/oroville_daily_precip_productB_n01.csv` ... n10
+4. `python mod_reservoir/storage_curves/_4_oroville_level5.py --product B`
+   - **Inputs:** Oroville daily precipitation (storage_curves/_3 Product B)
+   - **Outputs:** `_product_b_final/S_OROVLLEVEL5_productB_n01.csv` ... n10
 
 ### Tulare Groundwater Terms (14 vars)
 
@@ -290,7 +307,7 @@ tools and are not part of the Product B pipeline.*
 
 1. `python mod_other/instream_flows/_1_min_flow_feather.py --product B`
 2. `python mod_other/instream_flows/_2_sjr_rest_req.py --product B`
-- **Inputs:** rim inflows (rim_inflow/_3 Product B)
+- **Inputs:** rim inflows (rim_inflow/_1 --product B)
 - **Outputs:** `_product_b_final/*.csv` (MINFLOWFEATHER;
   REST_REQ_NP/REST_REQ_P) per chunk
 - *Optional diagnostic:* both scripts also accept `--product validation`
@@ -309,7 +326,7 @@ tools and are not part of the Product B pipeline.*
 6. `python mod_other/upper_watershed/_5_dnp_evaporation.py --calibrate` *(setup; run once to derive the hypsographic polynomial)*
 7. `python mod_other/upper_watershed/_5_dnp_evaporation.py --product B`
 - **Inputs:** upper_watershed/_0 SV reference; WYT indices Product B;
-  rim_inflow/_3 rim CSV; `reference/qmap_pairs.csv`
+  rim_inflow/_1 --product B rim CSV; `reference/qmap_pairs.csv`
 - **Outputs:** `_product_b_final/*.csv` per chunk
 
 ### Closure Terms (13 vars)
@@ -328,7 +345,7 @@ tools and are not part of the Product B pipeline.*
 
 1. `python mod_other/day_volume_fractions/_2_generate_product_b.py`
    - **Inputs:** CalSim baseline DSS (VOL-FRACTION); reference inflows;
-     rim_inflow/_3 Product B chunks
+     rim_inflow/_1 --product B chunks
    - **Outputs:** `_product_b_final/vol_fraction_productB_n{01..10}.csv`
      + WY-match diagnostics under `_2_generate_product_b/wy_matches_*.csv`
 
@@ -342,7 +359,7 @@ tools and are not part of the Product B pipeline.*
 4. `python mod_other/miscellaneous/_3_hybrid.py --product B`
 5. `python mod_other/miscellaneous/_4_qmap.py --product B`
 - **Inputs:** miscellaneous/_0 baseline; WYT indices Product B;
-  rim_inflow/_3 rim CSV; `reference/qmap_pairs.csv`
+  rim_inflow/_1 --product B rim CSV; `reference/qmap_pairs.csv`
 - **Outputs:** `_product_b_final/*.csv` per chunk
 
 ### Salinity
