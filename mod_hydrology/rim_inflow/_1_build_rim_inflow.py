@@ -24,9 +24,9 @@ method in reference/CalSim3_inflow_mapping.csv (CS3_Inflow, Source, Method):
 Products
 --------
 - A          : Product A (WGEN scenario 1), WY1972-2018, the compiler window
+- B          : Product B (WGEN scenario 1), 10 chunks of 100 water years, each labelled
+               WY1922-2021 (utils.wgen_calendar); a qmap SV is mapped once over all 10 chunks
 - historical : the historical-unsplit run, WY1916-2018, for evaluation; not delivered
-
-Product B arrives in phase P3.
 
 Inputs
 ------
@@ -38,11 +38,12 @@ Inputs
 
 Outputs
 -------
-- <generated>/mod_hydrology/rim_inflow/output/_1_build_rim_inflow/<Product_A/1|Historical_Unsplit>/
+- <generated>/mod_hydrology/rim_inflow/output/_1_build_rim_inflow/<Product_A/1|Product_B/1|Historical_Unsplit>/
   (utils.paths.get_rim_inflow_outputs; the folder is deleted first)
-  - calsim_qmap_validation_TS.csv  (CalSim, Matched_inflow, Year, Month, qmap_postAdj);
-                                   Matched_inflow is the source series, or the method for a
-                                   sum of several series and for zero
+  - calsim_qmap_validation_TS.csv  (A, historical; CalSim, Matched_inflow, Year, Month,
+                                   qmap_postAdj); Matched_inflow is the source series, or the
+                                   method for a sum of several series and for zero
+  - <CalSim>_qmo_n01.csv ... _n10.csv  (B; the same columns, 1,200 months per chunk)
   - qmap_fits.csv                  per qmap SV: source, fit window, mean annual volumes of the
                                    SV and its source in CalSim3 (fit window) and in the product,
                                    and their ratios
@@ -54,6 +55,7 @@ Outputs
 Usage
 -----
     python mod_hydrology/rim_inflow/_1_build_rim_inflow.py --product A
+    python mod_hydrology/rim_inflow/_1_build_rim_inflow.py --product B
     python mod_hydrology/rim_inflow/_1_build_rim_inflow.py --product historical
 """
 
@@ -70,6 +72,7 @@ from utils.paths import (INFLOW_PROVENANCE, get_arc_inflows, get_base_dir, get_i
                          get_rim_inflow_outputs, remove_tree, require_pinned_run)
 from utils.qmap_fit import FIT_WY
 from utils.quantile_mapping import qmap_single
+from utils.wgen_calendar import LABEL_WY
 
 _SCRIPT_DIR = Path(__file__).resolve().parent
 MAPPING_CSV = _SCRIPT_DIR / "reference" / "CalSim3_inflow_mapping.csv"
@@ -77,7 +80,7 @@ DSS_FILE = get_base_dir() / "CalSim3" / "__calsim_sv_default__.dss"
 INVENTORY_XLSX = get_inventory_dir() / "_MASTER_INVENTORY_FOR_STOCHASTIC_INPUT_GENERATION_.xlsx"
 
 METHODS = ("arc", "sum", "qmap", "zero", "wyt", "none")
-PRODUCT_WY = {"A": (1972, 2018), "historical": (1916, 2018)}
+PRODUCT_WY = {"A": (1972, 2018), "B": LABEL_WY, "historical": (1916, 2018)}  # B: per chunk
 
 
 def wy_index(wy: tuple[int, int]) -> pd.DatetimeIndex:
@@ -160,24 +163,30 @@ def to_frame(values: pd.Series) -> pd.DataFrame:
 
 
 def build(product: str, mapping: pd.DataFrame, part_c: dict):
-    arcs = pd.read_csv(get_arc_inflows(product), usecols=["date", "arc", "taf"], parse_dates=["date"])
-    wide = arcs.pivot(index="date", columns="arc", values="taf")
+    """The SVs of every method built here, per chunk: ``{chunk: {SV: series}}``, with the one
+    chunk ``None`` for A and historical; and the qmap fits."""
+    arcs = pd.read_csv(get_arc_inflows(product), parse_dates=["date"])
     out_index = wy_index(PRODUCT_WY[product])
+    chunks = sorted(arcs["chunk"].unique()) if "chunk" in arcs else [None]
+    models = {}
+    for c in chunks:
+        wide = (arcs if c is None else arcs[arcs["chunk"] == c]).pivot(
+            index="date", columns="arc", values="taf")
 
-    def model_leaf(name):
-        if name not in wide.columns:
-            raise SystemExit(f"{name}: not an arc of the rim-inflow model")
-        return wide[name]
+        def model_leaf(name, wide=wide):
+            if name not in wide.columns:
+                raise SystemExit(f"{name}: not an arc of the rim-inflow model")
+            return wide[name]
 
-    model = Resolver(mapping, out_index, model_leaf)
-    built = {name: model(name) for name in mapping.index
-             if mapping.at[name, "Method"] in ("arc", "sum", "zero")}
+        models[c] = Resolver(mapping, out_index, model_leaf)
+    built = {c: {name: models[c](name) for name in mapping.index
+                 if mapping.at[name, "Method"] in ("arc", "sum", "zero")} for c in chunks}
 
     qrows = mapping[mapping["Method"] == "qmap"]
     fit_index = wy_index(FIT_WY)
     cs3_names = set(qrows.index)
     for src in qrows["Source"]:
-        cs3_names |= model.leaves(src)
+        cs3_names |= models[chunks[0]].leaves(src)
     cs3 = read_calsim3(cs3_names, part_c)
     calsim = Resolver(mapping, fit_index, lambda n: cs3[n])
     fits = []
@@ -186,24 +195,43 @@ def build(product: str, mapping: pd.DataFrame, part_c: dict):
         basis_hist, target = calsim(src), cs3[name].reindex(fit_index)
         if target.isna().any():
             raise SystemExit(f"{name}: CalSim3 series has gaps in WY{FIT_WY[0]}-{FIT_WY[1]}")
-        basis_sim = model(src)
+        basis_sim = pd.concat([models[c](src) for c in chunks])     # every chunk in one map
         q = qmap_single(to_frame(basis_sim), to_frame(basis_hist), to_frame(target))
-        built[name] = pd.Series(q["quantile_mapped_value"].to_numpy(float), index=out_index, name=name)
-        n_fit, n_out = len(fit_index) / 12, len(out_index) / 12
+        mapped = q["quantile_mapped_value"].to_numpy(float)
+        for j, c in enumerate(chunks):
+            built[c][name] = pd.Series(mapped[j * len(out_index):(j + 1) * len(out_index)],
+                                       index=out_index, name=name)
+        n_fit, n_out = len(fit_index) / 12, len(mapped) / 12
         fits.append({
             "CalSim": name, "Source": src, "fit_wy": f"{FIT_WY[0]}-{FIT_WY[1]}",
             "cs3_taf_yr": target.sum() / n_fit, "cs3_source_taf_yr": basis_hist.sum() / n_fit,
             "cs3_ratio": target.sum() / basis_hist.sum(),
-            "product_taf_yr": built[name].sum() / n_out,
+            "product_taf_yr": mapped.sum() / n_out,
             "product_source_taf_yr": basis_sim.sum() / n_out,
-            "product_ratio": built[name].sum() / basis_sim.sum(),
+            "product_ratio": mapped.sum() / basis_sim.sum(),
         })
     return built, pd.DataFrame(fits)
 
 
+def sv_frames(mapping: pd.DataFrame, built: dict) -> dict:
+    """Per SV, in mapping order, its rows: CalSim, Matched_inflow (the source series, or the
+    method for a sum of several series and for zero), Year, Month, qmap_postAdj."""
+    out = {}
+    for name in mapping.index:
+        if name not in built:
+            continue
+        method, src = mapping.at[name, "Method"], mapping.at[name, "Source"]
+        s = built[name]
+        single = method in ("arc", "qmap") or (method == "sum" and "+" not in src)
+        out[name] = pd.DataFrame({
+            "CalSim": name, "Matched_inflow": src if single else method,
+            "Year": s.index.year, "Month": s.index.month, "qmap_postAdj": s.to_numpy(float)})
+    return out
+
+
 def main():
     ap = argparse.ArgumentParser(description="Build the rim-inflow SVs from the rim-inflow model.")
-    ap.add_argument("--product", choices=list(PRODUCT_WY), required=True)   # B: phase P3
+    ap.add_argument("--product", choices=list(PRODUCT_WY), required=True)
     args = ap.parse_args()
 
     mapping = read_mapping()
@@ -214,27 +242,24 @@ def main():
                          f"not in the inventory {extra}; not in the mapping {absent}")
 
     manifest = require_pinned_run(get_arc_inflows(args.product).parent)
-    built, fits = build(args.product, mapping, part_c)
-
     paths = get_rim_inflow_outputs(args.product)
-    remove_tree(paths["dir"])
+    remove_tree(paths["dir"])          # first, so a failed build leaves no old SVs behind
+    built, fits = build(args.product, mapping, part_c)
     paths["dir"].mkdir(parents=True)
     (paths["dir"] / INFLOW_PROVENANCE).write_text(json.dumps(manifest, indent=1))
 
-    rows = []
-    for name in mapping.index:          # mapping order
-        if name not in built:
-            continue
-        method, src = mapping.at[name, "Method"], mapping.at[name, "Source"]
-        s = built[name]
-        single = method in ("arc", "qmap") or (method == "sum" and "+" not in src)
-        rows.append(pd.DataFrame({
-            "CalSim": name, "Matched_inflow": src if single else method,
-            "Year": s.index.year, "Month": s.index.month, "qmap_postAdj": s.to_numpy(float)}))
-    ts = pd.concat(rows, ignore_index=True)
-    ts.to_csv(paths["ts"], index=False)
     fits.to_csv(paths["dir"] / "qmap_fits.csv", index=False, float_format="%.4f")
-    print(f"{ts['CalSim'].nunique()} SVs, WY{PRODUCT_WY[args.product][0]}-{PRODUCT_WY[args.product][1]}: {paths['ts']}")
+    wy = PRODUCT_WY[args.product]
+    if args.product == "B":
+        for c, sv_set in built.items():
+            for name, frame in sv_frames(mapping, sv_set).items():
+                frame.to_csv(paths["dir"] / f"{name}_qmo_n{c:02d}.csv", index=False)
+        n_sv = len(next(iter(built.values())))
+        print(f"{n_sv} SVs x {len(built)} chunks, each WY{wy[0]}-{wy[1]}: {paths['dir']}")
+    else:
+        ts = pd.concat(sv_frames(mapping, built[None]).values(), ignore_index=True)
+        ts.to_csv(paths["ts"], index=False)
+        print(f"{ts['CalSim'].nunique()} SVs, WY{wy[0]}-{wy[1]}: {paths['ts']}")
     print(fits[["CalSim", "Source", "cs3_ratio", "product_ratio"]].to_string(index=False))
 
     if args.product == "A":
@@ -244,7 +269,7 @@ def main():
         sv.sort_values(["Part B", "Year", "Month"]).to_csv(paths["sv"], index=False)
         print(f"SV format: {paths['sv']}")
 
-    skipped = mapping[~mapping.index.isin(built)]
+    skipped = mapping[~mapping.index.isin(next(iter(built.values())))]
     print(f"Not built here: {skipped['Method'].value_counts().to_dict()}")
 
 
