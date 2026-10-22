@@ -6,8 +6,8 @@ replaces, and measures how both respond to the Product A detrending.
 
 G3, skill. The model's historical-unsplit SVs (direct, no bias correction; built by
 _1_build_rim_inflow.py) and the raw VIC historical-unsplit run of the v1.0 archive (routed,
-before quantile mapping and the anchor mass balance), each against CalSim3, monthly, on three
-windows of water years:
+before quantile mapping and the anchor mass balance; see VIC's historical run below), each
+against CalSim3, monthly, on three windows of water years:
 
 - 1976-1985: held out of the dPL training, the only out-of-sample test
 - 1950-2018 less 1976-1985: in-sample
@@ -20,11 +20,12 @@ their precipitation, so the difference is the detrending's temperature signal.
 
 Also the Sacramento four-river annual bias by year class, for the dry-year evidence.
 
-Months left out. The v1.0 VIC historical run was forced with the 289 x10 precipitation spikes
-that SAC-SMA's store and Product A divide by 10 (reference/prcp_x10_artifacts.csv; 259 of them
-in July 1974, which puts about 585 TAF too much into VIC's Folsom inflow that month). Every
-spike month and the month after it (21 months) are left out of all comparisons, for both
-models, so they are scored on the same months.
+VIC's historical run. The historical WGEN weather has precipitation 10 times too high on 289
+grid-cell days (reference/prcp_x10_artifacts.csv; 259 of them in July 1974). Products A and B
+and SAC-SMA's historical forcing carry a tenth of those values; v1.0's VIC run on the
+historical weather used them as they were. The script reads that run redone with the values
+divided by 10 (routed/Historical_Unsplit_x10fix in the v1.0 archive, made by
+mod_forcing/vic/x10fix/vic_x10fix.py there), so every month is scored.
 
 For the qmap SVs (aliases and gap arcs) no window is out of sample, since their maps are fitted
 on CalSim3 over WY1950-2018, and VIC's series is the arc v1.0 matched to them.
@@ -35,9 +36,7 @@ Inputs
 - the model's arc flows: utils.paths.get_arc_inflows("historical"), get_arc_inflows("A")
 - reference/CalSim3_inflow_mapping.csv (anchor sums)
 - reference/CalSim3_VIC_name_mapping.csv (CalSim3 SV -> VIC routed series)
-- v1.0 archive: mod_forcing/vic/output/routed/{Historical_Unsplit, Product_A/1}/CS3_<VIC>_qmo.csv
-- reference/prcp_x10_artifacts.csv (key, date, prcp_raw_mm; a copy of SAC-SMA's
-  data/inputs/forcing/prcp_x10_artifacts.csv as of SAC-SMA 77f07dc)
+- v1.0 archive: mod_forcing/vic/output/routed/{Historical_Unsplit_x10fix, Product_A/1}/CS3_<VIC>_qmo.csv
 - CalSim3 baseline DSS: CalSim3/__calsim_sv_default__.dss
 - master inventory (Part C)
 
@@ -73,9 +72,9 @@ OUT_DIR = _gen / "output" / "_2_skill_evaluation"
 INFLOW_MAP = _SCRIPT_DIR / "reference" / "CalSim3_inflow_mapping.csv"
 VIC_MAP = _SCRIPT_DIR / "reference" / "CalSim3_VIC_name_mapping.csv"
 VIC_ROUTED = get_archive_dir() / "mod_forcing" / "vic" / "output" / "routed"
+VIC_HIST = "Historical_Unsplit_x10fix"     # v1.0's historical run, x10 precipitation corrected
 DSS_FILE = get_base_dir() / "CalSim3" / "__calsim_sv_default__.dss"
 INVENTORY_XLSX = get_inventory_dir() / "_MASTER_INVENTORY_FOR_STOCHASTIC_INPUT_GENERATION_.xlsx"
-X10_CSV = _SCRIPT_DIR / "reference" / "prcp_x10_artifacts.csv"
 
 
 def wys(a: int, b: int) -> set:
@@ -113,19 +112,6 @@ def water_years(index: pd.DatetimeIndex) -> np.ndarray:
     return index.year + (index.month >= 10).astype(int)
 
 
-def spike_months() -> pd.DatetimeIndex:
-    """Month ends of every x10 spike month and the month after it."""
-    d = pd.read_csv(X10_CSV, parse_dates=["date"])["date"] + pd.offsets.MonthEnd(0)
-    return pd.DatetimeIndex(sorted(set(d) | set(d + pd.offsets.MonthEnd(1))))
-
-
-SKIP = spike_months()
-
-
-def drop_skipped(s: pd.Series) -> pd.Series:
-    return s[~s.index.isin(SKIP)]
-
-
 def wide_arcs(forcing: str) -> pd.DataFrame:
     d = pd.read_csv(get_arc_inflows(forcing), usecols=["date", "arc", "taf"], parse_dates=["date"])
     return d.pivot(index="date", columns="arc", values="taf")
@@ -144,6 +130,8 @@ def anchor_sum(wide: pd.DataFrame, mapping: pd.DataFrame, name: str) -> pd.Serie
 
 def read_vic(sub: str, vic_names) -> pd.DataFrame:
     """Raw VIC routed series of the v1.0 archive, month-end indexed, by VIC name."""
+    if not (VIC_ROUTED / sub).is_dir():
+        raise SystemExit(f"{VIC_ROUTED / sub} is missing")
     out = {}
     for v in sorted(set(vic_names)):
         f = VIC_ROUTED / sub / f"CS3_{v}_qmo.csv"
@@ -166,7 +154,6 @@ def read_calsim3(names) -> pd.DataFrame:
 
 def skill_rows(name, method, obs, sac, vic):
     rows = []
-    obs = drop_skipped(obs)
     wy = water_years(obs.index)
     for label, years in WINDOWS.items():
         m = np.isin(wy, list(years))
@@ -188,7 +175,6 @@ def response(hist: pd.Series, prod: pd.Series) -> list:
     for a, b in PERIODS:
         vals = {}
         for tag, s in (("H", hist), ("A", prod)):
-            s = drop_skipped(s)
             s = s[np.isin(water_years(s.index), list(wys(a, b)))]
             vals[tag] = (s.sum(), s[s.index.month.isin(APR_JUL)].sum())
         (vh, ajh), (va, aja) = vals["H"], vals["A"]
@@ -207,9 +193,8 @@ def main():
     sac = ts.pivot(index="date", columns="CalSim", values="qmap_postAdj")
     names = list(sac.columns)
     cs3 = read_calsim3(names)
-    vic_h = read_vic("Historical_Unsplit", vic_map.reindex(names).dropna())
-    print(f"{len(names)} SVs; CalSim3 {cs3.shape[1]}; VIC raw {vic_h.shape[1]} series; "
-          f"{len(SKIP)} x10 spike months left out")
+    vic_h = read_vic(VIC_HIST, vic_map.reindex(names).dropna())
+    print(f"{len(names)} SVs; CalSim3 {cs3.shape[1]}; VIC raw {vic_h.shape[1]} series ({VIC_HIST})")
 
     # ---- G3: skill per SV and window ----------------------------------------
     rows = []
@@ -264,7 +249,6 @@ def main():
         "SAC": sac[four].sum(axis=1),
         "VIC_raw": series["Sacramento four"][2][0],
     }).dropna()
-    ann = drop_skipped(ann)
     ann = ann.groupby(water_years(ann.index)).sum()
     ann.index.name = "WY"
     ann = ann.loc[1922:2018]
