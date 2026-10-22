@@ -51,6 +51,7 @@ from matplotlib.patches import Patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 from utils.paths import get_module_generated_dir, get_base_dir
+from utils.wgen_calendar import require_stamp_days
 
 _gen = get_module_generated_dir("mod_reservoir/evaporation")
 
@@ -70,21 +71,21 @@ _MONTH_NAMES = {
 
 def _load_climate_data_product_b(file_path: str) -> pd.DataFrame:
     """
-    Load Product B WGEN climate data using a PeriodIndex - consistent with all
-    other project scripts that handle the 1000-year stochastic sequence.
+    Load Product B WGEN climate data with its stamp year and month.
 
-    Product B WGEN files use years 1-1008 (below pandas Timestamp min ~1677),
-    so date construction into a DatetimeIndex fails.  A daily PeriodIndex
-    anchored at 2025-01-01 (368,172 periods) spans the full 1000-year sequence
-    and is compatible with pandas resample() for monthly aggregation.
+    Product B WGEN files use years 1-1008 (below the pandas Timestamp minimum, ~1677) on a
+    calendar of their own (utils.wgen_calendar), so this loader builds no dates;
+    process_daily_to_monthly groups the rows by stamp year and month.
     """
     data = np.loadtxt(file_path)
-    dates = pd.period_range(start='2025-01-01', periods=len(data), freq='D')
+    require_stamp_days(len(data), file_path)
     return pd.DataFrame({
+        'year':      data[:, 0].astype(int),
+        'month':     data[:, 1].astype(int),
         'precip_mm': data[:, 3],
         'tmax_c':    data[:, 4],
         'tmin_c':    data[:, 5],
-    }, index=dates)
+    })
 
 
 def process_reservoir(
@@ -118,39 +119,32 @@ def process_reservoir(
     pd.DataFrame
         Monthly evaporation time series
     """
-    try:
-        # Find weather file
-        weather_file = find_nearest_weather_file(reservoir_code, weather_dir=weather_dir)
-        if weather_file is None:
-            print("    No weather file found")
-            return None
+    weather_file = find_nearest_weather_file(reservoir_code, weather_dir=weather_dir)
+    if weather_file is None:
+        raise FileNotFoundError(f"{reservoir_code}: no weather file in {weather_dir}")
 
-        # Load daily data
-        if product_b:
-            daily_data = _load_climate_data_product_b(weather_file)
-        else:
-            daily_data = load_climate_data(weather_file)
-            daily_data = daily_data.loc[start_date:end_date]
+    # Load daily data
+    if product_b:
+        daily_data = _load_climate_data_product_b(weather_file)
+    else:
+        daily_data = load_climate_data(weather_file)
+        daily_data = daily_data.loc[start_date:end_date]
 
-        # Calculate evaporation
-        calc = EvaporationCalculator(reservoir_code)
-        evap_df = calc.process_daily_to_monthly(daily_data)
+    # Calculate evaporation
+    calc = EvaporationCalculator(reservoir_code)
+    evap_df = calc.process_daily_to_monthly(daily_data)
 
-        # Product A only: save individual reservoir CSV
-        if not product_b:
-            params = get_reservoir_info(reservoir_code)
-            region = params['region']
-            region_folder = region.replace(' ', '_').replace('/', '_')
-            output_path = Path(output_dir) / 'individual_reservoirs' / region_folder
-            output_path.mkdir(parents=True, exist_ok=True)
-            output_file = output_path / f'{reservoir_code}.csv'
-            evap_df.to_csv(output_file)
+    # Product A only: save individual reservoir CSV
+    if not product_b:
+        params = get_reservoir_info(reservoir_code)
+        region = params['region']
+        region_folder = region.replace(' ', '_').replace('/', '_')
+        output_path = Path(output_dir) / 'individual_reservoirs' / region_folder
+        output_path.mkdir(parents=True, exist_ok=True)
+        output_file = output_path / f'{reservoir_code}.csv'
+        evap_df.to_csv(output_file)
 
-        return evap_df
-
-    except Exception as e:
-        print(f"    Error: {e}")
-        return None
+    return evap_df
 
 
 def process_reservoirs(
@@ -208,13 +202,9 @@ def process_reservoirs(
             code, start_date, end_date, output_dir,
             weather_dir=weather_dir, product_b=product_b
         )
-
-        if evap_df is not None:
-            results[code] = evap_df
-            annual_avg = evap_df['evaporation_in'].mean() * 12
-            print(f"OK {len(evap_df):4d} months | {annual_avg:5.1f} in/yr")
-        else:
-            print("FAILED")
+        results[code] = evap_df
+        annual_avg = evap_df['evaporation_in'].mean() * 12
+        print(f"OK {len(evap_df):4d} months | {annual_avg:5.1f} in/yr")
 
     elapsed = time.time() - start_time
 

@@ -555,8 +555,8 @@ def run_product_b():
             f'UNIMP_OROV_qmo_n{n:02d}.csv'
         )
         if not os.path.exists(pb_path):
-            print(f"  [n{n:02d}] Skipped - file not found: {pb_path}")
-            continue
+            raise FileNotFoundError(f"[n{n:02d}] {pb_path} is missing; run "
+                                    "mod_hydrology/rim_inflow/_1_build_rim_inflow.py --product B")
 
         unimp_pb       = _load_product_b_chunk(n)
         unimp_combined = pd.concat([_cs3_seed, unimp_pb]).sort_index()

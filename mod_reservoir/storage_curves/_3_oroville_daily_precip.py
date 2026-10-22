@@ -5,8 +5,8 @@ Computes grid-weighted daily basin-average precipitation (inches) for the
 Oroville/Feather River basin from WGEN weather data, using grid weights from
 CS3_8RI_OROVI_GridInfo.txt.
 
-For Product_B: 10 chunk CSVs of 100 water years each (WY1922-WY2021); skips
-Jan-Sep of Year 1 to align to the October water-year start.
+For Product_B: 10 chunk CSVs of 100 water years each, cut by utils.wgen_calendar
+(Jan-Sep of stamp year 1 skipped) and labelled in order with the days of WY1922-WY2021.
 For Product_A and Historical: single output files.
 
 Inputs
@@ -40,6 +40,7 @@ import pandas as pd
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 from utils.paths import get_base_dir, get_module_generated_dir
+from utils.wgen_calendar import N_CHUNKS, STAMP_DAYS, chunk_days
 
 _gen = get_module_generated_dir("mod_reservoir/storage_curves")
 _ref = Path(__file__).resolve().parents[2] / 'mod_forcing' / 'climate' / 'reference' / 'GridInfo'
@@ -157,8 +158,7 @@ def calculate_basin_daily_precipitation(grid_info_df, data_folder, date_index):
         meteo_file = find_meteo_file(lat, lon, data_folder)
         
         if meteo_file is None:
-            print(f"    Warning: No meteo file found for grid cell ({lat}, {lon}), skipping")
-            continue
+            raise FileNotFoundError(f"no meteo file for grid cell ({lat}, {lon}) in {data_folder}")
         
         # Read daily data
         daily_data = read_meteo_file(meteo_file)
@@ -224,8 +224,7 @@ def calculate_basin_daily_precip_product_b(grid_info_df, data_folder):
         lat, lon, weight = row['lat'], row['lon'], row['weight1']
         f = data_folder / f"meteo_{lat}_{lon}"
         if not f.exists():
-            print(f"    Warning: meteo_{lat}_{lon} not found, skipping")
-            continue
+            raise FileNotFoundError(f"{f}: grid cell ({lat}, {lon}) of the basin has no WGEN file")
         raw = np.loadtxt(f)
         if ymd is None:
             ymd = raw[:, :3].astype(int)
@@ -449,34 +448,26 @@ def main():
         # (years 1-1008 are below pandas Timestamp minimum and cannot be parsed directly)
         print("\nReading Product B daily data (full 1000-year sequence)...")
         daily_df = calculate_basin_daily_precip_product_b(grid_info_df, data_folder)
+        if len(daily_df) != STAMP_DAYS or tuple(daily_df.iloc[0][['Year', 'Month', 'Day']]) != (1, 1, 1):
+            raise ValueError(f"{len(daily_df)} days from {tuple(daily_df.iloc[0][['Year', 'Month', 'Day']])}; "
+                             f"Product B has the {STAMP_DAYS} stamp days from 1 January of year 1")
 
-        # Skip Jan-Sep of year 1 to align to October water year start
-        daily_df = daily_df[
-            ~((daily_df['Year'] == 1) & (daily_df['Month'] < 10))
-        ].reset_index(drop=True)
-
-        # Assign synthetic water year
-        daily_df['WY'] = np.where(daily_df['Month'] >= 10, daily_df['Year'] + 1, daily_df['Year'])
-
-        # Chunk into 10 groups of 100 water years (same convention as rim inflow chunker)
-        wys = sorted(daily_df['WY'].unique())
-        wys_per_chunk = 100
-        print(f"\nWriting 10 chunks of {wys_per_chunk} water years each (WY1922-WY2021 template)...")
-        for k in range(10):
-            wy_chunk = set(wys[k * wys_per_chunk: (k + 1) * wys_per_chunk])
-            chunk = daily_df[daily_df['WY'].isin(wy_chunk)].copy()
-
-            # Relabel years to template Oct 1921 - Sep 2021 (WY1922-WY2021).
-            # Chunk k starts at Oct of synthetic year (1 + 100k); map that to 1921.
-            year_offset = 1920 - 100 * k
-            chunk['year'] = chunk['Year'] + year_offset
-
-            out = chunk[['year', 'Month', 'Day', 'precip_inches']].rename(
-                columns={'Month': 'month', 'Day': 'day'}
-            )
-            output_file = output_dir / f'oroville_daily_precip_productB_n{k+1:02d}.csv'
+        # Label each chunk's 36,525 stamp days (utils.wgen_calendar) in order with the 36,525
+        # days of WY1922-2021
+        label_days = pd.date_range('1921-10-01', '2021-09-30', freq='D')
+        print(f"\nWriting {N_CHUNKS} chunks of 100 water years each (WY1922-WY2021 template)...")
+        for k in range(1, N_CHUNKS + 1):
+            first, n_days = chunk_days(k)
+            assert n_days == len(label_days)
+            out = pd.DataFrame({
+                'year': label_days.year,
+                'month': label_days.month,
+                'day': label_days.day,
+                'precip_inches': daily_df['precip_inches'].to_numpy()[first:first + n_days],
+            })
+            output_file = output_dir / f'oroville_daily_precip_productB_n{k:02d}.csv'
             out.to_csv(output_file, index=False)
-            print(f"  Chunk {k+1:02d}/10: {len(out)} days | WY1922-WY2021 | {output_file.name}")
+            print(f"  Chunk {k:02d}/{N_CHUNKS}: {len(out)} days | WY1922-WY2021 | {output_file.name}")
 
         print(f"\nProduct B outputs: {output_dir}")
 

@@ -389,8 +389,7 @@ def run_generate(product: str) -> None:
         for label, stor in storage_chunks:
             er_chunk = er_chunks.get(label)
             if er_chunk is None:
-                print(f"  {label}: WARNING no ER chunk found, skipping")
-                continue
+                raise SystemExit(f"{label}: no ER chunk, so its old output would stay in place")
             stor = stor.copy()
             stor["date"] = stor["date"].dt.to_period("M").dt.to_timestamp()
             stor["surface_area_acres"] = poly_func(stor["storage_taf"])
@@ -404,7 +403,7 @@ def run_generate(product: str) -> None:
             )
             missing_er = stor["er_inches"].isna().sum()
             if missing_er:
-                print(f"  {label}: WARNING {missing_er} months missing ER")
+                raise SystemExit(f"{label}: {missing_er} months have no ER")
 
             out_csv = csv_dir / f"_e_pedro_sv_evaporation_productB_{label}.csv"
             pd.DataFrame({

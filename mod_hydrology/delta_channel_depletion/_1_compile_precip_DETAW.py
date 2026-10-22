@@ -38,6 +38,7 @@ import pandas as pd
 # Add repo root to path for utils imports
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 from utils.paths import get_base_dir, get_module_generated_dir
+from utils.wgen_calendar import N_CHUNKS, STAMP_DAYS, chunk_days
 
 
 class CompileStationsPrecipMM:
@@ -82,8 +83,8 @@ class CompileStationsPrecipMM:
         self.ref_dir = os.path.dirname(os.path.abspath(coord_file))
         self.met_columns = ['Year', 'Month', 'Day', 'precip', 'tmax', 'tmin']
         if self.product_b:
-            # Product B spans ~1000 years; use PeriodIndex to exceed pandas Timestamp max (~2262)
-            self.dates = pd.period_range(start='2025-01-01', end='3033-01-08', freq='D')
+            # Product B: one WGEN row per stamp day (utils.wgen_calendar)
+            self.dates = pd.RangeIndex(STAMP_DAYS)
         else:
             self.dates = pd.date_range(start=self.start_date, end=self.end_date, freq='D')
 
@@ -234,21 +235,10 @@ class CompileStationsPrecipMM:
         return df_out
 
     def _write_product_b_chunks(self, result_vals):
-        """Split 1000-year daily station precip into 10 CSV chunks of 100 water years each.
-        Skips first 273 days (Jan-Sep) to align to Oct water year start.
-        Each chunk spans template WY1922-WY2021 (Sep 30 1921 - Sep 2021).
-        Sep 30 1921 values are copied from reference/mm_pcp4.csv.
-        Output files: {base}_n01{ext} ... {base}_n10{ext}
+        """Split the daily station precip into the 10 chunks of utils.wgen_calendar.chunk_days,
+        each labelled 30 Sep 1921 - 30 Sep 2021. The 30 Sep 1921 row comes from
+        reference/mm_pcp4.csv. Output files: {base}_n01{ext} ... {base}_n10{ext}
         """
-        skip_days = 273
-        date_template_oct = pd.date_range('1921-10-01', '2021-09-30', freq='D')
-        days_per_chunk = len(date_template_oct)  # 36524
-        total_chunks = 10
-        total_needed = skip_days + days_per_chunk * total_chunks
-        for stn, vals in result_vals.items():
-            if len(vals) < total_needed:
-                raise ValueError(f"{stn}: need {total_needed} days, got {len(vals)}")
-
         # Read Sep 30 1921 reference row from reference/mm_pcp4.csv
         ref_mm = pd.read_csv(os.path.join(self.ref_dir, 'mm_pcp4.csv'), nrows=1)
         sep30_ref = ref_mm.iloc[0]
@@ -259,8 +249,9 @@ class CompileStationsPrecipMM:
         out_dir = os.path.dirname(os.path.abspath(self.output_csv))
         base, ext = os.path.splitext(os.path.basename(self.output_csv))
         os.makedirs(out_dir, exist_ok=True)
-        print(f"  Product B: {days_per_chunk}+1 days/chunk, {total_chunks} chunks (skip {skip_days} days, prepend Sep 30 ref)")
-        for i in range(total_chunks):
+        print(f"  Product B: {len(date_template)} days per chunk, {N_CHUNKS} chunks")
+        for i in range(N_CHUNKS):
+            first, n = chunk_days(i + 1)
             df_chunk = pd.DataFrame({
                 'year':  date_template.year.astype(int),
                 'month': date_template.month.astype(int),
@@ -268,26 +259,17 @@ class CompileStationsPrecipMM:
                 'DOY':   date_template.dayofyear.astype(int),
             })
             for stn in self.station_order:
-                aligned = result_vals[stn][skip_days:]
-                chunk_data = aligned[i * days_per_chunk:(i + 1) * days_per_chunk]
-                df_chunk[stn] = [float(sep30_ref[stn])] + list(chunk_data)
+                df_chunk[stn] = [float(sep30_ref[stn])] + list(result_vals[stn][first:first + n])
             out_file = os.path.join(out_dir, f"{base}_n{i+1:02d}{ext}")
             df_chunk.to_csv(out_file, index=False)
             print(f"    Chunk {i+1:02d}/10: {os.path.basename(out_file)}")
 
     def _write_product_b_lodi_chunks(self, df_vars, output_csv_lodi):
-        """Split 1000-year daily Lodi met into 10 CSV chunks of 100 water years each.
-        Sep 30 1921 values are copied from reference/LODI_PT4.csv."""
-        skip_days = 273
-        date_template_oct = pd.date_range('1921-10-01', '2021-09-30', freq='D')
-        days_per_chunk = len(date_template_oct)
-        total_chunks = 10
-        total_needed = skip_days + days_per_chunk * total_chunks
+        """Split the daily Lodi met into the 10 chunks of utils.wgen_calendar.chunk_days, as
+        _write_product_b_chunks does; the 30 Sep 1921 row comes from reference/LODI_PT4.csv."""
         precip_vals = df_vars['precip'].values
         tmax_vals   = df_vars['tmax'].values
         tmin_vals   = df_vars['tmin'].values
-        if len(precip_vals) < total_needed:
-            raise ValueError(f"Lodi: need {total_needed} days, got {len(precip_vals)}")
 
         # Read Sep 30 1921 reference row from reference/LODI_PT4.csv
         ref_lodi = pd.read_csv(os.path.join(self.ref_dir, 'LODI_PT4.csv'), nrows=1)
@@ -299,11 +281,12 @@ class CompileStationsPrecipMM:
         out_dir = os.path.dirname(os.path.abspath(output_csv_lodi))
         base, ext = os.path.splitext(os.path.basename(output_csv_lodi))
         os.makedirs(out_dir, exist_ok=True)
-        print(f"  Product B Lodi: {days_per_chunk}+1 days/chunk, {total_chunks} chunks (skip {skip_days} days, prepend Sep 30 ref)")
-        for i in range(total_chunks):
-            p_chunk  = precip_vals[skip_days:][i * days_per_chunk:(i + 1) * days_per_chunk]
-            tx_chunk = tmax_vals  [skip_days:][i * days_per_chunk:(i + 1) * days_per_chunk]
-            tn_chunk = tmin_vals  [skip_days:][i * days_per_chunk:(i + 1) * days_per_chunk]
+        print(f"  Product B Lodi: {len(date_template)} days per chunk, {N_CHUNKS} chunks")
+        for i in range(N_CHUNKS):
+            first, n = chunk_days(i + 1)
+            p_chunk  = precip_vals[first:first + n]
+            tx_chunk = tmax_vals[first:first + n]
+            tn_chunk = tmin_vals[first:first + n]
             df_chunk = pd.DataFrame({
                 'Date':    date_template.strftime('%Y-%m-%d'),
                 'Year':    date_template.year.astype(int),

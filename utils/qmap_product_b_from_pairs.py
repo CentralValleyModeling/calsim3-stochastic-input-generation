@@ -34,12 +34,14 @@ from utils.qmap_fit import (
     read_historical_predictors, sum_parts, training_basis,
 )
 from utils.quantile_mapping import qmap_single
+from utils.wgen_calendar import N_CHUNKS
 
 # -----------------------------------------------------------------------------
 # Defaults
 # -----------------------------------------------------------------------------
 PRODUCT_B_START = pd.Timestamp("1921-10-31")
 PRODUCT_B_END = pd.Timestamp("2021-09-30")
+PRODUCT_B_CHUNKS = [f"n{k:02d}" for k in range(1, N_CHUNKS + 1)]
 DSS_READ_START = "1915-01-31"
 DSS_READ_END = "2021-12-31"
 OUTPUT_TAG = "qmap"
@@ -306,8 +308,8 @@ def load_product_b_all_timeseries(
 ) -> pd.DataFrame:
     """
     Load and concatenate all Product-B realizations for one basis term. A
-    ``I_A+I_B`` basis is the sum of its parts; a realization missing a part is
-    skipped.
+    ``I_A+I_B`` basis is the sum of its parts. A realization missing a part
+    stops the run: a chunk left out would leave its old output in place.
 
     Returns columns:
       timeseries, year, month, basis_sim
@@ -325,14 +327,12 @@ def load_product_b_all_timeseries(
             ),
         )
         if sim_ser is None:
-            continue
+            raise FileNotFoundError(
+                f"{basis_partb}, chunk {ts}: a part has no <part>_qmo_{ts}.csv in {sim_dir}")
 
         block = ser_to_df(sim_ser).rename(columns={"value": "basis_sim"})
         block["timeseries"] = ts
         blocks.append(block)
-
-    if not blocks:
-        return pd.DataFrame(columns=["timeseries", "year", "month", "basis_sim"])
 
     out = pd.concat(blocks, ignore_index=True)
     out["timeseries"] = pd.Categorical(out["timeseries"], categories=timeseries_list, ordered=True)
@@ -496,8 +496,10 @@ def run_product_b_qmap_from_pairs(
     historical = read_historical_predictors(absorb_parts) if absorb_parts else {}
 
     timeseries_list = find_timeseries_in_dir(sim_in_dir)
-    if not timeseries_list:
-        raise RuntimeError(f"No Product B basis files found in: {sim_in_dir}")
+    if timeseries_list != PRODUCT_B_CHUNKS:
+        raise RuntimeError(f"Product B basis files in {sim_in_dir} cover chunks "
+                           f"{timeseries_list or 'none'}; expected {PRODUCT_B_CHUNKS[0]}-"
+                           f"{PRODUCT_B_CHUNKS[-1]}")
 
     print(f"  Detected {len(timeseries_list)} Product B realizations: {', '.join(timeseries_list)}")
 
@@ -508,12 +510,9 @@ def run_product_b_qmap_from_pairs(
     )
 
     if skipped_rows:
-        print("  Skipped pair(s):")
-        for target_b, basis_b, reason in skipped_rows:
-            print(f"    {target_b:<30s} <- {predictor_label(basis_b):<20s} {reason}")
-
-    if not training:
-        raise RuntimeError("No valid DSS training pairs available.")
+        raise RuntimeError("pairs without a training basis:\n" + "\n".join(
+            f"    {target_b:<30s} <- {predictor_label(basis_b):<20s} {reason}"
+            for target_b, basis_b, reason in skipped_rows))
 
     print(f"  {len(training)} valid pair(s) ready for quantile mapping")
     print(f"  Setup complete ({time.perf_counter() - t_start:.1f}s)")
@@ -526,6 +525,7 @@ def run_product_b_qmap_from_pairs(
 
     qmap_cache: dict[tuple[str, str, str], pd.DataFrame] = {}
     basis_cache: dict[str, pd.DataFrame] = {}
+    failed: list[str] = []
     t_qmap = time.perf_counter()
     width = len(str(n_pairs))
 
@@ -541,11 +541,6 @@ def run_product_b_qmap_from_pairs(
                 )
 
             sim_all = basis_cache[basis_b]
-            if sim_all.empty:
-                elapsed = time.perf_counter() - t_qmap
-                print(f"  [{i:>{width}}/{n_pairs}] {target_b:<30s} <- {predictor_label(basis_b):<20s} skip ({elapsed:.1f}s)")
-                continue
-
             simulation_df = sim_all[["year", "month", "basis_sim"]].rename(columns={"basis_sim": "value"})
             qmap = qmap_single(simulation_df, info["b_train"], info["t_train"]).copy()
 
@@ -579,6 +574,7 @@ def run_product_b_qmap_from_pairs(
             elapsed = time.perf_counter() - t_qmap
             print(f"  [{i:>{width}}/{n_pairs}] {target_b:<30s} <- {predictor_label(basis_b):<20s} ERROR ({elapsed:.1f}s)")
             print(f"      {type(exc).__name__}: {exc}")
+            failed.append(f"{target_b} <- {basis_b}: {type(exc).__name__}: {exc}")
             continue
 
         elapsed = time.perf_counter() - t_qmap
@@ -586,8 +582,9 @@ def run_product_b_qmap_from_pairs(
 
     print(f"  Mapped {len(qmap_cache)}/{n_pairs} pair(s) ({time.perf_counter() - t_qmap:.1f}s)")
 
-    if not qmap_cache:
-        raise RuntimeError("No Product B realizations were available for quantile mapping.")
+    if failed:
+        raise RuntimeError(f"{len(failed)} pair(s) failed; no output written:\n    "
+                           + "\n    ".join(failed))
 
     # ------------------------------------------------------------------
     # Split mapped results back to each realization and write outputs
@@ -600,8 +597,6 @@ def run_product_b_qmap_from_pairs(
 
         for (target_b, basis_b, target_c), mapped in qmap_cache.items():
             block = mapped[mapped["timeseries"] == ts].copy()
-            if block.empty:
-                continue
 
             out_df = pd.DataFrame(
                 {

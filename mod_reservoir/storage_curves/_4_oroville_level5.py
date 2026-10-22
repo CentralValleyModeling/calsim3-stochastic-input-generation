@@ -77,6 +77,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 from utils import dss_io
 from utils.paths import get_base_dir, get_module_generated_dir
 from utils.validation_plots import Series, plot_monthly_box, plot_ts_cdf
+from utils.wgen_calendar import N_CHUNKS
 
 _gen = get_module_generated_dir("mod_reservoir/storage_curves")
 INPUT_DIR = _gen / "output" / "_3_oroville_daily_precip"
@@ -84,17 +85,12 @@ OUTPUT_DIR = _gen / "output" / "_4_oroville_level5"
 VALIDATION_DIR = _gen / "output" / "_product_a_validation"
 PRODUCT_B_DIR = _gen / "output" / "_product_b_final"
 DEFAULT_DSS = get_base_dir() / "CalSim3" / "__calsim_sv_default__.dss"
-N_CHUNKS = 10
 
 
 def load_daily_precip_csv(csv_path: Path) -> pd.DataFrame:
     df = pd.read_csv(csv_path)
-    df["date"] = pd.to_datetime(
-        dict(year=df["year"], month=df["month"], day=df["day"]),
-        errors="coerce",
-    )
-    # Drop invalid dates (e.g. Feb 29 on non-leap years from WGEN)
-    df = df.dropna(subset=["date"])
+    # every day a real date: _3 labels Product B's stamp days in order with WY1922-2021's
+    df["date"] = pd.to_datetime(dict(year=df["year"], month=df["month"], day=df["day"]))
     df = df.sort_values("date").reset_index(drop=True)
     return df[["date", "precip_inches"]]
 
@@ -376,8 +372,8 @@ def main() -> None:
             chunk_tag = f"n{chunk_num:02d}"
             csv_path = input_dir / f"oroville_daily_precip_productB_{chunk_tag}.csv"
             if not csv_path.exists():
-                print(f"  WARNING: {csv_path} not found, skipping chunk {chunk_tag}")
-                continue
+                raise FileNotFoundError(f"{csv_path}: no daily precipitation for chunk {chunk_tag}; "
+                                        "run _3_oroville_daily_precip.py --source Product_B")
             out_csv = PRODUCT_B_DIR / f"S_OROVLLEVEL5_productB_{chunk_tag}.csv"
             jobs.append((chunk_tag, csv_path, out_csv))
 
