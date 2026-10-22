@@ -5,5 +5,5 @@
     "inflow_model": "sacsma",
     "inflow_repo": "../SAC-SMA",
     "inflow_env": "sacsma",
-    "inflow_commit": "f6f79a6228bb26493c1368933517fde7bf45be44"
+    "inflow_commit": "76893ca6cc773baab94863585317d22305f60cc7"
 }

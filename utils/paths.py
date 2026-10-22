@@ -16,6 +16,7 @@ Quick start
     output   = get_module_generated_dir("mod_hydrology/calsimhydro") / "output"
 """
 
+import csv
 import hashlib
 import json
 import os
@@ -47,7 +48,7 @@ def _long_path(p: Path) -> Path:
     return p
 
 # ---------------------------------------------------------------------------
-# Load user config → fall back to default
+# Load user config, falling back to the default
 # ---------------------------------------------------------------------------
 _USER_CFG = REPO_ROOT / "config.json"
 _DEFAULT_CFG = REPO_ROOT / "config_default.json"
@@ -80,12 +81,12 @@ def get_data_dir() -> Path:
 
 
 def get_base_dir() -> Path:
-    """Return ``<data_dir>/BASE`` — original reference and modeling files."""
+    """Return ``<data_dir>/BASE``: original reference and modeling files."""
     return DATA_DIR / "BASE"
 
 
 def get_generated_dir() -> Path:
-    """Return ``<data_dir>/GENERATED`` — all module input/output."""
+    """Return ``<data_dir>/GENERATED``: all module input/output."""
     return DATA_DIR / "GENERATED"
 
 
@@ -134,7 +135,6 @@ def get_inflow_commit() -> str:
 
 
 #: Forcings of the rim-inflow model (``mod_forcing/inflows``) -> their output subfolder.
-#: Product B arrives in phase P3 of the SAC-SMA swap.
 INFLOW_FORCINGS = {
     "historical": Path("Historical_Unsplit"),
     "A": Path("Product_A") / "1",
@@ -150,29 +150,47 @@ def get_arc_inflows(forcing: str) -> Path:
 
 
 #: Beside ``arc_inflow_monthly.csv``, and copied into each rim-inflow SV folder: the manifest
-#: of the rim-inflow model run the files come from (model, commit, forcing, hashes, G1, G2).
+#: of the rim-inflow model run the files come from (model, commit, forcing, hashes, gates).
 INFLOW_PROVENANCE = "run_manifest.json"
 
 
 def require_pinned_run(folder: Path) -> dict:
     """Return the run manifest of the rim-inflow model outputs in ``folder``, and stop unless
     they come from the configured model (``inflow_model``) at the pinned commit
-    (``inflow_commit``), in a run that did not fail G1. Outputs left over from another model or
-    an earlier pin, or from a step that was not re-run after the config changed, fail here."""
+    (``inflow_commit``) with no modified tracked files, in a run that passed every gate, on the
+    inputs G2 last checked (``forcing_identity.csv`` of ``_1_build_forcing.py``). Outputs left
+    over from another model, an earlier pin or an earlier input, or from a step that was not
+    re-run after the config or the input changed, fail here."""
     path = folder / INFLOW_PROVENANCE
     if not path.exists():
         raise FileNotFoundError(f"{folder}: no {INFLOW_PROVENANCE}, so the run behind these "
                                 "outputs is unknown; re-run mod_forcing/inflows and the "
                                 "rim-inflow builder")
     manifest = json.loads(path.read_text())
-    if (manifest.get("g1") or {}).get("pass") is False:
-        raise RuntimeError(f"{path}: the run failed G1")
+    if not manifest.get("gates"):
+        raise RuntimeError(f"{path}: records no gates; re-run mod_forcing/inflows and the "
+                           "rim-inflow builder")
+    failed = [name for name, g in manifest["gates"].items() if not g.get("pass")]
+    if failed:
+        raise RuntimeError(f"{path}: the run failed {', '.join(failed)}")
     run = (manifest.get("inflow_model"), manifest.get("model_commit"))
     pin = (get_inflow_model(), get_inflow_commit())
     if run != pin:
         raise RuntimeError(f"{folder}: built from {run[0]} at {run[1]}, but the config names "
                            f"{pin[0]} at {pin[1]} (inflow_model, inflow_commit); re-run "
                            "mod_forcing/inflows and the rim-inflow builder")
+    if manifest.get("model_clean") is not True:
+        raise RuntimeError(f"{path}: the run was made with --allow-dirty (modified tracked files, "
+                           "or an environment that runs another checkout), so it is not the "
+                           "pinned commit's")
+    identity = (get_module_generated_dir("mod_forcing/inflows") / "output" / "_1_build_forcing"
+                / INFLOW_FORCINGS[manifest["forcing"]] / "forcing_identity.csv")
+    with open(identity, newline="") as fh:
+        checked = {r["input"]: r["input_sha256"] for r in csv.DictReader(fh)}
+    used = {k: manifest["sha256"].get(k) for k in manifest["files"]["inputs"]}
+    if used != checked:
+        raise RuntimeError(f"{path}: the run read other inputs than G2 last checked ({identity}); "
+                           "re-run mod_forcing/inflows/_2_run_product.py and the rim-inflow builder")
     return manifest
 
 

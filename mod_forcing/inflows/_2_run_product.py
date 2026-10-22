@@ -7,17 +7,16 @@ one table the rim-inflow SVs are built from.
 The model is the one the config names (``inflow_model``); at present SAC-SMA's dPL-CalSim
 with its share model (adapters/sacsma.py). It lives in its own git repository
 (``inflow_repo``), pinned to one commit (``inflow_commit``), and runs there as an external
-command in its own environment (``inflow_env``). Its adapter builds the command, checks the
-environment and the result, and reads the flows. The command writes into a temporary folder,
-deleted after the run.
+command in its own environment (``inflow_env``). Its adapter runs it, checks the environment
+and the result, and reads the flows. The run writes into a temporary folder, deleted after it.
 
 Forcings
 --------
 - historical : WGEN NonDetrend-Unsplit, the model's training forcing: the reference for skill
                and for the absorb fits of the second stage
 - A          : WGEN Product A scenario 1
-
-Product B runs in segments, in phase P3.
+- B          : WGEN Product B scenario 1, 1,008 stamp years, delivered as 10 chunks of 100 water
+               years (utils.wgen_calendar); SAC-SMA runs it in segments (adapters/sacsma.py)
 
 Checks
 ------
@@ -25,26 +24,30 @@ Checks
   environment must run the model from that checkout; ``--allow-dirty`` runs anyway and the
   manifest records the state.
 - Gate G2, before the run: forcing_identity.csv of _1_build_forcing.py must show a pass on
-  every cell of the model's input, for the input's current sha256.
-- Gate G1, after the run: the new series must repeat the series the model tracks at the pin
-  (the adapter's ``reproduce``; skipped for a model that tracks none). If G1 fails, only the
-  manifest is written.
+  every cell of every input file, for each file's current sha256.
+- The adapter's gates, after the run: G1 (the series repeats the one the model tracks at the
+  pin) where the model tracks one; G6 (each segment of a run in segments starts from the state
+  the one before kept) for a run in segments. If G1 fails, the script writes only the manifest;
+  if G6 fails, the adapter stops before the join and the script writes nothing.
 
 Inputs
 ------
-- the model checkout: its input for the forcing and the files the run used
-- <generated>/mod_forcing/inflows/output/_1_build_forcing/<forcing>/forcing_identity.csv
+- the model checkout and the files the run used
+- <generated>/mod_forcing/inflows/output/_1_build_forcing/<forcing>/: forcing_identity.csv,
+  and the inputs written there (Product B)
 
 Outputs
 -------
-- <generated>/mod_forcing/inflows/output/_2_run_product/<Historical_Unsplit|Product_A/1>/
+- <generated>/mod_forcing/inflows/output/_2_run_product/<Historical_Unsplit|Product_A/1|Product_B/1>/
   (deleted first)
-  - arc_inflow_monthly.csv  (date, WY, month, arc, taf, kind), utils.paths.get_arc_inflows:
-                            the model's arcs over the complete water years of the run (for
-                            SAC-SMA the 196 arcs and the Sacramento valley node I_SRBB_VAL);
-                            date is the month end, flows in TAF per month
+  - arc_inflow_monthly.csv  (date, WY, month, arc, taf, kind; Product B adds chunk first),
+                            utils.paths.get_arc_inflows: the model's arcs over the complete
+                            water years of the run (for SAC-SMA the 196 arcs and the
+                            Sacramento valley node I_SRBB_VAL); date is the month end, flows
+                            in TAF per month. Product B's months carry the labels of their
+                            chunk, WY1922-2021.
   - run_manifest.json       model, commit, environment, sha256 of every file the run used,
-                            forcing, water years, command, the G1 and G2 results. The
+                            forcing, water years, commands and every gate's result. The
                             rim-inflow builder reads only flows whose manifest names the
                             configured model and pinned commit (utils.paths.require_pinned_run).
 
@@ -52,6 +55,7 @@ Usage
 -----
     python mod_forcing/inflows/_2_run_product.py --forcing historical
     python mod_forcing/inflows/_2_run_product.py --forcing A
+    python mod_forcing/inflows/_2_run_product.py --forcing B
 """
 
 import argparse
@@ -65,10 +69,11 @@ from pathlib import Path
 import pandas as pd
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
-from mod_forcing.inflows.adapters import load
+from mod_forcing.inflows.adapters import label, load
 from utils.paths import (INFLOW_FORCINGS, INFLOW_PROVENANCE, get_arc_inflows, get_inflow_commit,
                          get_inflow_env, get_inflow_model, get_inflow_repo,
                          get_module_generated_dir, remove_tree, sha256_file)
+from utils.wgen_calendar import chunk_months
 
 _gen = get_module_generated_dir("mod_forcing/inflows")
 
@@ -78,9 +83,9 @@ def git(repo: Path, *args: str) -> str:
                           check=True).stdout.strip()
 
 
-def check_g2(forcing: str, input_sha: str) -> int:
-    """Gate G2: stop unless _1_build_forcing.py passed on every cell of this input; return the
-    number of cells."""
+def check_g2(forcing: str, input_sha: dict[str, str]) -> dict:
+    """Gate G2: stop unless _1_build_forcing.py passed on every cell of each of these inputs
+    (name -> sha256); return the record of it."""
     path = _gen / "output" / "_1_build_forcing" / INFLOW_FORCINGS[forcing] / "forcing_identity.csv"
     rerun = f"run _1_build_forcing.py --forcing {forcing} --cells all"
     if not path.exists():
@@ -90,22 +95,34 @@ def check_g2(forcing: str, input_sha: str) -> int:
         raise SystemExit(f"{path}: G2 checked a sample, not every cell of the input; {rerun}")
     if not g2["pass"].all():
         raise SystemExit(f"{path}: G2 failed: the input differs from BASE")
-    if set(g2["input_sha256"]) != {input_sha}:
-        raise SystemExit(f"{path}: G2 checked another version of the input; {rerun}")
-    return int(g2["input_cells"].iloc[0])
+    checked = dict(zip(g2["input"], g2["input_sha256"]))
+    if checked != input_sha:
+        raise SystemExit(f"{path}: G2 checked other inputs, or other versions of them; {rerun}")
+    return {"inputs": len(input_sha), "cells": int(g2["input_cells"].iloc[0]), "pass": True}
 
 
-def tidy(flows: pd.DataFrame) -> pd.DataFrame:
-    """The adapter's flows, one row per arc and month, dated by month end and water year."""
+def tidy(forcing: str, flows: pd.DataFrame) -> pd.DataFrame:
+    """The adapter's flows, one row per arc and month, dated by month end and water year; for
+    Product B, by the chunk and its label month."""
     if flows["taf"].isna().any():
         raise SystemExit(f"missing flows in {flows.loc[flows['taf'].isna(), 'arc'].unique()}")
-    out = flows.copy()
-    start = pd.to_datetime(out["month"], format="%Y-%m")
-    out["date"] = start + pd.offsets.MonthEnd(0)
-    out["WY"] = start.dt.year + (start.dt.month >= 10).astype(int)
-    out["month"] = start.dt.month
-    out = out[["date", "WY", "month", "arc", "taf", "kind"]]
-    return out.sort_values(["arc", "date"]).reset_index(drop=True)
+    out = flows[["arc", "taf", "kind"]].copy()
+    cols = ["date", "WY", "month", "arc", "taf", "kind"]
+    keys = ["arc", "date"]
+    if forcing == "B":
+        lab = chunk_months(flows["year"], flows["month"])
+        inside = (lab["chunk"] > 0).to_numpy()
+        out, lab = out[inside].copy(), lab[inside]
+        out["chunk"] = lab["chunk"].to_numpy()
+        year, month = lab["Year"].to_numpy(), lab["Month"].to_numpy()
+        cols, keys = ["chunk", *cols], ["chunk", *keys]
+    else:
+        year, month = flows["year"].to_numpy(), flows["month"].to_numpy()
+    start = pd.to_datetime(pd.DataFrame({"year": year, "month": month, "day": 1}))
+    out["date"] = (start + pd.offsets.MonthEnd(0)).to_numpy()
+    out["WY"] = year + (month >= 10)
+    out["month"] = month
+    return out[cols].sort_values(keys).reset_index(drop=True)
 
 
 def main():
@@ -129,12 +146,12 @@ def main():
                          f"or env {env} runs it from another checkout; check out the pin "
                          "(config: inflow_commit) or pass --allow-dirty")
 
-    input_path = model.input_file(repo, args.forcing)
-    input_rel = input_path.relative_to(repo).as_posix()
+    build_dir = _gen / "output" / "_1_build_forcing" / INFLOW_FORCINGS[args.forcing]
+    files = model.inputs(repo, args.forcing, build_dir)
     print("Hashing the model input ...")
-    input_sha = sha256_file(input_path)
-    g2_cells = check_g2(args.forcing, input_sha)
-    print(f"G2 PASS on {g2_cells} cells")
+    input_sha = {label(f, repo): sha256_file(f) for f in files}
+    g2 = check_g2(args.forcing, input_sha)
+    print(f"G2 PASS on {g2['cells']} cells of {g2['inputs']} input(s)")
 
     out_dir = _gen / "output" / "_2_run_product" / INFLOW_FORCINGS[args.forcing]
     remove_tree(out_dir)
@@ -142,19 +159,18 @@ def main():
 
     with tempfile.TemporaryDirectory(prefix="inflow_run_") as tmp:
         run_dir = Path(tmp)
-        cmd = model.command(repo, env, args.forcing, run_dir)
-        shown = [Path(cmd[0]).stem] + [c if c != str(run_dir) else "<temporary folder>"
-                                       for c in cmd[1:]]
-        print("Running:", " ".join(shown))
         started = datetime.now(timezone.utc)
-        subprocess.run(cmd, cwd=repo, check=True)
+        cmds = model.run(repo, env, args.forcing, files, run_dir)
+        shown = [[Path(c[0]).stem] + [a.replace(str(run_dir), "<temporary folder>") for a in c[1:]]
+                 for c in cmds]
 
-        info = model.describe(repo, run_dir)
+        info = model.describe(repo, args.forcing, run_dir)
         print("Hashing the model files ...")
         hashes = {rel: sha256_file(repo / rel) for rel in info["files"].values()}
-        hashes[input_rel] = input_sha
-        g1 = model.reproduce(repo, args.forcing, run_dir)
-        arcs = tidy(model.arc_flows(run_dir)) if g1 is None or g1["pass"] else None
+        hashes.update(input_sha)
+        gates = model.gates(repo, args.forcing, run_dir)
+        passed = all(g["pass"] for g in gates.values())
+        arcs = tidy(args.forcing, model.arc_flows(args.forcing, run_dir)) if passed else None
 
     manifest = {
         "tool": "mod_forcing/inflows/_2_run_product.py",
@@ -169,26 +185,25 @@ def main():
         "environment": environment,
         "forcing": args.forcing,
         "water_years": None if arcs is None else [int(arcs["WY"].min()), int(arcs["WY"].max())],
-        "files": {**info["files"], "input": input_rel},
+        "chunks": None if arcs is None or "chunk" not in arcs else int(arcs["chunk"].nunique()),
+        "files": {**info["files"], "inputs": list(input_sha)},
         "sha256": hashes,
-        "command": shown,
+        "commands": shown,
         "run": info["run"],
-        "g2": {"cells": g2_cells, "pass": True},
-        "g1": g1,
+        "gates": {"G2": g2, **gates},
     }
     (out_dir / INFLOW_PROVENANCE).write_text(json.dumps(manifest, indent=1))
-    if g1 is None:
-        print(f"G1 skipped: {model.LABEL} tracks no series to compare with")
-    else:
-        print(json.dumps(g1, indent=1))
-        if not g1["pass"]:
-            raise SystemExit(f"G1 FAIL: the series differs from the one {model.LABEL} tracks")
-        print("G1 PASS")
+    for name, g in gates.items():
+        print(f"{name}: {'PASS' if g['pass'] else 'FAIL'}")
+    if not passed:
+        raise SystemExit(f"gate failed: {[n for n, g in gates.items() if not g['pass']]}; "
+                         f"see {out_dir / INFLOW_PROVENANCE}")
 
     path = get_arc_inflows(args.forcing)
     arcs.to_csv(path, index=False, date_format="%Y-%m-%d", float_format="%.8g")
-    print(f"{arcs['arc'].nunique()} series, WY{arcs['WY'].min()}-{arcs['WY'].max()}, "
-          f"{len(arcs):,} rows")
+    print(f"{arcs['arc'].nunique()} series, WY{arcs['WY'].min()}-{arcs['WY'].max()}"
+          + (f" in {manifest['chunks']} chunks" if manifest["chunks"] else "")
+          + f", {len(arcs):,} rows")
     print(f"Wrote {out_dir}")
 
 
