@@ -21,7 +21,7 @@ Inputs
 - Reference inflows:    reference/reference_inflows.csv
     Part B / Part C pairs defining the annual flow index components
 - Product B rim inflows (utils.paths.get_rim_inflow_outputs):
-    <PartB>_qmo_n01.csv ... n10.csv (qmap_postAdj or qmap_preAdj)
+    <PartB>_qmo_n01.csv ... n10.csv (qmap_postAdj)
 
 Outputs
 -------
@@ -50,6 +50,7 @@ import pandas as pd
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 from utils import dss_io
 from utils.paths import get_base_dir, get_module_generated_dir, get_rim_inflow_outputs
+from utils.wgen_calendar import N_CHUNKS
 
 # Paths
 _GEN_DIR = get_module_generated_dir("mod_other/day_volume_fractions")
@@ -61,7 +62,6 @@ script_name = Path(__file__).stem
 DEFAULT_OUTDIR = _GEN_DIR / "output" / script_name
 PRODUCT_B_FINAL = _GEN_DIR / "output" /"_product_b_final"
 
-N_CHUNKS = 10
 MAX_WORKERS = max(1, (os.cpu_count() or 4) - 1)
 
 # Earliest water year allowed in the donor pool. Patterns before 1955 are
@@ -201,22 +201,15 @@ def load_chunk_inflows(rim_dir: Path, chunk: int, ref_csv: Path) -> pd.DataFrame
             missing.append(partb)
             continue
 
-        df = pd.read_csv(csv_path)
-        # Use qmap_postAdj (mass-balance adjusted), fall back to qmap_preAdj
-        val_col = "qmap_postAdj" if "qmap_postAdj" in df.columns else "qmap_preAdj"
-        sub = df[["Year", "Month", val_col]].copy()
-        sub = sub.rename(columns={val_col: partb})
-        sub = sub.set_index(["Year", "Month"])
-        series_dict[partb] = sub[partb]
+        df = pd.read_csv(csv_path, usecols=["Year", "Month", "qmap_postAdj"])
+        series_dict[partb] = df.set_index(["Year", "Month"])["qmap_postAdj"].rename(partb)
 
-    if not series_dict:
-        return pd.DataFrame()
+    if missing:
+        raise FileNotFoundError(
+            f"{len(missing)}/{len(partb_list)} rim inflows of chunk {chunk_tag} missing in "
+            f"{rim_dir}: " + ", ".join(f"{m}_qmo_{chunk_tag}.csv" for m in missing))
 
     result = pd.DataFrame(series_dict)
-    if missing:
-        print(f"    WARNING: {len(missing)}/{len(partb_list)} inflows NOT found for {chunk_tag}:")
-        for m in missing:
-            print(f"      - {m}_qmo_{chunk_tag}.csv")
     print(f"    Chunk {chunk_tag}: loaded {len(series_dict)}/{len(partb_list)} inflows, {len(result)} months")
     return result
 

@@ -73,6 +73,7 @@ from collections import OrderedDict
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 from utils import dss_io
+from utils.wgen_calendar import N_CHUNKS
 from utils.paths import (get_base_dir, get_generated_dir, get_module_generated_dir, get_inventory_dir,
                          get_rim_inflow_outputs)
 
@@ -96,7 +97,6 @@ INVENTORY_XLSX = get_inventory_dir() / "_MASTER_INVENTORY_FOR_STOCHASTIC_INPUT_G
 DSS_PATTERN = "/*/*/*/*/1MON/*"
 
 # Product B canonical period: 100 WY per chunk  (Oct 1921 - Sep 2021)
-N_CHUNKS     = 10
 CHUNK_TAGS   = [f"n{i:02d}" for i in range(1, N_CHUNKS + 1)]
 PB_START_YM  = (1921, 10)   # first data month
 PB_END_YM    = (2021,  9)   # last data month
@@ -127,6 +127,11 @@ _parser.add_argument(
     "--chunks", nargs="+", type=int,
     default=list(range(1, N_CHUNKS + 1)),
     help="Chunk numbers to compile, 1-10 (default: all).",
+)
+_parser.add_argument(
+    "--allow-missing", action="store_true", default=False,
+    help="Compile even if a module, or one of the chunks compiled, has no CSVs; the "
+         "baseline then fills its SVs. Without it the script stops.",
 )
 _parser.add_argument(
     "--summary-figures", action="store_true", default=False,
@@ -1787,6 +1792,7 @@ module_svs     = {}          # label -> set of (Part B, Part C)
 module_files   = {}          # label -> int (file count)
 module_src_paths = {}        # label -> list[Path] (for copying)
 missing_modules = []
+incomplete_modules = []      # (label, chunk tags with no CSVs)
 
 for label, (src_dir, _inv_cat, reader_type) in MODULE_CONFIG_B.items():
     chunk_data, n_files, svs, src_paths = scan_module_csvs(label, src_dir, reader_type)
@@ -1797,6 +1803,9 @@ for label, (src_dir, _inv_cat, reader_type) in MODULE_CONFIG_B.items():
         for tag in CHUNK_TAGS:
             if chunk_data[tag]:
                 all_chunk_data[tag][label] = chunk_data[tag]
+        absent = [tag for tag in ACTIVE_TAGS if not chunk_data[tag]]
+        if absent:
+            incomplete_modules.append((label, absent))
         print(f"  [OK]   {label:40s}  {n_files:>4} files  |  "
               f"{len(svs):>4} unique (B,C)")
     else:
@@ -1807,8 +1816,13 @@ print("-" * 72)
 print(f"  Modules found: {len(module_files)} / {len(MODULE_CONFIG_B)}")
 if missing_modules:
     print(f"  Modules skipped: {', '.join(missing_modules)}")
+for _label, _absent in incomplete_modules:
+    print(f"  Module {_label} has no CSVs for {', '.join(_absent)}")
 print(f"  Scan completed in {time.time()-t0_scan:.1f}s")
 print()
+if (missing_modules or incomplete_modules) and not CLI_ARGS.allow_missing:
+    sys.exit("ERROR: modules or chunks without CSVs (above); the baseline would fill their "
+             "SVs. Regenerate them, or pass --allow-missing to compile anyway.")
 
 if not module_files:
     sys.exit("ERROR: No module CSVs found. Nothing to compile.")

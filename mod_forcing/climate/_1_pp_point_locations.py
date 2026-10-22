@@ -39,6 +39,7 @@ import pandas as pd
 # Add repo root to path for utils imports
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 from utils.paths import get_base_dir, get_module_generated_dir
+from utils.wgen_calendar import require_stamp_days
 
 
 def find_nearest_grid_cell(target_lat, target_lon, data_folder):
@@ -109,8 +110,8 @@ def read_meteo_file(filepath, product_b=False):
     filepath : str
         Path to meteo file
     product_b : bool
-        If True, assign a PeriodIndex instead of parsing dates
-        (Product B years 1-1008 are below pandas Timestamp min ~1677)
+        If True, keep the stamp year and month and parse no dates
+        (Product B years 1-1008 are below pandas Timestamp min ~1677; utils.wgen_calendar)
         
     Returns:
     --------
@@ -120,7 +121,7 @@ def read_meteo_file(filepath, product_b=False):
                        names=['year', 'month', 'day', 'precip_mm', 'tmax_c', 'wind_ms'])
     
     if product_b:
-        data.index = pd.period_range(start='2025-01-01', periods=len(data), freq='D')
+        require_stamp_days(len(data), filepath)
     else:
         data['date'] = pd.to_datetime(data[['year', 'month', 'day']])
     
@@ -134,22 +135,22 @@ def calculate_monthly_precip(daily_data, product_b=False):
     Parameters:
     -----------
     daily_data : pd.DataFrame
-        DataFrame with 'precip_mm' column; DatetimeIndex (Product A/Hist)
-        or PeriodIndex (Product B)
+        DataFrame with 'precip_mm' column; a 'date' column (Product A/Hist)
+        or the stamp 'year' and 'month' (Product B)
     product_b : bool
-        If True, input has PeriodIndex; use 'M' instead of 'MS'
+        If True, sum by the stamp year and month
         
     Returns:
     --------
     pd.DataFrame with monthly precipitation totals
     """
     if product_b:
-        monthly_precip = daily_data['precip_mm'].resample('M').sum()  # period-resample
-        monthly_precip_inches = monthly_precip / 25.4
+        # stamp months (utils.wgen_calendar), in order from January of stamp year 1
+        monthly_precip = daily_data.groupby(['year', 'month'])['precip_mm'].sum()
         monthly_df = pd.DataFrame({
-            'year':          [p.year  for p in monthly_precip_inches.index],
-            'month':         [p.month for p in monthly_precip_inches.index],
-            'precip_inches': monthly_precip_inches.values,
+            'year':          monthly_precip.index.get_level_values('year'),
+            'month':         monthly_precip.index.get_level_values('month'),
+            'precip_inches': monthly_precip.values / 25.4,
         })
     else:
         daily_indexed = daily_data.set_index('date')
@@ -312,8 +313,7 @@ def write_product_b_chunks(summaries: list, output_folder):
             continue
         vals = md['precip_inches'].values
         if len(vals) < total_needed:
-            print(f"  Warning: {s['location_name']} only {len(vals)} months (need {total_needed}), skipping")
-            continue
+            raise ValueError(f"{s['location_name']}: {len(vals)} months, need {total_needed}")
         loc_data[s['location_name']] = vals
 
     if not loc_data:
@@ -440,7 +440,7 @@ def main():
     print(f"Found {len(locations_df)} locations to process")
     
     # Process each location
-    summaries = []
+    summaries, failed = [], []
     product_b = (args.source == 'Product_B')
     for idx, row in locations_df.iterrows():
         try:
@@ -455,7 +455,9 @@ def main():
             summaries.append(summary)
         except Exception as e:
             print(f"  ERROR processing {row['location_name']}: {str(e)}")
-            continue
+            failed.append(row['location_name'])
+    if failed:
+        raise SystemExit(f"{len(failed)} location(s) failed, so their SVs would be missing: {failed}")
     
     # Save summary file
     if summaries:

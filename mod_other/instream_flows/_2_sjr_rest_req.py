@@ -32,6 +32,7 @@ import pandas as pd
 # Add repo root to path for utils imports
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 from utils.paths import get_base_dir, get_module_generated_dir, get_rim_inflow_outputs
+from utils.wgen_calendar import N_CHUNKS
 from utils import dss_io
 
 # -----------------------------------------------------------------------------
@@ -659,8 +660,10 @@ def run_product_b(
         files = [product_b_dir]
     else:
         files = sorted(product_b_dir.glob("UNIMP_SJ_qmo_n*.csv"))
-    if not files:
-        raise FileNotFoundError(f"No product B files found in {product_b_dir}")
+        expected = [f"UNIMP_SJ_qmo_n{k:02d}.csv" for k in range(1, N_CHUNKS + 1)]
+        if [f.name for f in files] != expected:
+            raise FileNotFoundError(f"{product_b_dir}: expected {expected[0]} ... {expected[-1]}, "
+                                    f"found {[f.name for f in files] or 'none'}")
 
     outdir.mkdir(parents=True, exist_ok=True)
     written: list[Path] = []
