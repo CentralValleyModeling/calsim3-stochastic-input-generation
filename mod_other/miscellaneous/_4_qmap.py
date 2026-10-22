@@ -86,7 +86,8 @@ def _write_product_b_final(out_dir: Path, final_dir: Path, pair_csv: Path,
             src_fname = build_output_filename(target_b, ts, output_tag="qmap")
             src_path = out_dir / src_fname
             if not src_path.exists():
-                continue
+                raise FileNotFoundError(f"{src_path}: the quantile map wrote no {ts} output "
+                                        f"for {target_b}")
 
             df = pd.read_csv(src_path)
             final_df = pd.DataFrame({

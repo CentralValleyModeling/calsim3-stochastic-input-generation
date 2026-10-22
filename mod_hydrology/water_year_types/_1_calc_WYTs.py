@@ -306,8 +306,8 @@ def process_product_a(input_path, output_dir, thresholds):
     # Verify we have all components
     missing = set(all_components) - set(df_wide.columns)
     if missing:
-        print(f"  WARNING: Missing components: {missing}")
-    
+        raise ValueError(f"no series for {sorted(missing)}")
+
     # Calculate WYTs with 1971 initial index values (previous year for 1972 start)
     # From CDEC historical WYT data: 1971 Sac Index = 10.37, SJ Index = 2.89
     wyt_df = calculate_wyts(df_wide, thresholds, 
@@ -364,8 +364,8 @@ def process_product_b(input_dir, output_dir, thresholds):
             file_path = input_path / file_name
             
             if not file_path.exists():
-                print(f"    WARNING: Missing file {file_path}")
-                continue
+                raise FileNotFoundError(f"{file_path}: a rim inflow of the Sacramento or San "
+                                        "Joaquin index is missing for this chunk")
             
             # Read the component data
             comp_df = pd.read_csv(file_path)
@@ -380,7 +380,7 @@ def process_product_b(input_dir, output_dir, thresholds):
         all_components = SAC_COMPONENTS + SJ_COMPONENTS
         missing = set(all_components) - set(df_chunk.columns)
         if missing:
-            print(f"    WARNING: Missing components: {missing}")
+            raise ValueError(f"chunk n{chunk_num:02d}: no series for {sorted(missing)}")
         
         # Calculate WYTs for this chunk.
         # Each chunk is an independent 100-year sequence mapped to a WY1922 start,

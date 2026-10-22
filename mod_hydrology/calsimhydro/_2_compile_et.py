@@ -46,6 +46,7 @@ from pydsstools.core import TimeSeriesContainer
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 from utils import dss_io
 from utils.paths import get_archive_dir, get_module_generated_dir
+from utils.wgen_calendar import STAMP_DAYS, stamp_month_of_day
 
 # Local quantile mapping utility
 from utils.quantile_mapping import qmap_single
@@ -103,9 +104,9 @@ class CompileWBAET:
 		self.product_b = product_b
 		self.hist_vic_path = hist_vic_path
 		self.n_workers = n_workers
-		# Product B VIC fluxes span ~1000 years - use PeriodIndex to exceed pandas Timestamp max (~2262)
+		# Product B: one VIC flux row per WGEN stamp day; utils.wgen_calendar groups them into months
 		if self.product_b:
-			self.dates_daily = pd.period_range(start='2025-01-01', end='3033-01-08', freq='D')
+			self.dates_daily = pd.RangeIndex(STAMP_DAYS)
 		else:
 			self.dates_daily = pd.date_range(start=self.start_date, end=self.end_date, freq="D")
 		# Historical DatetimeIndex always needed for QM training (Product A dates)
@@ -194,11 +195,11 @@ class CompileWBAET:
 		self, daily_mm: pd.DataFrame
 	) -> pd.DataFrame:
 		"""Return a monthly DataFrame in inches/month.
-		Handles both DatetimeIndex (Product A) and PeriodIndex (Product B).
+		Handles both DatetimeIndex (Product A) and the stamp days of Product B.
 		"""
-		if isinstance(daily_mm.index, pd.PeriodIndex):
-			# PeriodIndex can exceed Timestamp max; use groupby on period
-			return daily_mm.groupby(daily_mm.index.asfreq('M')).sum() / 25.4
+		if not isinstance(daily_mm.index, pd.DatetimeIndex):
+			# Product B: the stamp days summed by stamp month, from January of stamp year 1
+			return daily_mm.groupby(stamp_month_of_day()[:len(daily_mm)]).sum() / 25.4
 		return daily_mm.resample("ME").sum() / 25.4  # mm -> inches
 
 	def _quantile_map(self, monthly_df: pd.DataFrame) -> pd.Series:
@@ -252,7 +253,7 @@ class CompileWBAET:
 		"""Apply QM transfer function to stochastic monthly ET.
 		Trains on full historical VIC vs CS3 (WY 1921-2018), applies to the full stochastic sequence.
 		hist_monthly_merged must have 'VIC' and 'CS3' columns with a DatetimeIndex.
-		stoch_monthly_vic must have a 'VIC' column (PeriodIndex or integer-indexed).
+		stoch_monthly_vic must have a 'VIC' column, one row per stamp month from January of stamp year 1.
 		Returns a plain-values Series (no meaningful datetime index).
 		"""
 		df_hist = hist_monthly_merged.copy()
@@ -273,10 +274,7 @@ class CompileWBAET:
 		# Build ETsim with sequential synthetic year IDs and calendar month
 		vals = stoch_monthly_vic["VIC"].values
 		n = len(vals)
-		if isinstance(stoch_monthly_vic.index, pd.PeriodIndex):
-			months = stoch_monthly_vic.index.month
-		else:
-			months = [(i % 12) + 1 for i in range(n)]
+		months = [(i % 12) + 1 for i in range(n)]
 		ETsim = pd.DataFrame({
 			"year": [(i // 12) + 1 for i in range(n)],
 			"month": months,

@@ -219,7 +219,8 @@ class EvaporationCalculator:
         Parameters:
         -----------
         daily_data : pd.DataFrame
-            Daily temperature data with datetime index
+            Daily temperature data with datetime index, or (Product B) with the stamp
+            'year' and 'month' columns of utils.wgen_calendar
         tmax_col : str
             Column name for maximum temperature
         tmin_col : str
@@ -230,9 +231,15 @@ class EvaporationCalculator:
         pd.DataFrame
             Monthly evaporation rates
         """
-        # PeriodIndex (Product B) requires 'M'; DatetimeIndex uses 'ME'
-        resample_freq = 'M' if isinstance(daily_data.index, pd.PeriodIndex) else 'ME'
-        monthly = daily_data.resample(resample_freq).agg({
+        if {'year', 'month'} <= set(daily_data.columns):
+            # Product B: stamp months, each with the number of days it has in the record
+            g = daily_data.groupby(['year', 'month'])
+            monthly = g[[tmax_col, tmin_col]].mean()
+            evap = [self.calculate_monthly_regression(tmax, tmin, month, days)
+                    for (_, month), tmax, tmin, days in zip(monthly.index, monthly[tmax_col],
+                                                            monthly[tmin_col], g.size())]
+            return pd.DataFrame({'evaporation_in': evap}, index=monthly.index)
+        monthly = daily_data.resample('ME').agg({
             tmax_col: 'mean',
             tmin_col: 'mean'
         })

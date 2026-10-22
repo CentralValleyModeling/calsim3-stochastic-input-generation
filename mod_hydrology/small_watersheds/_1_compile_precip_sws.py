@@ -39,6 +39,7 @@ import pandas as pd
 # Add repo root to path for utils imports
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 from utils.paths import get_base_dir, get_module_generated_dir
+from utils.wgen_calendar import STAMP_DAYS, require_stamp_days, stamp_month_of_day
 
 
 class CompileSmallWatershedPrecip:
@@ -71,8 +72,8 @@ class CompileSmallWatershedPrecip:
         self.product_b = product_b
         self.met_columns = ["Year", "Month", "Day", "precip", "tmax", "tmin"]
         if self.product_b:
-            # Product B spans ~1000 years; use PeriodIndex to exceed pandas Timestamp max (~2262)
-            self.date_index = pd.period_range(start='2025-01-01', end='3033-01-08', freq='D')
+            # Product B: one WGEN row per stamp day (utils.wgen_calendar)
+            self.date_index = pd.RangeIndex(STAMP_DAYS)
         else:
             self.date_index = pd.date_range(start=start_date, end=end_date, freq="D")
 
@@ -103,15 +104,16 @@ class CompileSmallWatershedPrecip:
         return df
 
     def _read_met_product_b(self, path: str) -> pd.Series:
-        """Read precip column from a Product B WGEN met file (no real dates; assign PeriodIndex)."""
+        """Read the precip column of a Product B WGEN met file, one row per stamp day."""
         df = pd.read_csv(path,
                          sep=self.met_sep,
                          header=None,
                          names=self.met_columns,
                          engine="python",
                          usecols=[3])  # only precip column
+        require_stamp_days(len(df), path)
         s = df.iloc[:, 0].reset_index(drop=True)
-        s.index = self.date_index[:len(s)]
+        s.index = self.date_index
         return s
 
     def _aggregate_watershed_monthly(self, grid_subset: pd.DataFrame) -> pd.Series:
@@ -139,7 +141,7 @@ class CompileSmallWatershedPrecip:
         return in_series
 
     def _aggregate_watershed_monthly_product_b(self, grid_subset: pd.DataFrame) -> pd.Series:
-        """Area-weighted daily precip (mm) -> monthly inches for Product B (PeriodIndex, no real dates)."""
+        """Area-weighted daily precip (mm) -> monthly inches for Product B (stamp months, no dates)."""
         weighted_sum = None
         weight_total = 0.0
         for _, row in grid_subset.iterrows():
@@ -151,8 +153,8 @@ class CompileSmallWatershedPrecip:
             weighted_sum = met_p * weight if weighted_sum is None else (weighted_sum + met_p * weight)
             weight_total += weight
         series_mm = weighted_sum / weight_total
-        # PeriodIndex: group by monthly period
-        monthly_in = series_mm.groupby(series_mm.index.asfreq('M')).sum() * self.mm_to_in
+        # stamp months, in order from January of stamp year 1
+        monthly_in = series_mm.groupby(stamp_month_of_day()[:len(series_mm)]).sum() * self.mm_to_in
         monthly_in.name = grid_subset.iloc[0].watershed_id
         return monthly_in
 

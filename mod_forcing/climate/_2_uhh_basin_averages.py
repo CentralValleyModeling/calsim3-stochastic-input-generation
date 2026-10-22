@@ -49,6 +49,7 @@ from matplotlib.patches import Patch
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 from utils import dss_io
 from utils.paths import get_base_dir, get_module_generated_dir
+from utils.wgen_calendar import require_stamp_days, stamp_month_index, stamp_month_of_day
 from utils.quantile_mapping import qmap_single
 
 
@@ -115,7 +116,8 @@ def read_meteo_file(filepath, product_b=False):
         Path to meteo file
     product_b : bool
         If True, skip pd.to_datetime (Product B years 1-1008 are below
-        pandas Timestamp minimum ~1677). The caller assigns PeriodIndex.
+        pandas Timestamp minimum ~1677). The caller groups the rows by stamp month
+        (utils.wgen_calendar).
         
     Returns:
     --------
@@ -145,7 +147,8 @@ def calculate_basin_monthly_averages(grid_info_df, data_folder, date_index=None,
     Uses weighted aggregation approach similar to small watersheds processing.
 
     For Product B, WGEN files have years 1-1008 (below pandas Timestamp min ~1677)
-    so a daily PeriodIndex is used instead of parsing actual dates. No reindexing
+    on a calendar of their own: the rows are the stamp days from 1 January of stamp
+    year 1, summed or averaged by stamp month (utils.wgen_calendar). No reindexing
     is performed; all rows in the file are used directly.
 
     Parameters:
@@ -157,7 +160,7 @@ def calculate_basin_monthly_averages(grid_info_df, data_folder, date_index=None,
     date_index : pd.DatetimeIndex, optional
         Full date range for Product A / Historical alignment
     product_b : bool
-        If True, use PeriodIndex (no date alignment)
+        If True, use the stamp days (no date alignment)
 
     Returns:
     --------
@@ -176,21 +179,22 @@ def calculate_basin_monthly_averages(grid_info_df, data_folder, date_index=None,
         meteo_file = find_meteo_file(lat, lon, data_folder)
 
         if meteo_file is None:
-            print(f"    Warning: No meteo file found for grid cell ({lat}, {lon}), skipping")
-            continue
+            raise FileNotFoundError(f"no meteo file for grid cell ({lat}, {lon}) in {data_folder}")
 
         # Read daily data
         daily_raw = read_meteo_file(meteo_file, product_b=product_b)
 
         if product_b:
-            # Product B: years 1-1008 can't be parsed as Timestamps.
-            # Assign a sequential PeriodIndex so resample() works correctly.
-            n = len(daily_raw)
-            period_idx = pd.period_range(start='2025-01-01', periods=n, freq='D')
-            daily_data = pd.Series(daily_raw['precip_mm'].values, index=period_idx, name='precip_mm')
+            # Product B: years 1-1008 can't be parsed as Timestamps. The rows must be
+            # the stamp days from 1 January of stamp year 1 (utils.wgen_calendar).
+            require_stamp_days(len(daily_raw), meteo_file)
+            if not np.array_equal(stamp_month_index(daily_raw['year'], daily_raw['month']),
+                                  stamp_month_of_day()):
+                raise ValueError(f"{meteo_file}: the rows are not the stamp days from year 1")
+            daily_data = pd.Series(daily_raw['precip_mm'].values, name='precip_mm')
             tavg_s = pd.Series(
                 ((daily_raw['tmax_c'].values + daily_raw['tmin_c'].values) / 2.0),
-                index=period_idx, name='tavg_c'
+                name='tavg_c'
             )
             precip_series = daily_data
             tavg_series = tavg_s
@@ -216,12 +220,13 @@ def calculate_basin_monthly_averages(grid_info_df, data_folder, date_index=None,
     daily_tavg_c = weighted_tavg_sum / weight_total
 
     if product_b:
-        # PeriodIndex: period resample requires 'M', not 'ME'
-        monthly_precip_mm = daily_precip_mm.resample('M').sum()   # period-resample
-        monthly_tavg_c = daily_tavg_c.resample('M').mean()        # period-resample
+        # stamp months (utils.wgen_calendar), in order from January of stamp year 1
+        stamp_month = stamp_month_of_day()
+        monthly_precip_mm = daily_precip_mm.groupby(stamp_month).sum()
+        monthly_tavg_c = daily_tavg_c.groupby(stamp_month).mean()
         monthly_df = pd.DataFrame({
-            'year':          [p.year  for p in monthly_precip_mm.index],
-            'month':         [p.month for p in monthly_precip_mm.index],
+            'year':          monthly_precip_mm.index // 12 + 1,
+            'month':         monthly_precip_mm.index % 12 + 1,
             'precip_inches': (monthly_precip_mm.values / 25.4),
             'tavg_f':        (monthly_tavg_c.values * 9 / 5) + 32,
         })
@@ -349,12 +354,12 @@ def apply_vpd_quantile_mapping(temp_monthly, target_vpd, source_type):
     target_vpd = target_vpd.dropna(subset=['value'])
 
     if source_type == 'Product_B':
-        # Product B has synthetic year labels (2025-3033) that don't overlap with
+        # Product B has stamp year labels (1-1008) that don't overlap with
         # historical VPD years (1921-2018), so year-based filtering/merging won't work.
         # qmap_single builds independent per-month (1-12) distributions for basis
         # and target, so only the month labels need to be correct -- years are
-        # irrelevant.  Product B months are already correct calendar months from
-        # the PeriodIndex, so we use them directly (no label overwriting).
+        # irrelevant.  Product B months are the stamp months (utils.wgen_calendar),
+        # so we use them directly (no label overwriting).
         # Use up to 1200 months (~100 WY), truncated to whichever series is shorter.
         n_calib = min(len(temp_basis_sim), len(target_vpd), 1200)
         basis_hist_temp = temp_basis_sim.iloc[:n_calib].copy().reset_index(drop=True)
@@ -1260,8 +1265,7 @@ def write_product_b_chunks(summaries: list, output_folder):
                 continue
             vals = md[col].values
             if len(vals) < total_needed:
-                print(f"  Warning: {loc_name} only {len(vals)} months (need {total_needed}), skipping")
-                continue
+                raise ValueError(f"{loc_name}: {len(vals)} months, need {total_needed}")
             loc_data[loc_name] = vals
 
         if not loc_data:
@@ -1891,7 +1895,7 @@ def main():
     print(f"Found {len(locations_df)} watershed locations to process")
     
     # Process each location (each will create both PPT and T files)
-    summaries = []
+    summaries, failed = [], []
     for idx, row in locations_df.iterrows():
         try:
             summary = process_location(
@@ -1907,7 +1911,9 @@ def main():
             summaries.append(summary)
         except Exception as e:
             print(f"  ERROR processing {row['location']}: {str(e)}")
-            continue
+            failed.append(row['location'])
+    if failed:
+        raise SystemExit(f"{len(failed)} location(s) failed, so their SVs would be missing: {failed}")
     
     # Save summary file
     if summaries:

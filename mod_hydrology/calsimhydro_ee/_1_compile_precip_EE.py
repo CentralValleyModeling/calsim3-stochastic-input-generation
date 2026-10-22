@@ -40,7 +40,6 @@ import os
 import sys
 from pathlib import Path
 
-import numpy as np
 import pandas as pd
 from pydsstools.core import TimeSeriesContainer
 
@@ -48,6 +47,7 @@ from pydsstools.core import TimeSeriesContainer
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 from utils import dss_io
 from utils.paths import get_base_dir, get_module_generated_dir
+from utils.wgen_calendar import N_CHUNKS, STAMP_DAYS, daily_chunk_1920_2021
 
 
 class CompileWBAPrecipEE:
@@ -84,8 +84,8 @@ class CompileWBAPrecipEE:
         self.product_b = product_b
         self.met_columns = ['Year', 'Month', 'Day', 'precip', 'tmax', 'tmin']
         if self.product_b:
-            # Product B spans ~1000 years; use PeriodIndex to exceed pandas Timestamp max (~2262)
-            self.dates = pd.period_range(start='2025-01-01', end='3033-01-08', freq='D')
+            # Product B: one WGEN row per stamp day (utils.wgen_calendar)
+            self.dates = pd.RangeIndex(STAMP_DAYS)
         else:
             self.dates = pd.date_range(start=self.start_date_vic, end=self.end_date_vic, freq='D')
         os.makedirs(self.output_path, exist_ok=True)
@@ -153,58 +153,13 @@ class CompileWBAPrecipEE:
         print(f"Done. {len(results)} WBAs compiled.")
         return results
 
-    def _build_product_b_chunk(self, values, chunk_idx):
-        """Build Jan 1920 - Dec 2021 data array for one Product B chunk.
-
-        Core (non-overlapping): Oct 1921 - Sep 2021 (100 water years).
-        Jan 1921 - Sep 1921: WGEN data preceding this chunk's core.
-        Oct 2021 - Dec 2021: WGEN data following this chunk's core.
-        Jan 1920 - Dec 1920: Backfill (duplicate of Jan 1921 - Dec 1921).
-        """
-        core_template = pd.date_range('1921-10-01', '2021-09-30', freq='D')
-        core_days = len(core_template)
-        skip_days = 273   # Jan 1 - Sep 30
-        pre_core_days = 273
-        suffix_days = 92  # Oct 1 - Dec 31
-
-        core_start = skip_days + chunk_idx * core_days
-
-        pre_core = values[core_start - pre_core_days : core_start]
-        core = values[core_start : core_start + core_days]
-        post_core = values[core_start + core_days : core_start + core_days + suffix_days]
-
-        # Jan 1921 - Dec 2021 natural data
-        natural = np.concatenate([pre_core, core, post_core])
-
-        # Backfill: Jan 1920 - Dec 1920 = copy of Jan 1921 - Dec 1921
-        # 1921 has 365 days; 1920 is a leap year with 366 days
-        jan_dec_1921 = natural[:365]
-        backfill = np.concatenate([
-            jan_dec_1921[:59],    # Jan 1 - Feb 28 (59 days)
-            jan_dec_1921[58:59],  # Feb 29 = copy of Feb 28
-            jan_dec_1921[59:]     # Mar 1 - Dec 31 (306 days)
-        ])
-
-        return np.concatenate([backfill, natural])
-
     def _write_product_b_chunks(self, results, pcp_dir):
-        # Output Jan 1920 - Dec 2021 per chunk.
-        # Core: Oct 1921 - Sep 2021 (100 WY, non-overlapping across chunks).
-        # Jan 1920 - Dec 1920: backfill (copy of Jan-Dec 1921).
-        # Oct 2021 - Dec 2021: from subsequent chunk's WGEN data.
+        # Per WBA and chunk, 1 Jan 1920 - 31 Dec 2021 (utils.wgen_calendar.daily_chunk_1920_2021).
         date_template = pd.date_range('1920-01-01', '2021-12-31', freq='D')
-        core_template = pd.date_range('1921-10-01', '2021-09-30', freq='D')
-        core_days = len(core_template)
-        skip_days = 273
-        total_chunks = 10
-        total_needed = skip_days + core_days * total_chunks + 92  # +92 for last chunk's Oct-Dec suffix
-        print(f"  Product B: {core_days} core days/chunk, {len(date_template)} output days/chunk, {total_chunks} chunks")
+        print(f"  Product B: {len(date_template)} days per chunk, {N_CHUNKS} chunks")
         for wba, pcp_data in results.items():
-            values = pcp_data.values
-            if len(values) < total_needed:
-                raise ValueError(f"{wba}: need {total_needed} days, got {len(values)}")
-            for i in range(total_chunks):
-                chunk_values = self._build_product_b_chunk(values, i)
+            for i in range(N_CHUNKS):
+                chunk_values = daily_chunk_1920_2021(pcp_data.values, i + 1)
                 df = pd.DataFrame({
                     'y': date_template.year,
                     'm': date_template.month,
@@ -244,14 +199,13 @@ class CompileWBAPrecipEE:
 
     def _write_product_b_dss(self, results):
         # Write 10 per-chunk DSS files, Jan 1920 - Dec 2021 each.
-        total_chunks = 10
         start_dt_str = "01JAN1920 24:00"
-        for i in range(total_chunks):
+        for i in range(N_CHUNKS):
             dss_file = os.path.join(self.output_path, f"CS3_DailyPrecipitation_EE_n{i+1:02d}.dss")
             print(f"  Writing DSS chunk {i+1:02d}/10: {os.path.basename(dss_file)}")
             with dss_io.open_dss(dss_file, catalog_flag=False) as dss:
                 for wba, pcp_data in results.items():
-                    chunk_values = self._build_product_b_chunk(pcp_data.values, i)
+                    chunk_values = daily_chunk_1920_2021(pcp_data.values, i + 1)
                     tsc = TimeSeriesContainer()
                     tsc.pathname = f"/IWFM/E{wba}/PRECIP//1DAY/PRECIPITATION"
                     tsc.startDateTime = start_dt_str

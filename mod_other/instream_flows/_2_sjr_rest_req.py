@@ -659,8 +659,10 @@ def run_product_b(
         files = [product_b_dir]
     else:
         files = sorted(product_b_dir.glob("UNIMP_SJ_qmo_n*.csv"))
-    if not files:
-        raise FileNotFoundError(f"No product B files found in {product_b_dir}")
+        expected = [f"UNIMP_SJ_qmo_n{k:02d}.csv" for k in range(1, 11)]
+        if [f.name for f in files] != expected:
+            raise FileNotFoundError(f"{product_b_dir}: expected {expected[0]} ... {expected[-1]}, "
+                                    f"found {[f.name for f in files] or 'none'}")
 
     outdir.mkdir(parents=True, exist_ok=True)
     written: list[Path] = []

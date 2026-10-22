@@ -209,14 +209,12 @@ def load_chunk_inflows(rim_dir: Path, chunk: int, ref_csv: Path) -> pd.DataFrame
         sub = sub.set_index(["Year", "Month"])
         series_dict[partb] = sub[partb]
 
-    if not series_dict:
-        return pd.DataFrame()
+    if missing:
+        raise FileNotFoundError(
+            f"{len(missing)}/{len(partb_list)} rim inflows of chunk {chunk_tag} missing in "
+            f"{rim_dir}: " + ", ".join(f"{m}_qmo_{chunk_tag}.csv" for m in missing))
 
     result = pd.DataFrame(series_dict)
-    if missing:
-        print(f"    WARNING: {len(missing)}/{len(partb_list)} inflows NOT found for {chunk_tag}:")
-        for m in missing:
-            print(f"      - {m}_qmo_{chunk_tag}.csv")
     print(f"    Chunk {chunk_tag}: loaded {len(series_dict)}/{len(partb_list)} inflows, {len(result)} months")
     return result
 
