@@ -3,7 +3,8 @@
 
 Inputs
 ------
-Spline workbook EToDaily sheet and DCR2025 precipitation input.
+Step 12 daily ETo csv (cubic spline of the monthly ETo) and DCR2025
+precipitation input.
 
 Outputs
 -------
@@ -12,16 +13,15 @@ GENERATED/mod_forcing/climate/output/_3_refet_cimis_adj/step14.
 
 Dependencies
 ------------
-Python environment from the CUP+ environment.yml, openpyxl, pandas, pyhecdss.
+Python environment from the CUP+ environment.yml, numpy, pandas, pyhecdss.
 
 Usage
 -----
-python Step14_Final_CS3_ET_DSS.py [--overwrite] [--install-package]
+python step14_final_cs3_et_dss.py [--overwrite] [--install-package]
 """
 from __future__ import annotations
 
 import argparse
-import csv
 import datetime as dt
 import os
 import re
@@ -29,8 +29,8 @@ import subprocess
 import sys
 from pathlib import Path
 
+import numpy as np
 import pandas as pd
-from openpyxl import load_workbook
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[3]))
 from utils.paths import get_module_generated_dir, get_base_dir
@@ -41,12 +41,9 @@ REPO_ROOT = HERE.parents[2]
 DSS_LINK = REPO_ROOT / "_step14_dss_link"
 CUP_LINK = REPO_ROOT / "_step14_cup_link"
 CUP_DIR = get_base_dir() / "PyCUP"
-WORKBOOK_NAME = "step12b_CS3_Table_9-xx_ETo_Spline2025_Oct1920.xlsm"
+DAILY_ETO_NAME = "Historical_Unsplit (Product_A)_EToDaily_1921_2018.csv"
 START_YEAR = 1921
 END_YEAR = 2018
-FIRST_WORKBOOK_DATA_ROW = 8
-DATE_COLUMN = 2
-FIRST_SERIES_COLUMN = 3
 EXCLUDED_WBA_HEADERS = {"WBA_91"}
 
 
@@ -59,10 +56,10 @@ def generated_step14_dir() -> Path:
     )
 
 
-def find_spline_workbook() -> Path:
-    path = generated_step14_dir().parent / "step12" / WORKBOOK_NAME
+def find_daily_eto() -> Path:
+    path = generated_step14_dir().parent / "step12" / DAILY_ETO_NAME
     if not path.is_file():
-        raise FileNotFoundError(f"Spline workbook not found: {path}")
+        raise FileNotFoundError(f"Step 12 daily ETo file not found: {path}")
     return path
 
 
@@ -70,73 +67,40 @@ def expected_daily_index(start_year: int, end_year: int) -> pd.DatetimeIndex:
     return pd.date_range(f"{start_year}-01-01", f"{end_year}-12-31", freq="D")
 
 
-def export_eto(workbook_path: Path, output_path: Path) -> tuple[list[str], pd.DatetimeIndex]:
-    workbook = load_workbook(workbook_path, read_only=True, data_only=True)
-    if "EToDaily" not in workbook.sheetnames:
-        workbook.close()
-        raise ValueError(f"Workbook has no EToDaily sheet: {workbook_path}")
-
-    sheet = workbook["EToDaily"]
-    workbook_headers = [
-        str(value).strip()
-        for value in next(
-            sheet.iter_rows(min_row=2, max_row=2, min_col=FIRST_SERIES_COLUMN,
-                            max_col=sheet.max_column, values_only=True)
-        )
-    ]
-    if not workbook_headers or any(not name for name in workbook_headers) or len(workbook_headers) != len(set(workbook_headers)):
-        workbook.close()
-        raise ValueError("EToDaily row 2 must contain unique, non-empty series headers.")
-    headers = [name for name in workbook_headers if name not in EXCLUDED_WBA_HEADERS]
+def export_eto(daily_eto_path: Path, output_path: Path) -> tuple[list[str], pd.DatetimeIndex]:
+    source = pd.read_csv(daily_eto_path)
+    if source.columns.size == 0 or source.columns[0] != "Date":
+        raise ValueError(f"Step 12 daily ETo must start with a Date column: {daily_eto_path}")
+    file_headers = [str(name).strip() for name in source.columns[1:]]
+    if (not file_headers or any(not name for name in file_headers)
+            or len(file_headers) != len(set(file_headers))):
+        raise ValueError("Step 12 daily ETo must contain unique, non-empty series headers.")
+    headers = [name for name in file_headers if name not in EXCLUDED_WBA_HEADERS]
     if not headers:
-        workbook.close()
-        raise ValueError("EToDaily contains no processable WBA series.")
-    selected_positions = [
-        index for index, name in enumerate(workbook_headers)
-        if name not in EXCLUDED_WBA_HEADERS
-    ]
+        raise ValueError("Step 12 daily ETo contains no processable WBA series.")
 
+    try:
+        dates = pd.DatetimeIndex([
+            dt.datetime.strptime(str(value).strip(), "%m/%d/%Y") for value in source["Date"]
+        ])
+    except ValueError as exc:
+        raise ValueError("Step 12 daily ETo dates must be m/d/yyyy.") from exc
+    in_range = (dates.year >= START_YEAR) & (dates.year <= END_YEAR)
+    dates = dates[in_range]
     expected = expected_daily_index(START_YEAR, END_YEAR)
-    rows: list[tuple[dt.datetime, tuple[float, ...]]] = []
-    for row in sheet.iter_rows(
-        min_row=FIRST_WORKBOOK_DATA_ROW,
-        max_row=sheet.max_row,
-        min_col=DATE_COLUMN,
-        max_col=sheet.max_column,
-        values_only=True,
-    ):
-        date_value = row[0]
-        if date_value is None:
-            continue
-        date = pd.Timestamp(date_value).normalize()
-        if START_YEAR <= date.year <= END_YEAR:
-            values = tuple(
-                row[FIRST_SERIES_COLUMN - DATE_COLUMN + index]
-                for index in selected_positions
-            )
-            if len(values) != len(headers) or any(value is None for value in values):
-                workbook.close()
-                raise ValueError(f"EToDaily has blank series values on {date.date()}.")
-            try:
-                numeric = tuple(float(value) for value in values)
-            except (TypeError, ValueError) as exc:
-                workbook.close()
-                raise ValueError(f"EToDaily has a nonnumeric value on {date.date()}.") from exc
-            rows.append((date.to_pydatetime(), numeric))
-    workbook.close()
-
-    dates = pd.DatetimeIndex([row[0] for row in rows])
     if dates.has_duplicates or not dates.equals(expected):
         raise ValueError(
-            f"EToDaily dates must exactly cover {expected[0].date()} through "
+            f"Step 12 daily ETo dates must exactly cover {expected[0].date()} through "
             f"{expected[-1].date()} once each; got {len(dates)} rows."
         )
+    values = source.loc[in_range, headers].apply(pd.to_numeric, errors="coerce")
+    if not np.isfinite(values.to_numpy(dtype=float)).all():
+        raise ValueError("Step 12 daily ETo contains missing or nonnumeric values.")
+
     output_path.parent.mkdir(parents=True, exist_ok=True)
-    with output_path.open("w", newline="", encoding="utf-8") as stream:
-        writer = csv.writer(stream)
-        writer.writerow(["Date", *headers])
-        for date, values in rows:
-            writer.writerow([f"{date.month}/{date.day}/{date.year}", *values])
+    output = values.reset_index(drop=True)
+    output.insert(0, "Date", [f"{date.month}/{date.day}/{date.year}" for date in dates])
+    output.to_csv(output_path, index=False)
     return headers, dates
 
 
@@ -319,14 +283,14 @@ def main() -> None:
             "Pass --overwrite to allow replacement."
         )
 
-    workbook = find_spline_workbook()
+    daily_eto = find_daily_eto()
     eto_csv = CUP_DIR / "tables" / "eto.csv"
     precip_source = CUP_DIR / "tables" / "DCR2025_precip_adj.csv"
     precip_output = step14_dir / "DCR2025_precip_adj_1921_2018.csv"
     if not precip_source.is_file():
         raise FileNotFoundError(f"Precipitation source not found: {precip_source}")
 
-    eto_headers, eto_dates = export_eto(workbook, eto_csv)
+    eto_headers, eto_dates = export_eto(daily_eto, eto_csv)
     precip_dates = normalize_precipitation(precip_source, precip_output, eto_headers)
     if not eto_dates.equals(precip_dates):
         raise ValueError("ETo and precipitation dates are not identical after preparation.")
