@@ -3,7 +3,7 @@
 
 Inputs
 ------
-Spline workbook EToDaily sheet and DCR2025 precipitation input.
+Spline workbook EToDaily sheet and Step 13 daily precipitation.
 
 Outputs
 -------
@@ -24,7 +24,6 @@ import argparse
 import csv
 import datetime as dt
 import os
-import re
 import subprocess
 import sys
 from pathlib import Path
@@ -42,6 +41,7 @@ DSS_LINK = REPO_ROOT / "_step14_dss_link"
 CUP_LINK = REPO_ROOT / "_step14_cup_link"
 CUP_DIR = get_base_dir() / "PyCUP"
 WORKBOOK_NAME = "step12b_CS3_Table_9-xx_ETo_Spline2025_Oct1920.xlsm"
+PRECIP_NAME = "Historical_Unsplit_precip_daily_1921_2018.csv"
 START_YEAR = 1921
 END_YEAR = 2018
 FIRST_WORKBOOK_DATA_ROW = 8
@@ -63,6 +63,13 @@ def find_spline_workbook() -> Path:
     path = generated_step14_dir().parent / "step12" / WORKBOOK_NAME
     if not path.is_file():
         raise FileNotFoundError(f"Spline workbook not found: {path}")
+    return path
+
+
+def find_step13_precipitation() -> Path:
+    path = generated_step14_dir().parent / "step13" / PRECIP_NAME
+    if not path.is_file():
+        raise FileNotFoundError(f"Step 13 precipitation not found: {path}")
     return path
 
 
@@ -140,65 +147,25 @@ def export_eto(workbook_path: Path, output_path: Path) -> tuple[list[str], pd.Da
     return headers, dates
 
 
-def normalize_precipitation(
+def select_precipitation(
     source_path: Path,
     output_path: Path,
     eto_headers: list[str],
 ) -> pd.DatetimeIndex:
-    source = pd.read_csv(source_path, index_col=0)
-    source.index = source.index.astype(str).str.strip()
-    if source.columns.has_duplicates:
-        raise ValueError("Precipitation input contains duplicate WBA headers.")
-
-    # The source date year is two digits and cannot identify the century. Its
-    # fixed 1921-2021 row sequence is validated using every month/day before
-    # four-digit years are assigned by position.
-    source_calendar = expected_daily_index(1921, 2021)
-    if len(source) != len(source_calendar):
-        raise ValueError(
-            f"Precipitation must contain {len(source_calendar)} daily rows for 1921-2021; "
-            f"found {len(source)}."
-        )
-    month_days = []
-    for raw_date in source.index:
-        match = re.fullmatch(r"(\d{1,2})-([A-Za-z]{3})-(\d{2})", raw_date)
-        if not match:
-            raise ValueError(f"Unexpected ambiguous precipitation date: {raw_date!r}")
-        try:
-            parsed = dt.datetime.strptime(raw_date, "%d-%b-%y")
-        except ValueError as exc:
-            raise ValueError(f"Invalid precipitation date label: {raw_date!r}") from exc
-        month_days.append((parsed.month, parsed.day))
-    expected_month_days = [(date.month, date.day) for date in source_calendar]
-    if month_days != expected_month_days:
-        raise ValueError(
-            "Precipitation row sequence does not match an unbroken 1921-2021 daily calendar."
-        )
-
+    """Write the Step 13 precipitation columns that match the ETo headers, in ETo order."""
+    source = pd.read_csv(source_path)
     missing_headers = sorted(set(eto_headers) - set(source.columns))
-    extra_headers = sorted(
-        set(source.columns) - set(eto_headers) - EXCLUDED_WBA_HEADERS
-    )
-    if missing_headers or extra_headers:
-        raise ValueError(
-            f"ETo and precipitation WBA headers differ; missing={missing_headers}, "
-            f"extra={extra_headers}."
-        )
-
-    source = source[eto_headers].apply(pd.to_numeric, errors="coerce")
-    if source.isna().any().any():
-        raise ValueError("Precipitation contains missing or nonnumeric values.")
-    source.index = source_calendar
-    source = source.loc[f"{START_YEAR}-01-01":f"{END_YEAR}-12-31", eto_headers]
-    expected = expected_daily_index(START_YEAR, END_YEAR)
-    if not source.index.equals(expected):
-        raise ValueError("Normalized precipitation dates do not match the 1921-2018 ETo dates.")
+    if missing_headers:
+        raise ValueError(f"Step 13 precipitation lacks ETo headers: {missing_headers}")
+    if source[eto_headers].isna().any().any():
+        raise ValueError("Step 13 precipitation contains missing values.")
+    dates = pd.DatetimeIndex(pd.to_datetime(source["Date"], format="%d%b%Y"))
+    if not dates.equals(expected_daily_index(START_YEAR, END_YEAR)):
+        raise ValueError("Step 13 precipitation dates do not match the 1921-2018 ETo dates.")
 
     output_path.parent.mkdir(parents=True, exist_ok=True)
-    output = source.copy()
-    output.insert(0, "Date", [date.strftime("%d%b%Y").upper() for date in output.index])
-    output.to_csv(output_path, index=False)
-    return source.index
+    source[["Date", *eto_headers]].to_csv(output_path, index=False)
+    return dates
 
 
 def validate_crop_inputs(wba_headers: list[str]) -> None:
@@ -321,13 +288,11 @@ def main() -> None:
 
     workbook = find_spline_workbook()
     eto_csv = CUP_DIR / "tables" / "eto.csv"
-    precip_source = CUP_DIR / "tables" / "DCR2025_precip_adj.csv"
-    precip_output = step14_dir / "DCR2025_precip_adj_1921_2018.csv"
-    if not precip_source.is_file():
-        raise FileNotFoundError(f"Precipitation source not found: {precip_source}")
+    precip_source = find_step13_precipitation()
+    precip_output = step14_dir / "precip_1921_2018.csv"
 
     eto_headers, eto_dates = export_eto(workbook, eto_csv)
-    precip_dates = normalize_precipitation(precip_source, precip_output, eto_headers)
+    precip_dates = select_precipitation(precip_source, precip_output, eto_headers)
     if not eto_dates.equals(precip_dates):
         raise ValueError("ETo and precipitation dates are not identical after preparation.")
 
