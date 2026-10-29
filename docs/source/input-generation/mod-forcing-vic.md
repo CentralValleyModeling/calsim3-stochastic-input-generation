@@ -30,4 +30,4 @@ The `compile_rim_inflows` class (`_2_compile_rim_inflows.py`) routes VIC flux fi
 
 The date index depends on the run: Product A uses a standard `DatetimeIndex` (1915--2018) and Product B a `PeriodIndex` (2025--3033), the latter handling 1,000-year sequences that exceed pandas Timestamp limits. (The same script also supports a Historical observed-climate run spanning 1915--2021.) Product B output is written as 10 chunks of 100 water years (`*_n01.csv` ... `*_n10.csv`), with the first nine months of the series dropped so the chunks align to an October (water-year) start. The compiled watershed flows become the VIC basis series for quantile mapping in `mod_hydrology/rim_inflow/`.
 
-VIC also produces ET-related flux outputs (EVAP, PET_H2OSURF, PET_SHORT) that are consumed by `mod_hydrology/calsimhydro/` for area-weighted ET quantile mapping to CalSim reference ET targets.
+VIC also produces ET-related flux outputs (EVAP, PET_SHORT) that are consumed by `mod_hydrology/calsimhydro/` for area-weighted ET quantile mapping to CalSim reference ET targets.
