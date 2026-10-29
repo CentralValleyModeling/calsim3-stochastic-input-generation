@@ -8,7 +8,7 @@ Product A (1921-2018) or Product B (chunked).
 Inputs
 ------
 - VIC flux files; WBA grid info
-- CS3 RefETo / CropET / PanEvap DSS (quantile-mapping target)
+- CS3 RefETo / CropET DSS (quantile-mapping target)
 
 Outputs
 -------
@@ -132,8 +132,6 @@ class CompileWBAET:
 				path = f"/CALSIM/{wba}/REF-ET//1MON/REFETO/"
 			elif self.et_type == 'CropET':
 				path = f"/IWFM/{wba}/RATE_INCH//1MON/EVAPOTRANSPIRATION/"
-			elif self.et_type == 'PanEvap':
-				path = f"/CALSIM/{wba}/PAN-EVAP//1MON/PAN-EVAP/"
 			else:
 				raise ValueError(f"Unknown ET type: {self.et_type}")
 			ts = dss.read_ts(path, window=(start, end))
@@ -159,8 +157,7 @@ class CompileWBAET:
 		if not os.path.exists(fname):
 			raise FileNotFoundError(f"VIC flux file not found: {fname}")
 		df = pd.read_csv(fname, sep="\t", header=None, engine="python")
-		vic_col_idx = self.vic_col_index - 1 if self.et_type == 'PanEvap' else self.vic_col_index
-		col = df.iloc[:, vic_col_idx].astype(float)
+		col = df.iloc[:, self.vic_col_index].astype(float)
 		col.index = dates[:len(col)]
 		return col
 
@@ -348,8 +345,6 @@ class CompileWBAET:
 		start_dt_str = "31JAN1920 24:00:00"
 		if self.et_type == 'CropET':
 			dss_stem = "CS3_ET"
-		elif self.et_type == 'PanEvap':
-			dss_stem = "CS3_PanEvap"
 		else:
 			dss_stem = "CS3_RefET"
 		for i in range(total_chunks):
@@ -361,13 +356,11 @@ class CompileWBAET:
 					tsc = TimeSeriesContainer()
 					if self.et_type == 'CropET':
 						tsc.pathname = f"/IWFM/{wba}/RATE_INCH//1MON/EVAPOTRANSPIRATION/"
-					elif self.et_type == 'PanEvap':
-						tsc.pathname = f"/CALSIM/{wba}/PAN-EVAP//1MON/PAN-EVAP/"
 					else:
 						tsc.pathname = f"/CALSIM/{wba_to_space(wba)}/REF-ET//1MON/REFETO/"
 					tsc.startDateTime = start_dt_str
 					tsc.numberValues = len(chunk)
-					tsc.units = "Inch" if self.et_type == 'PanEvap' else "IN/MONTH"
+					tsc.units = "IN/MONTH"
 					tsc.type = "PER-CUM"
 					tsc.interval = 1
 					tsc.values = chunk.astype(float)
@@ -416,7 +409,7 @@ class CompileWBAET:
 						continue
 					cache[crop_wba] = self._read_cshydro_monthly_et(crop_wba, dss_start, dss_end)
 			else:
-				cshydro_wba = 'WBA02' if wba == 'Gerber' else wba_to_space(wba)
+				cshydro_wba = wba_to_space(wba)
 				cache[cshydro_wba] = self._read_cshydro_monthly_et(cshydro_wba, dss_start, dss_end)
 		return cache
 
@@ -446,7 +439,7 @@ class CompileWBAET:
 					qmap_series = self._qmap_product_b(vic_monthly_in, hist_merged)
 					wba_results[crop_wba] = qmap_series
 			else:
-				cshydro_wba = 'WBA02' if wba == 'Gerber' else wba_to_space(wba)
+				cshydro_wba = wba_to_space(wba)
 				cs3_monthly_in = cs3_cache[cshydro_wba]
 				hist_merged = pd.merge(hist_monthly_in, cs3_monthly_in, left_index=True, right_index=True)
 				qmap_series = self._qmap_product_b(vic_monthly_in, hist_merged)
@@ -462,7 +455,7 @@ class CompileWBAET:
 					qmap_series = self._quantile_map(monthly_df)
 					wba_results[crop_wba] = qmap_series
 			else:
-				cshydro_wba = 'WBA02' if wba == 'Gerber' else wba_to_space(wba)
+				cshydro_wba = wba_to_space(wba)
 				cs3_monthly_in = cs3_cache[cshydro_wba]
 				monthly_df = pd.merge(vic_monthly_in, cs3_monthly_in, left_index=True, right_index=True)
 				qmap_series = self._quantile_map(monthly_df)
@@ -471,12 +464,11 @@ class CompileWBAET:
 
 	def run(self, select_wbas: Optional[List[str]] = None) -> Dict[str, pd.Series]:
 		grid_info_all = self._read_grid_info()
-		if self.et_type == 'PanEvap':
-			wbas = ['Gerber']
-		elif select_wbas:
+		if select_wbas:
 			wbas = list(select_wbas)
 		else:
 			wbas = grid_info_all["wba_id"].unique().tolist()
+			# The Gerber cells feed _2b_compile_pan_evap.py
 			wbas.remove('Gerber')
 
 		dss_start = "31OCT1920 00:00:00"
@@ -528,8 +520,6 @@ class CompileWBAET:
 			return
 		if self.et_type == 'CropET':
 			dss_out = self.output_path + "/CS3_ET.dss"
-		elif self.et_type == 'PanEvap':
-			dss_out = self.output_path + "/CS3_PanEvap.dss"
 		elif self.et_type == 'RefET':
 			dss_out = self.output_path + "/CS3_RefET.dss"
 		if self.et_type == 'CropET':
@@ -543,13 +533,11 @@ class CompileWBAET:
 				tsc = TimeSeriesContainer()
 				if self.et_type == 'CropET':
 					tsc.pathname = f"/IWFM/{wba}/RATE_INCH//1MON/EVAPOTRANSPIRATION/"
-				elif self.et_type == 'PanEvap':
-					tsc.pathname = f"/CALSIM/{wba}/PAN-EVAP//1MON/PAN-EVAP/"
 				elif self.et_type == 'RefET':
 					tsc.pathname = f"/CALSIM/{wba_to_space(wba)}/REF-ET//1MON/REFETO/"
 				tsc.startDateTime = start_dt
 				tsc.numberValues = len(s)
-				tsc.units = "Inch" if self.et_type=='PanEvap' else "IN/MONTH" # inches per month
+				tsc.units = "IN/MONTH" # inches per month
 				tsc.type = "PER-CUM"
 				tsc.interval = 1  # monthly interval
 				tsc.values = s.values.astype(float)
@@ -593,12 +581,6 @@ def main():
 		help="Path to CS3 CropET DSS file (default: reference/CS3_ET.dss).",
 	)
 	parser.add_argument(
-		"--cshydro_panevap_dss",
-		type=str,
-		default=None,
-		help="Path to CS3 PanEvap DSS file (default: reference/CS3_PanEvapGerber.dss).",
-	)
-	parser.add_argument(
 		"--output_path", type=str, default=None, help="Output directory for CSV (and DSS). Defaults to ./output/_2_compile_et/Product_A or Product_B."
 	)
 	parser.add_argument(
@@ -617,7 +599,7 @@ def main():
 		"--vic_col_index",
 		type=int,
 		default=21,
-		help="0-based column index of short grass reference ET in VIC flux files (automatically adjusts by -1 for H20_SURFACE with PanEvap)",
+		help="0-based column index of short grass reference ET in VIC flux files",
 	)
 	parser.add_argument(
 		"--wbas",
@@ -635,7 +617,7 @@ def main():
 		"--et_type",
 		type=str,
 		default='RefET',
-		help="ET type to process: 'RefET', 'CropET', 'PanEvap', or 'all' (runs all three).",
+		help="ET type to process: 'RefET', 'CropET', or 'all' (runs both).",
 	)
 
 	parser.add_argument(
@@ -672,8 +654,6 @@ def main():
 		args.cshydro_refet_dss = str(_script_dir / "reference" / "CS3_RefETo.dss")
 	if args.cshydro_cropet_dss is None:
 		args.cshydro_cropet_dss = str(_script_dir / "reference" / "CS3_ET.dss")
-	if args.cshydro_panevap_dss is None:
-		args.cshydro_panevap_dss = str(_script_dir / "reference" / "CS3_PanEvapGerber.dss")
 	product_b = args.product == 'B'
 	if product_b:
 		vic_path = args.vic_path or str(_vic_gen / 'output' / 'fluxes' / 'Product_B' / '1')
@@ -686,20 +666,18 @@ def main():
 
 	# Build the list of (et_type, cshydro_dss) pairs to run
 	if args.et_type == 'all':
-		if not all([args.cshydro_refet_dss, args.cshydro_cropet_dss, args.cshydro_panevap_dss]):
+		if not all([args.cshydro_refet_dss, args.cshydro_cropet_dss]):
 			raise ValueError(
-				"--et_type all requires --cshydro_refet_dss, --cshydro_cropet_dss, and --cshydro_panevap_dss."
+				"--et_type all requires --cshydro_refet_dss and --cshydro_cropet_dss."
 			)
 		et_runs = [
-			('RefET',   args.cshydro_refet_dss),
-			('CropET',  args.cshydro_cropet_dss),
-			('PanEvap', args.cshydro_panevap_dss),
+			('RefET',  args.cshydro_refet_dss),
+			('CropET', args.cshydro_cropet_dss),
 		]
 	else:
 		dss_map = {
-			'RefET':   args.cshydro_refet_dss,
-			'CropET':  args.cshydro_cropet_dss,
-			'PanEvap': args.cshydro_panevap_dss,
+			'RefET':  args.cshydro_refet_dss,
+			'CropET': args.cshydro_cropet_dss,
 		}
 		cshydro_dss = args.cshydro_dss or dss_map.get(args.et_type)
 		et_runs = [(args.et_type, cshydro_dss)]
