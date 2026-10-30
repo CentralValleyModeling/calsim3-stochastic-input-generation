@@ -14,6 +14,7 @@ CalSim Synthetic Hydroclimate
    source/results_product_a
    source/results_product_b
    source/summary
+   source/changelog
 
 .. toctree::
    :maxdepth: 3
