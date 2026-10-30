@@ -2,12 +2,13 @@
 Build and Check the Rim-Inflow Model's Forcing Against BASE
 ===========================================================
 A rim-inflow model may read the WGEN weather in a form of its own rather than the text files
-in BASE: SAC-SMA, for one, reads a NetCDF store of the 4,410 grid cells it uses. This script
-checks that the model's input for a forcing holds the BASE weather it stands for (gate G2), on
-a sample of cells or on all of them. Where the model's checkout does not hold that input
-(the adapter's ``BUILT``; for SAC-SMA, Product B), the script first writes it from BASE. The
-model's adapter (adapters/<inflow_model>.py) writes and compares the files; this script
-supplies the BASE side and keeps the record.
+in BASE: SAC-SMA reads a NetCDF store of the 4,410 grid cells it uses, VIC a text file per cell
+with the wind added. This script checks that the model's input for a forcing holds the BASE
+weather it stands for (gate G2), on a sample of cells or on all of them. Where the model's
+folder does not hold that input (the adapter's ``BUILT``: for SAC-SMA, Product B; for VIC,
+every forcing), the script first writes it from BASE. The model's adapter
+(adapters/<inflow_model>.py) writes and compares the files; this script supplies the BASE side
+and keeps the record.
 
 Forcings
 --------
@@ -25,13 +26,14 @@ Outputs
 -------
 - <generated>/mod_forcing/inflows/output/_1_build_forcing/<Historical_Unsplit|Product_A/1|Product_B/1>/
   - the inputs built here (SAC-SMA, Product B: wgen_product_b_seg01.nc ... _seg10.nc,
-    0.6-0.75 GB each, 6.8 GB in all)
-  - forcing_identity.csv  (per input file and variable: cells checked, the adapter's measures
-                           of the difference, pass; the cells in the input, its name and its
-                           sha256, which _2_run_product.py records in its manifest too)
+    0.6-0.75 GB each, 6.8 GB in all; VIC: meteo_<lat>_<lon> for 4,097 cells, 4 GB for
+    historical or A and 32 GB for B)
+  - forcing_identity.csv  (``--cells all`` only; per input file and variable: cells checked,
+                           the adapter's measures of the difference, pass; the input's name and
+                           its sha256, which _2_run_product.py records in its manifest too)
 
-_2_run_product.py runs the model only if this file shows a pass on every cell of every input,
-so run it with ``--cells all`` first.
+_2_run_product.py runs the model only if this file shows a pass on every input. A sample of
+cells is a quick check: it prints its table and leaves the file as it was.
 
 Usage
 -----
@@ -39,7 +41,7 @@ Usage
     python mod_forcing/inflows/_1_build_forcing.py --forcing historical --cells all
     python mod_forcing/inflows/_1_build_forcing.py --forcing B --cells all       # builds, then checks
     python mod_forcing/inflows/_1_build_forcing.py --forcing B --cells all --check-only
-    python mod_forcing/inflows/_1_build_forcing.py --forcing A          # quick: 200 cells
+    python mod_forcing/inflows/_1_build_forcing.py --forcing A          # quick: 200 cells, not recorded
 """
 
 import argparse
@@ -102,17 +104,25 @@ def main():
         raise SystemExit(f"missing inputs {[f.name for f in missing]}; run without --check-only")
     print("Input: " + "\n       ".join(str(f) for f in files))
     out = model.check_inputs(repo, args.forcing, files, read_base, n_cells)
-    print("Hashing the inputs ...")
-    sha = {f: sha256_file(f) for f in files}
-    out["input_sha256"] = out["input"].map(sha)
+    if n_cells is None:
+        print("Hashing the inputs ...")
+        out["input_sha256"] = out["input"].map({f: sha256_file(f) for f in files})
     out["input"] = out["input"].map(lambda f: label(f, repo))
 
-    out.to_csv(out_dir / "forcing_identity.csv", index=False)
-    print(out.to_string(index=False))
-    print(f"Wrote {out_dir / 'forcing_identity.csv'}")
+    if len(out) <= 40:
+        print(out.to_string(index=False))
+    else:
+        print(out.groupby("variable").agg(files=("input", "nunique"), days=("days", "sum"),
+                                          max_abs_diff=("max_abs_diff", "max"),
+                                          outside_tol=("outside_tol", "sum"),
+                                          x10_pairs=("x10_pairs", "sum"),
+                                          passed=("pass", "all")).to_string())
+    if n_cells is None:
+        out.to_csv(out_dir / "forcing_identity.csv", index=False)
+        print(f"Wrote {out_dir / 'forcing_identity.csv'}")
     if not out["pass"].all():
         raise SystemExit("G2 FAIL: the input differs from BASE")
-    print("G2 PASS")
+    print("G2 PASS" if n_cells is None else f"G2 PASS on {n_cells} sampled cells (not recorded)")
 
 
 if __name__ == "__main__":

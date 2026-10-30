@@ -3,8 +3,10 @@ Centralized path resolver for data directories.
 
 Reads the data root from ``config.json`` (user-local, git-ignored) at the repo
 root, falling back to ``config_default.json`` (tracked) when the user file is
-absent.  All module scripts should import helpers from this module instead of
-hard-coding ``../../data/`` relative paths.
+absent.  The environment variable ``CSSTOCHASTIC_CONFIG`` names another user
+file in place of ``config.json``, e.g. the config of a chain built on another
+rim-inflow model.  All module scripts should import helpers from this module
+instead of hard-coding ``../../data/`` relative paths.
 
 Quick start
 -----------
@@ -50,14 +52,16 @@ def _long_path(p: Path) -> Path:
 # ---------------------------------------------------------------------------
 # Load user config, falling back to the default
 # ---------------------------------------------------------------------------
-_USER_CFG = REPO_ROOT / "config.json"
+_USER_CFG = Path(os.environ.get("CSSTOCHASTIC_CONFIG", REPO_ROOT / "config.json"))
 _DEFAULT_CFG = REPO_ROOT / "config_default.json"
 
 
 def _load_config() -> dict:
-    """Defaults from ``config_default.json``, overridden key by key by ``config.json``."""
+    """Defaults from ``config_default.json``, overridden key by key by the user file."""
     with open(_DEFAULT_CFG, "r") as f:
         cfg = json.load(f)
+    if "CSSTOCHASTIC_CONFIG" in os.environ and not _USER_CFG.exists():
+        raise SystemExit(f"CSSTOCHASTIC_CONFIG names {_USER_CFG}, which does not exist")
     if _USER_CFG.exists():
         with open(_USER_CFG, "r") as f:
             cfg.update(json.load(f))
@@ -86,12 +90,14 @@ def get_base_dir() -> Path:
 
 
 def get_generated_dir() -> Path:
-    """Return ``<data_dir>/GENERATED``: all module input/output."""
-    return DATA_DIR / "GENERATED"
+    """Return ``<data_dir>/<generated_dir>`` (``GENERATED`` by default; an absolute
+    ``generated_dir`` stands alone): all module input/output. The SAC-SMA chain uses
+    ``GENERATED``; a chain on another rim-inflow model keeps its own folder."""
+    return _long_path(DATA_DIR / _CFG["generated_dir"])
 
 
 def get_module_generated_dir(module: str) -> Path:
-    """Return ``<data_dir>/GENERATED/<module>/``.
+    """Return ``<generated_dir>/<module>/``.
 
     Parameters
     ----------
@@ -118,8 +124,8 @@ def get_inflow_model() -> str:
 
 
 def get_inflow_repo() -> Path:
-    """Return the rim-inflow model's git repository (``inflow_repo``, relative to the repo root
-    or absolute)."""
+    """Return the rim-inflow model's folder (``inflow_repo``, relative to the repo root or
+    absolute)."""
     p = Path(_CFG["inflow_repo"])
     return p if p.is_absolute() else (REPO_ROOT / p).resolve()
 
@@ -129,9 +135,10 @@ def get_inflow_env() -> str:
     return _CFG["inflow_env"]
 
 
-def get_inflow_commit() -> str:
-    """Return the commit of ``inflow_repo`` the rim-inflow product is pinned to (``inflow_commit``)."""
-    return _CFG["inflow_commit"]
+def get_inflow_pin() -> str:
+    """Return the version of the rim-inflow model the product is pinned to (``inflow_pin``), in
+    the form its adapter's ``version`` reports: for SAC-SMA a commit of ``inflow_repo``."""
+    return _CFG["inflow_pin"]
 
 
 #: Forcings of the rim-inflow model (``mod_forcing/inflows``) -> their output subfolder.
@@ -150,17 +157,18 @@ def get_arc_inflows(forcing: str) -> Path:
 
 
 #: Beside ``arc_inflow_monthly.csv``, and copied into each rim-inflow SV folder: the manifest
-#: of the rim-inflow model run the files come from (model, commit, forcing, hashes, gates).
+#: of the rim-inflow model run the files come from (model, version, forcing, hashes, gates).
 INFLOW_PROVENANCE = "run_manifest.json"
 
 
 def require_pinned_run(folder: Path) -> dict:
     """Return the run manifest of the rim-inflow model outputs in ``folder``, and stop unless
-    they come from the configured model (``inflow_model``) at the pinned commit
-    (``inflow_commit``) with no modified tracked files, in a run that passed every gate, on the
-    inputs G2 last checked (``forcing_identity.csv`` of ``_1_build_forcing.py``). Outputs left
-    over from another model, an earlier pin or an earlier input, or from a step that was not
-    re-run after the config or the input changed, fail here."""
+    they come from the configured model (``inflow_model``) at the pinned version
+    (``inflow_pin``) with no modified files, in a run that passed every gate, on the inputs G2
+    last checked (``forcing_identity.csv`` of ``_1_build_forcing.py``). A run is clean only
+    when the version it found is its pin, so the pin it records stands for the version. Outputs
+    left over from another model, an earlier pin or an earlier input, or from a step that was
+    not re-run after the config or the input changed, fail here."""
     path = folder / INFLOW_PROVENANCE
     if not path.exists():
         raise FileNotFoundError(f"{folder}: no {INFLOW_PROVENANCE}, so the run behind these "
@@ -173,16 +181,16 @@ def require_pinned_run(folder: Path) -> dict:
     failed = [name for name, g in manifest["gates"].items() if not g.get("pass")]
     if failed:
         raise RuntimeError(f"{path}: the run failed {', '.join(failed)}")
-    run = (manifest.get("inflow_model"), manifest.get("model_commit"))
-    pin = (get_inflow_model(), get_inflow_commit())
+    run = (manifest.get("inflow_model"), manifest.get("model_pin"))
+    pin = (get_inflow_model(), get_inflow_pin())
     if run != pin:
         raise RuntimeError(f"{folder}: built from {run[0]} at {run[1]}, but the config names "
-                           f"{pin[0]} at {pin[1]} (inflow_model, inflow_commit); re-run "
+                           f"{pin[0]} at {pin[1]} (inflow_model, inflow_pin); re-run "
                            "mod_forcing/inflows and the rim-inflow builder")
     if manifest.get("model_clean") is not True:
-        raise RuntimeError(f"{path}: the run was made with --allow-dirty (modified tracked files, "
-                           "or an environment that runs another checkout), so it is not the "
-                           "pinned commit's")
+        raise RuntimeError(f"{path}: the run was made with --allow-dirty (off the pin, modified "
+                           "files, or an environment that runs another folder), so it is not "
+                           "the pinned version's")
     identity = (get_module_generated_dir("mod_forcing/inflows") / "output" / "_1_build_forcing"
                 / INFLOW_FORCINGS[manifest["forcing"]] / "forcing_identity.csv")
     with open(identity, newline="") as fh:

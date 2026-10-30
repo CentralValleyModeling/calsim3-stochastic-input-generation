@@ -21,13 +21,13 @@ conda activate csstochastic
 ```
 root/
 ├── mod_forcing/              
-│   ├── vic/                  Append wind to WGEN, compile rim inflows from VIC fluxes
+│   ├── inflows/              Run the rim-inflow model (SAC-SMA or VIC) on WGEN, check its forcing
 │   └── climate/              Point precip, basin-avg climate (T, PPT, VPD)
 │
 ├── mod_hydrology/            
 │   ├── calsimhydro/          Sac Valley: compile precip/ET, postprocess Product A & B
 │   ├── calsimhydro_ee/       External Elements: compile precip, postprocess
-│   ├── rim_inflow/           Quantile-map VIC inflows, correlation analysis, NSE metrics
+│   ├── rim_inflow/           Rim-inflow SVs from the model's arcs, skill evaluation
 │   ├── water_year_types/     Sac 40-30-30, SJ 60-20-20 WYT classification
 │   ├── delta_channel_depletion/  DETAW/DCD Delta
 │   ├── small_watersheds/     SWS precipitation compilation and postprocessing
@@ -65,7 +65,7 @@ By default scripts expect data under `data/` at the repo root, split into `BASE/
 
 #### Acquiring the data
 
-`data_management.py` downloads the module-level zips published on Box (listed in `data_links.json`) and extracts them into your `data_dir`, mirroring the `BASE/` and `GENERATED/` structure:
+`data_management.py` downloads the module-level zips published on Box (listed in `data_links.json`) and extracts them into your `data_dir`, mirroring the `BASE/`, `GENERATED/` and `GENERATED_v1.0/` structure:
 
 ```bash
 python data_management.py acquire                       # all modules
@@ -89,10 +89,13 @@ data/                            (or wherever data_dir points)
 │   └── CalSim3/
 │       └── __calsim_sv_default__.dss   CalSim3 baseline study-variable DSS
 │
-└── GENERATED/                   Script outputs, mirroring module structure
-    ├── mod_forcing/
-    │   └── climate/             Climate extraction outputs
-    └── ...
+├── GENERATED/                   Script outputs, mirroring module structure
+│   ├── mod_forcing/
+│   │   └── climate/             Climate extraction outputs
+│   └── ...
+│
+└── GENERATED_v1.0/              The v1.0 outputs, read-only
+    └── mod_forcing/vic/         VIC_Support_4.2.d (the VIC model), VIC fluxes and routed series
 ```
 
 ### 4. Run the pipeline

@@ -1,18 +1,22 @@
 """
 Rim-Inflow Model Adapters
 =========================
-mod_forcing/inflows runs one rim-inflow model: any model kept in a git repository that turns
-the WGEN weather into monthly flows on the CalSim3 rim-inflow arcs. The config names the model
-(``inflow_model``), its checkout (``inflow_repo``), the commit the product is pinned to
-(``inflow_commit``) and the environment it runs in (``inflow_env``).
+mod_forcing/inflows runs one rim-inflow model: any model kept in a folder of its own (a git
+checkout, or a fixed set of files) that turns the WGEN weather into monthly flows on the CalSim3
+rim-inflow arcs. The config names the model (``inflow_model``), its folder (``inflow_repo``),
+the version the product is pinned to (``inflow_pin``) and the environment it runs in
+(``inflow_env``).
 
-The two drivers do what every model shares: the pin check on the checkout, gate G2 and its
+The two drivers do what every model shares: the pin check on the folder, gate G2 and its
 record, the run in a temporary folder, the dating of the flows (water years, and the Product B
 chunks of utils.wgen_calendar) and the run manifest. What is particular to a model sits in its
 adapter, the module of this package named after ``inflow_model``, which defines:
 
 LABEL
     The model's name in messages.
+version(repo) -> dict
+    The version of the model in ``repo``, the string ``inflow_pin`` names (a git commit, or a
+    digest of the model's files), and ``modified``, the files that differ from that version.
 FORCINGS
     Forcing key (``historical``, ``A``, ``B``) -> the model's name for its input of that forcing.
 BUILT
@@ -28,8 +32,7 @@ check_inputs(repo, forcing, files, read_base, n_cells) -> DataFrame
     Gate G2: compare the input files with BASE on ``n_cells`` cells, or on all of them if None.
     ``read_base(cell)`` returns one WGEN cell (y, m, d, prcp, tmax, tmin) and must pickle: the
     adapter may call it in worker processes. One row per input file and variable, with at least
-    ``input`` (the file), ``cells`` (cells checked), ``input_cells`` (cells in the file) and
-    ``pass``.
+    ``input`` (the file), ``cells`` (cells checked) and ``pass``.
 check_environment(repo, env) -> dict
     What ``env`` runs, for the manifest; ``ok`` is False unless it runs the model in ``repo``.
 run(repo, env, forcing, files, out_dir) -> list[list[str]]
@@ -55,6 +58,24 @@ CalSim3_inflow_mapping.csv, so a model must deliver those arcs.
 import importlib
 from pathlib import Path
 from types import ModuleType
+
+import numpy as np
+import pandas as pd
+
+
+def ymd(w: pd.DataFrame) -> np.ndarray:
+    """The days (yyyymmdd) of a WGEN cell's rows."""
+    return (w["y"].to_numpy(np.int64) * 10000 + w["m"].to_numpy(np.int64) * 100
+            + w["d"].to_numpy(np.int64))
+
+
+def x10_days(csv: Path, keys) -> dict[str, set]:
+    """Cell -> the days (yyyymmdd) of its x10 precipitation spikes in ``csv`` (key, date), for
+    the cells in ``keys``."""
+    t = pd.read_csv(csv, parse_dates=["date"])
+    t = t[t["key"].isin(set(keys))]
+    days = t["date"].dt.year * 10000 + t["date"].dt.month * 100 + t["date"].dt.day
+    return {k: set(g.tolist()) for k, g in days.groupby(t["key"])}
 
 
 def label(path: Path, repo: Path) -> str:

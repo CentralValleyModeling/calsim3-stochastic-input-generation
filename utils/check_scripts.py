@@ -59,8 +59,6 @@ PRODUCT_A_SCRIPTS = [
     "mod_reservoir/evaporation/_0_extract_reservoir_database.py",
     "mod_other/miscellaneous/_0_extract_others.py",
     "mod_other/upper_watershed/_0_load_sv.py",
-    "mod_forcing/vic/_1_append_wind_wgen_hist.py",
-    "mod_forcing/vic/_2_compile_rim_inflows.py",
     "mod_forcing/inflows/_1_build_forcing.py",
     "mod_forcing/inflows/_2_run_product.py",
     "mod_forcing/climate/_1_pp_point_locations.py",
@@ -127,7 +125,6 @@ PRODUCT_B_SCRIPTS = [
 # accepted as "known" by the manifest-drift cross-check (rule 5) so they
 # don't trip the on-disk-but-unlisted detector.
 EXEMPT_SCRIPTS = [
-    "mod_forcing/vic/_1_append_wind_wgen_stochastic.py",            # alt stochastic variant; pipeline uses _1_append_wind_wgen_hist
     "mod_hydrology/calsimhydro/_0_compare_et_cshydro_vic.py",       # diagnostic
     "mod_hydrology/rim_inflow/_0_stochastic_inflow_explore.py",     # exploration
     "mod_hydrology/rim_inflow/_0_stochastic_precipitation.py",      # exploration

@@ -12,11 +12,6 @@
 
     "_GENERATED_forcing": "---- GENERATED: mod_forcing ----",
     "GENERATED/mod_forcing/climate": "https://cadwr.box.com/s/f4x373r92taqrzsrd8ejkcpwuxh1gqay",
-    "GENERATED/mod_forcing/vic/input/Product_A": "https://cadwr.box.com/s/6ygv26qn0cqw95dp75b7h73x6nhuwndr",
-    "GENERATED/mod_forcing/vic/input/Product_B": "https://cadwr.box.com/s/vj8u9xmcc7vxkgf2jing8fwvkqtli56s",
-    "GENERATED/mod_forcing/vic/output/fluxes": "https://cadwr.box.com/s/wzcj4j85kep7phcddvlw90xd8hr2b5tx",
-    "GENERATED/mod_forcing/vic/output/routed": "https://cadwr.box.com/s/1dymur24n149dfpfag5i2s2f1gr3tukk",
-    "GENERATED/mod_forcing/vic/VIC_Support_4.2.d": "https://cadwr.box.com/s/jaiecqc4s9jl6s1he1iumaqqfza2dksd",
 
     "_GENERATED_hydrology": "---- GENERATED: mod_hydrology ----",
     "GENERATED/mod_hydrology/calsimhydro": "https://cadwr.box.com/s/j55b5qhw4tqsjnn7hyem9ivpw7fn30k2",
@@ -40,5 +35,12 @@
 
     "_GENERATED_postprocessing": "---- GENERATED: postprocessing ----",
     "GENERATED/postprocessing/sv_compile": "https://cadwr.box.com/s/zvle7kga717iulglb0sexve2xgc1hbsj",
-    "GENERATED/postprocessing/calsim_runs": "https://cadwr.box.com/s/wad3zvrbm9ay1jlqei5q52pcau5wrdli"
+    "GENERATED/postprocessing/calsim_runs": "https://cadwr.box.com/s/wad3zvrbm9ay1jlqei5q52pcau5wrdli",
+
+    "_GENERATED_v1.0": "---- GENERATED_v1.0: the v1.0 outputs, read-only ----",
+    "GENERATED_v1.0/mod_forcing/vic/input/Product_A": "https://cadwr.box.com/s/6ygv26qn0cqw95dp75b7h73x6nhuwndr",
+    "GENERATED_v1.0/mod_forcing/vic/input/Product_B": "https://cadwr.box.com/s/vj8u9xmcc7vxkgf2jing8fwvkqtli56s",
+    "GENERATED_v1.0/mod_forcing/vic/output/fluxes": "https://cadwr.box.com/s/wzcj4j85kep7phcddvlw90xd8hr2b5tx",
+    "GENERATED_v1.0/mod_forcing/vic/output/routed": "https://cadwr.box.com/s/1dymur24n149dfpfag5i2s2f1gr3tukk",
+    "GENERATED_v1.0/mod_forcing/vic/VIC_Support_4.2.d": "https://cadwr.box.com/s/jaiecqc4s9jl6s1he1iumaqqfza2dksd"
 }

@@ -1,8 +1,9 @@
 # Product A Validation - Execution Runbook
 
-> **Scope:** the Product A pipeline -- 1921-2018 historical-length split-sample
-> quantile-mapping **validation** (train 1921-1971, simulate/validate
-> 1972-2018). One continuous monthly time series per study variable (SV).
+> **Scope:** the Product A pipeline -- 1921-2018 historical-length scenarios,
+> compared with CalSim 3 over WY 1972-2018; the quantile maps are fitted on
+> WY 1950-2018 (`utils/qmap_fit.py`). One continuous monthly time series per
+> study variable (SV).
 >
 > **Standalone document** at the repo root. Not part of the Sphinx build.
 >
@@ -36,10 +37,14 @@
 
 ```
 Tier 1  FORCING (mod_forcing)
-    VIC:
-        python mod_forcing/vic/_1_append_wind_wgen_hist.py
-        -> [EXTERNAL] VIC hydrologic model run
-        python mod_forcing/vic/_2_compile_rim_inflows.py --product A
+    Rim-inflow model (config inflow_*; SAC-SMA, or VIC under WSL):
+        python mod_forcing/inflows/_1_build_forcing.py --forcing A --cells all
+        python mod_forcing/inflows/_2_run_product.py --forcing A
+    Historical run of the same model, which the absorb fits of the second stage read
+    (once per pin, shared with Product B):
+        python mod_forcing/inflows/_1_build_forcing.py --forcing historical --cells all
+        python mod_forcing/inflows/_2_run_product.py --forcing historical
+        python mod_hydrology/rim_inflow/_1_build_rim_inflow.py --product historical
     Climate:
         python mod_forcing/climate/_1_pp_point_locations.py --source Product_A --scenario 1
         python mod_forcing/climate/_2_uhh_basin_averages.py --source Product_A --scenario 1
@@ -55,7 +60,7 @@ Tier 2  CORE HYDROLOGY (mod_hydrology)
         -> [EXTERNAL] CalSimHydroEE model run
         python mod_hydrology/calsimhydro_ee/_2_postprocess_product_a.py
     Rim Inflow:
-        python mod_hydrology/rim_inflow/_2_qmap_historical_validation.py
+        python mod_hydrology/rim_inflow/_1_build_rim_inflow.py --product A
     Small Watersheds:
         python mod_hydrology/small_watersheds/_1_compile_precip_sws.py --product A
         -> [EXTERNAL] Small Watersheds model run
@@ -139,9 +144,9 @@ run-to-run on identical inputs.
 
 | Script | Command | Inputs | Outputs |
 |---|---|---|---|
-| vic/_1 | `python mod_forcing/vic/_1_append_wind_wgen_hist.py` | WGEN `Product_A` met files; historical wind | wind-appended VIC forcing |
-| [EXTERNAL] VIC | manual VIC model run | wind-appended forcing | VIC flux files (RUNOFF + BASEFLOW) |
-| vic/_2 | `python mod_forcing/vic/_2_compile_rim_inflows.py --product A` | VIC fluxes; grid weights (incl. composite `CS3_8RI_SRBB_GridInfo.txt`) | routed monthly rim inflows `CS3_*_qmo.csv` (+ DSS), incl. Bend Bridge `CS3_8RI_SRBB_qmo.csv` (Shasta + above-SAC257 tributaries) |
+| inflows/_1 | `python mod_forcing/inflows/_1_build_forcing.py --forcing A --cells all` | WGEN `Product_A` met files (VIC: and the LTO wind) | the model's input where its folder does not hold it (VIC: a forcing file per cell) and its G2 check against BASE |
+| inflows/_2 historical | `python mod_forcing/inflows/_1_build_forcing.py --forcing historical --cells all`, `python mod_forcing/inflows/_2_run_product.py --forcing historical`, then `python mod_hydrology/rim_inflow/_1_build_rim_inflow.py --product historical` | the model at the pin; its historical input | the historical rim inflows the absorb fits of the second stage read (`utils/qmap_fit.py`); they refuse a run from another pin. Once per pin, shared with Product B |
+| inflows/_2 | `python mod_forcing/inflows/_2_run_product.py --forcing A` | the model at the pin; the inputs above | `arc_inflow_monthly.csv` (date, WY, month, arc, taf, kind) and `run_manifest.json` (with G1: the run repeats what the model tracks) |
 | climate/_1 | `python mod_forcing/climate/_1_pp_point_locations.py --source Product_A --scenario 1` | WGEN met files; PP point reference | per-location monthly precip CSVs |
 | climate/_2 | `python mod_forcing/climate/_2_uhh_basin_averages.py --source Product_A --scenario 1` | WGEN met files; CS3 baseline DSS (UHH precip); grid weights | basin-average precip/Tmax/Tmin/VPD + `_product_a_validation/` SV CSVs |
 
@@ -179,9 +184,9 @@ Each external-run model is a contiguous block: compile inputs ->
 
 ### Rim Inflow (227 vars)
 
-1. `python mod_hydrology/rim_inflow/_2_qmap_historical_validation.py`
-   - **Inputs:** VIC routed inflows (vic/_2); CS3 baseline DSS; `CalSim3_VIC_name_mapping.csv`; `RimInflowAnchor.xlsx`
-   - **Outputs:** `_riminflow_productA_1972_2018.csv` (+ TS/summary, figures)
+1. `python mod_hydrology/rim_inflow/_1_build_rim_inflow.py --product A`
+   - **Inputs:** the arc flows of inflows/_2 (only from a run at the pin); `CalSim3_inflow_mapping.csv`; CS3 baseline DSS (pass-through QM fits of the aliases)
+   - **Outputs:** `_riminflow_productA_1972_2018.csv` and `calsim_qmap_validation_TS.csv`
 
 ### Small Watersheds (210 vars)
 

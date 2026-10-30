@@ -68,13 +68,6 @@ BASE_LOOSE_FILES = [
 ]
 LOOSE_FILES_KEY = "BASE/_loose_files"  # data_links.json key + Box zip stem
 
-# Per-path depth overrides for GENERATED auto-discovery (relative to GENERATED
-# root, forward slashes).  Paths not listed here use the --depth default (2).
-GENERATED_DEPTH_OVERRIDES = {
-    "mod_forcing/vic": 4,
-    "mod_forcing/vic/VIC_Support_4.2.d": 3,  # keep as single zip
-}
-
 IGNORE_DIR_NAMES = {"__pycache__", ".ipynb_checkpoints"}
 IGNORE_FILE_NAMES = {"Thumbs.db", ".DS_Store"}
 IGNORE_SUFFIXES = {".pyc"}
@@ -109,26 +102,10 @@ def should_skip_file(rel_path: Path) -> bool:
     return False
 
 
-def discover_targets(
-    root: Path,
-    default_depth: int = 2,
-    depth_overrides: dict | None = None,
-) -> list:
-    """
-    Discover directories to zip under root.
+def discover_targets(root: Path, max_depth: int = 2) -> list:
+    """Discover directories to zip under root, recursing up to max_depth levels."""
 
-    Recurses up to default_depth levels.  When traversal reaches a directory
-    whose path (relative to root, forward slashes) appears in depth_overrides,
-    that subtree switches to the override depth instead.
-    """
-    if depth_overrides is None:
-        depth_overrides = {}
-
-    def _recurse(directory: Path, depth: int, max_depth: int) -> list:
-        rel_str = directory.relative_to(root).as_posix()
-        if rel_str in depth_overrides:
-            max_depth = depth_overrides[rel_str]
-
+    def _recurse(directory: Path, depth: int) -> list:
         subdirs = [
             d for d in sorted(directory.iterdir())
             if d.is_dir() and not is_ignored_dir(d.name)
@@ -139,7 +116,7 @@ def discover_targets(
 
         result = []
         for d in subdirs:
-            result.extend(_recurse(d, depth + 1, max_depth))
+            result.extend(_recurse(d, depth + 1))
         return result
 
     if not root.exists():
@@ -149,7 +126,7 @@ def discover_targets(
     for d1 in sorted(root.iterdir()):
         if not d1.is_dir() or is_ignored_dir(d1.name):
             continue
-        result.extend(_recurse(d1, 1, default_depth))
+        result.extend(_recurse(d1, 1))
     return result
 
 
@@ -413,7 +390,6 @@ def sync_section(
     label: str,
     explicit_targets: list | None = None,
     max_depth: int = 2,
-    depth_overrides: dict | None = None,
     cache_root: Path | None = None,
     compresslevel: int = DEFAULT_COMPRESSLEVEL,
     workers: int | None = None,
@@ -436,7 +412,7 @@ def sync_section(
             else:
                 print(f"  [{label}] WARNING: configured target not found: {t}")
     else:
-        source_dirs = discover_targets(source_root, max_depth, depth_overrides)
+        source_dirs = discover_targets(source_root, max_depth)
 
     if not source_dirs:
         print(f"  [{label}] No targets found under {source_root}")
@@ -626,7 +602,7 @@ def load_links(
             continue
         if base_only and not key.startswith("BASE/"):
             continue
-        if generated_only and not key.startswith("GENERATED/"):
+        if generated_only and not key.startswith("GENERATED"):    # GENERATED/ and GENERATED_v1.0/
             continue
         if keys_filter and key not in keys_filter:
             continue
@@ -802,7 +778,6 @@ def cmd_sync(args) -> None:
             args.box_dir / "GENERATED",
             label="GENERATED",
             max_depth=args.depth,
-            depth_overrides=GENERATED_DEPTH_OVERRIDES,
             cache_root=CACHE_ROOT / "GENERATED",
             compresslevel=args.compresslevel,
             workers=args.workers,
@@ -904,7 +879,7 @@ def main() -> None:
     p_acq.add_argument("--base-only", action="store_true",
                        help="Only download BASE/ entries")
     p_acq.add_argument("--generated-only", action="store_true",
-                       help="Only download GENERATED/ entries")
+                       help="Only download GENERATED/ and GENERATED_v1.0/ entries")
     p_acq.add_argument(
         "--token", default=None,
         help=(
