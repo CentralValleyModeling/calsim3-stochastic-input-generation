@@ -37,7 +37,8 @@ BASE/WGEN/Product_B/1, and run() then:
 
 1. runs the segments' passes in order (``product apply --forcing <store> --start --end``):
    segment 1 from SAC-SMA's cycle spin-up, each later one from the model state the one before
-   kept on its last day (``--save-state``, ``--init-state``), so the 10 passes give the flow of
+   kept on its last day (``--save-state``, ``--init-state``; some SAC-SMA stores keep their
+   initial state for decades, ``sacsma/dpl/spinup.py``), so the 10 passes give the flow of
    one unbroken run of the record (``sacsma verify learned`` checks this split, bit for bit);
 2. checks gate G6: each pass ran the span of its segment, the spans follow each other day by
    day, and each later pass started from the state file the one before wrote (by sha256,
@@ -49,10 +50,6 @@ BASE/WGEN/Product_B/1, and run() then:
    --centre-wy all``), centred on the whole record, the stationary climate's counterpart of
    the fit years WY1950-2015.
 
-A 30-year lead-in in place of the hand-off left two segments 18.7% apart on I_MFS047's annual
-volume 27 years into their overlap: some SAC-SMA stores keep their initial state for decades
-(``sacsma/dpl/spinup.py``).
-
 Output. ``rim_inflow_monthly.csv`` (arc, month, taf, dpl_taf, kind) holds the 196 arcs:
 ``taf`` is the product flow, ``kind`` share, single-arc system or non-anchor.
 ``tier2/tier2_monthly.csv`` holds the Sacramento valley node I_SRBB_VAL (UNIMP_SRBB is the sum
@@ -60,7 +57,6 @@ of its 8 arcs and this node), and ``tier2/tier2_run_info.json`` names the checkp
 extension cells the run used.
 """
 
-import hashlib
 import json
 import os
 import shutil
@@ -73,6 +69,8 @@ import netCDF4
 import numpy as np
 import pandas as pd
 
+from mod_forcing.inflows.adapters import x10_days, ymd
+from utils.paths import sha256_file
 from utils.wgen_calendar import CHUNK_MONTHS, N_CHUNKS, chunk_months, chunk_span, stamp_day_index
 
 LABEL = "SAC-SMA"
@@ -104,6 +102,15 @@ def conda() -> str:
     if not path:
         raise SystemExit("conda not found (CONDA_EXE unset and conda not on PATH)")
     return path
+
+
+def version(repo: Path) -> dict:
+    """The checkout's HEAD commit and its modified tracked files."""
+    def git(*args: str) -> str:
+        return subprocess.run(["git", "-C", str(repo), *args], capture_output=True, text=True,
+                              check=True).stdout.strip()
+    return {"version": git("rev-parse", "HEAD"),
+            "modified": git("status", "--porcelain", "--untracked-files=no").splitlines()}
 
 
 def _plain(path: Path) -> Path:
@@ -153,11 +160,6 @@ def _read_batches(read_base, keys):
             yield from zip(batch, pool.map(read_base, batch))
 
 
-def _ymd(w: pd.DataFrame) -> np.ndarray:
-    return (w["y"].to_numpy(np.int64) * 10000 + w["m"].to_numpy(np.int64) * 100
-            + w["d"].to_numpy(np.int64))
-
-
 def _ymd_of(day: tuple) -> int:
     return day[0] * 10000 + day[1] * 100 + day[2]
 
@@ -179,16 +181,16 @@ def build_inputs(repo: Path, forcing: str, read_base, build_dir: Path, source: s
     stores, rows, stamp = [], [], None
     try:
         for i, (k, w) in enumerate(_read_batches(read_base, keys)):
-            ymd = _ymd(w)
+            days = ymd(w)
             if stamp is None:
-                stamp = ymd
+                stamp = days
                 for s, f in zip(segs, files):
-                    r = np.flatnonzero((ymd >= _ymd_of(s["start"])) & (ymd <= _ymd_of(s["end"])))
+                    r = np.flatnonzero((days >= _ymd_of(s["start"])) & (days <= _ymd_of(s["end"])))
                     if not len(r) or not (np.diff(r) == 1).all():
                         raise SystemExit(f"cell {k}: segment {s['segment']} has no contiguous days")
                     rows.append(r)
                     stores.append(_create_store(f, keys, w.iloc[r], s, source))
-            elif not np.array_equal(ymd, stamp):
+            elif not np.array_equal(days, stamp):
                 raise SystemExit(f"cell {k}: its days differ from those of cell {keys[0]}")
             tmin, tmax = _sorted_pair(w)
             vals = {"prcp": w["prcp"].to_numpy(np.float32), "tmin": tmin.astype(np.float32),
@@ -275,26 +277,20 @@ def check_inputs(repo: Path, forcing: str, files: list[Path], read_base,
         print(f"{len(keys)} cells in {len(files)} store(s), {sum(map(len, days))} days; "
               f"checking {len(idx)} cells")
 
-        x10 = {}    # cell -> stamp days (yyyymmdd) of its x10 spikes
-        if forcing == "historical":
-            t = pd.read_csv(repo / X10_CSV, parse_dates=["date"])
-            for k, g in t.groupby("key"):
-                x10[k] = set((g["date"].dt.year * 10000 + g["date"].dt.month * 100
-                              + g["date"].dt.day).tolist())
-
-        rows = {(f, v): dict(variable=v, cells=0, days=0, max_abs_diff=0.0, outside_tol=0,
+        x10 = x10_days(repo / X10_CSV, keys) if forcing == "historical" else {}
+        rows ={(f, v): dict(variable=v, cells=0, days=0, max_abs_diff=0.0, outside_tol=0,
                              x10_pairs=0) for f in files for v in VARIABLES}
         for n, (k, w) in enumerate(_read_batches(read_base, keys[idx]), 1):
             i = idx[n - 1]
-            ymd = _ymd(w)
+            base_days = ymd(w)
             lo, hi = _sorted_pair(w)
             text = {"prcp": w["prcp"].to_numpy(float), "tmin": lo, "tmax": hi}
             for f, ds, d in zip(files, stores, days):
-                pos = np.searchsorted(ymd, d)
-                if (pos >= len(ymd)).any() or not np.array_equal(ymd[pos], d):
+                pos = np.searchsorted(base_days, d)
+                if (pos >= len(base_days)).any() or not np.array_equal(base_days[pos], d):
                     raise SystemExit(f"cell {k}: the days of {f.name} are not all in BASE")
-                if forcing not in BUILT and len(d) != len(ymd):
-                    raise SystemExit(f"cell {k}: {len(ymd)} days in BASE, {len(d)} in {f.name}")
+                if forcing not in BUILT and len(d) != len(base_days):
+                    raise SystemExit(f"cell {k}: {len(base_days)} days in BASE, {len(d)} in {f.name}")
                 for v, ref in text.items():
                     got = np.asarray(ds[v][i, :], dtype=float)
                     exp = ref[pos].copy()
@@ -316,10 +312,8 @@ def check_inputs(repo: Path, forcing: str, files: list[Path], read_base,
 
     out = pd.DataFrame([{**r, "input": f} for (f, _), r in rows.items()])
     out["pass"] = out["outside_tol"] == 0
-    out["input_cells"] = len(keys)
-    cols = ["variable", "cells", "days", "max_abs_diff", "outside_tol", "x10_pairs", "pass",
-            "input_cells", "input"]
-    return out[cols]
+    return out[["variable", "cells", "days", "max_abs_diff", "outside_tol", "x10_pairs", "pass",
+                "input"]]
 
 
 def check_environment(repo: Path, env: str) -> dict:
@@ -371,10 +365,6 @@ def _stamp_months(t: pd.DataFrame, offset: int) -> tuple[np.ndarray, np.ndarray]
     return ym[0].to_numpy() - offset, ym[1].to_numpy()
 
 
-def _sha256(path: Path) -> str:
-    return hashlib.sha256(path.read_bytes()).hexdigest()
-
-
 def handoff(out_dir: Path) -> dict:
     """Gate G6 (module docstring): per segment its span, the span its pass ran, how it started
     and the sha256 of the state it kept, in ``g6_handoff.json``."""
@@ -385,7 +375,7 @@ def handoff(out_dir: Path) -> dict:
         row = {"segment": s["segment"], "start": s["start"], "end": s["end"],
                "envelope": info.get("envelope"), "spinup": info.get("spinup"),
                "init_state_sha256": info.get("init_state_sha256"),
-               "state_sha256": _sha256(seg_dir / STATE_FILE)}
+               "state_sha256": sha256_file(seg_dir / STATE_FILE)}
         ran = row["envelope"] == [_gregorian(s["start"], s["offset"]),
                                   _gregorian(s["end"], s["offset"])]
         first = stamp_day_index(*s["start"])

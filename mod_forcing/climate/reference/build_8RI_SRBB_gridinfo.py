@@ -2,10 +2,11 @@
 Build the CS3_8RI_SRBB Composite GridInfo (rim + valley floor)
 ==============================================================
 One-off generator for ``GridInfo/CS3_8RI_SRBB_GridInfo.txt``, the grid-weight
-file that lets ``mod_forcing/vic/_2_compile_rim_inflows.py`` route the Sacramento
-River at Bend Bridge (CalSim node SAC257, anchor for UNIMP_SRBB) directly -- the
-same way any other rim point is routed -- instead of summing pre-routed component
-series afterward.
+file of the Sacramento River at Bend Bridge (CalSim node SAC257, anchor for
+UNIMP_SRBB), which v1.0 routed directly as one basin, and of
+``GridInfo/CS3_I_SRBB_VAL_GridInfo.txt``, the valley floor alone: the VIC
+adapter (mod_forcing/inflows/adapters/vic.py) routes it as the valley node
+I_SRBB_VAL, and UNIMP_SRBB is the 8 rim arcs plus that node.
 
 The Shasta-only routing (CS3_I_SHSTA) stops at the dam and under-represents Bend
 Bridge by roughly 30 percent. Bend Bridge drains Shasta inflow plus everything
@@ -38,8 +39,7 @@ same units as every committed GridInfo file (a 1/16-degree cell at 42.4N is
 SQ_MI to within 0.1 sq mi, so both halves are rasterized consistently.
 
 The GridInfo ``id`` is a legacy GIS raster index the runtime is indifferent to --
-``_2_compile_rim_inflows.py`` matches cells to VIC flux files by lat/lon, never by
-id. Valley cells that already appear in a committed GridInfo keep their canonical
+the VIC routing matches cells to VIC flux files by lat/lon, never by id. Valley cells that already appear in a committed GridInfo keep their canonical
 id and f1; valley-only cells (outside every existing rim delineation) get a
 computed f1 and a synthetic id in a reserved block (>= VALLEY_ID_BASE),
 collision-free and informational only.
@@ -50,8 +50,7 @@ area normalization in compile_rim_inflows.compute_runoff, and is the physically
 consistent result since every cell is now weighted once against the whole basin.
 
 This is a build-time artifact generator, not part of the runtime pipeline. Run
-it only if the component delineations change; the committed
-CS3_8RI_SRBB_GridInfo.txt is what the pipeline actually consumes.
+it only if the component delineations change.
 
 Usage
 -----
@@ -75,6 +74,7 @@ GI = os.path.join(HERE, "GridInfo")
 REPO_ROOT = os.path.abspath(os.path.join(HERE, os.pardir, os.pardir, os.pardir))
 GPKG_LAYER = "CalSim3_And_GooseLake"
 OUTPUT_NAME = "CS3_8RI_SRBB_GridInfo.txt"
+VALLEY_NAME = "CS3_I_SRBB_VAL_GridInfo.txt"
 
 # Bend Bridge (SAC257) rim components: Shasta inflow + above-SAC257 tributaries.
 COMPONENTS = [
@@ -112,12 +112,12 @@ def default_gpkg():
 
 def _load_known():
     """Canonical (lat, lon) -> id and -> most-precise f1 string, gathered from
-    every committed component GridInfo (the composite CS3_8RI_SRBB file is skipped
-    so stale output never feeds back in). Lets valley cells that coincide with an
+    every committed component GridInfo (this script's two outputs are skipped so
+    stale output never feeds back in). Lets valley cells that coincide with an
     existing rim cell reuse its canonical id/f1."""
     known_id, known_f1 = {}, {}
     for path in glob.glob(os.path.join(GI, "CS3_*_GridInfo.txt")):
-        if os.path.basename(path) == OUTPUT_NAME:
+        if os.path.basename(path) in (OUTPUT_NAME, VALLEY_NAME):
             continue
         with open(path) as fh:
             for line in fh:
@@ -248,6 +248,13 @@ def build(gpkg_path=None):
     print(f"Wrote {out} ({len(cells)} unique cells from {len(COMPONENTS)} rim "
           f"components + valley floor [{n_valley} cells, {n_valley_new} valley-only, "
           f"{valley_total / KM2_PER_SQMI:.1f} sq mi])")
+
+    # --- 4. Write the valley floor alone (the valley node I_SRBB_VAL). ---
+    out = os.path.join(GI, VALLEY_NAME)
+    with open(out, "w", newline="") as fh:
+        for r in valley_rows:
+            fh.write(f"{r['id']}\t{r['lat']:.5f}\t{r['lon']:.5f}\t{r['f1']}\t{r['f2']!r}\n")
+    print(f"Wrote {out} ({n_valley} cells, {valley_total / KM2_PER_SQMI:.1f} sq mi)")
 
 
 def main():

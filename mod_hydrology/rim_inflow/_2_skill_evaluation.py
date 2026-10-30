@@ -27,7 +27,7 @@ historical weather used them as they were. The script reads that run redone with
 divided by 10 (routed/Historical_Unsplit_x10fix in the v1.0 archive, made by
 mod_forcing/vic/x10fix/vic_x10fix.py there), so every month is scored.
 
-For the qmap SVs (aliases and gap arcs) no window is out of sample, since their maps are fitted
+For the quantile-mapped SVs (aliases and gap arcs) no window is out of sample, since their maps are fitted
 on CalSim3 over WY1950-2018, and VIC's series is the arc v1.0 matched to them.
 
 Inputs
@@ -61,8 +61,8 @@ import numpy as np
 import pandas as pd
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
-from utils import dss_io
-from utils.paths import (get_archive_dir, get_arc_inflows, get_base_dir, get_inventory_dir,
+from mod_hydrology.rim_inflow._1_build_rim_inflow import read_calsim3, read_inventory_part_c
+from utils.paths import (get_archive_dir, get_arc_inflows, get_inflow_model,
                          get_module_generated_dir, get_rim_inflow_outputs)
 from utils.validation_plots import nse, pbias, r2
 
@@ -73,8 +73,6 @@ INFLOW_MAP = _SCRIPT_DIR / "reference" / "CalSim3_inflow_mapping.csv"
 VIC_MAP = _SCRIPT_DIR / "reference" / "CalSim3_VIC_name_mapping.csv"
 VIC_ROUTED = get_archive_dir() / "mod_forcing" / "vic" / "output" / "routed"
 VIC_HIST = "Historical_Unsplit_x10fix"     # v1.0's historical run, x10 precipitation corrected
-DSS_FILE = get_base_dir() / "CalSim3" / "__calsim_sv_default__.dss"
-INVENTORY_XLSX = get_inventory_dir() / "_MASTER_INVENTORY_FOR_STOCHASTIC_INPUT_GENERATION_.xlsx"
 
 
 def wys(a: int, b: int) -> set:
@@ -142,16 +140,6 @@ def read_vic(sub: str, vic_names) -> pd.DataFrame:
     return pd.DataFrame(out)
 
 
-def read_calsim3(names) -> pd.DataFrame:
-    inv = pd.read_excel(INVENTORY_XLSX, sheet_name="MASTER")
-    b, c = inv.columns[2], inv.columns[3]
-    part_c = {str(x).strip().upper(): str(y).strip().upper() for x, y in zip(inv[b], inv[c])}
-    keys = {(n, part_c[n]) for n in names if n in part_c}
-    with dss_io.open_dss(str(DSS_FILE), version=6, catalog_flag=True) as dss:
-        got = dss_io.read_monthly_series(dss, keys, "1921-10-31", "2018-09-30")
-    return pd.DataFrame({k[0]: s for k, s in got.items()})
-
-
 def skill_rows(name, method, obs, sac, vic):
     rows = []
     wy = water_years(obs.index)
@@ -184,6 +172,9 @@ def response(hist: pd.Series, prod: pd.Series) -> list:
 
 
 def main():
+    if get_inflow_model() != "sacsma":
+        raise SystemExit("the skill evaluation scores SAC-SMA against v1.0's raw VIC; run it on "
+                         f"the SAC-SMA chain, not {get_inflow_model()}")
     OUT_DIR.mkdir(parents=True, exist_ok=True)
     mapping = pd.read_csv(INFLOW_MAP, keep_default_na=False).set_index("CS3_Inflow")
     vic_map = pd.read_csv(VIC_MAP).dropna().set_index("CS3_Inflow")["VIC_Inflow"]
@@ -192,7 +183,8 @@ def main():
     ts["date"] = pd.to_datetime(dict(year=ts["Year"], month=ts["Month"], day=1)) + pd.offsets.MonthEnd(0)
     sac = ts.pivot(index="date", columns="CalSim", values="qmap_postAdj")
     names = list(sac.columns)
-    cs3 = read_calsim3(names)
+    part_c = read_inventory_part_c()
+    cs3 = pd.DataFrame(read_calsim3({n for n in names if n in part_c}, part_c))
     vic_h = read_vic(VIC_HIST, vic_map.reindex(names).dropna())
     print(f"{len(names)} SVs; CalSim3 {cs3.shape[1]}; VIC raw {vic_h.shape[1]} series ({VIC_HIST})")
 

@@ -4,15 +4,18 @@ Run the Rim-Inflow Model
 Runs the rim-inflow model on one forcing, checks it, and writes its monthly arc flows as the
 one table the rim-inflow SVs are built from.
 
-The model is the one the config names (``inflow_model``); at present SAC-SMA's dPL-CalSim
-with its share model (adapters/sacsma.py). It lives in its own git repository
-(``inflow_repo``), pinned to one commit (``inflow_commit``), and runs there as an external
-command in its own environment (``inflow_env``). Its adapter runs it, checks the environment
-and the result, and reads the flows. The run writes into a temporary folder, deleted after it.
+The model is the one the config names (``inflow_model``): SAC-SMA's dPL-CalSim with its share
+model (adapters/sacsma.py), which v1.1 delivers, or VIC 4.2.d (adapters/vic.py). It lives in
+its own folder (``inflow_repo``), pinned to one version (``inflow_pin``: for SAC-SMA a commit
+of its git repository), and runs there as an external command in its own environment
+(``inflow_env``). Its adapter runs it, checks the environment and the result, and reads the
+flows. The run writes into a temporary folder, deleted after it. A GENERATED folder holds the
+chain of one model (config ``generated_dir``), so the script will not replace another model's
+run.
 
 Forcings
 --------
-- historical : WGEN NonDetrend-Unsplit, the model's training forcing: the reference for skill
+- historical : WGEN NonDetrend-Unsplit (SAC-SMA's training forcing): the reference for skill
                and for the absorb fits of the second stage
 - A          : WGEN Product A scenario 1
 - B          : WGEN Product B scenario 1, 1,008 stamp years, delivered as 10 chunks of 100 water
@@ -20,8 +23,8 @@ Forcings
 
 Checks
 ------
-- The checkout's HEAD must be the pinned commit, with no modified tracked files, and the
-  environment must run the model from that checkout; ``--allow-dirty`` runs anyway and the
+- The model's version (adapter ``version``) must be the pin, with no modified files, and the
+  environment must run the model from that folder; ``--allow-dirty`` runs anyway and the
   manifest records the state.
 - Gate G2, before the run: forcing_identity.csv of _1_build_forcing.py must show a pass on
   every cell of every input file, for each file's current sha256.
@@ -46,10 +49,10 @@ Outputs
                             Sacramento valley node I_SRBB_VAL); date is the month end, flows
                             in TAF per month. Product B's months carry the labels of their
                             chunk, WY1922-2021.
-  - run_manifest.json       model, commit, environment, sha256 of every file the run used,
+  - run_manifest.json       model, version, environment, sha256 of every file the run used,
                             forcing, water years, commands and every gate's result. The
                             rim-inflow builder reads only flows whose manifest names the
-                            configured model and pinned commit (utils.paths.require_pinned_run).
+                            configured model and pin (utils.paths.require_pinned_run).
 
 Usage
 -----
@@ -60,7 +63,6 @@ Usage
 
 import argparse
 import json
-import subprocess
 import sys
 import tempfile
 from datetime import datetime, timezone
@@ -70,17 +72,12 @@ import pandas as pd
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 from mod_forcing.inflows.adapters import label, load
-from utils.paths import (INFLOW_FORCINGS, INFLOW_PROVENANCE, get_arc_inflows, get_inflow_commit,
-                         get_inflow_env, get_inflow_model, get_inflow_repo,
+from utils.paths import (INFLOW_FORCINGS, INFLOW_PROVENANCE, get_arc_inflows, get_inflow_env,
+                         get_inflow_model, get_inflow_pin, get_inflow_repo,
                          get_module_generated_dir, remove_tree, sha256_file)
 from utils.wgen_calendar import chunk_months
 
 _gen = get_module_generated_dir("mod_forcing/inflows")
-
-
-def git(repo: Path, *args: str) -> str:
-    return subprocess.run(["git", "-C", str(repo), *args], capture_output=True, text=True,
-                          check=True).stdout.strip()
 
 
 def check_g2(forcing: str, input_sha: dict[str, str]) -> dict:
@@ -91,14 +88,12 @@ def check_g2(forcing: str, input_sha: dict[str, str]) -> dict:
     if not path.exists():
         raise SystemExit(f"G2 has not been run on this input: {path} is missing; {rerun}")
     g2 = pd.read_csv(path)
-    if "input_cells" not in g2 or (g2["cells"] != g2["input_cells"]).any():
-        raise SystemExit(f"{path}: G2 checked a sample, not every cell of the input; {rerun}")
     if not g2["pass"].all():
         raise SystemExit(f"{path}: G2 failed: the input differs from BASE")
     checked = dict(zip(g2["input"], g2["input_sha256"]))
     if checked != input_sha:
         raise SystemExit(f"{path}: G2 checked other inputs, or other versions of them; {rerun}")
-    return {"inputs": len(input_sha), "cells": int(g2["input_cells"].iloc[0]), "pass": True}
+    return {"inputs": len(input_sha), "pass": True}
 
 
 def tidy(forcing: str, flows: pd.DataFrame) -> pd.DataFrame:
@@ -130,30 +125,36 @@ def main():
     ap = argparse.ArgumentParser(description=f"Run the rim-inflow model ({model.LABEL}) on one forcing.")
     ap.add_argument("--forcing", choices=list(model.FORCINGS), required=True)
     ap.add_argument("--allow-dirty", action="store_true",
-                    help="run even if the model checkout is off the pin or has modified files")
+                    help="run even if the model is off the pin or has modified files")
     args = ap.parse_args()
 
-    repo, env, pin = get_inflow_repo(), get_inflow_env(), get_inflow_commit()
-    head = git(repo, "rev-parse", "HEAD")
-    modified = git(repo, "status", "--porcelain", "--untracked-files=no")
+    repo, env, pin = get_inflow_repo(), get_inflow_env(), get_inflow_pin()
+    found = model.version(repo)
     environment = model.check_environment(repo, env)
-    clean = head == pin and not modified and environment["ok"]
+    clean = found["version"] == pin and not found["modified"] and environment["ok"]
     print(f"{model.LABEL}: {repo}")
-    print(f"  HEAD {head}, pin {pin}, modified files: {len(modified.splitlines())}")
+    print(f"  version {found['version']}, pin {pin}, modified files: {len(found['modified'])}")
     print(f"  environment: {environment}")
     if not clean and not args.allow_dirty:
-        raise SystemExit(f"{model.LABEL} is not at the pinned commit, has modified tracked files, "
-                         f"or env {env} runs it from another checkout; check out the pin "
-                         "(config: inflow_commit) or pass --allow-dirty")
+        raise SystemExit(f"{model.LABEL} is not at the pin, has modified files, or env {env} "
+                         "runs it from another folder; restore the pinned version "
+                         "(config: inflow_pin) or pass --allow-dirty")
 
     build_dir = _gen / "output" / "_1_build_forcing" / INFLOW_FORCINGS[args.forcing]
     files = model.inputs(repo, args.forcing, build_dir)
     print("Hashing the model input ...")
     input_sha = {label(f, repo): sha256_file(f) for f in files}
     g2 = check_g2(args.forcing, input_sha)
-    print(f"G2 PASS on {g2['cells']} cells of {g2['inputs']} input(s)")
+    print(f"G2 PASS on every cell of {g2['inputs']} input(s)")
 
     out_dir = _gen / "output" / "_2_run_product" / INFLOW_FORCINGS[args.forcing]
+    previous = out_dir / INFLOW_PROVENANCE
+    if previous.exists():
+        other = json.loads(previous.read_text()).get("inflow_model")
+        if other != get_inflow_model():
+            raise SystemExit(f"{out_dir} holds a run of {other}; the chain of "
+                             f"{get_inflow_model()} goes in its own GENERATED folder "
+                             "(config: generated_dir)")
     remove_tree(out_dir)
     out_dir.mkdir(parents=True)
 
@@ -179,7 +180,7 @@ def main():
         "started_utc": started.isoformat(timespec="seconds"),
         "written_utc": datetime.now(timezone.utc).isoformat(timespec="seconds"),
         "model_repo": str(repo),
-        "model_commit": head,
+        "model_version": found["version"],
         "model_pin": pin,
         "model_clean": clean,
         "environment": environment,

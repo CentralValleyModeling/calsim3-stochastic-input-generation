@@ -19,14 +19,14 @@ Do not use emojis or non-ASCII characters in code or outputs.
 
 ```
 root/
-├── mod_forcing/              VIC model forcing and climate extractions
-│   ├── vic/                  Append wind to WGEN, compile rim inflows from VIC fluxes
-│   └── climate/              Point precip, basin-avg climate (T, PPT, VPD)
+├── mod_forcing/              Rim-inflow model runs and climate extractions
+│   ├── inflows/              Run the configured rim-inflow model (SAC-SMA or VIC) and write its arc flows
+│   └── climate/              Point precip, basin-avg climate (T, PPT, VPD); GridInfo basin weights
 │
 ├── mod_hydrology/            Sacramento Valley, East Side, rim inflow, Delta, WYTs
 │   ├── calsimhydro/          Sac Valley: compile precip/ET, postprocess Product A & B
 │   ├── calsimhydro_ee/       External elements: compile precip, postprocess
-│   ├── rim_inflow/           Quantile-map VIC inflows, correlation analysis, NSE metrics
+│   ├── rim_inflow/           Build the rim-inflow SVs from the model's arc flows; skill evaluation
 │   ├── water_year_types/     Sac 40-30-30, SJ 60-20-20 WYT classification
 │   ├── delta_channel_depletion/  DETAW/DCD Delta ag demands
 │   ├── small_watersheds/     SWS precipitation compilation and postprocessing
@@ -52,8 +52,7 @@ root/
 │   ├── qmap_product_a_from_pairs.py  Reusable Product A split-sample QM driven by qmap_pairs.csv
 │   ├── qmap_product_b_from_pairs.py  Reusable Product B chunked QM driven by qmap_pairs.csv
 │   ├── wyt_monthlyavg_framework.py  compute_wyt_monthlyavg(): WYT x month reconstruction
-│   ├── dss_pickle_builder.py CalView-style DSS cache (values/diffs/units pkl); routes through dss_io
-│   └── calculate_correlations_finder.py  R-squared between CalSim and VIC inflows
+│   └── dss_pickle_builder.py CalView-style DSS cache (values/diffs/units pkl); routes through dss_io
 │
 ├── inventory/                Master CalSim SV inventory spreadsheet + screening
 ├── data/                     Large data (git-ignored): BASE/ (read-only) + GENERATED/ (outputs)
@@ -126,23 +125,24 @@ in CI on push/PR -- see `.github/workflows/lint.yml`):
 
 ## Data Flow & Dependencies
 
-WGEN -> VIC (append wind, run model) -> VIC outputs -> [calsimhydro, calsimhydro_ee, rim_inflow, evaporation, ...] -> postprocessing/sv_compile -> Final DSS
+WGEN -> rim-inflow model (mod_forcing/inflows) -> rim_inflow builder -> [water_year_types, mod_other, ...]; WGEN -> [climate, calsimhydro, calsimhydro_ee, evaporation, ...] -> postprocessing/sv_compile -> Final DSS
 
-**Tiers**: (1) mod_forcing/vic, (2) mod_forcing/climate, (3) mod_hydrology/*, (4) water_year_types, (5) delta_channel_depletion + small_watersheds, (6) mod_reservoir/evaporation (independent), (7) mod_other/*, (8) postprocessing/sv_compile
+**Tiers**: (1) mod_forcing/inflows, (2) mod_forcing/climate, (3) mod_hydrology/*, (4) water_year_types, (5) delta_channel_depletion + small_watersheds, (6) mod_reservoir/evaporation (independent), (7) mod_other/*, (8) postprocessing/sv_compile
 
 ---
 
 ## Module Details
 
-### mod_forcing/vic/
+### mod_forcing/inflows/
+
+The config names the model (`inflow_model`, an adapter in `adapters/`), its folder, environment and pin (`inflow_pin`); `generated_dir` names the GENERATED folder of its chain.
 
 | Script | Purpose | Product |
 |--------|---------|---------|
-| `_1_append_wind_wgen_hist.py` | Append wind to WGEN for VIC (Jupyter-style) | A |
-| `_1_append_wind_wgen_stochastic.py` | Append wind to WGEN for VIC (Jupyter-style) | B |
-| `_2_compile_rim_inflows.py` | VIC flux files → rim inflows (argparse class); `--product {Historical,Historical_Unsplit,A,B}`; routes the `CS3_8RI_SRBB` Bend Bridge composite directly via a merged GridInfo | Historical, A & B |
-| `reference/build_8RI_SRBB_gridinfo.py` | Build-time only (needs geopandas): merges Shasta + 7 rim tributary GridInfo components and rasterizes the CT_BENDBRIDGE valley floor (WBA 02/03) from `BASE/CalSim3/calsim3.gpkg` into `CS3_8RI_SRBB_GridInfo.txt` (single SRBB build; valley step folded in) | n/a |
-| `reference/build_no_gooselake_gridinfo.py` | Build-time only (needs geopandas): `--target {I_SHSTA,SRBB,all}` drops the ~1000 sq mi Goose Lake over-extension outside the authoritative SHSTA / CT_BENDBRIDGE drainage, writing `CS3_I_SHSTA_no_gooselake_GridInfo.txt` and `CS3_8RI_SRBB_no_gooselake_GridInfo.txt` | n/a |
+| `_1_build_forcing.py` | Build the model's input from BASE where its folder lacks it (VIC: a forcing file per cell with the LTO wind) and check it against BASE (G2) | historical, A, B (`--forcing`, `--cells`, `--check-only`) |
+| `_2_run_product.py` | Run the model at the pin and write `arc_inflow_monthly.csv` + `run_manifest.json` | historical, A, B (`--forcing`, `--allow-dirty`) |
+| `adapters/sacsma.py` | SAC-SMA dPL-CalSim with its share model; Product B in 10 segments (G1, G6) | delivered in v1.1 |
+| `adapters/vic.py` | VIC 4.2.d under WSL, pinned by the sha256 of its files; arcs routed from GridInfo; xz-compressed flux store reused while model and inputs match (G1: 8 cells rerun byte for byte) | selectable |
 
 ### mod_forcing/climate/
 
@@ -150,6 +150,8 @@ WGEN -> VIC (append wind, run model) -> VIC outputs -> [calsimhydro, calsimhydro
 |--------|---------|---------|
 | `_1_pp_point_locations.py` | Monthly precip for PP point locations from WGEN | A, B, Historical (`--source`, `--scenario`) |
 | `_2_uhh_basin_averages.py` | Basin-average precip/temp/VPD for UHH locations | A, B, Historical (`--source`, `--validate-outputs`) |
+| `reference/build_8RI_SRBB_gridinfo.py` | Build-time only (needs geopandas): merges Shasta + 7 rim tributary GridInfo components and rasterizes the CT_BENDBRIDGE valley floor (WBA 02/03) from `BASE/CalSim3/calsim3.gpkg` into `CS3_8RI_SRBB_GridInfo.txt`, and writes the valley floor alone as `CS3_I_SRBB_VAL_GridInfo.txt` | n/a |
+| `reference/build_no_gooselake_gridinfo.py` | Build-time only (needs geopandas): `--target {I_SHSTA,SRBB,all}` drops the ~1000 sq mi Goose Lake over-extension outside the authoritative SHSTA / CT_BENDBRIDGE drainage, writing `CS3_I_SHSTA_no_gooselake_GridInfo.txt` and `CS3_8RI_SRBB_no_gooselake_GridInfo.txt` | n/a |
 
 ### mod_hydrology/calsimhydro/
 
@@ -175,9 +177,8 @@ WGEN -> VIC (append wind, run model) -> VIC outputs -> [calsimhydro, calsimhydro
 |--------|---------|---------|
 | `_0_stochastic_inflow_explore.py` | Interactive exploration (30-yr rolling drought scatter) | Analysis |
 | `_0_stochastic_precipitation.py` | Precipitation exploration | Analysis |
-| `_1_calc_correlations.py` | R² between CalSim and VIC inflows | Correlation (`--basis {Historical,Historical_Unsplit}`) |
-| `_2_qmap_historical_validation.py` | Quantile-map Product A to historical period | A (`--basis {Product_A,Historical_Unsplit}`, `--locations`, `--qmap-col`, `--nonexceedance-month`) |
-| `_3_qmap_productB.py` | Quantile-map Product B stochastic inflows | B (`--basis {Product_A,Historical_Unsplit}`) |
+| `_1_build_rim_inflow.py` | The 241 rim-inflow SVs from the model's arc flows (arcs, anchor sums, gap arcs, alias maps) | A, B, historical (`--product`) |
+| `_2_skill_evaluation.py` | The model's historical run against CalSim 3 and v1.0 | historical |
 | `_calc_nse.py` | Nash-Sutcliffe efficiency metrics | Validation |
 
 ### mod_hydrology/water_year_types/
@@ -262,7 +263,7 @@ Oroville Level 5: storage-based, DCR 2023 sedimentation correction (3,538 -> 3,4
 
 ## Reconstruction Methodologies
 
-- **Quantile Mapping (QM)**: Empirical CDF mapping for terms with good VIC correlation. `utils/quantile_mapping.py::qmap_single()`.
+- **Quantile Mapping (QM)**: Empirical CDF mapping of a rim-inflow predictor onto a CalSim3 term, fitted on WY1950-2018 as a pass or absorb fit (`utils/qmap_fit.py`). `utils/quantile_mapping.py::qmap_single()`.
 - **WYT Averaging**: Monthly averages by WYT class (W/AN/BN/D/C) for weak correlation. `utils/wyt_monthlyavg_framework.py::compute_wyt_monthlyavg()`.
 - **Hybrid (QM + WYT)**: `(QM + WYT) / 2` for low correlation or peak overshoot.
 - **Direct Calculation**: Physical formulas and Flow (or index) -to-value relationships with optimized thresholds.

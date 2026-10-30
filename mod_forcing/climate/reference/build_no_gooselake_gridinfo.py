@@ -23,14 +23,13 @@ drain nowhere relevant.
 What it does
 ------------
 For each target, drop every cell whose 1/16-degree footprint does not touch the
-authoritative mask -- i.e. cells lying entirely outside the reference (the Goose
-Lake block). Cells that straddle the divide keep their f1/f2 unchanged; only
-cells fully outside are eliminated, matching "eliminate grids outside the
-reference". Kept cells retain their exact id/lat/lon/f1/f2 from the source, so
-the non-Goose portion is byte-identical to the parent.
+authoritative mask (the Goose Lake block), and clip the basin area (f2) of each
+cell that straddles the mask's edge to its area inside the mask (EPSG:3310), so
+no area outside the drainage is counted: the 10 cells on the Goose Lake divide
+held 84 sq mi outside it. Every other line is kept as it is in the source.
 
-Outputs go to GridInfo/, so mod_forcing/vic/_2_compile_rim_inflows.py routes them like any
-other watershed (CS3_I_SHSTA_no_gooselake_qmo.csv, CS3_8RI_SRBB_no_gooselake_qmo.csv).
+Outputs go to GridInfo/. The VIC adapter (mod_forcing/inflows/adapters/vic.py)
+routes I_SHSTA through CS3_I_SHSTA_no_gooselake.
 
 Run the SRBB target after build_8RI_SRBB_gridinfo.py (it reads that output). Like
 the valley generator, this needs geopandas and runs under a GIS env, not
@@ -58,6 +57,7 @@ GPKG_LAYER = "CalSim3_And_GooseLake"
 
 RES = 0.0625
 KM2_PER_SQMI = 2.589988
+AREA_EPSG = 3310             # California Albers (meters); equal-area, km^2 via /1e6
 
 # Each target: source GridInfo, output GridInfo, and the gpkg rows whose union is
 # the authoritative drainage (cells outside it are eliminated).
@@ -104,28 +104,33 @@ def build_target(name, layer):
     if mask_sel.empty:
         raise ValueError(f"No mask polygons found for target {name} in the gpkg.")
     mask = mask_sel.union_all()  # EPSG:4326, same CRS as the cell footprints below
+    mask_area = mask_sel.to_crs(AREA_EPSG).union_all()
 
-    kept, dropped_area, n_src = [], 0.0, 0
     with open(source_path) as fh:
-        for line in fh:
-            if not line.strip():
-                continue
-            n_src += 1
-            _cid, lat, lon, _f1, f2 = line.rstrip("\n").split("\t")
-            la, lo = float(lat), float(lon)
-            footprint = box(lo - RES / 2, la - RES / 2, lo + RES / 2, la + RES / 2)
-            if mask.intersects(footprint):
-                kept.append(line if line.endswith("\n") else line + "\n")
-            else:
-                dropped_area += float(f2)
+        rows = [line.rstrip("\n").split("\t") for line in fh if line.strip()]
+    footprints = [box(float(lo) - RES / 2, float(la) - RES / 2, float(lo) + RES / 2,
+                      float(la) + RES / 2) for _cid, la, lo, _f1, _f2 in rows]
+    inside_km2 = gpd.GeoSeries(footprints, crs=4326).to_crs(AREA_EPSG).intersection(mask_area).area / 1e6
+
+    kept, dropped_area, clipped_area, n_clipped = [], 0.0, 0.0, 0
+    for (cid, lat, lon, f1, f2), footprint, inside in zip(rows, footprints, inside_km2):
+        if not mask.intersects(footprint):
+            dropped_area += float(f2)
+            continue
+        if float(f2) > inside:
+            clipped_area += float(f2) - inside
+            n_clipped += 1
+            f2 = repr(float(inside))
+        kept.append(f"{cid}\t{lat}\t{lon}\t{f1}\t{f2}\n")
 
     with open(output_path, "w", newline="") as fh:
         fh.writelines(kept)
 
     print(f"[{name}] wrote {os.path.basename(output_path)} ({spec['label']})")
-    print(f"  kept {len(kept)} of {n_src} cells; "
-          f"eliminated {n_src - len(kept)} Goose Lake cells "
-          f"({dropped_area / KM2_PER_SQMI:.1f} sq mi)")
+    print(f"  kept {len(kept)} of {len(rows)} cells; "
+          f"eliminated {len(rows) - len(kept)} Goose Lake cells "
+          f"({dropped_area / KM2_PER_SQMI:.1f} sq mi); clipped {n_clipped} edge cells to the "
+          f"drainage ({clipped_area / KM2_PER_SQMI:.1f} sq mi)")
 
 
 def main():

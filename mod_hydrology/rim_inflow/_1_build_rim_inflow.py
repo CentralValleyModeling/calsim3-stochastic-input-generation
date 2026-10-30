@@ -5,13 +5,15 @@ Builds every CalSim3 rim-inflow SV from the monthly arc flows of the rim-inflow 
 (mod_forcing/inflows, the model the config names), with no bias correction. Each SV has a
 method in reference/CalSim3_inflow_mapping.csv (CS3_Inflow, Source, Method):
 
-- arc  : the 196 arcs the model simulates, as they are.
+- arc  : the 196 arcs every model simulates, as they are.
+- gap  : an arc not every model simulates (I_SJR258, I_SJR265, I_TUO054): the model's arc when
+         its run has it (VIC), otherwise a qmap from Source (SAC-SMA).
 - sum  : the UNIMP anchors, as the sum of their arcs (UNIMP_SRBB adds the Sacramento valley
          node I_SRBB_VAL), and their _UHH twins, equal to the anchor as in CalSim3. The
          anchor arcs are those of RimInflowAnchor.xlsx; a single-arc system sums one arc.
          The alias I422 equals I_LOSVQ in every month of CalSim3, so it copies the model's
          I_LOSVQ; a quantile map would bend that identity in its tails.
-- qmap : the other aliases and the gap arcs, by pass-through quantile mapping. The map is
+- qmap : the other aliases, by pass-through quantile mapping. The map is
          fitted from the CalSim3 source series to the CalSim3 series over WY1950-2018 and
          applied to the model's source series, so the SV carries the model's error like the
          arcs it comes from. A source that is a sum is fitted on the CalSim3 sum of the same
@@ -79,7 +81,7 @@ MAPPING_CSV = _SCRIPT_DIR / "reference" / "CalSim3_inflow_mapping.csv"
 DSS_FILE = get_base_dir() / "CalSim3" / "__calsim_sv_default__.dss"
 INVENTORY_XLSX = get_inventory_dir() / "_MASTER_INVENTORY_FOR_STOCHASTIC_INPUT_GENERATION_.xlsx"
 
-METHODS = ("arc", "sum", "qmap", "zero", "wyt", "none")
+METHODS = ("arc", "gap", "sum", "qmap", "zero", "wyt", "none")
 PRODUCT_WY = {"A": (1972, 2018), "B": LABEL_WY, "historical": (1916, 2018)}  # B: per chunk
 
 
@@ -162,10 +164,22 @@ def to_frame(values: pd.Series) -> pd.DataFrame:
                          "value": values.to_numpy(float)})
 
 
+def resolve_gaps(mapping: pd.DataFrame, delivered: set) -> pd.DataFrame:
+    """The mapping with each gap row made an arc (its own source) where the run delivers the arc,
+    and a qmap from its Source otherwise."""
+    m = mapping.copy()
+    gap = m["Method"] == "gap"
+    own = gap & m.index.isin(delivered)
+    m.loc[own, "Method"], m.loc[own, "Source"] = "arc", m.index[own]
+    m.loc[gap & ~own, "Method"] = "qmap"
+    return m
+
+
 def build(product: str, mapping: pd.DataFrame, part_c: dict):
     """The SVs of every method built here, per chunk: ``{chunk: {SV: series}}``, with the one
-    chunk ``None`` for A and historical; and the qmap fits."""
+    chunk ``None`` for A and historical; the qmap fits; and the mapping with its gaps resolved."""
     arcs = pd.read_csv(get_arc_inflows(product), parse_dates=["date"])
+    mapping = resolve_gaps(mapping, set(arcs["arc"]))
     out_index = wy_index(PRODUCT_WY[product])
     chunks = sorted(arcs["chunk"].unique()) if "chunk" in arcs else [None]
     models = {}
@@ -210,7 +224,7 @@ def build(product: str, mapping: pd.DataFrame, part_c: dict):
             "product_source_taf_yr": basis_sim.sum() / n_out,
             "product_ratio": mapped.sum() / basis_sim.sum(),
         })
-    return built, pd.DataFrame(fits)
+    return built, pd.DataFrame(fits), mapping
 
 
 def sv_frames(mapping: pd.DataFrame, built: dict) -> dict:
@@ -244,7 +258,7 @@ def main():
     manifest = require_pinned_run(get_arc_inflows(args.product).parent)
     paths = get_rim_inflow_outputs(args.product)
     remove_tree(paths["dir"])          # first, so a failed build leaves no old SVs behind
-    built, fits = build(args.product, mapping, part_c)
+    built, fits, mapping = build(args.product, mapping, part_c)
     paths["dir"].mkdir(parents=True)
     (paths["dir"] / INFLOW_PROVENANCE).write_text(json.dumps(manifest, indent=1))
 
