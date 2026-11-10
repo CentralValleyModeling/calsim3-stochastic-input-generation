@@ -89,9 +89,9 @@ def points_inside(points, boundary, lon="Lon", lat="Lat"):
     return points[geometry.within(geom_union)].copy()
 
 
-F1_CSV = STEP10_DIR / "Historical_Unsplit (Product_A)_F1_table.csv"
-HS_CSV = STEP10_DIR / "Historical_Unsplit (Product_A)_HS_monthly_avg_mmperday.csv"
-CORRECTED_CSV = STEP10_DIR / "Historical_Unsplit (Product_A)_ETo_F1corrected_monthly_inpermonth.csv"
+F1_CSV = STEP10_DIR / "Product_A_F1_table.csv"
+HS_CSV = STEP10_DIR / "Product_A_HS_monthly_avg_mmperday.csv"
+CORRECTED_CSV = STEP10_DIR / "Product_A_ETo_F1corrected_monthly_inpermonth.csv"
 F1_DIR = PLOT_OUTPUT_DIR / "F1_maps_WBA_FixedScaleBar"
 F1_CA_DIR = PLOT_OUTPUT_DIR / "F1_maps_Statewide_FixedScaleBar"
 F1_MONTHLY_DIR = PLOT_OUTPUT_DIR / "F1_maps_WBA_VariableScaleBar"
@@ -104,8 +104,8 @@ HS_CA_MONTHLY_DIR = PLOT_OUTPUT_DIR / "HS_maps_Statewide_VariableScaleBar"
 MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun",
           "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
 PERIOD_LABELS = {
-    "F1 adjustment factor": "Applied to ETo 1921-2018",
-    "H-S monthly average ETo": "Averaged over 1921-2018",
+    "F1 adjustment factor": "Applied to ETo 1920-2018",
+    "H-S monthly average ETo": "Averaged over 1920-2018",
 }
 
 
@@ -114,14 +114,14 @@ def validate_full_period(corrected_csv):
     data_columns = columns[2:]
     expected = [
         f"{month}-{year}"
-        for year in range(1921, 2019)
+        for year in range(1920, 2019)
         for month in MONTHS
     ]
     if data_columns != expected:
         first = data_columns[0] if data_columns else "<none>"
         last = data_columns[-1] if data_columns else "<none>"
         raise ValueError(
-            "Step 10b corrected input must cover exactly Jan-1921 through "
+            "Step 10b corrected input must cover exactly Jan-1920 through "
             f"Dec-2018; found {first} through {last}"
         )
 
@@ -169,7 +169,7 @@ def draw_map_set(df, value_name, unit, output_dir, filename_prefix,
         fig, ax = plt.subplots(figsize=(6, 7.5), facecolor="#F8FAFC")
         scatter = draw_one(ax, month)
         ax.set_title(
-            f"{month} {value_name}\nHistorical_Unsplit (Product_A) grid | {period_label}",
+            f"{month} {value_name}\nProduct_A grid | {period_label}",
             fontsize=11, fontweight="bold", pad=8,
         )
         ax.tick_params(labelbottom=True, labelleft=True, labelsize=8)
@@ -188,7 +188,7 @@ def draw_map_set(df, value_name, unit, output_dir, filename_prefix,
     if save_monthly_grid:
         fig, axes = plt.subplots(3, 4, figsize=(22, 17), facecolor="#F8FAFC")
         fig.suptitle(
-            f"{value_name} ({unit}) | Historical_Unsplit (Product_A) grid | {period_label}",
+            f"{value_name} ({unit}) | Product_A grid | {period_label}",
             fontsize=14, fontweight="bold", y=0.995,
         )
         scatter = None
@@ -241,7 +241,7 @@ def draw_monthly_scale_map_set(df, value_name, unit, output_dir, filename_prefix
     for month in MONTHS:
         fig, ax = plt.subplots(figsize=(6, 7.5), facecolor="#F8FAFC")
         scatter, month_min, month_max = draw_one(ax, month)
-        ax.set_title(f"{month} {value_name}\nHistorical_Unsplit (Product_A) grid | {period_label} | monthly scale",
+        ax.set_title(f"{month} {value_name}\nProduct_A grid | {period_label} | monthly scale",
                      fontsize=11, fontweight="bold", pad=8)
         colorbar = fig.colorbar(scatter, ax=ax, orientation="vertical", pad=0.02,
                                 shrink=0.65)

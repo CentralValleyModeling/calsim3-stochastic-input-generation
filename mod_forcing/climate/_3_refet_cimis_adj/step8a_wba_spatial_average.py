@@ -11,8 +11,10 @@ Date       : 2026
 MANUAL STEP 8 PURPOSE (from manual Section 8.1)
 ------------------------------------------------
 Compute area-weighted spatial average monthly ETo for the 42 CalSim3 Water
-Budget Areas (WBAs), 21 Subregions (SRs), and all weighted Small Watersheds
-(SWs) using Step 0 grid-polygon intersection weights.
+Budget Areas (WBAs) plus WBA 91, 21 Subregions (SRs), and all weighted Small
+Watersheds (SWs) using Step 0 grid-polygon intersection weights. WBA 91 has no
+polygon; its WTable_91.csv (written by Step 0) copies WBA 90's weights, so it is
+picked up by the WTable glob like any other WBA.
 
 Equivalent PRISM step:
   Reads:  GridETo_PRISM_CIMIS_inpermonth (from CS3Domain_F1... Excel)

@@ -1,10 +1,10 @@
 # -*- coding: utf-8 -*-
 """
-Manual Step 5.0: Ref ETo Calculation (Hargreaves-Samani Equation) -- Historical_Unsplit (Product_A)
+Manual Step 5.0: Ref ETo Calculation (Hargreaves-Samani Equation) -- Product_A
 ================================================================================
 Manual ref : User_Manual_CS3_Domain_v2.pdf, Section 5.0
 Original   : H-S_RefETo_PRISM_optimized_lat_lon_monthlyavg_Ra_v4_final_mod.py
-Project    : Reference ETo for CalSim3 using Historical_Unsplit (Product_A) weather data
+Project    : Reference ETo for CalSim3 using Product_A weather data
 Author     : DWR
 Date       : 2026
 
@@ -14,14 +14,14 @@ Calculate reference evapotranspiration (ETo) using temperature data.
 The script processes station metadata, extracts temperature values,
 computes solar radiation (Ra), and derives daily and monthly ETo values.
 
-Historical_Unsplit (Product_A) Adaptation
+Product_A Adaptation
 ---------------------
-    Manual (PRISM)                     | Historical_Unsplit (Product_A)
+    Manual (PRISM)                     | Product_A
   -----------------------------------|------------------------------------------
-  Station metadata from DBF/CSV      | Lat/lon parsed from data_{lat}_{lon} filenames
+  Station metadata from DBF/CSV      | Lat/lon parsed from meteo_{lat}_{lon} filenames
   Monthly Tmax/Tmin wide-format CSVs | Daily Tmax/Tmin per-cell text files
   Monthly Ra * monthly mean temps    | Daily Ra * daily temps -> sum to monthly
-    Date range: 1920-2023              | Date range: 1921-2018 final output
+    Date range: 1920-2023              | Date range: 1920-2018 final output
 
 HARGREAVES-SAMANI FORMULA (unchanged)
 ---------------------------------------
@@ -31,23 +31,24 @@ HARGREAVES-SAMANI FORMULA (unchanged)
 
 INPUTS
 ------
-    Historical_Unsplit (Product_A) directory:
-    Each file: data_{lat}_{lon}  (whitespace-separated, no header)
+    BASE/WGEN/Product_A/1 directory:
+    Each file: meteo_{lat}_{lon}  (whitespace-separated, no header)
     Columns  : Year  Month  Day  Precip(mm)  Tmax(C)  Tmin(C)
-    Period   : 1915-01-01 to 2018-12-31; output is limited to 1921-2018
+    Period   : 1915-01-01 to 2018-12-31; output is limited to 1920-2018
 
 OUTPUTS  (written to output/)
 ------------------------------
-    Historical_Unsplit (Product_A)_ETo_monthly_inpermonth.csv
-    rows = grid cells, cols = Lon Lat Jan-1921 Feb-1921 ... Dec-2018
-      units: inches/month  --> input for Step 6-7 (F1 correction)
+    Product_A_ETo_monthly_inpermonth.csv
+    rows = grid cells, cols = Lon Lat Jan-1920 Feb-1920 ... Dec-2018
+      units: inches/month  --> input for Step 10b (F1 correction)
 
-    Historical_Unsplit (Product_A)_monthly_Ra.csv
+    Product_A_monthly_Ra.csv
       rows = grid cells, cols = Lon Lat Jan Feb ... Dec
-      monthly average Ra from 1921 reference year
+      monthly average Ra from the 1920 reference year (leap year)
 
-    Historical_Unsplit (Product_A)_daily_Ra_1921.csv
-      long format: Lon Lat Date Daily_Ra  (365 rows per cell)
+    Product_A_daily_Ra_1921.csv
+      long format: Lon Lat Date Daily_Ra  (366 rows per cell, 1920-01-01
+      through 1920-12-31; filename kept for compatibility)
 
 ENVIRONMENT
 -----------
@@ -56,7 +57,7 @@ ENVIRONMENT
 
 HOW TO RUN
 ----------
-  python step5_hs_eto_calculation.py
+  python step10a_hs_eto_calculation_1921_2018.py
   Runtime: ~5-20 min (all CPU cores used via multiprocessing)
 """
 
@@ -82,19 +83,16 @@ script_dir = pathlib.Path(__file__).parent.resolve()
 base_dir = get_base_dir()
 gen_dir = get_module_generated_dir("mod_forcing/climate")
 
-GRID_DATA_DIR = base_dir / "WGEN" / "Historical_Unsplit"
+GRID_DATA_DIR = base_dir / "WGEN" / "Product_A" / "1"
 
 OUTPUT_DIR = gen_dir / "output" / "_3_refet_cimis_adj" / "step10"
 
-START_DATE = "1921-01-01"
+START_DATE = "1920-01-01"
 END_DATE   = "2018-12-31"
 
 # =============================================================================
 
-_DAYS_1921 = [datetime(1921, 1, 1) + timedelta(days=i) for i in range(365)]
-_CUM_DAYS  = np.insert(
-    np.cumsum([31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31]), 0, 0
-)
+_DAYS_REF = [datetime(1920, 1, 1) + timedelta(days=i) for i in range(366)]
 _MONTH_NAMES = ["Jan","Feb","Mar","Apr","May","Jun",
                 "Jul","Aug","Sep","Oct","Nov","Dec"]
 
@@ -114,7 +112,7 @@ def calculate_ra_vectorized(lat_deg, dates):
 
 
 def scan_grid_files(data_dir):
-    pattern = re.compile(r"^data_([-\d.]+)_([-\d.]+)$")
+    pattern = re.compile(r"^meteo_([-\d.]+)_([-\d.]+)$")
     cells = []
     for fname in os.listdir(data_dir):
         m = pattern.match(fname)
@@ -158,14 +156,15 @@ def process_cell(cell):
         for period, total in df.groupby(df["date"].dt.to_period("M"))["eto_mm"].sum().items()
     }
 
-    ra_1921    = calculate_ra_vectorized(lat, _DAYS_1921)
+    ra_ref     = calculate_ra_vectorized(lat, _DAYS_REF)
+    ref_months = np.array([d.month for d in _DAYS_REF])
     monthly_ra = {
-        name: round(float(np.mean(ra_1921[_CUM_DAYS[i]:_CUM_DAYS[i+1]])), 4)
+        name: round(float(np.mean(ra_ref[ref_months == i + 1])), 4)
         for i, name in enumerate(_MONTH_NAMES)
     }
     daily_ra_rows = [
-        [lon, lat, _DAYS_1921[i].strftime("%Y-%m-%d"), round(float(ra_1921[i]), 4)]
-        for i in range(365)
+        [lon, lat, _DAYS_REF[i].strftime("%Y-%m-%d"), round(float(ra_ref[i]), 4)]
+        for i in range(len(_DAYS_REF))
     ]
 
     base = {"Lon": lon, "Lat": lat}
@@ -178,7 +177,7 @@ def process_cell(cell):
 
 def main():
     print("=" * 60)
-    print("Manual Step 5: H-S ETo Calculation -- Historical_Unsplit (Product_A)")
+    print("Step 10a: H-S ETo Calculation -- Product_A")
     print(f"Period: {START_DATE}  to  {END_DATE}")
     print("=" * 60)
 
@@ -187,7 +186,7 @@ def main():
     print(f"\nScanning grid files:\n  {GRID_DATA_DIR}")
     cells = scan_grid_files(GRID_DATA_DIR)
     if not cells:
-        raise FileNotFoundError(f"No data_{{lat}}_{{lon}} files found in:\n  {GRID_DATA_DIR}")
+        raise FileNotFoundError(f"No meteo_{{lat}}_{{lon}} files found in:\n  {GRID_DATA_DIR}")
     print(f"  Found {len(cells):,} cells")
 
     # OneDrive cloud-only placeholders have zero size; catch this before the
@@ -197,7 +196,7 @@ def main():
         raise OSError(
             f"\n{len(placeholder):,} of {len(cells):,} grid files are OneDrive "
             f"cloud-only placeholders (0 bytes).\n"
-            "Fix: right-click the Historical_Unsplit folder in File Explorer\n"
+            "Fix: right-click the Product_A folder in File Explorer\n"
             "     → 'Always keep on this device'  and wait for OneDrive to sync.\n"
             f"Example file: {os.path.basename(placeholder[0]['path'])}"
         )
@@ -207,6 +206,11 @@ def main():
         results = pool.map(process_cell, cells)
     results = [r for r in results if r is not None]
     print(f"  {len(results):,} cells completed")
+    if len(results) != len(cells):
+        raise RuntimeError(
+            f"{len(cells) - len(results):,} of {len(cells):,} grid cells were skipped "
+            "(see [SKIP] messages above). Refusing to write an incomplete grid."
+        )
 
     df_meto = pd.DataFrame([r[0] for r in results])
     id_cols = ["Lon", "Lat"]
@@ -222,14 +226,14 @@ def main():
         columns=["Lon","Lat","Date","Daily_Ra"],
     )
 
-    df_meto.to_csv(OUTPUT_DIR / "Historical_Unsplit (Product_A)_ETo_monthly_inpermonth.csv", index=False)
-    df_mra.to_csv(OUTPUT_DIR / "Historical_Unsplit (Product_A)_monthly_Ra.csv",             index=False)
-    df_dra.to_csv(OUTPUT_DIR / "Historical_Unsplit (Product_A)_daily_Ra_1921.csv",          index=False)
+    df_meto.to_csv(OUTPUT_DIR / "Product_A_ETo_monthly_inpermonth.csv", index=False)
+    df_mra.to_csv(OUTPUT_DIR / "Product_A_monthly_Ra.csv",             index=False)
+    df_dra.to_csv(OUTPUT_DIR / "Product_A_daily_Ra_1921.csv",          index=False)
 
     print(f"\nOutputs written to: {OUTPUT_DIR}")
-    print("  Historical_Unsplit (Product_A)_ETo_monthly_inpermonth.csv  --> input for Step 6-7")
-    print("  Historical_Unsplit (Product_A)_monthly_Ra.csv")
-    print("  Historical_Unsplit (Product_A)_daily_Ra_1921.csv")
+    print("  Product_A_ETo_monthly_inpermonth.csv  --> input for Step 10b")
+    print("  Product_A_monthly_Ra.csv")
+    print("  Product_A_daily_Ra_1921.csv")
     print("Done.")
 
 

@@ -84,11 +84,11 @@ BOUNDARY_DIR = _find_network_dir()
 
 MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun",
           "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
-PERIOD_LABEL = "1921-2018 average"
+PERIOD_LABEL = "1920-2018 average"
 
 GROUPS = {
     "WBA": {
-        "csv": STEP11_DIR / "Historical_Unsplit (Product_A)_Spatial_Average_ETo_F1corrected_monthly_averaged_per_WBA.csv",
+        "csv": STEP11_DIR / "Product_A_Spatial_Average_ETo_F1corrected_monthly_averaged_per_WBA.csv",
         "geojson": BOUNDARY_DIR / "CS3_WBAs.geojson",
         "join_column": "WBA_ID",
         "output_dir": PLOT_OUTPUT_DIR / "maps_FixedScaleBar" / "WBA",
@@ -100,7 +100,7 @@ GROUPS = {
         "focus": True,
     },
     "SR": {
-        "csv": STEP11_DIR / "Historical_Unsplit (Product_A)_Spatial_Average_ETo_F1corrected_monthly_averaged_per_SR.csv",
+        "csv": STEP11_DIR / "Product_A_Spatial_Average_ETo_F1corrected_monthly_averaged_per_SR.csv",
         "geojson": BOUNDARY_DIR / "C2vsim_subregions.geojson",
         "join_column": "Subregion_",
         "output_dir": PLOT_OUTPUT_DIR / "maps_FixedScaleBar" / "SR",
@@ -112,7 +112,7 @@ GROUPS = {
         "focus": False,
     },
     "SW": {
-        "csv": STEP11_DIR / "Historical_Unsplit (Product_A)_Spatial_Average_ETo_F1corrected_monthly_averaged_per_SW.csv",
+        "csv": STEP11_DIR / "Product_A_Spatial_Average_ETo_F1corrected_monthly_averaged_per_SW.csv",
         "geojson": BOUNDARY_DIR / "SmallWatersheds.geojson",
         "join_column": "SW_ID",
         "output_dir": PLOT_OUTPUT_DIR / "maps_FixedScaleBar" / "SW",
@@ -179,7 +179,7 @@ def plot_group(name, config):
     for month in MONTHS:
         fig, ax = plt.subplots(figsize=(6, 7.5), facecolor="#F8FAFC")
         draw_one(ax, month)
-        ax.set_title(f"{month} {config['title']} ETo\nHistorical_Unsplit (Product_A) F1-corrected | {PERIOD_LABEL}",
+        ax.set_title(f"{month} {config['title']} ETo\nProduct_A F1-corrected | {PERIOD_LABEL}",
                      fontsize=11, fontweight="bold", pad=8)
         sm = plt.cm.ScalarMappable(cmap="YlOrRd", norm=plt.Normalize(vmin=vmin, vmax=vmax))
         sm.set_array([])
@@ -200,7 +200,7 @@ def plot_group(name, config):
             month_vmax = month_vmin + 1e-9
         fig, ax = plt.subplots(figsize=(6, 7.5), facecolor="#F8FAFC")
         draw_one(ax, month, month_vmin, month_vmax)
-        ax.set_title(f"{month} {config['title']} ETo\nHistorical_Unsplit (Product_A) F1-corrected | {PERIOD_LABEL}",
+        ax.set_title(f"{month} {config['title']} ETo\nProduct_A F1-corrected | {PERIOD_LABEL}",
                      fontsize=11, fontweight="bold", pad=8)
         sm = plt.cm.ScalarMappable(
             cmap="YlOrRd", norm=plt.Normalize(vmin=month_vmin, vmax=month_vmax)
