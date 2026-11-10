@@ -1,56 +1,64 @@
 # -*- coding: utf-8 -*-
 """
-Step 11a: Historical_Unsplit (Product_A) ETo Spatial Average for 1921-2018
+Step 11a: Product_A ETo Spatial Average for 1920-2018
 =================================================================
 Manual ref : User_Manual_CS3_Domain_v2.pdf, Section 8.0
 Original   : H-S_RefETo_PRISM_CIMIS_WBAs_SR_SW_SpatialAvg_Monthly.py
-Project    : Reference ETo for CalSim3 using Historical_Unsplit (Product_A) weather data
+Project    : Reference ETo for CalSim3 using Product_A weather data
 Author     : DWR
 Date       : 2026
 
 MANUAL STEP 8 PURPOSE (from manual Section 8.1)
 ------------------------------------------------
 Compute area-weighted spatial average monthly ETo for each of the 42
-CalSim3 Water Budget Areas (WBAs) using intersection weights between the
-grid and the WBA polygons.
+CalSim3 Water Budget Areas (WBAs) plus WBA 91 using intersection weights between
+the grid and the WBA polygons. WBA 91 has no polygon; Step 0 writes WTable_91.csv
+as a copy of WBA 90's weights, so it is processed like any other WBA.
 
 Equivalent PRISM step:
   Reads:  GridETo_PRISM_CIMIS_inpermonth (from CS3Domain_F1... Excel)
           WTable_*.csv (one per WBA, area-weighted grid fractions)
   Output: Spatial_Average_ETo_inpermonth.csv (12-column, 42-row monthly avg)
 
-Historical_Unsplit (Product_A) ADAPTATION
+Product_A ADAPTATION
 ---------------------
-    Reads F1-corrected monthly ETo from Step 10b (Lon Lat mon-YYYY, 1921-2018)
+    Reads F1-corrected monthly ETo from Step 10b (Lon Lat mon-YYYY, 1920-2018)
         WBA, SR, and SW weights: GENERATED/.../_3_refet_cimis_adj/step0/WTable_*.csv
     Output: one row per polygon and 12 long-term monthly averages
 
 INPUTS
 ------
     1. Step 10b output:
-    Historical_Unsplit (Product_A)_ETo_F1corrected_monthly_inpermonth.csv
+    Product_A_ETo_F1corrected_monthly_inpermonth.csv
              (written to GENERATED/.../_3_refet_cimis_adj/step10/)
 
     2. Step 0 generated weights:
              GENERATED/.../_3_refet_cimis_adj/step0/WTable_*.csv
-         The current outputs contain 42 WBA, 21 SR, and 151 SW weight tables.
+         The current outputs contain 43 WBA (incl. WBA 91 = WBA 90 copy), 21 SR, and 151 SW weight tables.
          Each CSV has 3 columns (skiprows=2, then header row):
          long[k], lati[k], percent[k]
      where percent[k] = (area of cell_k ∩ WBA) / (total WBA area) × 100
 
-OUTPUTS  (written to GENERATED/.../_3_refet_cimis_adj/step11/)
-------------------------------
-    Historical_Unsplit (Product_A)_Spatial_Average_ETo_F1corrected_per_WBA.csv
-      rows = 42 WBAs
+OUTPUTS
+-------
+    CSVs are written to GENERATED/.../_3_refet_cimis_adj/step11/.
+    Product_A_Spatial_Average_ETo_F1corrected_per_WBA.csv
+      rows = 43 WBAs (including WBA 91)
             cols = WBA_ID, Jan, Feb, Mar, Apr, May, Jun, Jul, Aug, Sep, Oct, Nov, Dec
-            units: inches/month (long-term monthly average across 1921-2018)
+            units: inches/month (long-term monthly average across 1920-2018)
       --> Required input for Step 9 (Spline Disaggregation)
 
-    Historical_Unsplit (Product_A)_Spatial_Average_ETo_F1corrected_per_SR.csv
+    Product_A_Spatial_Average_ETo_F1corrected_per_SR.csv
         One row for each of the 21 Subregions.
 
-    Historical_Unsplit (Product_A)_Spatial_Average_ETo_F1corrected_per_SW.csv
+    Product_A_Spatial_Average_ETo_F1corrected_per_SW.csv
         One row for each weighted Small Watershed (currently 151).
+
+    CS3_RefETo.dss
+        Written to GENERATED/mod_hydrology/calsimhydro/output/_2_compile_et/Product_A/.
+        One monthly time series per WBA using
+        /CALSIM/{WBA with spaces}/REF-ET//1MON/REFETO/
+        Units: IN/MONTH; period: PER-CUM; January 1920 through December 2018.
 
 ENVIRONMENT
 -----------
@@ -62,14 +70,18 @@ HOW TO RUN
     Prerequisites: Step 10b and Step 0 must be run first.
 """
 
-import sys
+import os
 import pathlib
+import sys
+import tempfile
 import pandas as pd
 import numpy as np
 import re
+from pydsstools.core import TimeSeriesContainer
 
 # Add repo root to path for utils imports
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[3]))
+from utils import dss_io
 from utils.paths import get_module_generated_dir
 
 # =============================================================================
@@ -80,14 +92,20 @@ gen_dir = get_module_generated_dir("mod_forcing/climate")
 
 STEP10_CSV = (
     gen_dir / "output" / "_3_refet_cimis_adj" / "step10"
-    / "Historical_Unsplit (Product_A)_ETo_F1corrected_monthly_inpermonth.csv"
+    / "Product_A_ETo_F1corrected_monthly_inpermonth.csv"
 )
 
 WTABLE_DIR = gen_dir / "output" / "_3_refet_cimis_adj" / "step0"
 
 OUTPUT_DIR = gen_dir / "output" / "_3_refet_cimis_adj" / "step11"
-START_YEAR = 1921
+DSS_OUTPUT_DIR = (
+    get_module_generated_dir("mod_hydrology/calsimhydro")
+    / "output" / "_2_compile_et" / "Product_A"
+)
+START_YEAR = 1920
 END_YEAR = 2018
+START_DATE_DSS = "31JAN1920 24:00:00"
+EXPECTED_MONTHS = (END_YEAR - START_YEAR + 1) * 12
 
 MONTH_NAMES = ["Jan","Feb","Mar","Apr","May","Jun",
                "Jul","Aug","Sep","Oct","Nov","Dec"]
@@ -166,9 +184,10 @@ def spatial_average(df_avg, wtable_dir, glob_pattern, id_col):
             try:
                 eto_row = df_avg_indexed.loc[key]
             except KeyError:
-                dists = ((df_avg["Lon"] - row["Lon"])**2 +
-                         (df_avg["Lat"] - row["Lat"])**2).values
-                eto_row = df_avg.iloc[np.argmin(dists)][MONTH_NAMES]
+                raise ValueError(
+                    f"{poly_id}: weighted cell Lon={row['Lon']}, Lat={row['Lat']} "
+                    "is not in the Step 10b output. Rerun Steps 10a and 10b with the full grid."
+                )
 
             w = row["pct_k"]
             for m in MONTH_NAMES:
@@ -210,8 +229,10 @@ def spatial_timeseries(df_eto, wtable_dir, glob_pattern, id_col, data_cols):
         positions = source_index.index.get_indexer(weight_index)
         for weight_index_position in np.flatnonzero(positions < 0):
             coordinate = weights.iloc[weight_index_position][["Lon", "Lat"]].to_numpy(dtype=float)
-            distances = ((source_coordinates - coordinate) ** 2).sum(axis=1)
-            positions[weight_index_position] = int(np.argmin(distances))
+            raise ValueError(
+                f"{poly_id}: weighted cell Lon={coordinate[0]}, Lat={coordinate[1]} "
+                "is not in the Step 10b output. Rerun Steps 10a and 10b with the full grid."
+            )
 
         values = df_eto.iloc[positions][data_cols].to_numpy(dtype=float)
         weight_values = weights["pct_k"].to_numpy(dtype=float)
@@ -236,9 +257,77 @@ def spatial_timeseries(df_eto, wtable_dir, glob_pattern, id_col, data_cols):
     return pd.DataFrame(records)[[id_col] + data_cols]
 
 
+def write_wba_dss(df_wba_timeseries, data_cols):
+    """Write a clean WBA monthly ETo DSS using the existing CalSim path convention."""
+    if df_wba_timeseries.empty:
+        raise ValueError("No WBA monthly time series are available for the Step 11 DSS.")
+    if len(data_cols) != EXPECTED_MONTHS:
+        raise ValueError(
+            f"Expected {EXPECTED_MONTHS} monthly values for {START_YEAR}-{END_YEAR}; "
+            f"found {len(data_cols)}."
+        )
+
+    dss_path = DSS_OUTPUT_DIR / "CS3_RefETo.dss"
+    dss_path.parent.mkdir(parents=True, exist_ok=True)
+    fd, temp_name = tempfile.mkstemp(
+        prefix=".CS3_RefETo_",
+        suffix=".dss",
+        dir=dss_path.parent,
+    )
+    os.close(fd)
+    temp_path = pathlib.Path(temp_name)
+    temp_path.unlink()
+
+    try:
+        with dss_io.open_dss(temp_path, version=6, catalog_flag=False) as dss:
+            for row in df_wba_timeseries.itertuples(index=False, name=None):
+                wba_id, *values = row
+                if len(values) != EXPECTED_MONTHS:
+                    raise ValueError(
+                        f"{wba_id}: expected {EXPECTED_MONTHS} monthly values; "
+                        f"found {len(values)}."
+                    )
+                tsc = TimeSeriesContainer()
+                wba_part = f"WBA_{wba_id}".replace("_", " ")
+                tsc.pathname = f"/CALSIM/{wba_part}/REF-ET//1MON/REFETO/"
+                tsc.startDateTime = START_DATE_DSS
+                tsc.numberValues = len(values)
+                tsc.units = "IN/MONTH"
+                tsc.type = "PER-CUM"
+                tsc.interval = 1
+                tsc.values = np.asarray(values, dtype=float)
+                dss.put_ts(tsc)
+
+        with dss_io.open_dss(temp_path, version=6, catalog_flag=False) as dss:
+            paths = dss.getPathnameList("/CALSIM/*/REF-ET/*/1MON/REFETO/") or []
+        expected_wbas = {
+            f"WBA_{wba_id}".replace("_", " ")
+            for wba_id in df_wba_timeseries["WBA_ID"]
+        }
+        actual_wbas = {
+            pathname.strip("/").split("/")[1]
+            for pathname in paths
+        }
+        if actual_wbas != expected_wbas:
+            raise ValueError(
+                "Step 11 DSS validation failed; "
+                f"missing WBA parts={sorted(expected_wbas - actual_wbas)}, "
+                f"unexpected WBA parts={sorted(actual_wbas - expected_wbas)}."
+            )
+
+        os.replace(temp_path, dss_path)
+    finally:
+        if temp_path.exists():
+            temp_path.unlink()
+
+    if not dss_path.is_file() or dss_path.stat().st_size == 0:
+        raise OSError(f"Step 11 DSS was not created successfully: {dss_path}")
+    print(f"  DSS written: {dss_path} ({len(expected_wbas)} WBA series)")
+
+
 def main():
     print("=" * 60)
-    print("Step 11a: WBA / SR / SW Spatial Average -- Historical_Unsplit (Product_A) F1-corrected")
+    print("Step 11a: WBA / SR / SW Spatial Average -- Product_A F1-corrected")
     print("=" * 60)
 
     if not STEP10_CSV.exists():
@@ -278,9 +367,10 @@ def main():
                 try:
                     eto_row = df_avg_indexed.loc[key]
                 except KeyError:
-                    dists = ((df_avg["Lon"] - row["Lon"])**2 +
-                             (df_avg["Lat"] - row["Lat"])**2).values
-                    eto_row = df_avg.iloc[np.argmin(dists)][MONTH_NAMES]
+                    raise ValueError(
+                        f"{poly_id}: weighted cell Lon={row['Lon']}, Lat={row['Lat']} "
+                        "is not in the Step 10b output. Rerun Steps 10a and 10b with the full grid."
+                    )
                 w = row["pct_k"]
                 for m in MONTH_NAMES:
                     avg[m] = avg.get(m, 0.0) + float(eto_row[m]) * w
@@ -302,7 +392,7 @@ def main():
     print("\n[3/3] Small Watershed (SW) spatial averages (WTable_SW_*.csv) ...")
     df_sw = spatial_average(df_avg, WTABLE_DIR, "WTable_SW_*.csv", id_col="SW_ID")
 
-    print("\nComputing dated spatial series for 1921-2018 ...")
+    print(f"\nComputing dated spatial series for {START_YEAR}-{END_YEAR} ...")
     df_wba_timeseries = spatial_timeseries(
         df_eto, WTABLE_DIR, "WTable_*.csv", id_col="WBA_ID",
         data_cols=data_cols,
@@ -321,12 +411,12 @@ def main():
     )
 
     # --- Write outputs ----------------------------------------------------
-    out_wba = OUTPUT_DIR / "Historical_Unsplit (Product_A)_Spatial_Average_ETo_F1corrected_monthly_averaged_per_WBA.csv"
-    out_sr  = OUTPUT_DIR / "Historical_Unsplit (Product_A)_Spatial_Average_ETo_F1corrected_monthly_averaged_per_SR.csv"
-    out_sw  = OUTPUT_DIR / "Historical_Unsplit (Product_A)_Spatial_Average_ETo_F1corrected_monthly_averaged_per_SW.csv"
-    out_wba_timeseries = OUTPUT_DIR / "Historical_Unsplit (Product_A)_Spatial_Average_ETo_F1corrected_monthly_timeseries_per_WBA.csv"
-    out_sr_timeseries  = OUTPUT_DIR / "Historical_Unsplit (Product_A)_Spatial_Average_ETo_F1corrected_monthly_timeseries_per_SR.csv"
-    out_sw_timeseries  = OUTPUT_DIR / "Historical_Unsplit (Product_A)_Spatial_Average_ETo_F1corrected_monthly_timeseries_per_SW.csv"
+    out_wba = OUTPUT_DIR / "Product_A_Spatial_Average_ETo_F1corrected_monthly_averaged_per_WBA.csv"
+    out_sr  = OUTPUT_DIR / "Product_A_Spatial_Average_ETo_F1corrected_monthly_averaged_per_SR.csv"
+    out_sw  = OUTPUT_DIR / "Product_A_Spatial_Average_ETo_F1corrected_monthly_averaged_per_SW.csv"
+    out_wba_timeseries = OUTPUT_DIR / "Product_A_Spatial_Average_ETo_F1corrected_monthly_timeseries_per_WBA.csv"
+    out_sr_timeseries  = OUTPUT_DIR / "Product_A_Spatial_Average_ETo_F1corrected_monthly_timeseries_per_SR.csv"
+    out_sw_timeseries  = OUTPUT_DIR / "Product_A_Spatial_Average_ETo_F1corrected_monthly_timeseries_per_SW.csv"
 
     if not df_wba.empty:
         df_wba.to_csv(out_wba, index=False)
@@ -340,6 +430,10 @@ def main():
         df_sr_timeseries.to_csv(out_sr_timeseries, index=False, float_format="%.6f")
     if not df_sw_timeseries.empty:
         df_sw_timeseries.to_csv(out_sw_timeseries, index=False, float_format="%.6f")
+
+    # --- Write CalSim RefET DSS -------------------------------------------
+    print("\nWriting WBA monthly ETo DSS ...")
+    write_wba_dss(df_wba_timeseries, data_cols)
 
     print(f"\nOutputs written to: {OUTPUT_DIR}")
     output_sets = [

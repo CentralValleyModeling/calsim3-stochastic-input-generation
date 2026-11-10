@@ -21,7 +21,7 @@ PRODUCT A ADAPTATION
   Station metadata from DBF/CSV      | Lat/lon parsed from data_{lat}_{lon} filenames
   Monthly Tmax/Tmin wide-format CSVs | Daily Tmax/Tmin per-cell text files
   Monthly Ra * monthly mean temps    | Daily Ra * daily temps -> sum to monthly
-    Date range: 1920-2023              | Date range: 1921-2018 final output
+    Date range: 1920-2023              | Date range: 1920-2018 final output
 
 HARGREAVES-SAMANI FORMULA (unchanged)
 ---------------------------------------
@@ -34,20 +34,21 @@ INPUTS
   Product A Historical_Unsplit directory:
     Each file: data_{lat}_{lon}  (whitespace-separated, no header)
     Columns  : Year  Month  Day  Precip(mm)  Tmax(C)  Tmin(C)
-    Period   : 1915-01-01 to 2018-12-31; output is limited to 1921-2018
+    Period   : 1915-01-01 to 2018-12-31; output is limited to 1920-2018
 
 OUTPUTS  (written to output/)
 ------------------------------
     Historical_Unsplit (Product_A)_ETo_monthly_inpermonth.csv
-    rows = grid cells, cols = Lon Lat Jan-1921 Feb-1921 ... Dec-2018
+    rows = grid cells, cols = Lon Lat Jan-1920 Feb-1920 ... Dec-2018
       units: inches/month  --> input for Step 6-7 (F1 correction)
 
     Historical_Unsplit (Product_A)_monthly_Ra.csv
       rows = grid cells, cols = Lon Lat Jan Feb ... Dec
-      monthly average Ra from 1921 reference year
+      monthly average Ra from the 1920 reference year (leap year)
 
     Historical_Unsplit (Product_A)_daily_Ra_1921.csv
-      long format: Lon Lat Date Daily_Ra  (365 rows per cell)
+      long format: Lon Lat Date Daily_Ra  (366 rows per cell, 1920-01-01
+      through 1920-12-31; filename kept for compatibility)
 
 ENVIRONMENT
 -----------
@@ -86,15 +87,12 @@ GRID_DATA_DIR = base_dir / "WGEN" / "Historical_Unsplit"
 
 OUTPUT_DIR = gen_dir / "output" / "_3_refet_cimis_adj" / "step5"
 
-START_DATE = "1921-01-01"
+START_DATE = "1920-01-01"
 END_DATE   = "2018-12-31"
 
 # =============================================================================
 
-_DAYS_1921 = [datetime(1921, 1, 1) + timedelta(days=i) for i in range(365)]
-_CUM_DAYS  = np.insert(
-    np.cumsum([31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31]), 0, 0
-)
+_DAYS_REF = [datetime(1920, 1, 1) + timedelta(days=i) for i in range(366)]
 _MONTH_NAMES = ["Jan","Feb","Mar","Apr","May","Jun",
                 "Jul","Aug","Sep","Oct","Nov","Dec"]
 
@@ -158,14 +156,15 @@ def process_cell(cell):
         for period, total in df.groupby(df["date"].dt.to_period("M"))["eto_mm"].sum().items()
     }
 
-    ra_1921    = calculate_ra_vectorized(lat, _DAYS_1921)
+    ra_ref     = calculate_ra_vectorized(lat, _DAYS_REF)
+    ref_months = np.array([d.month for d in _DAYS_REF])
     monthly_ra = {
-        name: round(float(np.mean(ra_1921[_CUM_DAYS[i]:_CUM_DAYS[i+1]])), 4)
+        name: round(float(np.mean(ra_ref[ref_months == i + 1])), 4)
         for i, name in enumerate(_MONTH_NAMES)
     }
     daily_ra_rows = [
-        [lon, lat, _DAYS_1921[i].strftime("%Y-%m-%d"), round(float(ra_1921[i]), 4)]
-        for i in range(365)
+        [lon, lat, _DAYS_REF[i].strftime("%Y-%m-%d"), round(float(ra_ref[i]), 4)]
+        for i in range(len(_DAYS_REF))
     ]
 
     base = {"Lon": lon, "Lat": lat}

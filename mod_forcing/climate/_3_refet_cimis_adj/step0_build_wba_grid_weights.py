@@ -37,7 +37,8 @@ Input GeoJSON and lat/lon grid files are in WGS84 (EPSG:4326).
 INPUTS
 ------
 1. Boundary GeoJSON files (in mod_forcing/climate/reference/):
-    CS3_WBAs.geojson          (42 WBA polygons, field: WBA_ID)
+    CS3_WBAs.geojson          (42 WBA polygons, field: WBA_ID; WBA 91 has no
+                               polygon and is given WBA 90's weights)
     C2vsim_subregions.geojson (21 SR polygons, field: Subregion_)
     SmallWatersheds.geojson   (SW polygons, field: SW_ID)
 
@@ -140,6 +141,8 @@ HALF_CELL   = 0.03125    # half the 1/16-degree cell width
 WBA_ID_FIELD = "WBA_ID"
 SR_ID_FIELD  = "Subregion_"         # integer 1-21
 SW_ID_FIELD  = "SW_ID"              # integer; null rows are skipped
+WBA_91_ID     = "91"     # no polygon of its own
+WBA_91_SOURCE = "90"     # WBA 91 takes WBA 90's grid cells
 MIN_PERCENT  = 0.01      # drop cells contributing less than 0.01% to a polygon
 
 # =============================================================================
@@ -249,6 +252,12 @@ def main():
     wba_gdf = gpd.read_file(WBA_GEOJSON)[[WBA_ID_FIELD, "geometry"]]
     print(f"  Loaded {len(wba_gdf)} WBAs")
     wba_weights = compute_weights(wba_gdf, grid_gdf, id_field=WBA_ID_FIELD, label="WBA")
+    # WBA 91 has no polygon: it uses WBA 90's grid cells and weights
+    if WBA_91_SOURCE not in wba_weights:
+        raise KeyError(f"WBA {WBA_91_SOURCE} weights not found; cannot build WBA {WBA_91_ID}")
+    wba_weights[WBA_91_ID] = wba_weights[WBA_91_SOURCE].copy()
+    print(f"  WBA {WBA_91_ID} aliased to WBA {WBA_91_SOURCE}: "
+          f"{len(wba_weights[WBA_91_ID])} cells")
     for poly_id, df in sorted(wba_weights.items()):
         write_wtable(poly_id, df, OUTPUT_DIR, prefix="")
     print(f"  Written: {len(wba_weights)} WTable_*.csv")

@@ -46,11 +46,11 @@ differ, so their H-S estimates differ, and F1 must be recomputed accordingly.
             per cell per month.
 
   Step v  (manual -> this script):
-    Multiply the full Historical_Unsplit (Product_A) H-S time series (1921-2018) by F1.
+    Multiply the full Historical_Unsplit (Product_A) H-S time series (1920-2018) by F1.
 
 INPUTS
 ------
-        Step 5 output: Historical_Unsplit (Product_A)_ETo_monthly_inpermonth.csv (inches/month, 1921-2018)
+        Step 5 output: Historical_Unsplit (Product_A)_ETo_monthly_inpermonth.csv (inches/month, 1920-2018)
         CIMIS source: annual Step 6 CSVs in
             OneDrive/.../CIMIS_MonthlyAvg_ETo_mmperday_ProductA_grid_Per_Year/
             CIMIS_MonthlyAvg_ETo_mmperday_ProductA_grid_2004.csv through _2018.csv
@@ -58,7 +58,7 @@ INPUTS
 OUTPUTS (written to output/)
 -----------------------------
     Historical_Unsplit (Product_A)_ETo_F1corrected_monthly_inpermonth.csv
-      Same structure as Step 5 output (Lon Lat Jan-1915 ... Dec-2018).
+      Same structure as Step 5 output (Lon Lat Jan-1920 ... Dec-2018).
       Each value multiplied by its cell+month F1 factor.
       Units: inches/month  --> input for Step 8
 
@@ -75,7 +75,7 @@ ENVIRONMENT
 
 HOW TO RUN
 ----------
-  python step7_apply_f1_adjustment.py
+  python step7a_apply_f1_adjustment.py
   Prerequisites: Step 5 must be run first.
                  Step 6 annual output files for 2004-2018 must be present.
 """
@@ -112,7 +112,7 @@ OUTPUT_DIR = gen_dir / "output" / "_3_refet_cimis_adj" / "step7"
 # Use only the overlap period; the Historical_Unsplit (Product_A) H-S series ends in 2018.
 F1_START_YEAR = 2004
 F1_END_YEAR   = 2018
-FULL_START_YEAR = 1921
+FULL_START_YEAR = 1920
 FULL_END_YEAR   = 2018
 
 MONTH_NAMES = ["Jan","Feb","Mar","Apr","May","Jun",
@@ -282,7 +282,7 @@ def main():
     print("\nStep iv -- Computing F1 = CIMIS_avg / Historical_Unsplit (Product_A) H-S avg ...")
     f1, df_f1 = compute_f1(hs_avg, cimis_avg, df_eto, id_cols)
 
-    print("Step v  -- Applying F1 to full 1915-2018 time series ...")
+    print(f"Step v  -- Applying F1 to full {FULL_START_YEAR}-{FULL_END_YEAR} time series ...")
     df_corrected = apply_f1_to_series(df_eto, id_cols, data_cols, f1)
 
     non_id = [c for c in df_corrected.columns if c not in id_cols]
