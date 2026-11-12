@@ -30,6 +30,8 @@ Diagnostic outputs  (all written to ``_product_a_validation/``)
 - ``paths_modified.csv``                   - every (Part B/C, module) modified
 - ``paths_unchanged.csv``                  - baseline paths untouched by any module
 - ``paths_not_in_baseline.csv``            - module paths absent from the baseline
+- ``paths_partial_window.csv``             - module paths that cover only part of the
+                                             overwrite window (the baseline fills the rest)
 - ``inventory_expected_modified.csv``      - inventory SVs successfully modified
 - ``inventory_expected_missing.csv``       - inventory SVs that should have been
                                              modified but were not
@@ -80,8 +82,8 @@ from collections import OrderedDict
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 from utils import dss_io
-from utils.paths import (get_base_dir, get_generated_dir, get_module_generated_dir, get_inventory_dir,
-                         get_rim_inflow_outputs)
+from utils.paths import (PRODUCT_A_WY, get_base_dir, get_generated_dir, get_module_generated_dir,
+                         get_inventory_dir, get_rim_inflow_outputs)
 
 # Suppress noisy warnings from empty slices (e.g. all-NaN columns in stats)
 warnings.filterwarnings("ignore", message="Mean of empty slice")
@@ -104,9 +106,10 @@ INVENTORY_XLSX = get_inventory_dir() / "_MASTER_INVENTORY_FOR_STOCHASTIC_INPUT_G
 
 DSS_PATTERN = "/*/*/*/*/1MON/*"
 
-# Overwrite window (inclusive end-of-month timestamps)
-OVERWRITE_START = pd.Timestamp(1971, 10, 31)
-OVERWRITE_END   = pd.Timestamp(2018,  9, 30)
+# Overwrite window (inclusive end-of-month timestamps): utils.paths.PRODUCT_A_WY
+OVERWRITE_START = pd.Timestamp(PRODUCT_A_WY[0] - 1, 10, 31)
+OVERWRITE_END   = pd.Timestamp(PRODUCT_A_WY[1],  9, 30)
+WINDOW_MONTHS   = 12 * (PRODUCT_A_WY[1] - PRODUCT_A_WY[0] + 1)
 
 # -- Junction helper for long DSS paths ----------------------------------------
 # The Fortran HEC-DSS library inside pydsstools limits path names to 256 chars.
@@ -1850,6 +1853,7 @@ print("-" * 72)
 module_dss_paths   = OrderedDict()   # label -> Path to intermediate DSS
 module_modified    = {}              # label -> set of (B,C) keys modified
 module_not_in_base = []              # records of (B,C) not found in baseline
+module_partial     = []              # records of (B,C) that cover part of the window
 
 for label, csvs in available_modules.items():
     t0 = time.time()
@@ -1859,7 +1863,7 @@ for label, csvs in available_modules.items():
     for f in csvs:
         df = pd.read_csv(f)
         df.columns = [c.strip() for c in df.columns]
-        frames.append(df)
+        frames.append(df.assign(_file=f.name))
     csv_df = pd.concat(frames, ignore_index=True)
 
     required = {"Part B", "Part C", "Year", "Month", "Value"}
@@ -1872,6 +1876,14 @@ for label, csvs in available_modules.items():
     csv_df["PARTC"] = csv_df["Part C"].map(excel_to_part)
     csv_df["DATE"]  = [ym_to_eom(y, m) for y, m in zip(csv_df["Year"], csv_df["Month"])]
     csv_df["Value"] = pd.to_numeric(csv_df["Value"], errors="coerce")
+
+    # Two rows for one month would leave the DSS with whichever was written last.
+    dup = csv_df[csv_df.duplicated(["PARTB", "PARTC", "DATE"], keep=False)]
+    if not dup.empty:
+        files = dup.groupby(["PARTB", "PARTC"])["_file"].unique().head(5)
+        raise SystemExit(f"{label}: {dup.groupby(['PARTB', 'PARTC']).ngroups} SV(s) have more "
+                         f"than one row for a month, e.g. "
+                         + "; ".join(f"{b}/{c} in {sorted(fs)}" for (b, c), fs in files.items()))
 
     override_dict = {}
     for (partb, partc), g in csv_df.groupby(["PARTB", "PARTC"]):
@@ -1911,6 +1923,13 @@ for label, csvs in available_modules.items():
             ]
             if overrides.empty:
                 continue
+            if len(overrides) < WINDOW_MONTHS:
+                module_partial.append({
+                    "Part B": partb, "Part C": partc, "Module": label,
+                    "First": overrides.index[0].strftime("%Y-%m"),
+                    "Last": overrides.index[-1].strftime("%Y-%m"),
+                    "Months": len(overrides), "Window_Months": WINDOW_MONTHS,
+                })
 
             override_index  = overrides.index
             override_values = overrides.values.astype(float)
@@ -2193,6 +2212,17 @@ if not nib_df.empty:
 fp = OUTPUT_DIR / "paths_not_in_baseline.csv"
 nib_df.to_csv(fp, index=False)
 print(f"  {fp.name:45s}  {len(nib_df):>6,} records")
+
+# -- paths_partial_window.csv ------------------------------------------------
+part_df = pd.DataFrame(module_partial, columns=["Part B", "Part C", "Module", "First", "Last",
+                                                "Months", "Window_Months"])
+part_df = part_df.sort_values(["Module", "Part B", "Part C"]).reset_index(drop=True)
+fp = OUTPUT_DIR / "paths_partial_window.csv"
+part_df.to_csv(fp, index=False)
+print(f"  {fp.name:45s}  {len(part_df):>6,} records")
+if not part_df.empty:
+    print(f"    keep the baseline outside their months: "
+          f"{part_df.groupby('Module').size().to_dict()}")
 
 # -- inventory_expected_modified.csv ------------------------------------------
 inv_mod_rows = expected_svs[

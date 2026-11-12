@@ -50,7 +50,8 @@ import pandas as pd
 # Add repo root to path for utils imports
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 from utils.paths import get_base_dir, get_module_generated_dir
-from utils.wyt_monthlyavg_framework import compute_wyt_pattern, compute_product_targets, plot_wyt_hist_validation, plot_actual_vs_recon_validation, water_year
+from utils.csv_io import write_product_a_csv
+from utils.wyt_monthlyavg_framework import compute_wyt_pattern, compute_product_targets, plot_wyt_hist_validation, plot_actual_vs_recon_validation
 
 
 _SCRIPT_DIR = Path(__file__).resolve().parent
@@ -113,15 +114,9 @@ def _write_targets(product_key: str, prefix: str, targets) -> None:
                 print(f"  - {out}")
 
     elif product_key == "A":
-        PRODUCT_A_DIR.mkdir(parents=True, exist_ok=True)
         for name, df in targets.items():
-            sv = _to_sv_format(df)
-            wy_min = int(df["date"].apply(water_year).min())
-            wy_max = int(df["date"].apply(water_year).max())
-            for part_b, grp in sv.groupby("Part B"):
-                out = PRODUCT_A_DIR / f"{part_b}_product_a_{wy_min}_{wy_max}.csv"
-                grp.to_csv(out, index=False)
-                print(f"  - {out}")
+            for part_b, grp in _to_sv_format(df).groupby("Part B"):
+                print(f"  - {write_product_a_csv(grp, PRODUCT_A_DIR, f'{part_b}_product_a')}")
 
 
 

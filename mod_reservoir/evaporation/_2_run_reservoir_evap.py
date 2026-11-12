@@ -50,7 +50,8 @@ import matplotlib.pyplot as plt
 from matplotlib.patches import Patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
-from utils.paths import get_module_generated_dir, get_base_dir
+from utils.csv_io import write_product_a_csv
+from utils.paths import PRODUCT_A_WY, get_module_generated_dir, get_base_dir
 from utils.wgen_calendar import require_stamp_days
 
 _gen = get_module_generated_dir("mod_reservoir/evaporation")
@@ -300,17 +301,12 @@ def create_summary_statistics(
     print(f"  Range: {summary_df['annual_total_in'].min():.2f} - {summary_df['annual_total_in'].max():.2f} in/yr")
 
 
-def create_validation_csv(
-    output_dir=None,
-    validation_dir=None,
-    start_wy: int = 1972,
-    end_wy: int = 2018
-):
+def create_validation_csv(output_dir=None, validation_dir=None):
     """
     Create a combined validation CSV from individual reservoir files.
 
     Reads processed individual reservoir CSVs and creates a long-format CSV
-    with columns Part B, Part C, Year, Month, Value for the validation period.
+    with columns Part B, Part C, Year, Month, Value over utils.paths.PRODUCT_A_WY.
 
     Parameters:
     -----------
@@ -318,11 +314,8 @@ def create_validation_csv(
         Directory containing individual_reservoirs/ subfolders
     validation_dir : path-like, optional
         Output directory for the validation CSV
-    start_wy : int
-        Start water year (default: 1972)
-    end_wy : int
-        End water year (default: 2018)
     """
+    start_wy, end_wy = PRODUCT_A_WY
     if output_dir is None:
         output_dir = _gen / 'output' / '_2_run_reservoir_evap' / 'Product_A'
     if validation_dir is None:
@@ -391,10 +384,7 @@ def create_validation_csv(
     result_df = result_df.sort_values(['Part B', 'Year', 'Month']).reset_index(drop=True)
 
     # Save
-    val_path = Path(validation_dir)
-    val_path.mkdir(parents=True, exist_ok=True)
-    output_file = val_path / f'_reservoir_evaporation_productA_{start_wy}_{end_wy}.csv'
-    result_df.to_csv(output_file, index=False)
+    output_file = write_product_a_csv(result_df, validation_dir, '_reservoir_evaporation_productA')
 
     n_reservoirs = result_df['Part B'].nunique()
     print(f"\n{'=' * 80}")

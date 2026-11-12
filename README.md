@@ -102,7 +102,7 @@ data/                            (or wherever data_dir points)
 
 Scripts within each module are numbered in execution order (`_1_`, `_2_`, ...) and run as scripts from inside their own directory. The full end-to-end run order, per-module commands, validation steps, and CLI flags are documented in the two production runbooks:
 
-- **[Product A Validation Runbook](Product_A_Validation_Manifest.md)** — 1921–2018 historical-length scenarios.
+- **[Product A Validation Runbook](Product_A_Validation_Manifest.md)** — historical-length scenarios, delivered over WY 1922-2018.
 - **[Product B Production Runbook](Product_B_Production_Manifest.md)** — 1000-year stochastic sequences (10 chunks of 100 water years).
 
 Follow the relevant manifest start to finish; it points at each module in dependency-tiered order through to the final DSS compilation.

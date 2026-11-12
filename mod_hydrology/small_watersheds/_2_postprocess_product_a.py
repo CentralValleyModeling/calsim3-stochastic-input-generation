@@ -22,11 +22,9 @@ Dependencies
 
 Usage
 -----
-Default (runs postprocess + validation for WY 1972-2018):
+Runs the postprocess and writes the validation CSV over utils.paths.PRODUCT_A_WY
+(the SWS Product A run covers WY1921-2018):
     python _2_postprocess_product_a.py
-
-Custom validation period (SWS product A output is 1921-2018):
-    python _2_postprocess_product_a.py 1922 2018
 """
 
 import os
@@ -42,7 +40,8 @@ import matplotlib.pyplot as plt
 # Add repo root to path for utils imports
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 from utils import dss_io
-from utils.paths import get_module_generated_dir, get_inventory_dir
+from utils.csv_io import write_product_a_csv
+from utils.paths import PRODUCT_A_WY, get_module_generated_dir, get_inventory_dir
 
 _GEN_DIR = get_module_generated_dir("mod_hydrology/small_watersheds")
 
@@ -234,11 +233,11 @@ def run_postprocess():
 
 # -- VALIDATION CSV ---------------------------------------------------
 
-def create_validation_csv(merged_df=None, output_dir=None, start_wy=1972, end_wy=2018):
+def create_validation_csv(merged_df=None, output_dir=None):
     """
     Create validation CSV from SmallWatersheds postprocess output.
 
-    Filters the VIC_Precip (Product A) scenario to the CalSim validation period
+    Filters the VIC_Precip (Product A) scenario to utils.paths.PRODUCT_A_WY
     and converts AF to TAF.  Outputs in standard CalSim validation format:
     Part B, Part C, Year, Month, Value.
 
@@ -249,14 +248,10 @@ def create_validation_csv(merged_df=None, output_dir=None, start_wy=1972, end_wy
         from SmallWatersheds_2DSS.csv on disk.
     output_dir : str, optional
         Output directory for validation CSV.  Defaults to VALIDATION_DIR.
-    start_wy : int
-        Start water year (default: 1972)
-    end_wy : int
-        End water year (default: 2018)
     """
     if output_dir is None:
         output_dir = VALIDATION_DIR
-    os.makedirs(output_dir, exist_ok=True)
+    start_wy, end_wy = PRODUCT_A_WY
 
     print("=" * 80)
     print("Creating Validation CSV -- Small Watersheds")
@@ -303,10 +298,7 @@ def create_validation_csv(merged_df=None, output_dir=None, start_wy=1972, end_wy
         by=['Part B', 'Part C', 'Year', 'Month']
     ).reset_index(drop=True)
 
-    output_file = os.path.join(
-        output_dir, f"_smallwatersheds_productA_{start_wy}_{end_wy}.csv"
-    )
-    val_df.to_csv(output_file, index=False)
+    output_file = write_product_a_csv(val_df, output_dir, "_smallwatersheds_productA")
 
     n_variables = val_df.groupby(['Part B', 'Part C']).ngroups
     print(f"\n  Written   : {output_file}")
@@ -322,16 +314,8 @@ def create_validation_csv(merged_df=None, output_dir=None, start_wy=1972, end_wy
 
 def main():
     """Main entry point."""
-    args = [a for a in sys.argv[1:] if not a.startswith('--')]
-
-    start_wy = int(args[0]) if len(args) >= 2 else 1972
-    end_wy   = int(args[1]) if len(args) >= 2 else 2018
-
-    if len(args) >= 2:
-        print(f"\nCustom validation period: WY {start_wy}-{end_wy}\n")
-
     merged_df = run_postprocess()
-    create_validation_csv(merged_df=merged_df, start_wy=start_wy, end_wy=end_wy)
+    create_validation_csv(merged_df=merged_df)
 
 
 if __name__ == "__main__":

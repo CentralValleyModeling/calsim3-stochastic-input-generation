@@ -56,9 +56,9 @@ INPUTS / OUTPUTS
     read via utils.dss_io.  The spreadsheet still supplies the calibrated
     thresholds and the Value_Spreadsheet reference column.
 
-  Product A  <-  rim-inflow Product A CSV  _riminflow_productA_1972_2018.csv
-    UNIMP_OROV (WY 1972-2018).  Leading months that predate
-    the first classifiable cycle are filled from the baseline MINFLOWFEATHER.
+  Product A  <-  rim-inflow Product A table  calsim_qmap_validation_TS.csv
+    UNIMP_OROV over the whole model run (WY 1916-2018), so the schedule
+    cycles of the delivered years have their preceding years.
 
   Product B  <-  rim-inflow Product B chunks  UNIMP_OROV_qmo_n01..n10.csv
     UNIMP_OROV; the WY-1921 rolling-average seed comes from
@@ -79,13 +79,10 @@ INPUTS / OUTPUTS
     Primary comparison: Value_Spreadsheet (MIF_FEATHER_Logic_Reconstruction.xlsx
       Main_WA cols G-S, rows 4-104, CY 1921-2021)
 
-  Output 2 - Product A (WY 1972-2018)
-    Classifies with the quantile-mapped Product A UNIMP_OROV; dates from
-    Oct 1971 - Sep 2018.  The leading months (Oct 1971 - Mar 1972), whose
-    schedule cycle needs WY 1971, are filled from the CalSim baseline
-    MINFLOWFEATHER.
+  Output 2 - Product A (WY 1922-2018, utils.paths.PRODUCT_A_WY)
+    Classifies with the Product A UNIMP_OROV; dates from Oct 1921 - Sep 2018.
     Written to:
-      output/_product_a_validation/_minflowfeather_productA_1972_2018.csv
+      output/_product_a_validation/_minflowfeather_productA_1922_2018.csv
 
   Output 3 - Product B (10 chunks, WY 1922-2021 each)
     Classifies with each chunk's own qmap_postAdj data plus CS3 WY 1921 seed
@@ -114,6 +111,7 @@ import numpy as np
 
 # Add repo root to path for utils imports
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
+from utils.csv_io import write_product_a_csv
 from utils.paths import get_base_dir, get_module_generated_dir, get_rim_inflow_outputs
 from utils import dss_io
 
@@ -124,17 +122,17 @@ _SCRIPT_DIR = Path(__file__).resolve().parent
 _gen        = get_module_generated_dir("mod_other/instream_flows")
 
 # CalSim SV DSS: source of the validation input UNIMP_OROV, the Product B
-# WY-1921 rolling-average seed, and the baseline MINFLOWFEATHER used to fill
-# Product A leading months and for the validation Value_CS3 column.
+# WY-1921 rolling-average seed, and the baseline MINFLOWFEATHER for the
+# validation Value_CS3 column.
 DSS_FILE         = get_base_dir() / "CalSim3" / "__calsim_sv_default__.dss"
 DSS_READ_START   = "1915-01-31"
 DSS_READ_END     = "2021-12-31"
 UNIMP_OROV_KEY = ("UNIMP_OROV", "FLOW-UNIMPAIRED")        # baseline inflow input
 MINFLOW_KEY    = ("MINFLOWFEATHER", "FLOW-MIN-REQUIRED")  # CS3 actual (Value_CS3)
 
-# Product A UNIMP_OROV (WY 1972-2018), from the rim-inflow Product A CSV
-# (Part B == UNIMP_OROV).
-PATH_PRODUCT_A_CSV = get_rim_inflow_outputs("A")["sv"]
+# Product A UNIMP_OROV over the whole model run, from the rim-inflow Product A table
+# (CalSim == UNIMP_OROV).
+PATH_PRODUCT_A_CSV = get_rim_inflow_outputs("A")["ts"]
 
 # Product B directory (10 chunk CSVs)
 PATH_UNIMP_OROV_PB_DIR = get_rim_inflow_outputs("B")["dir"]
@@ -148,9 +146,8 @@ OUT_DIR = _gen / "output" / "_1_min_flow_feather"
 # Output 1: wide-format validation (WY 1922-2021, capped by available historical data)
 OUT_VALIDATION = OUT_DIR / "_minflowfeather_validation_1922_2021.csv"
 
-# Output 2: Product A (WY 1972-2018, quantile-mapped input)
+# Output 2: Product A (utils.paths.PRODUCT_A_WY)
 OUT_PRODUCT_A_DIR = _gen / "output" / "_product_a_validation"
-OUT_PRODUCT_A = OUT_PRODUCT_A_DIR / "_minflowfeather_productA_1972_2018.csv"
 
 # Output 3: Product B - one file per chunk (n01 ... n10)
 OUT_PRODUCT_B_DIR = _gen / "output" / "_product_b_final"
@@ -499,41 +496,26 @@ def run_validation():
 
 
 def _read_product_a_unimp_orov(path: Path = PATH_PRODUCT_A_CSV) -> pd.Series:
-    """Load quantile-mapped Product A UNIMP_OROV (TAF, WY 1972-2018) from the
-    rim-inflow Product A CSV (rows where Part B == UNIMP_OROV)."""
+    """Load Product A UNIMP_OROV (TAF) over the whole model run from the rim-inflow
+    Product A table (rows where CalSim == UNIMP_OROV)."""
     df = pd.read_csv(path)
-    df = df[df['Part B'].astype(str).str.upper() == UNIMP_OROV_KEY[0]]
+    df = df[df['CalSim'].astype(str).str.upper() == UNIMP_OROV_KEY[0]]
     idx = (pd.to_datetime({'year': df['Year'], 'month': df['Month'], 'day': 1})
            + pd.offsets.MonthEnd(0))
-    return pd.Series(df['Value'].astype(float).to_numpy(), index=idx).sort_index()
+    return pd.Series(df['qmap_postAdj'].astype(float).to_numpy(), index=idx).sort_index()
 
 
 def run_product_a():
-    """Output 2: Product A (WY 1972-2018, quantile-mapped UNIMP_OROV)."""
-    os.makedirs(OUT_PRODUCT_A_DIR, exist_ok=True)
+    """Output 2: Product A (utils.paths.PRODUCT_A_WY)."""
     print("\n" + "-" * 65)
-    print("OUTPUT 2 - Product A  (WY 1972-2018, quantile-mapped UNIMP_OROV)")
+    print("OUTPUT 2 - Product A  (UNIMP_OROV of the rim-inflow model)")
     print("-" * 65)
 
     unimp_pa = _read_product_a_unimp_orov()
     mf_pa    = compute_min_flow_feather(unimp_pa)
-
-    # The first months of the input (Oct 1971-Mar 1972) belong to a schedule
-    # cycle that needs water year 1971, which the WY-1972-start input lacks, so
-    # they cannot be classified.  Fill them from the CalSim baseline
-    # MINFLOWFEATHER.
-    baseline_mf = _read_dss(MINFLOW_KEY)[MINFLOW_KEY]
-    missing = unimp_pa.index.difference(mf_pa.index)
-    mf_pa_out = (pd.concat([baseline_mf.reindex(missing).dropna(), mf_pa])
-                 .sort_index().round().astype(int))
-
-    df_pa = to_calsim_csv(mf_pa_out, 'MINFLOWFEATHER', 'FLOW-MIN-REQUIRED')
-    df_pa.to_csv(OUT_PRODUCT_A, index=False)
-    print(f"  Written : {OUT_PRODUCT_A}")
-    wy_first = int(df_pa.loc[df_pa['Month'] == 10, 'Year'].min()) + 1
-    wy_last  = int(df_pa.loc[df_pa['Month'] == 9,  'Year'].max())
-    print(f"  Rows    : {len(df_pa):,}  (WY {wy_first} - WY {wy_last})")
-    print(f"  Leading months filled from baseline: {len(missing)}")
+    df_pa = to_calsim_csv(mf_pa, 'MINFLOWFEATHER', 'FLOW-MIN-REQUIRED')
+    out = write_product_a_csv(df_pa, OUT_PRODUCT_A_DIR, '_minflowfeather_productA')
+    print(f"  Written : {out}")
     print("  Product A schedule distribution:")
     _print_schedule_summary(_schedule_summary_from_series(unimp_pa))
 

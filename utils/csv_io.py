@@ -2,7 +2,8 @@
 Shared standard-value (SV) CSV helpers
 ======================================
 Centralizes the CSV read/normalize idioms repeated across the pipeline for the
-standard SV format ``Part B, Part C, Year, Month, Value``.
+standard SV format ``Part B, Part C, Year, Month, Value``, and
+``write_product_a_csv``, which writes a Product A series over ``PRODUCT_A_WY``.
 
 Behavior-preservation note
 --------------------------
@@ -19,9 +20,12 @@ scripts.
 """
 from __future__ import annotations
 
+import re
 from pathlib import Path
 
 import pandas as pd
+
+from utils.paths import PRODUCT_A_WY
 
 # Canonical column order for the standard SV / validation CSV format.
 SV_COLUMNS = ["Part B", "Part C", "Year", "Month", "Value"]
@@ -39,6 +43,28 @@ def read_sv_csv(path) -> pd.DataFrame:
     df = pd.read_csv(path, skipinitialspace=True)
     df.columns = [str(c).strip() for c in df.columns]
     return df
+
+
+# -- Product A writer ----------------------------------------------------------
+
+def write_product_a_csv(df: pd.DataFrame, folder, stem: str) -> Path:
+    """Write the rows of ``df`` (with ``Year`` and ``Month``) that fall in
+    ``utils.paths.PRODUCT_A_WY`` as ``<folder>/<stem>_<first WY>_<last WY>.csv``, and remove the
+    folder's other ``<stem>_<WY>_<WY>.csv`` files: the compiler reads every CSV in a folder, so
+    two spans of one series would give it two values for a month. Returns the path written."""
+    wy = df["Year"].astype(int) + (df["Month"].astype(int) >= 10)
+    keep = wy.between(*PRODUCT_A_WY)
+    if not keep.any():
+        raise ValueError(f"{stem}: no rows in WY{PRODUCT_A_WY[0]}-{PRODUCT_A_WY[1]}")
+    folder = Path(folder)
+    folder.mkdir(parents=True, exist_ok=True)
+    out = folder / f"{stem}_{wy[keep].min()}_{wy[keep].max()}.csv"
+    span = re.compile(re.escape(stem) + r"_\d{4}_\d{4}\.csv")
+    for old in folder.glob(f"{stem}_*.csv"):
+        if old.name != out.name and span.fullmatch(old.name):
+            old.unlink()
+    df[keep].to_csv(out, index=False)
+    return out
 
 
 # -- Series loader -------------------------------------------------------------

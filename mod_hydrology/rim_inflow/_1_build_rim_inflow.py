@@ -26,7 +26,7 @@ method in reference/CalSim3_inflow_mapping.csv (CS3_Inflow, Source, Method):
 Products
 --------
 - A          : Product A (WGEN scenario 1), WY1916-2018, the whole model run; its SV-format
-               file keeps WY1972-2018, the compiler window
+               file keeps WY1922-2018 (utils.paths.PRODUCT_A_WY), what the compiler delivers
 - B          : Product B (WGEN scenario 1), 10 chunks of 100 water years, each labelled
                WY1922-2021 (utils.wgen_calendar); a qmap SV is mapped once over all 10 chunks
 - historical : the historical-unsplit run, WY1916-2018, for evaluation; not delivered
@@ -50,8 +50,8 @@ Outputs
   - qmap_fits.csv                  per qmap SV: source, fit window, mean annual volumes of the
                                    SV and its source in CalSim3 (fit window) and in the product,
                                    and their ratios
-  - _product_a_validation/_riminflow_productA_1972_2018.csv  (A only; Part B, Part C, Year,
-                                   Month, Value over WY1972-2018, for the SV compiler)
+  - _product_a_validation/_riminflow_productA_1922_2018.csv  (A only; Part B, Part C, Year,
+                                   Month, Value over WY1922-2018, for the SV compiler)
   - run_manifest.json              the manifest of the model run the SVs come from, copied
                                    from the arc flows; the absorb fits check it (utils.qmap_fit)
 
@@ -71,8 +71,9 @@ import pandas as pd
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 from utils import dss_io
-from utils.paths import (INFLOW_PROVENANCE, get_arc_inflows, get_base_dir, get_inventory_dir,
-                         get_rim_inflow_outputs, remove_tree, require_pinned_run)
+from utils.paths import (INFLOW_PROVENANCE, PRODUCT_A_WY, get_arc_inflows, get_base_dir,
+                         get_inventory_dir, get_rim_inflow_outputs, remove_tree,
+                         require_pinned_run)
 from utils.qmap_fit import FIT_WY
 from utils.quantile_mapping import qmap_single
 from utils.wgen_calendar import LABEL_WY
@@ -84,7 +85,6 @@ INVENTORY_XLSX = get_inventory_dir() / "_MASTER_INVENTORY_FOR_STOCHASTIC_INPUT_G
 
 METHODS = ("arc", "gap", "sum", "qmap", "zero", "wyt", "none")
 PRODUCT_WY = {"A": (1916, 2018), "B": LABEL_WY, "historical": (1916, 2018)}  # B: per chunk
-COMPILE_WY = (1972, 2018)   # Product A's SV-format file, which the SV compiler reads
 
 
 def wy_index(wy: tuple[int, int]) -> pd.DatetimeIndex:
@@ -280,12 +280,12 @@ def main():
 
     if args.product == "A":
         wy_row = ts["Year"] + (ts["Month"] >= 10)
-        c = ts[wy_row.between(*COMPILE_WY)]
+        c = ts[wy_row.between(*PRODUCT_A_WY)]
         sv = pd.DataFrame({"Part B": c["CalSim"], "Part C": c["CalSim"].map(part_c),
                            "Year": c["Year"], "Month": c["Month"], "Value": c["qmap_postAdj"]})
         paths["sv_dir"].mkdir(parents=True)
         sv.sort_values(["Part B", "Year", "Month"]).to_csv(paths["sv"], index=False)
-        print(f"SV format, WY{COMPILE_WY[0]}-{COMPILE_WY[1]}: {paths['sv']}")
+        print(f"SV format, WY{PRODUCT_A_WY[0]}-{PRODUCT_A_WY[1]}: {paths['sv']}")
 
     skipped = mapping[~mapping.index.isin(next(iter(built.values())))]
     print(f"Not built here: {skipped['Method'].value_counts().to_dict()}")

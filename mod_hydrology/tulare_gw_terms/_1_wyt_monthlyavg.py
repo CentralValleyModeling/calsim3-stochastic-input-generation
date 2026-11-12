@@ -46,7 +46,8 @@ import pandas as pd
 # Add repo root to path for utils imports
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 from utils.paths import get_base_dir, get_module_generated_dir
-from utils.wyt_monthlyavg_framework import compute_wyt_pattern, compute_product_targets, plot_wyt_hist_validation, plot_actual_vs_recon_validation, water_year
+from utils.csv_io import write_product_a_csv
+from utils.wyt_monthlyavg_framework import compute_wyt_pattern, compute_product_targets, plot_wyt_hist_validation, plot_actual_vs_recon_validation
 
 
 _SCRIPT_DIR = Path(__file__).resolve().parent
@@ -108,14 +109,8 @@ def _write_targets(product_key: str, prefix: str, targets) -> None:
 
     elif product_key == "A":
         val_dir = BASE_RESULTS_DIR / "_product_a_validation"
-        val_dir.mkdir(parents=True, exist_ok=True)
         for name, df in targets.items():
-            sv = _to_sv_format(df)
-            wy_min = int(df["date"].apply(water_year).min())
-            wy_max = int(df["date"].apply(water_year).max())
-            out = val_dir / f"{prefix}_productA_{wy_min}_{wy_max}.csv"
-            sv.to_csv(out, index=False)
-            print(f"  - {out}")
+            print(f"  - {write_product_a_csv(_to_sv_format(df), val_dir, f'{prefix}_productA')}")
 
 
 

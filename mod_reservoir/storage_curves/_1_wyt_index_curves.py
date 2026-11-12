@@ -47,7 +47,8 @@ import numpy as np
 import pandas as pd
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
-from utils.paths import get_base_dir, get_module_generated_dir
+from utils.csv_io import write_product_a_csv
+from utils.paths import PRODUCT_A_WY, get_base_dir, get_module_generated_dir
 from utils import dss_io
 from utils.validation_plots import Series, plot_ts_cdf
 
@@ -235,6 +236,7 @@ def generate_targets(
     wyt_sched: pd.DataFrame,
     wyt_tables: Dict[str, pd.DataFrame],
     map_wyt_by: str = None,
+    wy_range: Tuple[int, int] = None,
 ) -> pd.DataFrame:
     """Generate target storage-level time series for all schedule series.
 
@@ -251,16 +253,20 @@ def generate_targets(
         Force all WYT series to map by calendar year ('cy') or water
         year ('wy'), ignoring the per-series year_type_basis in the CSV.
         Default None uses year_type_basis from the schedule CSV.
+    wy_range : (int, int) or None
+        Water years of the output; default None takes the span of the WYT tables. A
+        calendar-year series takes the class of the year before for October-December, so
+        a range that starts after the tables gives every month a class.
 
     Returns
     -------
     pd.DataFrame
         Long-form: Part B, Part C, Year, Month, Value
     """
-    # Determine date range from WYT tables
-    all_wys = pd.concat([t["WY"] for t in wyt_tables.values()])
-    wy_min, wy_max = int(all_wys.min()), int(all_wys.max())
-    grid = _make_monthly_index(wy_min, wy_max)
+    if wy_range is None:
+        all_wys = pd.concat([t["WY"] for t in wyt_tables.values()])
+        wy_range = (int(all_wys.min()), int(all_wys.max()))
+    grid = _make_monthly_index(*wy_range)
     grid["cy"] = grid["date"].dt.year
 
     results = []
@@ -339,19 +345,7 @@ def generate_targets(
 
 def _write_product_a(df: pd.DataFrame, prefix: str) -> None:
     """Write Product A validation CSV."""
-    PRODUCT_A_DIR.mkdir(parents=True, exist_ok=True)
-
-    dates = pd.to_datetime(
-        df[["Year", "Month"]].assign(Day=1).rename(
-            columns={"Year": "year", "Month": "month", "Day": "day"}
-        )
-    )
-    wy_min = int(dates.apply(water_year).min())
-    wy_max = int(dates.apply(water_year).max())
-
-    out_path = PRODUCT_A_DIR / f"{prefix}_productA_{wy_min}_{wy_max}.csv"
-    df.to_csv(out_path, index=False)
-    print(f"  [OK] {out_path}")
+    print(f"  [OK] {write_product_a_csv(df, PRODUCT_A_DIR, f'{prefix}_productA')}")
 
 
 def _write_product_b(df: pd.DataFrame, ensemble: str) -> None:
@@ -399,7 +393,7 @@ def run_product_a_plots(
     df: pd.DataFrame,
     dss_data: Dict[Tuple[str, str], pd.Series],
 ) -> None:
-    """Plot Product A targets against historical DSS actuals (WY 1972-2018).
+    """Plot Product A targets against historical DSS actuals over PRODUCT_A_WY.
 
     Mirrors the historical validation figures but pairs the Product A series
     (schedule targets applied to Product A WYT classifications) with the
@@ -418,8 +412,8 @@ def run_product_a_plots(
         )
     ) + pd.offsets.MonthEnd(0)
 
-    plot_start = pd.Timestamp("1971-10-01")
-    plot_end = pd.Timestamp("2018-09-30")
+    plot_start = pd.Timestamp(PRODUCT_A_WY[0] - 1, 10, 1)
+    plot_end = pd.Timestamp(PRODUCT_A_WY[1], 9, 30)
     for (partb, partc), sub in tmp.groupby(["Part B", "Part C"]):
         key = (str(partb).strip().upper(), str(partc).strip().upper())
         if key not in dss_data:
@@ -673,7 +667,8 @@ def main():
             wyt_dir = wyt_product_dir / _WYT_PRODUCT_DIRS["A"]
             wyt_tables = _load_wyt(wyt_dir, basins, product="A")
             df = generate_targets(
-                monthly_sched, wyt_sched, wyt_tables, map_wyt_by=args.yr_type_map
+                monthly_sched, wyt_sched, wyt_tables, map_wyt_by=args.yr_type_map,
+                wy_range=PRODUCT_A_WY,
             )
             _fill_from_dss(df)
             _write_product_a(df, OUTPUT_PREFIX)

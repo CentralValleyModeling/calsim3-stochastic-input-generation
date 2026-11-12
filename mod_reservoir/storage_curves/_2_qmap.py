@@ -3,7 +3,7 @@ Storage Curves Quantile Mapping (Product A or Product B)
 ========================================================
 Thin driver around the shared QM engines for the reservoir storage_curves
 module. For ``--product A`` it calls ``utils.qmap_product_a_from_pairs.
-run_product_a_qmap_from_pairs`` (1972-2018 simulation). For ``--product B``
+run_product_a_qmap_from_pairs`` (1922-2018 simulation). For ``--product B``
 it calls ``utils.qmap_product_b_from_pairs.run_product_b_qmap_from_pairs``
 for each of the 10 stochastic chunks, then reformats the per-chunk detail
 CSVs into final ``Part B, Part C, Year, Month, Value`` files.
@@ -14,7 +14,7 @@ For each (target, predictor) pair in ``reference/qmap_pairs.csv``:
   ``fit`` (utils.qmap_fit): ``pass`` trains on the CalSim3 predictor,
   ``absorb`` on the rim-inflow model's historical-unsplit predictor. The
   target is CalSim3's.
-- Simulation (A: 1972-2018; B: 10 chunks of 100 WY each) maps the
+- Simulation (A: 1922-2018; B: 10 chunks of 100 WY each) maps the
   rim-inflow model's predictor onto the target domain.
 
 Inputs
@@ -22,7 +22,7 @@ Inputs
 - ``reference/qmap_pairs.csv`` (pair definitions and fit; shared by A and B)
 - CalSim baseline DSS: ``BASE/CalSim3/__calsim_sv_default__.dss``
 - Rim-inflow predictors (utils.paths.get_rim_inflow_outputs): Product A
-  ``_riminflow_productA_1972_2018.csv``; Product B ``<PartB>_qmo_n{01..10}.csv``;
+  ``_riminflow_productA_1922_2018.csv``; Product B ``<PartB>_qmo_n{01..10}.csv``;
   the historical-unsplit run for absorb fits
 
 Outputs
@@ -110,7 +110,7 @@ def main() -> None:
     )
     parser.add_argument(
         "--product", choices=["A", "B"], required=True,
-        help="Product to generate: A (1972-2018) or B (10 stochastic chunks); "
+        help="Product to generate: A (1922-2018) or B (10 stochastic chunks); "
              "both use the WY1950-2018 fit.",
     )
     args = parser.parse_args()

@@ -26,12 +26,12 @@ Reference inputs (./reference/)
 External inputs
 ---------------
   mod_reservoir/evaporation output (ER_PEDRO):
-    _2_run_reservoir_evap/_product_a_validation/_reservoir_evaporation_productA_*.csv
-      (filter Part B == 'ER_PEDRO')
+    _2_run_reservoir_evap/_product_a_validation/_reservoir_evaporation_productA_1922_2018.csv
+      (filter Part B == 'ER_PEDRO'; the span is utils.paths.PRODUCT_A_WY)
     _2_run_reservoir_evap/_product_b_final/reservoir_evaporation_productB_n*.csv
       (filter Part B == 'ER_PEDRO')
   mod_other/upper_watershed GENERATED output (storage):
-    _product_a_validation/S_PEDRO_SV_product_a_*.csv
+    _product_a_validation/S_PEDRO_SV_product_a_1922_2018.csv
     _product_b_final/S_PEDRO_SV_product_b_n*.csv
 
 Outputs  (data/GENERATED/mod_other/upper_watershed/output/)
@@ -48,7 +48,7 @@ Outputs  (data/GENERATED/mod_other/upper_watershed/output/)
   _5_dnp_evaporation/Product_B/
     ...
   _product_a_validation/
-    _e_pedro_sv_evaporation_productA_<start>_<end>.csv
+    _e_pedro_sv_evaporation_productA_1922_2018.csv
   _product_b_final/
     _e_pedro_sv_evaporation_productB_<start>_<end>.csv
 
@@ -72,7 +72,8 @@ from scipy.stats import pearsonr
 
 # -- Repo path setup -----------------------------------------------------------
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
-from utils.paths import get_module_generated_dir
+from utils.csv_io import write_product_a_csv
+from utils.paths import PRODUCT_A_WY, get_module_generated_dir
 
 _SCRIPT_DIR = Path(__file__).resolve().parent
 _GEN_DIR    = get_module_generated_dir("mod_other/upper_watershed")
@@ -249,16 +250,9 @@ def _load_storage_ref(product: str) -> pd.DataFrame:
     Load S_PEDRO_SV storage (TAF) for Product A from the GENERATED validation dir.
 
     Expects standard SV CSV format: Part B, Part C, Year, Month, Value.
-    Globs for S_PEDRO_SV_product_a_*.csv in _product_a_validation/.
+    Reads S_PEDRO_SV_product_a_<PRODUCT_A_WY>.csv in _product_a_validation/.
     """
-    pattern = "S_PEDRO_SV_product_a_*.csv"
-    matches = sorted(CSV_A_DIR.glob(pattern))
-    if not matches:
-        raise FileNotFoundError(
-            f"No S_PEDRO_SV Product A storage file found in:\n  {CSV_A_DIR}\n"
-            f"  (pattern: {pattern})"
-        )
-    path = matches[-1]   # use most recent if multiple
+    path = CSV_A_DIR / "S_PEDRO_SV_product_a_{}_{}.csv".format(*PRODUCT_A_WY)
     df = pd.read_csv(path)
     df["date"] = pd.to_datetime(df[["Year", "Month"]].assign(Day=1))
     df = df.rename(columns={"Value": "storage_taf"})
@@ -297,19 +291,12 @@ def _load_er_a() -> pd.DataFrame:
     """
     Load ER_PEDRO (inches/month) for Product A from the evaporation validation CSV.
 
-    Globs _product_a_validation/_reservoir_evaporation_productA_*.csv,
+    Reads _product_a_validation/_reservoir_evaporation_productA_<PRODUCT_A_WY>.csv,
     filters rows where Part B == 'ER_PEDRO'.
     Returns df with columns: date (month-start), er_inches.
     """
-    search_dir = _EVAP_OUTROOT / "_product_a_validation"
-    pattern = "_reservoir_evaporation_productA_*.csv"
-    matches = sorted(search_dir.glob(pattern))
-    if not matches:
-        raise FileNotFoundError(
-            f"No Product A reservoir evaporation file found in:\n  {search_dir}\n"
-            f"  (pattern: {pattern})"
-        )
-    path = matches[-1]
+    path = (_EVAP_OUTROOT / "_product_a_validation"
+            / "_reservoir_evaporation_productA_{}_{}.csv".format(*PRODUCT_A_WY))
     df = pd.read_csv(path)
     df = df[df["Part B"] == "ER_PEDRO"].copy()
     if df.empty:
@@ -374,9 +361,6 @@ def run_generate(product: str) -> None:
     c = pd.read_csv(coeffs_path)["value"].values
     print(f"  Polynomial: A = {c[0]:.6e}-S2 + {c[1]:.6e}-S + {c[2]:.6e}")
 
-    def _wy(d: pd.Timestamp) -> int:
-        return d.year + 1 if d.month >= 10 else d.year
-
     # -------------------------------------------------------------------------
     # Product B: process each storage chunk separately -> 10 output files
     # -------------------------------------------------------------------------
@@ -422,9 +406,9 @@ def run_generate(product: str) -> None:
         fig, ax = plt.subplots(figsize=(12, 6))
 
         # Product A generated output (if available)
-        pa_files = sorted(CSV_A_DIR.glob("_e_pedro_sv_evaporation_productA_*.csv"))
-        if pa_files:
-            pa_e = pd.read_csv(pa_files[-1])
+        pa_file = CSV_A_DIR / "_e_pedro_sv_evaporation_productA_{}_{}.csv".format(*PRODUCT_A_WY)
+        if pa_file.exists():
+            pa_e = pd.read_csv(pa_file)
             pa_monthly = pa_e.groupby("Month")["Value"].mean()
             ax.plot(pa_monthly.index, pa_monthly.values, "o-", lw=2.5,
                     color="steelblue", zorder=5, label="Product A")
@@ -450,7 +434,7 @@ def run_generate(product: str) -> None:
         return
 
     # -------------------------------------------------------------------------
-    # Product A: single continuous time series (partial period, e.g. 1972-2018)
+    # Product A: single continuous time series over PRODUCT_A_WY
     # -------------------------------------------------------------------------
     storage = _load_storage_ref(product)
     storage["date"] = storage["date"].dt.to_period("M").dt.to_timestamp()
@@ -482,17 +466,13 @@ def run_generate(product: str) -> None:
     valid = storage["e_cfs"].dropna()
     print(f"  E_PEDRO_SV: {valid.min():.2f}-{valid.max():.2f} CFS  (mean {valid.mean():.2f})")
 
-    valid_rows = storage[storage["e_cfs"].notna()]
-    start_wy   = _wy(valid_rows["date"].min())
-    end_wy     = _wy(valid_rows["date"].max())
-    out_csv    = csv_dir / f"_e_pedro_sv_evaporation_productA_{start_wy}_{end_wy}.csv"
-    pd.DataFrame({
+    out_csv = write_product_a_csv(pd.DataFrame({
         "Part B":  "E_PEDRO_SV",
         "Part C":  "EVAPORATION",
         "Year":    storage["date"].dt.year,
         "Month":   storage["date"].dt.month,
         "Value":   storage["e_cfs"],
-    }).to_csv(out_csv, index=False)
+    }), csv_dir, "_e_pedro_sv_evaporation_productA")
     print(f"  Wrote: {out_csv.name}")
 
     # -- Plots ----------------------------------------------------------------

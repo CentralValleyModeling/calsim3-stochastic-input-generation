@@ -1,9 +1,11 @@
 # Product A Validation - Execution Runbook
 
-> **Scope:** the Product A pipeline -- 1921-2018 historical-length scenarios,
-> compared with CalSim 3 over WY 1972-2018; the quantile maps are fitted on
-> WY 1950-2018 (`utils/qmap_fit.py`). One continuous monthly time series per
-> study variable (SV).
+> **Scope:** the Product A pipeline -- historical-length scenarios, delivered and
+> compared with CalSim 3 over WY 1922-2018 (`utils.paths.PRODUCT_A_WY`; the
+> CalSim 3 baseline starts in October 1921). CalSimHydro, CalSimHydroEE, Rice and
+> Rebalance cover WY 1972-2018, the span of their ET, and the compiler lists them
+> in `paths_partial_window.csv`. The quantile maps are fitted on WY 1950-2018
+> (`utils/qmap_fit.py`). One continuous monthly time series per study variable (SV).
 >
 > **Standalone document** at the repo root. Not part of the Sphinx build.
 >
@@ -104,7 +106,7 @@ Tier 4  DEPENDENT MODULES
 
 Tier 5  FINAL COMPILATION (postprocessing)
         python postprocessing/sv_compile/product_a_historical_validation.py
-        -> ProductA_Historical_Validation_SV.dss  (WY 1972-2018)
+        -> ProductA_Historical_Validation_SV.dss  (WY 1922-2018)
 
         (optional, post external CalSim 3.0 run consuming the SV DSS:
          python postprocessing/calsim_runs/_productA_pickle_builder.py
@@ -186,7 +188,7 @@ Each external-run model is a contiguous block: compile inputs ->
 
 1. `python mod_hydrology/rim_inflow/_1_build_rim_inflow.py --product A`
    - **Inputs:** the arc flows of inflows/_2 (only from a run at the pin); `CalSim3_inflow_mapping.csv`; CS3 baseline DSS (pass-through QM fits of the aliases)
-   - **Outputs:** `_riminflow_productA_1972_2018.csv` and `calsim_qmap_validation_TS.csv`
+   - **Outputs:** `_riminflow_productA_1922_2018.csv` and `calsim_qmap_validation_TS.csv` (WY 1916-2018, the whole model run)
 
 ### Small Watersheds (210 vars)
 
@@ -208,7 +210,7 @@ Each external-run model is a contiguous block: compile inputs ->
    - **Outputs:** `DCD_Calsim3_PlanningStudy_Product_A/.../CS3sv_DCD_PRISM_Dtrnd.dss`
 3. `python mod_hydrology/delta_channel_depletion/_2_postprocess_product_a.py`
    - **Inputs:** external DCD DSS; master inventory (CFS->TAF)
-   - **Outputs:** `_dcd_productA_1972_2018.csv` (+ merged/summary/boxplots)
+   - **Outputs:** `_dcd_productA_1922_2018.csv` (+ merged/summary/boxplots)
 
 ---
 
@@ -278,7 +280,7 @@ Each external-run model is a contiguous block: compile inputs ->
 4. `python mod_other/miscellaneous/_3_hybrid.py --product A`
 5. `python mod_other/miscellaneous/_4_qmap.py --product A`
 - **Inputs:** miscellaneous/_0 baseline; WYT indices; rim_inflow/_2 rim CSV; `reference/qmap_pairs.csv`
-- **Outputs:** `_product_a_validation/*.csv` (incl. `TULE_WET_INDX_productA_1972_2018.csv`); `_4_qmap/product_a/` detail + figures
+- **Outputs:** `_product_a_validation/*.csv` (incl. `TULE_WET_INDX_productA_1922_2018.csv`); `_4_qmap/product_a/` detail + figures
 
 ### Closure Terms, Day Volume Fractions, Salinity
 
@@ -295,7 +297,7 @@ non-product methodology analysis and emits no SV CSV.
 
 | Script | Command | Inputs | Outputs |
 |---|---|---|---|
-| sv_compile (final) | `python postprocessing/sv_compile/product_a_historical_validation.py` (`--compute-stats`; `--stats-report`; `--no-term-plots`; `--summary-tables`) | every module's `_product_a_validation/*.csv`; CS3 baseline DSS; master inventory | `ProductA_Historical_Validation_SV.dss` (WY 1972-2018; overwrite window Oct 31 1971 - Sep 30 2018); diagnostic CSVs + per-category R2/NSE/trend figures |
+| sv_compile (final) | `python postprocessing/sv_compile/product_a_historical_validation.py` (`--compute-stats`; `--stats-report`; `--no-term-plots`; `--summary-tables`) | every module's `_product_a_validation/*.csv`; CS3 baseline DSS; master inventory | `ProductA_Historical_Validation_SV.dss` (WY 1922-2018; overwrite window Oct 31 1921 - Sep 30 2018); diagnostic CSVs (incl. `paths_partial_window.csv`) + per-category R2/NSE figures |
 | (optional) calsim_runs | `python postprocessing/calsim_runs/_productA_pickle_builder.py`; `python postprocessing/calsim_runs/_productA_postproc.py` | external CalSim 3.0 run results consuming `ProductA_Historical_Validation_SV.dss` | Product A run pickle cache + postprocessed comparison artifacts |
 
 The final compiler auto-fills inventory "Constant/Rept" SVs from the

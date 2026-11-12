@@ -12,7 +12,7 @@ Output:
     - output/_2_postprocess_product_a/DeltaChannelDepletion_DSS.csv
     - output/_2_postprocess_product_a/DeltaChannelDepletion_summary_statistics_by_PartC.csv
     - output/_2_postprocess_product_a/Boxplot_{PartC}_with_mean.png
-    - output/_2_postprocess_product_a/_product_a_validation/_dcd_productA_1972_2018.csv
+    - output/_2_postprocess_product_a/_product_a_validation/_dcd_productA_1922_2018.csv
 """
 
 import calendar
@@ -29,7 +29,7 @@ import matplotlib.pyplot as plt
 # Add repo root to path for utils imports
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 from utils import csv_io, dss_io
-from utils.paths import get_module_generated_dir, get_inventory_dir
+from utils.paths import PRODUCT_A_WY, get_module_generated_dir, get_inventory_dir
 
 _GEN_DIR = get_module_generated_dir("mod_hydrology/delta_channel_depletion")
 
@@ -100,7 +100,7 @@ def extract_dss_data(dss_path):
     return pd.DataFrame(data_dict).sort_index()
 
 
-def to_validation_csv(df, start_wy=1972, end_wy=2018):
+def to_validation_csv(df, start_wy=PRODUCT_A_WY[0], end_wy=PRODUCT_A_WY[1]):
     """Convert wide DataFrame to validation format (Part B, Part C, Year, Month, Value).
 
     The format transform delegates to csv_io.to_validation_df; the CFS->TAF
@@ -166,8 +166,7 @@ def main():
     val_df = to_validation_csv(dss_data_by_file[1])
 
     if not val_df.empty:
-        val_csv_path = os.path.join(VALIDATION_DIR, "_dcd_productA_1972_2018.csv")
-        val_df.to_csv(val_csv_path, index=False)
+        val_csv_path = csv_io.write_product_a_csv(val_df, VALIDATION_DIR, "_dcd_productA")
         n_vars = val_df.groupby(['Part B', 'Part C']).ngroups
         print(f"Validation CSV saved: {val_csv_path}")
         print(f"  Variables: {n_vars}  |  Rows: {len(val_df):,}")

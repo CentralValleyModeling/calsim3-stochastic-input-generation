@@ -8,8 +8,9 @@ Dependencies
 ------------
 - mod_hydrology/rim_inflow/_1_build_rim_inflow.py, files found through
   utils.paths.get_rim_inflow_outputs:
-    Product A UNIMP_SJ is read from the CalSim-format validation CSV
-    ``_riminflow_productA_1972_2018.csv`` (filtered by Part B == UNIMP_SJ).
+    Product A UNIMP_SJ is read from ``calsim_qmap_validation_TS.csv``, the
+    whole model run (filtered by CalSim == UNIMP_SJ), and written over
+    ``utils.paths.PRODUCT_A_WY``.
     Product B UNIMP_SJ is read from per-chunk CSVs ``UNIMP_SJ_qmo_n*.csv``.
 
 Usage
@@ -31,7 +32,8 @@ import pandas as pd
 
 # Add repo root to path for utils imports
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
-from utils.paths import get_base_dir, get_module_generated_dir, get_rim_inflow_outputs
+from utils.csv_io import write_product_a_csv
+from utils.paths import PRODUCT_A_WY, get_base_dir, get_module_generated_dir, get_rim_inflow_outputs
 from utils.wgen_calendar import N_CHUNKS
 from utils import dss_io
 
@@ -41,7 +43,7 @@ from utils import dss_io
 DSS_FILE = get_base_dir() / "CalSim3" / "__calsim_sv_default__.dss"
 DEFAULT_DSS_READ_START = "1915-01-31"
 DEFAULT_DSS_READ_END = "2021-12-31"
-DEFAULT_PRODUCT_A = get_rim_inflow_outputs("A")["sv"]
+DEFAULT_PRODUCT_A = get_rim_inflow_outputs("A")["ts"]
 DEFAULT_PRODUCT_B_DIR = get_rim_inflow_outputs("B")["dir"]
 _gen = get_module_generated_dir("mod_other/instream_flows")
 DEFAULT_OUT_HIST = _gen / "output" / "_2_sjr_rest_req"
@@ -463,9 +465,10 @@ def get_default_calsim_rest_req(
 ) -> dict[str, pd.Series]:
     """Read default CalSim REST_REQ_NP and REST_REQ_P from DSS.
 
-    Used for leading-edge months (e.g. Oct 1971-Feb 1972 for Product A,
-    Oct 1921-Feb 1922 for Product B) where the input UNIMP_SJ data does
-    not cover a complete water year needed for reconstruction.
+    Used for leading-edge months (Oct 1921-Feb 1922 for Product B) where the
+    input UNIMP_SJ data does not cover a complete water year needed for
+    reconstruction. Product A's input starts years before its first
+    delivered month.
     """
     series_map = read_calsim_monthly_pairs(
         dssfile,
@@ -563,8 +566,8 @@ def plot_product_a_validation(
     figures_dir: Path,
     pulse_bpart: str = "REST_REQ_P",
     nonpulse_bpart: str = "REST_REQ_NP",
-    plot_start: str | pd.Timestamp = "1971-10-01",
-    plot_end: str | pd.Timestamp = "2018-09-30",
+    plot_start: str | pd.Timestamp = f"{PRODUCT_A_WY[0] - 1}-10-01",
+    plot_end: str | pd.Timestamp = f"{PRODUCT_A_WY[1]}-09-30",
 ) -> list[Path]:
     """Write the canonical TS+CDF validation figures for Product A.
 
@@ -625,12 +628,12 @@ def run_product_a(
     np_series, p_series = _fill_leading_edge(
         inflow.index, recon, default_rest_req, pulse_bpart, nonpulse_bpart,
     )
-    outdir.mkdir(parents=True, exist_ok=True)
-    pulse_path = outdir / "_SJRRPreqPulse_productA_1972_2018.csv"
-    np_path = outdir / "_SJRRPreqNonPulse_productA_1972_2018.csv"
-    to_output_format(p_series, pulse_bpart, part_c).to_csv(pulse_path, index=False)
-    to_output_format(np_series, nonpulse_bpart, part_c).to_csv(np_path, index=False)
-    written = [pulse_path, np_path]
+    written = [
+        write_product_a_csv(to_output_format(p_series, pulse_bpart, part_c), outdir,
+                            "_SJRRPreqPulse_productA"),
+        write_product_a_csv(to_output_format(np_series, nonpulse_bpart, part_c), outdir,
+                            "_SJRRPreqNonPulse_productA"),
+    ]
     if figures_dir is not None and default_rest_req is not None:
         written.extend(
             plot_product_a_validation(
@@ -688,7 +691,7 @@ def main() -> None:
         description="Reconstruct REST_REQ_NP and REST_REQ_P from UNIMP_SJ unimpaired flow.")
     ap.add_argument("--product", choices=["validation", "A", "B"], required=True,
                     help="Output to run: validation (historical-comparison CSV), "
-                         "A (Product A historical 1972-2018), or B (Product B 10 chunks).")
+                         "A (Product A, WY1922-2018), or B (Product B 10 chunks).")
     args = ap.parse_args()
 
     written: list[Path] = []
@@ -705,8 +708,8 @@ def main() -> None:
         )
     else:
         # Read default CalSim REST_REQ values once - used for leading-edge months
-        # (e.g. Oct 1971-Feb 1972, Oct 1921-Feb 1922) that lack complete WY data
-        # for reconstruction.
+        # (Product B's Oct 1921-Feb 1922) that lack complete WY data for
+        # reconstruction, and for the Product A plots.
         default_rest_req = get_default_calsim_rest_req(dssfile=DSS_FILE)
 
         if args.product == "A":

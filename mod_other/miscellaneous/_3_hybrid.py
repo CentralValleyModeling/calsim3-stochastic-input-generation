@@ -25,7 +25,7 @@ Inputs
     * A: ``mod_hydrology/water_year_types/output/_1_calc_WYTs/Product_A/``
     * B: ``mod_hydrology/water_year_types/output/_1_calc_WYTs/Product_B/``
 - Rim inflow simulation (utils.paths.get_rim_inflow_outputs):
-    * A: ``_riminflow_productA_1972_2018.csv``
+    * A: ``_riminflow_productA_1922_2018.csv``
     * B: ``<PartB>_qmo_n{01..10}.csv``
     * the historical-unsplit run, for absorb fits
 
@@ -65,12 +65,12 @@ from pathlib import Path
 import pandas as pd
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
-from utils.paths import get_base_dir, get_module_generated_dir, get_rim_inflow_outputs
+from utils.csv_io import write_product_a_csv
+from utils.paths import PRODUCT_A_WY, get_base_dir, get_module_generated_dir, get_rim_inflow_outputs
 from utils.wyt_monthlyavg_framework import (
     compute_wyt_pattern,
     compute_product_targets,
     plot_actual_vs_recon_validation,
-    water_year,
 )
 from utils.qmap_product_a_from_pairs import run_product_a_qmap_from_pairs
 from utils.qmap_product_b_from_pairs import (
@@ -99,10 +99,6 @@ WYT_HIST_DIR = str(_REPO_DIR / "mod_hydrology" / "water_year_types" / "reference
 # -- Config (Product A specific) ---------------------------------------
 WYT_PRODUCT_A_DIR = str(_wyt_gen / "output" / "_1_calc_WYTs" / "Product_A")
 PRODUCT_A_RIM_CSV = get_rim_inflow_outputs("A")["sv"]
-SIM_START_A = "1971-10-01"
-SIM_END_A = "2018-09-30"
-PRODUCT_A_START_WY = 1972
-PRODUCT_A_END_WY = 2018
 
 # -- Config (Product B specific) ---------------------------------------
 WYT_PRODUCT_B_DIR = str(_wyt_gen / "output" / "_1_calc_WYTs" / "Product_B")
@@ -226,12 +222,8 @@ def run_wyt(product: str, prefix: str, wyt_terms_df: pd.DataFrame,
     for name, df in targets.items():
         sv = _to_sv_format(df)
         if product == "A":
-            wy_min = int(df["date"].apply(water_year).min())
-            wy_max = int(df["date"].apply(water_year).max())
             for part_b, grp in sv.groupby("Part B"):
-                out = wyt_intermediate_dir / f"{part_b}_product_a_{wy_min}_{wy_max}.csv"
-                grp.to_csv(out, index=False)
-                print(f"  - {out}")
+                print(f"  - {write_product_a_csv(grp, wyt_intermediate_dir, f'{part_b}_product_a')}")
         else:  # B
             tag = name.replace("product_b_", "")
             for part_b, grp in sv.groupby("Part B"):
@@ -262,8 +254,6 @@ def run_qmap_a(qmap_pairs_df: pd.DataFrame, base_dir: Path,
             product_a_rim_csv=PRODUCT_A_RIM_CSV,
             output_dir=_tmp_detail,
             validation_dir=str(qmap_intermediate_dir),
-            sim_start=SIM_START_A,
-            sim_end=SIM_END_A,
         )
 
     qmap_csv.unlink(missing_ok=True)
@@ -341,26 +331,13 @@ def run_final_hybrid_a(wyt_intermediate_dir: Path, qmap_intermediate_dir: Path,
         part_b = str(term["term_part_b"]).strip()
         part_c = str(term["term_part_c"]).strip()
 
-        # WYT intermediate: named with wy_min/wy_max from framework
-        wyt_candidates = sorted(
-            wyt_intermediate_dir.glob(f"{part_b}_product_a_*.csv")
-        )
-        if not wyt_candidates:
-            raise FileNotFoundError(
-                f"No WYT Product A intermediate found for {part_b} in "
-                f"{wyt_intermediate_dir}"
-            )
-        wyt_path = wyt_candidates[0]
-
-        # QMap intermediate: named with start/end WY from qmap utility
-        qmap_path = (
-            qmap_intermediate_dir
-            / f"{part_b}_productA_{PRODUCT_A_START_WY}_{PRODUCT_A_END_WY}.csv"
-        )
-        if not qmap_path.exists():
-            raise FileNotFoundError(
-                f"Missing QMap Product A intermediate for {part_b}: {qmap_path}"
-            )
+        # Both intermediates cover PRODUCT_A_WY (csv_io.write_product_a_csv)
+        span = "{}_{}".format(*PRODUCT_A_WY)
+        wyt_path = wyt_intermediate_dir / f"{part_b}_product_a_{span}.csv"
+        qmap_path = qmap_intermediate_dir / f"{part_b}_productA_{span}.csv"
+        for path in (wyt_path, qmap_path):
+            if not path.exists():
+                raise FileNotFoundError(f"Missing Product A intermediate for {part_b}: {path}")
 
         df_wyt = pd.read_csv(wyt_path)
         df_qmap = pd.read_csv(qmap_path)
@@ -386,12 +363,7 @@ def run_final_hybrid_a(wyt_intermediate_dir: Path, qmap_intermediate_dir: Path,
             "Value": (merged["Value_wyt"] + merged["Value_qmap"]) / 2.0,
         })
 
-        out_path = (
-            final_dir
-            / f"{part_b}_product_a_{PRODUCT_A_START_WY}_{PRODUCT_A_END_WY}.csv"
-        )
-        out_df.to_csv(out_path, index=False)
-        print(f"  - {out_path}")
+        print(f"  - {write_product_a_csv(out_df, final_dir, f'{part_b}_product_a')}")
         total += 1
 
     print(f"  Final hybrid: {total} file(s) written to {final_dir}")
@@ -477,7 +449,7 @@ def main() -> None:
     )
     parser.add_argument(
         "--product", choices=["A", "B"], required=True,
-        help="Product to generate: A (1972-2018 historical validation; one "
+        help="Product to generate: A (WY1922-2018 historical-length; one "
              "continuous series per term) or B (10 stochastic chunks).",
     )
     args = parser.parse_args()

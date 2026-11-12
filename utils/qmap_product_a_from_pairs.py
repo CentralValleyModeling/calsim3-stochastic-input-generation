@@ -11,7 +11,8 @@ Workflow per (target, predictor) pair
    or the model's historical-unsplit predictor (absorb).
 2. Fit the quantile map on WY1950-2018 (``utils.qmap_fit.FIT_WY``).
 3. Load the model's Product A predictor from the rim-inflow SV CSV for the
-   simulation window (default 1972-2018). A ``+`` predictor is summed.
+   simulation window (default ``utils.paths.PRODUCT_A_WY``, WY1922-2018). A ``+``
+   predictor is summed.
 4. Apply the map to produce the Product A target.
 5. Compare with the CalSim3 target (R2, NSE, PBIAS). The fit window covers the
    simulation window and Product A weather is detrended, so this is a
@@ -29,6 +30,7 @@ import numpy as np
 import pandas as pd
 
 from utils import csv_io, dss_io
+from utils.paths import PRODUCT_A_WY
 from utils.qmap_fit import (
     FIT_END, FIT_START, FIT_WY, predictor_label, predictor_parts, read_fit_column,
     read_historical_predictors, sum_parts, training_basis,
@@ -43,8 +45,8 @@ _REQUIRED_COLS = ["target_part_b", "target_part_c",
 _OPTIONAL_COLS = ["lower_bound", "upper_bound", "allow_negative"]
 
 # -- Defaults -----------------------------------------------------------------
-SIM_START = "1971-10-01"
-SIM_END = "2018-09-30"
+SIM_START = f"{PRODUCT_A_WY[0] - 1}-10-01"
+SIM_END = f"{PRODUCT_A_WY[1]}-09-30"
 DSS_READ_START = "1915-01-31"
 DSS_READ_END = "2018-12-31"
 ALLOW_NEGATIVE = False
@@ -240,7 +242,7 @@ def run_product_a_qmap_from_pairs(
     validation_dir : str or Path
         Directory for CalSim-format validation CSVs.
     sim_start, sim_end : str
-        Simulation/validation period boundaries (default 1971-10 to 2018-09).
+        Simulation/validation period boundaries (default ``PRODUCT_A_WY``).
     dss_read_start, dss_read_end : str
         DSS read window boundaries.
     allow_negative : bool
@@ -260,12 +262,6 @@ def run_product_a_qmap_from_pairs(
 
     for d in (output_dir, plots_dir, validation_dir):
         dss_io.safe_makedirs(d)
-
-    # -- Derive WY labels for output filenames --------------------------------
-    _sim_start_dt = pd.Timestamp(sim_start)
-    _sim_end_dt = pd.Timestamp(sim_end)
-    _start_wy = _sim_start_dt.year + (1 if _sim_start_dt.month >= 10 else 0)
-    _end_wy = _sim_end_dt.year + (1 if _sim_end_dt.month >= 10 else 0)
 
     # -- Load pair definitions ------------------------------------------------
     df_pairs = read_qmap_pairs(pair_csv)
@@ -432,11 +428,7 @@ def run_product_a_qmap_from_pairs(
             "Month": common_sim.month.astype(int),
             "Value": qmap_vals,
         })
-        val_csv = os.path.join(
-            validation_dir,
-            f"{target_b}_productA_{_start_wy}_{_end_wy}.csv",
-        )
-        val_df.to_csv(val_csv, index=False)
+        val_csv = csv_io.write_product_a_csv(val_df, validation_dir, f"{target_b}_productA")
         print(f"  Wrote: {val_csv}")
 
         # 10-12) Plots

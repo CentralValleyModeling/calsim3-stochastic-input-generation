@@ -29,7 +29,7 @@ Outputs:
       sheets: daily, monthly, compare_level5
     _4_oroville_level5/figures/product_a/S_OROVLLEVEL5_timeseries.png
       Product A vs Historical: monthly time series + non-exceedance CDF
-      with R2 / NSE / PBIAS over WY 1972 - <wy_max>.
+      with R2 / NSE / PBIAS over WY 1922 - <wy_max> (utils.paths.PRODUCT_A_WY).
     _4_oroville_level5/figures/product_a/S_OROVLLEVEL5_monthly_error.png
       WY-ordered (Oct-Sep) monthly box plot of error (Product A - Historical, TAF).
     _4_oroville_level5/figures/product_a/S_OROVLLEVEL5_monthly_pct_error.png
@@ -75,7 +75,8 @@ import pandas as pd
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 from utils import dss_io
-from utils.paths import get_base_dir, get_module_generated_dir
+from utils.csv_io import write_product_a_csv
+from utils.paths import PRODUCT_A_WY, get_base_dir, get_module_generated_dir
 from utils.validation_plots import Series, plot_monthly_box, plot_ts_cdf
 from utils.wgen_calendar import N_CHUNKS
 
@@ -286,27 +287,21 @@ def main() -> None:
         # Merge with historical Level-5
         monthly = monthly.merge(level5, on="month_end", how="left")
 
-        # Water year range
         monthly["WY"] = monthly["month_end"].dt.year + (monthly["month_end"].dt.month >= 10).astype(int)
-        wy_max = int(monthly["WY"].max())
 
-        # Product A format: Part B, Part C, Year, Month, Value (from WY 1972)
-        start_wy = 1972
-        val_mask = monthly["WY"] >= start_wy
-        val_monthly = monthly.loc[val_mask]
+        # Product A format: Part B, Part C, Year, Month, Value over PRODUCT_A_WY
+        start_wy = PRODUCT_A_WY[0]
         val_df = pd.DataFrame({
             "Part B": "S_OROVLLEVEL5",
             "Part C": "STORAGE-LEVEL",
-            "Year": val_monthly["month_end"].dt.year.values,
-            "Month": val_monthly["month_end"].dt.month.values,
-            "Value": val_monthly["S_target_eom_TAF"].values,
+            "Year": monthly["month_end"].dt.year.values,
+            "Month": monthly["month_end"].dt.month.values,
+            "Value": monthly["S_target_eom_TAF"].values,
         })
         val_df = val_df.dropna(subset=["Value"])
         val_df = val_df.sort_values(["Part B", "Part C", "Year", "Month"]).reset_index(drop=True)
 
-        VALIDATION_DIR.mkdir(parents=True, exist_ok=True)
-        out_csv = VALIDATION_DIR / f"S_OROVLLEVEL5_productA_{start_wy}_{wy_max}.csv"
-        val_df.to_csv(out_csv, index=False)
+        out_csv = write_product_a_csv(val_df, VALIDATION_DIR, "S_OROVLLEVEL5_productA")
 
         # Excel workbook
         compare = monthly.dropna(subset=["S_OROVLLEVEL5"]).copy()

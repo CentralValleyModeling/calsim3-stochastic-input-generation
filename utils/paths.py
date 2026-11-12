@@ -141,6 +141,10 @@ def get_inflow_pin() -> str:
     return _CFG["inflow_pin"]
 
 
+#: The water years the compiled Product A DSS takes from the generated SVs; the CalSim 3
+#: baseline starts in October 1921. utils.csv_io.write_product_a_csv clips to it.
+PRODUCT_A_WY = (1922, 2018)
+
 #: Forcings of the rim-inflow model (``mod_forcing/inflows``) -> their output subfolder.
 INFLOW_FORCINGS = {
     "historical": Path("Historical_Unsplit"),
@@ -212,8 +216,8 @@ def get_rim_inflow_outputs(product: str) -> dict:
     - ``ts`` (historical, A): ``calsim_qmap_validation_TS.csv``, one long table of every SV
       (CalSim, Matched_inflow, Year, Month, qmap_postAdj), over WY1916-2018, the whole model
       run.
-    - ``sv``, ``sv_dir`` (A): the Product A values over WY1972-2018 in SV format (Part B,
-      Part C, Year, Month, Value), ``_riminflow_productA_1972_2018.csv``, and its folder, which
+    - ``sv``, ``sv_dir`` (A): the Product A values over ``PRODUCT_A_WY`` in SV format (Part B,
+      Part C, Year, Month, Value), ``_riminflow_productA_1922_2018.csv``, and its folder, which
       the Product A compiler scans.
     """
     root = (get_module_generated_dir("mod_hydrology/rim_inflow") / "output"
@@ -223,7 +227,7 @@ def get_rim_inflow_outputs(product: str) -> dict:
         out["ts"] = root / "calsim_qmap_validation_TS.csv"
     if product == "A":
         out["sv_dir"] = root / "_product_a_validation"
-        out["sv"] = out["sv_dir"] / "_riminflow_productA_1972_2018.csv"
+        out["sv"] = out["sv_dir"] / "_riminflow_productA_{}_{}.csv".format(*PRODUCT_A_WY)
     return out
 
 

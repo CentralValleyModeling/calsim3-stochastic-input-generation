@@ -18,7 +18,7 @@ Thresholds (annual unimpaired Folsom flow, TAF):
   >  1146.02 -> 1.0
 
 Products:
-  - Product A (historical-length, WY 1972-2018): Uses FOLSM_INFLOW from the
+  - Product A (historical-length, WY 1922-2018): Uses FOLSM_INFLOW from the
     Product A rim-inflow output (calsim_qmap_validation_TS.csv).
   - Product B (1000-yr stochastic, 10 chunks): Uses synthetic FOLSM_INFLOW
     from the Product B rim-inflow output with the same thresholds applied directly.
@@ -32,7 +32,7 @@ External dependencies (utils.paths.get_rim_inflow_outputs):
 
 Output:
   - output/_product_a_validation/
-       _pge_wy_allocation_productA_1972_2018.csv
+       _pge_wy_allocation_productA_1922_2018.csv
   - output/_product_b_final/
        _pge_wy_allocation_productB_n01.csv  ...  _pge_wy_allocation_productB_n10.csv
 
@@ -52,7 +52,8 @@ import pandas as pd
 
 # Add repo root to path for utils imports
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
-from utils.paths import get_module_generated_dir, get_rim_inflow_outputs
+from utils.csv_io import write_product_a_csv
+from utils.paths import PRODUCT_A_WY, get_module_generated_dir, get_rim_inflow_outputs
 
 # ------------------------------------------------------------------------------
 # Configuration
@@ -60,8 +61,7 @@ from utils.paths import get_module_generated_dir, get_rim_inflow_outputs
 RUN_DIR = Path(__file__).resolve().parent
 
 # CalSim study period for Product A (water years)
-PRODUCT_A_START_WY = 1972
-PRODUCT_A_END_WY = 2018
+PRODUCT_A_START_WY, PRODUCT_A_END_WY = PRODUCT_A_WY
 
 # Product B: number of chunks
 PRODUCT_B_NCHUNKS = 10
@@ -265,9 +265,7 @@ def run_product_a(config: dict) -> Path:
     )
 
     # Write output
-    OUTPUT_A_DIR.mkdir(parents=True, exist_ok=True)
-    out_path = OUTPUT_A_DIR / f"_pge_wy_allocation_productA_{PRODUCT_A_START_WY}_{PRODUCT_A_END_WY}.csv"
-    df_out.to_csv(out_path, index=False)
+    out_path = write_product_a_csv(df_out, OUTPUT_A_DIR, "_pge_wy_allocation_productA")
     print(f"  Wrote: {out_path.name} ({len(df_out)} rows)")
 
     return out_path

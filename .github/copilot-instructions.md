@@ -9,7 +9,7 @@ Do not use emojis or non-ASCII characters in code or outputs.
 
 ## Products
 
-**Product A** (1921-2018): Historical-length scenarios. WGEN matched to historical period, actual wind merged. Single continuous time series per SV.
+**Product A** (WY1922-2018, `utils.paths.PRODUCT_A_WY`): Historical-length scenarios. WGEN matched to historical period, actual wind merged. Single continuous time series per SV.
 
 **Product B** (1000 years): Stochastic planning sequences. WGEN stochastic generation, resampled wind. 10 chunks x 100 water years (`*_n01.csv` through `*_n10.csv`). First 9 months skipped for Oct WY alignment.
 
@@ -284,7 +284,7 @@ Oroville Level 5: storage-based, DCR 2023 sedimentation correction (3,538 -> 3,4
 
 ### Output Files & CalSim Conventions
 
-- Product A: `*_productA_1921_2018.csv` (single file per SV)
+- Product A: `*_productA_<first WY>_<last WY>.csv`, WY1922-2018 (`utils.paths.PRODUCT_A_WY`) except CalSimHydro and CalSimHydroEE (WY1972-2018); `utils.csv_io.write_product_a_csv` clips to it and removes a series' other spans
 - Product B: `*_productB_n01.csv` through `*_n10.csv` (10 chunks)
 - Water Year: Oct-Sep (WY N = Oct(N-1) through Sep(N))
 - Reservoir codes: 5-letter (SHSTA, OROVL, FOLSM)

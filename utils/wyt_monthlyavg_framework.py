@@ -35,6 +35,7 @@ from typing import Dict, List, Tuple
 import pandas as pd
 
 from utils import dss_io
+from utils.paths import PRODUCT_A_WY
 
 
 DEFAULT_DSS_READ_START = "1921-10-31"
@@ -645,8 +646,8 @@ def plot_actual_vs_recon_validation(
     term_specs: List[TermSpec],
     figures_dir: Path,
     *,
-    plot_start: str | pd.Timestamp = "1971-10-01",
-    plot_end: str | pd.Timestamp = "2018-09-30",
+    plot_start: str | pd.Timestamp = f"{PRODUCT_A_WY[0] - 1}-10-01",
+    plot_end: str | pd.Timestamp = f"{PRODUCT_A_WY[1]}-09-30",
     unit: str = "",
     label: str = "Product A",
     value_col: str = "wyt_monthly_avg",
