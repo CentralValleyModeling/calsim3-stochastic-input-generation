@@ -200,6 +200,19 @@ def get_arc_inflows(forcing: str) -> Path:
 INFLOW_PROVENANCE = "run_manifest.json"
 
 
+def require_chain_model(forcing: str) -> None:
+    """Stop if this GENERATED folder holds a rim-inflow run of ``forcing`` (a key of
+    ``WEATHER_SETS``) by another model than ``inflow_model``: each model's chain keeps its own
+    GENERATED folder (``generated_dir``), so neither its run nor its G2 record is replaced."""
+    path = get_arc_inflows(forcing).parent / INFLOW_PROVENANCE
+    if path.exists():
+        other = json.loads(path.read_text()).get("inflow_model")
+        if other != get_inflow_model():
+            raise SystemExit(f"{path.parent} holds a run of {other}; the chain of "
+                             f"{get_inflow_model()} goes in its own GENERATED folder "
+                             "(config: generated_dir)")
+
+
 def require_pinned_run(folder: Path) -> dict:
     """Return the run manifest of the rim-inflow model outputs in ``folder``, and stop unless
     they come from the configured model (``inflow_model``) at the pinned version

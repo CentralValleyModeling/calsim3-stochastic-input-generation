@@ -74,7 +74,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 from mod_forcing.inflows.adapters import label, load
 from utils.paths import (WEATHER_SETS, INFLOW_PROVENANCE, get_arc_inflows, get_inflow_env,
                          get_inflow_model, get_inflow_pin, get_inflow_repo,
-                         get_module_generated_dir, remove_tree, sha256_file)
+                         get_module_generated_dir, remove_tree, require_chain_model,
+                         sha256_file)
 from utils.wgen_calendar import chunk_months
 
 _gen = get_module_generated_dir("mod_forcing/inflows")
@@ -148,13 +149,7 @@ def main():
     print(f"G2 PASS on every cell of {g2['inputs']} input(s)")
 
     out_dir = _gen / "output" / "_2_run_product" / WEATHER_SETS[args.forcing]["wgen"]
-    previous = out_dir / INFLOW_PROVENANCE
-    if previous.exists():
-        other = json.loads(previous.read_text()).get("inflow_model")
-        if other != get_inflow_model():
-            raise SystemExit(f"{out_dir} holds a run of {other}; the chain of "
-                             f"{get_inflow_model()} goes in its own GENERATED folder "
-                             "(config: generated_dir)")
+    require_chain_model(args.forcing)
     remove_tree(out_dir)
     out_dir.mkdir(parents=True)
 

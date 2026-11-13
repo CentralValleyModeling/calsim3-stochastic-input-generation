@@ -35,7 +35,8 @@ Outputs
 
 _2_run_product.py runs the model only if this file shows a pass on every input. A sample of
 cells is a quick check: it prints its table and leaves the file as it was, or removes it when
-the sample fails, so no gate reads the earlier pass.
+the sample fails, so no gate reads the earlier pass. The script stops when this GENERATED
+folder holds another model's run (``utils.paths.require_chain_model``).
 
 Usage
 -----
@@ -55,7 +56,7 @@ import pandas as pd
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 from mod_forcing.inflows.adapters import label, load
 from utils.paths import (WEATHER_SETS, get_base_dir, get_inflow_model, get_inflow_repo,
-                         get_module_generated_dir, sha256_file)
+                         get_module_generated_dir, require_chain_model, sha256_file)
 
 _gen = get_module_generated_dir("mod_forcing/inflows")
 
@@ -86,6 +87,7 @@ def main():
     n_cells = None if args.cells == "all" else int(args.cells)
     if n_cells is not None and n_cells < 1:
         raise SystemExit("--cells must be at least 1, or 'all'")
+    require_chain_model(args.forcing)
 
     repo = get_inflow_repo()
     base_sub, prefix = BASE_WEATHER[args.forcing]
