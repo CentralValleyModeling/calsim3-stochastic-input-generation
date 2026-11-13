@@ -35,7 +35,8 @@ from typing import Dict, List, Tuple
 import pandas as pd
 
 from utils import dss_io
-from utils.paths import PRODUCT_A_WY
+from utils.paths import DELIVERY_WY, WEATHER_SETS
+from utils.wgen_calendar import N_CHUNKS, water_year
 
 
 DEFAULT_DSS_READ_START = "1921-10-31"
@@ -45,12 +46,6 @@ DEFAULT_DSS_READ_END = "2021-09-30"
 # -----------------------
 # Small helpers
 # -----------------------
-
-
-def water_year(ts: pd.Timestamp) -> int:
-    """CA convention: WY N is Oct(N-1)–Sep(N)."""
-    return int(ts.year + (1 if ts.month >= 10 else 0))
-
 
 
 def basin_tag(basin: str) -> str:
@@ -107,7 +102,7 @@ def _make_monthly_index(wy_min: int, wy_max: int) -> pd.DataFrame:
     dates = pd.date_range(start=start, end=end, freq="ME")
 
     out = pd.DataFrame({"date": dates})
-    out["WY"] = out["date"].apply(water_year).astype(int)
+    out["WY"] = water_year(out["date"].dt.year, out["date"].dt.month)
     out["month"] = out["date"].dt.month.astype(int)
     return out
 
@@ -323,7 +318,7 @@ def read_terms_from_dss(
     if not terms:
         raise ValueError("No DSS term series were loaded from the requested term specs.")
 
-    out["WY"] = out["date"].apply(water_year).astype(int)
+    out["WY"] = water_year(out["date"].dt.year, out["date"].dt.month)
     out["month"] = out["date"].dt.month.astype(int)
 
     return out, terms, term_specs
@@ -356,11 +351,12 @@ def _load_historical_wyts(
 
 
 
-def _load_product_a_wyts(
+def _load_single_wyts(
     wyt_target_dir: Path,
     basin_tags: list[str],
 ) -> dict[str, pd.DataFrame]:
-    """Load Product A target WYT tables keyed by basin tag."""
+    """Load the target WYT tables of a single series (Historical_Unsplit, Product A) keyed by
+    basin tag."""
     out: dict[str, pd.DataFrame] = {}
     missing: list[str] = []
 
@@ -373,7 +369,7 @@ def _load_product_a_wyts(
 
     if missing:
         raise FileNotFoundError(
-            "Missing Product A WYT file(s):\n  - " + "\n  - ".join(missing)
+            f"Missing WYT file(s) in {wyt_target_dir}:\n  - " + "\n  - ".join(missing)
         )
 
     return out
@@ -646,8 +642,8 @@ def plot_actual_vs_recon_validation(
     term_specs: List[TermSpec],
     figures_dir: Path,
     *,
-    plot_start: str | pd.Timestamp = f"{PRODUCT_A_WY[0] - 1}-10-01",
-    plot_end: str | pd.Timestamp = f"{PRODUCT_A_WY[1]}-09-30",
+    plot_start: str | pd.Timestamp = f"{DELIVERY_WY[0] - 1}-10-01",
+    plot_end: str | pd.Timestamp = f"{DELIVERY_WY[1]}-09-30",
     unit: str = "",
     label: str = "Product A",
     value_col: str = "wyt_monthly_avg",
@@ -755,25 +751,25 @@ def compute_product_targets(
     pat_wide: pd.DataFrame,
     term_specs: List[TermSpec],
 ) -> Dict[str, pd.DataFrame]:
-    """Compute targets for a single product using a precomputed pattern.
+    """Compute targets for one weather set (a key of utils.paths.WEATHER_SETS) using a
+    precomputed pattern.
 
     Returns:
-      dict { name: df_long }
+      dict { name: df_long }: { product: df } for a single series, { "product_b_n01": df, ... }
+      for Product B
     """
-    prod = product.strip().upper()
-    if prod not in {"A", "B"}:
-        raise ValueError("product must be 'A' or 'B'.")
+    if product not in WEATHER_SETS:
+        raise ValueError(f"product must be one of {list(WEATHER_SETS)}")
 
     basin_tags = sorted({spec.wyt_tag for spec in term_specs})
     targets: Dict[str, pd.DataFrame] = {}
 
-    if prod == "A":
-        wyt_tables = _load_product_a_wyts(Path(wyt_target_dir), basin_tags)
-        name = "product_a"
-        targets[name] = compute_target_from_wyt(wyt_tables, pat_wide, term_specs)
+    if product != "B":
+        wyt_tables = _load_single_wyts(Path(wyt_target_dir), basin_tags)
+        targets[product] = compute_target_from_wyt(wyt_tables, pat_wide, term_specs)
     else:
-        for i in range(1, 11):
-            ensemble = f"n{str(i).zfill(2)}"
+        for i in range(1, N_CHUNKS + 1):
+            ensemble = f"n{i:02d}"
             wyt_tables = _load_product_b_wyts(Path(wyt_target_dir), basin_tags, ensemble)
             name = f"product_b_{ensemble}"
             targets[name] = compute_target_from_wyt(wyt_tables, pat_wide, term_specs)

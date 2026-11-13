@@ -18,8 +18,8 @@ Thresholds (annual unimpaired Folsom flow, TAF):
   >  1146.02 -> 1.0
 
 Products:
-  - Product A (historical-length, WY 1922-2018): Uses FOLSM_INFLOW from the
-    Product A rim-inflow output (calsim_qmap_validation_TS.csv).
+  - Historical_Unsplit and Product A (WY 1922-2018): use FOLSM_INFLOW from the
+    set's rim-inflow output (calsim_qmap_validation_TS.csv).
   - Product B (1000-yr stochastic, 10 chunks): Uses synthetic FOLSM_INFLOW
     from the Product B rim-inflow output with the same thresholds applied directly.
 
@@ -27,10 +27,12 @@ Input files (in ./reference/):
   - PGE_WY_ALLOCATION_config.json            : Thresholds & configuration
 
 External dependencies (utils.paths.get_rim_inflow_outputs):
-  - calsim_qmap_validation_TS.csv  (Product A FOLSM_INFLOW)
+  - calsim_qmap_validation_TS.csv  (FOLSM_INFLOW of Historical_Unsplit or Product A)
   - FOLSM_INFLOW_qmo_n01.csv ... n10.csv  (Product B inflows)
 
 Output:
+  - output/_historical_unsplit_validation/
+       _pge_wy_allocation_historicalUnsplit_1922_2018.csv
   - output/_product_a_validation/
        _pge_wy_allocation_productA_1922_2018.csv
   - output/_product_b_final/
@@ -38,6 +40,7 @@ Output:
 
 Usage
 -----
+    python mod_other/upper_watershed/_4_pge_wy_allocation.py --product historical
     python mod_other/upper_watershed/_4_pge_wy_allocation.py --product A
     python mod_other/upper_watershed/_4_pge_wy_allocation.py --product B
 """
@@ -52,32 +55,28 @@ import pandas as pd
 
 # Add repo root to path for utils imports
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
-from utils.csv_io import write_product_a_csv
-from utils.paths import PRODUCT_A_WY, get_module_generated_dir, get_rim_inflow_outputs
+from utils.csv_io import write_delivery_csv
+from utils.wgen_calendar import LABEL_MONTHS, N_CHUNKS, water_year, write_chunk_csvs, wy_months
+from utils.paths import DELIVERY_WY, WEATHER_SETS, delivery_dir, get_module_generated_dir, get_rim_inflow_outputs
 
 # ------------------------------------------------------------------------------
 # Configuration
 # ------------------------------------------------------------------------------
 RUN_DIR = Path(__file__).resolve().parent
 
-# CalSim study period for Product A (water years)
-PRODUCT_A_START_WY, PRODUCT_A_END_WY = PRODUCT_A_WY
-
-# Product B: number of chunks
-PRODUCT_B_NCHUNKS = 10
+# Delivered water years of the single series
+START_WY, END_WY = DELIVERY_WY
 
 # Input paths (relative to this script)
 REFERENCE_DIR = RUN_DIR / "reference"
 CONFIG_JSON = REFERENCE_DIR / "PGE_WY_ALLOCATION_config.json"
 
 # RimInflow files
-RIM_INFLOW_PRODUCT_A_CSV = get_rim_inflow_outputs("A")["ts"]
 RIM_INFLOW_PRODUCT_B_DIR = get_rim_inflow_outputs("B")["dir"]
 
 # Output directories
 _GEN_DIR = get_module_generated_dir("mod_other/upper_watershed")
 OUTPUT_ROOT = _GEN_DIR / "output" / "_4_pge_wy_allocation"
-OUTPUT_A_DIR = _GEN_DIR / "output" / "_product_a_validation"
 OUTPUT_B_DIR = _GEN_DIR / "output" / "_product_b_final"
 
 
@@ -88,13 +87,6 @@ def load_config(config_path: Path) -> dict:
     """Load thresholds and regression parameters from JSON config."""
     with open(config_path, "r", encoding="utf-8") as f:
         return json.load(f)
-
-
-def compute_water_year(year: int, month: int) -> int:
-    """Return the water year for a given calendar year/month.
-    WY runs Oct (month 10) through Sep (month 9).
-    """
-    return year + 1 if month >= 10 else year
 
 
 def apply_thresholds(annual_flow: float, thresholds: list[dict], default: float) -> float:
@@ -146,7 +138,7 @@ def annual_flow_to_wy_ratio(
         Columns: WY, Annual_Flow_TAF, Ratio.
     """
     df = df_monthly.copy()
-    df["WY"] = df.apply(lambda r: compute_water_year(int(r["Year"]), int(r["Month"])), axis=1)
+    df["WY"] = water_year(df["Year"], df["Month"])
     annual = df.groupby("WY")[flow_col].sum().reset_index()
     annual.columns = ["WY", "Annual_Flow_TAF"]
     annual["Ratio"] = annual["Annual_Flow_TAF"].apply(
@@ -157,10 +149,7 @@ def annual_flow_to_wy_ratio(
 
 def spread_ratio_to_monthly(
     wy_ratios: pd.DataFrame,
-    start_year: int,
-    start_month: int,
-    end_year: int,
-    end_month: int,
+    months: pd.DataFrame,
     alloc_start_month: int = 5,
     default_ratio: float = 1.0,
 ) -> pd.DataFrame:
@@ -175,10 +164,9 @@ def spread_ratio_to_monthly(
     ----------
     wy_ratios : DataFrame
         Columns: WY, Ratio.
-    start_year, start_month : int
-        First calendar month of output.
-    end_year, end_month : int
-        Last calendar month of output.
+    months : DataFrame
+        Year and Month of the output months, in order (utils.wgen_calendar.wy_months or
+        LABEL_MONTHS).
     alloc_start_month : int
         Month when new allocation kicks in (default 5 = May).
     default_ratio : float
@@ -190,48 +178,38 @@ def spread_ratio_to_monthly(
         Columns: Part B, Part C, Year, Month, Value.
     """
     ratio_lookup = dict(zip(wy_ratios["WY"].astype(int), wy_ratios["Ratio"]))
-
-    records = []
-    y, m = start_year, start_month
-    while (y, m) <= (end_year, end_month):
-        # Determine which WY's allocation applies to this month
-        alloc_wy = y if m >= alloc_start_month else y - 1
-        ratio = ratio_lookup.get(alloc_wy, default_ratio)
-        records.append(
-            {
-                "Part B": "PGE_WY_ALLOCATION_SV",
-                "Part C": "RATIO",
-                "Year": y,
-                "Month": m,
-                "Value": ratio,
-            }
-        )
-        # Advance to next month
-        m += 1
-        if m > 12:
-            m = 1
-            y += 1
-
-    return pd.DataFrame(records)
+    year = months["Year"].astype(int).to_numpy()
+    month = months["Month"].astype(int).to_numpy()
+    # The allocation of the water year in whose calendar year the month falls from May on
+    alloc_wy = [y if m >= alloc_start_month else y - 1 for y, m in zip(year, month)]
+    return pd.DataFrame({
+        "Part B": "PGE_WY_ALLOCATION_SV",
+        "Part C": "RATIO",
+        "Year": year,
+        "Month": month,
+        "Value": [ratio_lookup.get(w, default_ratio) for w in alloc_wy],
+    })
 
 
 # ------------------------------------------------------------------------------
-# Product A
+# Historical_Unsplit and Product A
 # ------------------------------------------------------------------------------
-def run_product_a(config: dict) -> Path:
-    """Generate PGE_WY_ALLOCATION_SV for Product A using FOLSM_INFLOW from QMap."""
+def run_single(config: dict, product: str) -> Path:
+    """Generate PGE_WY_ALLOCATION_SV for Historical_Unsplit or Product A using the set's
+    FOLSM_INFLOW from QMap."""
+    name = WEATHER_SETS[product]["name"]
     print("\n" + "=" * 60)
-    print("Product A: PGE_WY_ALLOCATION_SV")
+    print(f"{name}: PGE_WY_ALLOCATION_SV")
     print("=" * 60)
 
-    # Load FOLSM_INFLOW from Product A QMap validation output
-    df_all = pd.read_csv(RIM_INFLOW_PRODUCT_A_CSV)
+    # Load FOLSM_INFLOW from the set's QMap validation output
+    df_all = pd.read_csv(get_rim_inflow_outputs(product)["ts"])
     df_fols = (
         df_all[df_all["CalSim"] == "FOLSM_INFLOW"][["Year", "Month", "qmap_postAdj"]]
         .rename(columns={"qmap_postAdj": "FOLSM_INFLOW_TAF"})
         .copy()
     )
-    print(f"  Loaded FOLSM_INFLOW (Product A): {len(df_fols)} monthly records")
+    print(f"  Loaded FOLSM_INFLOW ({name}): {len(df_fols)} monthly records")
 
     # Compute WY annual sums and apply thresholds
     thresholds = config["thresholds"]
@@ -240,32 +218,27 @@ def run_product_a(config: dict) -> Path:
 
     # Filter to study period
     wy_ratios_study = wy_ratios[
-        (wy_ratios["WY"] >= PRODUCT_A_START_WY) & (wy_ratios["WY"] <= PRODUCT_A_END_WY)
+        (wy_ratios["WY"] >= START_WY) & (wy_ratios["WY"] <= END_WY)
     ].copy()
 
     # Also need the WY before the start for Oct-Apr of start year
-    wy_before = wy_ratios[wy_ratios["WY"] == PRODUCT_A_START_WY - 1]
+    wy_before = wy_ratios[wy_ratios["WY"] == START_WY - 1]
     wy_ratios_full = pd.concat([wy_before, wy_ratios_study], ignore_index=True)
 
     n_dry = len(wy_ratios_study[wy_ratios_study["Ratio"] < 1.0])
     print(f"  WYs with allocation < 1.0: {n_dry}/{len(wy_ratios_study)}")
 
     # Spread to monthly (Oct of start WY through Sep of end WY)
-    start_year = PRODUCT_A_START_WY - 1  # Oct of previous CY = start of first WY
-    start_month = 10
-    end_year = PRODUCT_A_END_WY
-    end_month = 9
-
     df_out = spread_ratio_to_monthly(
         wy_ratios_full,
-        start_year, start_month,
-        end_year, end_month,
+        wy_months(START_WY, END_WY),
         alloc_start_month=config["allocation_start_month"],
         default_ratio=default_ratio,
     )
 
     # Write output
-    out_path = write_product_a_csv(df_out, OUTPUT_A_DIR, "_pge_wy_allocation_productA")
+    out_path = write_delivery_csv(df_out, delivery_dir(_GEN_DIR / "output", product),
+                                  "_pge_wy_allocation", product)
     print(f"  Wrote: {out_path.name} ({len(df_out)} rows)")
 
     return out_path
@@ -301,7 +274,7 @@ def read_folsm_product_b(chunk: int) -> pd.DataFrame:
 def run_product_b(config: dict) -> list[Path]:
     """Generate PGE_WY_ALLOCATION_SV for Product B using synthetic FOLSM_INFLOW.
 
-    Uses the same thresholds as Product A applied directly to annual
+    Uses the same thresholds as the single series applied directly to annual
     FOLSM_INFLOW sums (unimpaired Folsom inflow from QMap).
     """
     print("\n" + "=" * 60)
@@ -312,10 +285,8 @@ def run_product_b(config: dict) -> list[Path]:
     default_ratio = config["default_ratio"]
     alloc_month = config["allocation_start_month"]
 
-    OUTPUT_B_DIR.mkdir(parents=True, exist_ok=True)
-    output_paths = []
-
-    for chunk in range(1, PRODUCT_B_NCHUNKS + 1):
+    chunks = []
+    for chunk in range(1, N_CHUNKS + 1):
         tag = f"n{chunk:02d}"
         print(f"\n  --- Chunk {tag} ---")
 
@@ -332,7 +303,7 @@ def run_product_b(config: dict) -> list[Path]:
         # The chunk starts at Oct 1921, so spread_ratio_to_monthly needs a WY
         # 1921 entry to assign allocations for Oct 1921 - Apr 1922.  WY 1921
         # cannot be computed (only 3 months of data available), so use WY 1922
-        # as the nearest proxy - same approach Product A uses for wy_before.
+        # as the nearest proxy.
         first_wy = int(wy_ratios["WY"].min())
         wy_before = wy_ratios[wy_ratios["WY"] == first_wy].copy()
         wy_before["WY"] = first_wy - 1
@@ -342,27 +313,18 @@ def run_product_b(config: dict) -> list[Path]:
         n_total = len(wy_ratios)
         print(f"  WYs: {n_total}, dry (ratio < 1.0): {n_dry}")
 
-        # Determine output period: first full Oct through last Sep
-        first_year = int(df_folsm["Year"].min())
-        last_year = int(df_folsm["Year"].max())
-        out_start_year = first_year
-        out_start_month = 10  # Oct
-        out_end_year = last_year
-        out_end_month = 9     # Sep
-
+        # Output period: the chunk's label months, Oct 1921 - Sep 2021
         df_out = spread_ratio_to_monthly(
             wy_ratios,
-            out_start_year, out_start_month,
-            out_end_year, out_end_month,
+            LABEL_MONTHS,
             alloc_start_month=alloc_month,
             default_ratio=default_ratio,
         )
+        chunks.append(df_out.assign(chunk=chunk))
 
-        out_path = OUTPUT_B_DIR / f"_pge_wy_allocation_productB_{tag}.csv"
-        df_out.to_csv(out_path, index=False)
-        output_paths.append(out_path)
-        print(f"  Wrote: {out_path.name} ({len(df_out)} rows)")
-
+    output_paths = write_chunk_csvs(pd.concat(chunks, ignore_index=True), OUTPUT_B_DIR,
+                                    "_pge_wy_allocation_productB")
+    print(f"  Wrote: {len(output_paths)} chunk files to {OUTPUT_B_DIR}")
     return output_paths
 
 
@@ -373,8 +335,9 @@ def main():
     import argparse
     ap = argparse.ArgumentParser(
         description="PGE_WY_ALLOCATION_SV reconstruction from FOLSM_INFLOW thresholds.")
-    ap.add_argument("--product", choices=["A", "B"], required=True,
-                    help='Product to generate: A (historical 1921-2018) or B (stochastic 1000-yr chunks).')
+    ap.add_argument("--product", choices=list(WEATHER_SETS), required=True,
+                    help='Weather set: historical (Historical_Unsplit) or A (WY1922-2018), '
+                         'or B (stochastic 1000-yr chunks).')
     args = ap.parse_args()
 
     print("PGE_WY_ALLOCATION_SV Reconstruction")
@@ -388,10 +351,10 @@ def main():
     print(f"  Default ratio: {config['default_ratio']}")
     print(f"  Allocation start month: {config['allocation_start_month']}")
 
-    if args.product == "A":
-        run_product_a(config)
-    else:
+    if args.product == "B":
         run_product_b(config)
+    else:
+        run_single(config, args.product)
 
     print("\n" + "=" * 60)
     print("Done.")

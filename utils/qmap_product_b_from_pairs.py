@@ -34,13 +34,11 @@ from utils.qmap_fit import (
     read_historical_predictors, sum_parts, training_basis,
 )
 from utils.quantile_mapping import qmap_single
-from utils.wgen_calendar import N_CHUNKS
+from utils.wgen_calendar import N_CHUNKS, require_label_months
 
 # -----------------------------------------------------------------------------
 # Defaults
 # -----------------------------------------------------------------------------
-PRODUCT_B_START = pd.Timestamp("1921-10-31")
-PRODUCT_B_END = pd.Timestamp("2021-09-30")
 PRODUCT_B_CHUNKS = [f"n{k:02d}" for k in range(1, N_CHUNKS + 1)]
 DSS_READ_START = "1915-01-31"
 DSS_READ_END = "2021-12-31"
@@ -269,11 +267,10 @@ def load_product_b_basis_series(
     basis_partb: str,
     sim_dir: str | Path,
     timeseries: str,
-    product_b_start: str | pd.Timestamp = PRODUCT_B_START,
-    product_b_end: str | pd.Timestamp = PRODUCT_B_END,
 ) -> pd.Series | None:
     """
-    Load one Product-B realization for a matched basis term.
+    Load one Product-B realization for a matched basis term, indexed by the month ends of its
+    label months (utils.wgen_calendar.LABEL_MONTHS, which the file's Year and Month must be).
 
     Expected filename pattern:
         <Matched_Inflow_PartB>_qmo_<timeseries>.csv
@@ -288,23 +285,15 @@ def load_product_b_basis_series(
     value_col = detect_product_b_value_col(df)
     vals = pd.to_numeric(df[value_col], errors="coerce").to_numpy(float)
 
-    canonical_idx = _date_range_me(pd.Timestamp(product_b_start), pd.Timestamp(product_b_end))
-    expected_months = len(canonical_idx)
-    if len(vals) != expected_months:
-        raise ValueError(
-            f"{fname}: expected {expected_months} rows ({canonical_idx[0].date()} to {canonical_idx[-1].date()}) "
-            f"but got {len(vals)}."
-        )
-
-    return pd.Series(vals, index=canonical_idx, name=basis_partb)
+    require_label_months(df["Year"], df["Month"], fname)
+    index = _date_range_me(f"{df['Year'].iloc[0]}-{df['Month'].iloc[0]:02d}-01", periods=len(df))
+    return pd.Series(vals, index=index, name=basis_partb)
 
 
 def load_product_b_all_timeseries(
     basis_partb: str,
     sim_dir: str | Path,
     timeseries_list: list[str],
-    product_b_start: str | pd.Timestamp = PRODUCT_B_START,
-    product_b_end: str | pd.Timestamp = PRODUCT_B_END,
 ) -> pd.DataFrame:
     """
     Load and concatenate all Product-B realizations for one basis term. A
@@ -322,8 +311,6 @@ def load_product_b_all_timeseries(
                 basis_partb=part,
                 sim_dir=sim_dir,
                 timeseries=ts,
-                product_b_start=product_b_start,
-                product_b_end=product_b_end,
             ),
         )
         if sim_ser is None:
@@ -426,8 +413,6 @@ def run_product_b_qmap_from_pairs(
     dss_file: str | Path,
     sim_in_dir: str | Path,
     out_dir: str | Path,
-    product_b_start: str | pd.Timestamp = PRODUCT_B_START,
-    product_b_end: str | pd.Timestamp = PRODUCT_B_END,
     output_tag: str = OUTPUT_TAG,
     dss_read_start: str = DSS_READ_START,
     dss_read_end: str = DSS_READ_END,
@@ -447,8 +432,6 @@ def run_product_b_qmap_from_pairs(
         Directory containing Product-B basis CSVs.
     out_dir
         Directory where mapped target CSVs will be written.
-    product_b_start, product_b_end
-        Canonical monthly time axis for Product-B basis files.
     output_tag
         Middle token in output filename, default ``qmap``.
     dss_read_start, dss_read_end
@@ -536,8 +519,6 @@ def run_product_b_qmap_from_pairs(
                     basis_partb=basis_b,
                     sim_dir=sim_in_dir,
                     timeseries_list=timeseries_list,
-                    product_b_start=product_b_start,
-                    product_b_end=product_b_end,
                 )
 
             sim_all = basis_cache[basis_b]

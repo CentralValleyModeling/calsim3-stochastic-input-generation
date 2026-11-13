@@ -72,7 +72,7 @@ import pandas as pd
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 from mod_forcing.inflows.adapters import label, load
-from utils.paths import (INFLOW_FORCINGS, INFLOW_PROVENANCE, get_arc_inflows, get_inflow_env,
+from utils.paths import (WEATHER_SETS, INFLOW_PROVENANCE, get_arc_inflows, get_inflow_env,
                          get_inflow_model, get_inflow_pin, get_inflow_repo,
                          get_module_generated_dir, remove_tree, sha256_file)
 from utils.wgen_calendar import chunk_months
@@ -83,7 +83,7 @@ _gen = get_module_generated_dir("mod_forcing/inflows")
 def check_g2(forcing: str, input_sha: dict[str, str]) -> dict:
     """Gate G2: stop unless _1_build_forcing.py passed on every cell of each of these inputs
     (name -> sha256); return the record of it."""
-    path = _gen / "output" / "_1_build_forcing" / INFLOW_FORCINGS[forcing] / "forcing_identity.csv"
+    path = _gen / "output" / "_1_build_forcing" / WEATHER_SETS[forcing]["wgen"] / "forcing_identity.csv"
     rerun = f"run _1_build_forcing.py --forcing {forcing} --cells all"
     if not path.exists():
         raise SystemExit(f"G2 has not been run on this input: {path} is missing; {rerun}")
@@ -140,14 +140,14 @@ def main():
                          "runs it from another folder; restore the pinned version "
                          "(config: inflow_pin) or pass --allow-dirty")
 
-    build_dir = _gen / "output" / "_1_build_forcing" / INFLOW_FORCINGS[args.forcing]
+    build_dir = _gen / "output" / "_1_build_forcing" / WEATHER_SETS[args.forcing]["wgen"]
     files = model.inputs(repo, args.forcing, build_dir)
     print("Hashing the model input ...")
     input_sha = {label(f, repo): sha256_file(f) for f in files}
     g2 = check_g2(args.forcing, input_sha)
     print(f"G2 PASS on every cell of {g2['inputs']} input(s)")
 
-    out_dir = _gen / "output" / "_2_run_product" / INFLOW_FORCINGS[args.forcing]
+    out_dir = _gen / "output" / "_2_run_product" / WEATHER_SETS[args.forcing]["wgen"]
     previous = out_dir / INFLOW_PROVENANCE
     if previous.exists():
         other = json.loads(previous.read_text()).get("inflow_model")

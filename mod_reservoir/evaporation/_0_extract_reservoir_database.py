@@ -41,6 +41,7 @@ import openpyxl
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 from utils.paths import get_module_generated_dir, get_base_dir
+from utils.wgen import nearest_cell
 
 _gen             = get_module_generated_dir("mod_reservoir/evaporation")
 _spreadsheets_dir = get_base_dir() / "CalSim3" / "ReservoirEvaporationSpreadsheets"
@@ -272,59 +273,23 @@ class ReservoirDatabase:
                 ])
 
 
-def find_nearest_weather_file(reservoir_code: str,
-                               weather_dir: str = '../_00_Data/Historical_Climate_LTO/1_Historical') -> Optional[str]:
+def find_nearest_weather_file(reservoir_code: str) -> str:
     """
-    Find the nearest weather data file for a reservoir.
-
-    Weather files are named: data_LAT_LON
+    The Historical_Climate_LTO file (utils.wgen set LTO, the weather of the Excel workbooks)
+    of the cell nearest a reservoir.
 
     Parameters:
     -----------
     reservoir_code : str
         Reservoir code
-    weather_dir : str
-        Directory containing weather data files
 
     Returns:
     --------
-    str or None
-        Path to nearest weather file, or None if not found
+    str
+        Path to the nearest weather file
     """
-    db = ReservoirDatabase()
-    loc = db.get_location(reservoir_code)
-
-    res_lat = loc['latitude']
-    res_lon = loc['longitude']
-
-    # Find all weather files
-    weather_path = Path(weather_dir)
-    if not weather_path.exists():
-        return None
-
-    min_dist = float('inf')
-    nearest_file = None
-
-    for file in weather_path.glob('data_*'):
-        # Extract lat/lon from filename: data_LAT_LON
-        parts = file.name.split('_')
-        if len(parts) != 3:
-            continue
-
-        try:
-            file_lat = float(parts[1])
-            file_lon = float(parts[2])
-
-            # Calculate distance
-            dist = np.sqrt((file_lat - res_lat)**2 + (file_lon - res_lon)**2)
-
-            if dist < min_dist:
-                min_dist = dist
-                nearest_file = str(file)
-        except ValueError:
-            continue
-
-    return nearest_file
+    loc = ReservoirDatabase().get_location(reservoir_code)
+    return str(nearest_cell("LTO", loc['latitude'], loc['longitude'])[2])
 
 
 def extract_reservoir_parameters(
@@ -536,12 +501,7 @@ def main():
     print("="*80)
 
     for code in ['FOLSM', 'SHSTA', 'OROVL']:
-        weather_file = find_nearest_weather_file(code)
-        if weather_file:
-            filename = Path(weather_file).name
-            print(f"\n{code:6s}: {filename}")
-        else:
-            print(f"\n{code:6s}: No weather file found")
+        print(f"\n{code:6s}: {Path(find_nearest_weather_file(code)).name}")
 
     # Export to CSV
     print("\n" + "="*80)

@@ -6,8 +6,11 @@ each UHH location, with Trinity (TR_UHH) highlighted for GitHub issue #78:
   1. PRISM_AN        PRISM all-networks, 4km      (independent reference)
   2. PRISM_LT        PRISM long-term/stable, 800m (independent reference)
   3. Hist_CalSim     CalSim historical SV precip  (__calsim_sv_default__.dss)
-  4. LIVNEH_UNSPLIT  Livneh "unsplit" forcing     (WGEN/Historical_Unsplit, col 3)
-  5. LIVNEH_SPLIT    Livneh "split" forcing       (Historical_Climate_LTO/1_Historical, col 0)
+  4. LIVNEH_UNSPLIT  Livneh "unsplit" forcing     (WGEN/Historical_Unsplit)
+  5. LIVNEH_SPLIT    Livneh "split" forcing       (Historical_Climate_LTO/1_Historical)
+
+Both Livneh sources are read through utils.wgen.read_met, which corrects the unsplit
+files' x10 precipitation days.
 
 The four gridded per-cell sources (all named data_<lat>_<lon>) are area-weighted
 to each UHH location using the GridInfo weights (mod_forcing/climate/
@@ -37,6 +40,7 @@ import matplotlib.pyplot as plt
 # Resolve repo data through utils.paths (the sanctioned resolver).
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 from utils.paths import get_base_dir, get_module_generated_dir
+from utils.wgen import dates, met_dir, read_met
 
 # Reuse the DSS historical reader and GridInfo/location helpers from the sibling
 # UHH module (module name starts with a digit-friendly underscore, so import by name).
@@ -48,8 +52,8 @@ BASE = get_base_dir()
 # here and these dirs are well under MAX_PATH).
 PRISM_AN_DIR = os.path.normpath(str(BASE / "PRISM" / "an"))
 PRISM_LT_DIR = os.path.normpath(str(BASE / "PRISM" / "lt"))
-SPLIT_DIR    = os.path.normpath(str(BASE / "Historical_Climate_LTO" / "1_Historical"))  # col 0 = prcp
-UNSPLIT_DIR  = os.path.normpath(str(BASE / "WGEN" / "Historical_Unsplit"))          # col 3 = prcp
+SPLIT_DIR    = os.path.normpath(str(met_dir("LTO")))
+UNSPLIT_DIR  = os.path.normpath(str(met_dir("historical")))
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 GRIDINFO_DIR = REPO_ROOT / "mod_forcing" / "climate" / "reference" / "GridInfo"
@@ -97,12 +101,12 @@ def _prism_cell_wy(path):
     return (tot[cnt == 12]) / MM_PER_IN
 
 
-def _daily_cell_wy(path, usecol):
-    """Daily per-cell file (no dates; row i = 1915-01-01 + i days) -> Series WY -> inches/yr.
-    usecol selects the precip column (Split col 0, Unsplit col 3). Keeps complete WYs (>=365 days)."""
-    v = np.loadtxt(path, usecols=usecol)
-    dates = pd.date_range("1915-01-01", periods=len(v), freq="D")
-    df = pd.DataFrame({"p": v, "WY": dates.year + (dates.month >= 10).astype(int)})
+def _daily_cell_wy(path, product):
+    """Daily per-cell file of ``product`` ("LTO" for Split, "historical" for Unsplit) -> Series
+    WY -> inches/yr. Keeps complete WYs (>=365 days)."""
+    w = read_met(product, path, usecols=["precip"])
+    d = dates(w)
+    df = pd.DataFrame({"p": w["precip"].to_numpy(), "WY": d.year + (d.month >= 10).astype(int)})
     g = df.groupby("WY")["p"]
     tot, cnt = g.sum(), g.count()
     return (tot[cnt >= 365]) / MM_PER_IN
@@ -117,9 +121,9 @@ def _cell_wy(source, path):
         if source in ("PRISM_AN", "PRISM_LT"):
             _CACHE[key] = _prism_cell_wy(path)
         elif source == "LIVNEH_SPLIT":
-            _CACHE[key] = _daily_cell_wy(path, 0)
+            _CACHE[key] = _daily_cell_wy(path, "LTO")
         elif source == "LIVNEH_UNSPLIT":
-            _CACHE[key] = _daily_cell_wy(path, 3)
+            _CACHE[key] = _daily_cell_wy(path, "historical")
     return _CACHE[key]
 
 

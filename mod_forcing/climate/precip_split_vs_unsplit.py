@@ -8,6 +8,8 @@ the repo convention, so it follows ``config.json`` wherever the data dir lives.
 Inputs (resolved via ``utils.paths.get_base_dir``):
   BASE/Historical_Climate_LTO/1_Historical/data_<lat>_<lon>   SPLIT:   prcp tmax tmin wind (no dates)
   BASE/WGEN/Historical_Unsplit/data_<lat>_<lon>           UNSPLIT: yr mo dy prcp tmax tmin
+Both are read through ``utils.wgen.read_met``, which corrects the unsplit files' x10
+precipitation days.
 
 Basin cell sets + area_weight come from the **SAC-SMA repo** (``SACSMA_REPO`` below):
 ``data/hru/hruinfo_<domain>.csv`` (per-basin dedup; cells may be shared across nested
@@ -33,14 +35,13 @@ import matplotlib.pyplot as plt
 # Resolve repo data through utils.paths (the sanctioned resolver) instead of
 # hard-coded relative hops, so BASE inputs and GENERATED outputs follow config.json.
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
-from utils.paths import get_base_dir, get_module_generated_dir
+from utils.paths import get_module_generated_dir
+from utils.wgen import met_dir, read_met
 
-BASE = get_base_dir()
-# Normalize to a plain string (forward slashes -> backslashes; the long-path
-# prefix get_base_dir adds is harmless here and these dirs are well under MAX_PATH)
-# so os.listdir in index_dir is happy on Windows.
-SP = os.path.normpath(str(BASE / "Historical_Climate_LTO" / "1_Historical"))  # split   (col 0 = prcp)
-UN = os.path.normpath(str(BASE / "WGEN" / "Historical_Unsplit"))          # unsplit (col 3 = prcp)
+# Plain strings for os.listdir in index_dir (the long-path prefix is harmless here and
+# these dirs are well under MAX_PATH).
+SP = os.path.normpath(str(met_dir("LTO")))         # split
+UN = os.path.normpath(str(met_dir("historical")))  # unsplit
 
 # external SAC-SMA repo: supplies the basin->cell definitions (hruinfo) read below.
 # Input only -- the comparison artifacts now go to this repo's GENERATED tree.
@@ -80,8 +81,8 @@ def main():
         if fs is None or fu is None:
             cache[k] = None
             return None
-        s = np.loadtxt(fs, usecols=0, max_rows=N)
-        u = np.loadtxt(fu, usecols=3, max_rows=N)
+        s = read_met("LTO", fs, usecols=["precip"])["precip"].to_numpy()[:N]
+        u = read_met("historical", fu, usecols=["precip"])["precip"].to_numpy()[:N]
         r = {f"s_{p}": float(s[m].sum()) for p, m in MASK.items()}
         r.update({f"u_{p}": float(u[m].sum()) for p, m in MASK.items()})
         cache[k] = r

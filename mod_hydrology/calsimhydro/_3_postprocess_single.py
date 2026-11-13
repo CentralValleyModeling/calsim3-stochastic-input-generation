@@ -1,20 +1,25 @@
 """
-Postprocess CalSimHydro Product A DSS Outputs
-=============================================
+Postprocess CalSimHydro DSS Outputs of a Single Weather Series
+==============================================================
 Extracts, merges, and compares scenario time series from CalSimHydro DSS
 files (CS3L2015V0Hydro_SV, RiceOutput, HydroRebalanceSJRdemands). Produces
 merged-scenario CSVs + summary statistics + boxplots (comparison mode) and
-Part B / Part C / Year / Month / Value validation CSVs.
+Part B / Part C / Year / Month / Value delivery CSVs of the set
+(Historical_Unsplit or Product A).
 
 Inputs
 ------
-- [EXTERNAL] CalSimHydro Product A scenario DSS (per the SOURCES dict)
+- [EXTERNAL] CalSimHydro and Rebalance run DSS (per the SOURCES dict): the
+  Historical, VICPrecip and QMET 1972-2018 comparison runs and the set's runs
+  CalSimHydro_<set> and Rebalance_<set> (<set>: Historical_Unsplit, Product_A)
 - Master inventory xlsx
 
 Outputs
 -------
-- output/_3_postprocess_product_a/  (merged + summary CSVs, boxplots)
-- output/_3_postprocess_product_a/_product_a_validation/  (CalSim-format CSVs)
+- output/_3_postprocess_single/<set>/<source>/  (merged + summary CSVs, boxplots)
+- output/_3_postprocess_single/<_historical_unsplit_validation|_product_a_validation>/
+  (_cshydro_<sv|rebalance|rice>_<historicalUnsplit|productA>_<first WY>_<last WY>.csv, the
+  run's water years within utils.paths.DELIVERY_WY)
 
 Dependencies
 ------------
@@ -23,10 +28,11 @@ Dependencies
 
 Usage
 -----
-    python _3_postprocess_product_a.py                     # run everything
-    python _3_postprocess_product_a.py --sources cshydro   # single source
-    python _3_postprocess_product_a.py --skip-compare      # validation only
-    python _3_postprocess_product_a.py --skip-validate     # comparison only
+    python _3_postprocess_single.py --product A                     # run everything
+    python _3_postprocess_single.py --product historical            # Historical_Unsplit
+    python _3_postprocess_single.py --product A --sources cshydro   # single source
+    python _3_postprocess_single.py --product A --skip-compare      # validation only
+    python _3_postprocess_single.py --product A --skip-validate     # comparison only
 """
 
 import os
@@ -43,69 +49,62 @@ import matplotlib.pyplot as plt
 # Add repo root to path for utils imports
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 from utils import csv_io, dss_io
-from utils.paths import get_module_generated_dir, get_inventory_dir
+from utils.paths import DELIVERY, DELIVERY_WY, WEATHER_SETS, delivery_dir, get_module_generated_dir, get_inventory_dir
 
 
 # -- CONSTANTS -----------------------------------------------------------------
 _GEN_DIR = get_module_generated_dir("mod_hydrology/calsimhydro")
-COMPARE_DIR = str(_GEN_DIR / "output" / "_3_postprocess_product_a")
-VALIDATE_DIR = str(_GEN_DIR / "output" / "_3_postprocess_product_a" / "_product_a_validation")
+OUTPUT_ROOT = _GEN_DIR / "output" / "_3_postprocess_single"
 
 EXCEL_PATH = str(get_inventory_dir() / "_MASTER_INVENTORY_FOR_STOCHASTIC_INPUT_GENERATION_.xlsx")
 SHEET_NAME = "MASTER"
 
-SCENARIO_LABELS = ['Historical', 'VIC_Precip', 'QM_ET', 'Product_A']
-START_WY = 1972
-END_WY = 2018
+# The comparison runs; the set's run comes last, labelled with the set name
+COMPARISON_RUNS = (("Historical", "Historical_1972-2018"), ("VIC_Precip", "VICPrecip_1972-2018"),
+                   ("QM_ET", "QMET_1972-2018"))
 
 # DSS source definitions
 _cshydro_runs = _GEN_DIR / "CalSimHydro_Runs"
 _rebalance_runs = _GEN_DIR / "CalSimHydro_Rebalance_Runs"
 
+# Each source's run folder is <runs>/<prefix>_<run>/<dss>
 SOURCES = {
     "cshydro": {
         "label": "CS3L2015V0Hydro_SV",
         "inv_filter": "CS3L2015V0Hydro_SV.dss",
-        "compare_dss": [
-            _cshydro_runs / "CalSimHydro_Historical_1972-2018" / "CS3L2015V0Hydro_SV.dss",
-            _cshydro_runs / "CalSimHydro_VICPrecip_1972-2018" / "CS3L2015V0Hydro_SV.dss",
-            _cshydro_runs / "CalSimHydro_QMET_1972-2018" / "CS3L2015V0Hydro_SV.dss",
-            _cshydro_runs / "CalSimHydro_Product_A" / "CS3L2015V0Hydro_SV.dss",
-        ],
-        "validate_dss": _cshydro_runs / "CalSimHydro_Product_A" / "CS3L2015V0Hydro_SV.dss",
-        "compare_csv": "calsimHydro_1972-2018_SV_DSS.csv",
+        "runs": _cshydro_runs, "prefix": "CalSimHydro", "dss": Path("CS3L2015V0Hydro_SV.dss"),
+        "compare_csv": "calsimHydro_SV_DSS.csv",
         "summary_csv": "calsimHydro_summary_statistics_by_PartC.csv",
-        "validate_csv": f"_cshydro_sv_productA_{START_WY}_{END_WY}.csv",
+        "validate_stem": "_cshydro_sv",
     },
     "rebalance": {
         "label": "HydroRebalanceSJRdemands",
         "inv_filter": "RebalancedSJR_AW_TW_DP.dss",
-        "compare_dss": [
-            _rebalance_runs / "Rebalance_Historical_1972-2018" / "DSS" / "HydroRebalanceSJRdemands.dss",
-            _rebalance_runs / "Rebalance_VICPrecip_1972-2018" / "DSS" / "HydroRebalanceSJRdemands.dss",
-            _rebalance_runs / "Rebalance_QMET_1972-2018" / "DSS" / "HydroRebalanceSJRdemands.dss",
-            _rebalance_runs / "Rebalance_Product_A" / "DSS" / "HydroRebalanceSJRdemands.dss",
-        ],
-        "validate_dss": _rebalance_runs / "Rebalance_Product_A" / "DSS" / "HydroRebalanceSJRdemands.dss",
-        "compare_csv": "HydroRebalanceSJRdemands_1972-2018_DSS.csv",
+        "runs": _rebalance_runs, "prefix": "Rebalance", "dss": Path("DSS") / "HydroRebalanceSJRdemands.dss",
+        "compare_csv": "HydroRebalanceSJRdemands_DSS.csv",
         "summary_csv": "HydroRebalanceSJRdemands_summary_statistics_by_PartC.csv",
-        "validate_csv": f"_cshydro_rebalance_productA_{START_WY}_{END_WY}.csv",
+        "validate_stem": "_cshydro_rebalance",
     },
     "rice": {
         "label": "RiceOutput",
         "inv_filter": "RiceOutput.dss",
-        "compare_dss": [
-            _cshydro_runs / "CalSimHydro_Historical_1972-2018" / "RiceOutput.dss",
-            _cshydro_runs / "CalSimHydro_VICPrecip_1972-2018" / "RiceOutput.dss",
-            _cshydro_runs / "CalSimHydro_QMET_1972-2018" / "RiceOutput.dss",
-            _cshydro_runs / "CalSimHydro_Product_A" / "RiceOutput.dss",
-        ],
-        "validate_dss": _cshydro_runs / "CalSimHydro_Product_A" / "RiceOutput.dss",
+        "runs": _cshydro_runs, "prefix": "CalSimHydro", "dss": Path("RiceOutput.dss"),
         "compare_csv": "RiceOutput_DSS.csv",
         "summary_csv": "RiceOutput_summary_statistics_by_PartC.csv",
-        "validate_csv": f"_cshydro_rice_productA_{START_WY}_{END_WY}.csv",
+        "validate_stem": "_cshydro_rice",
     },
 }
+
+
+def run_dss(src, run):
+    """DSS file of a source in run folder ``<prefix>_<run>``."""
+    return src["runs"] / f"{src['prefix']}_{run}" / src["dss"]
+
+
+def scenarios(src, product):
+    """(label, DSS) of the comparison runs, then of the set's run."""
+    name = WEATHER_SETS[product]["name"]
+    return [(label, run_dss(src, run)) for label, run in COMPARISON_RUNS] + [(name, run_dss(src, name))]
 
 
 # -- HELPER FUNCTIONS ----------------------------------------------------------
@@ -159,7 +158,7 @@ def extract_dss_data(dss_path, excel_partcs):
 
 # -- COMPARISON MODE -----------------------------------------------------------
 
-def run_comparison(source_key, src):
+def run_comparison(source_key, src, product):
     """Extract all scenarios, merge, compute stats, and generate boxplots."""
     print(f"\n{'-' * 60}")
     print(f"  Comparison: {src['label']}")
@@ -168,9 +167,11 @@ def run_comparison(source_key, src):
     excel_partcs, desired_order = load_inventory(src["inv_filter"])
     print(f"  Inventory: {len(excel_partcs)} SVs from master spreadsheet")
 
-    # Read all 4 scenario DSS files (Historical, VIC_Precip, QM_ET, Product_A)
+    # Read all 4 scenario DSS files (Historical, VIC_Precip, QM_ET, the set)
+    runs = scenarios(src, product)
+    labels = [label for label, _ in runs]
     dss_data_by_file = []
-    for dss_path, label in zip(src["compare_dss"], SCENARIO_LABELS):
+    for label, dss_path in runs:
         if not dss_path.exists():
             print(f"  WARNING: DSS not found, skipping source: {dss_path}")
             return
@@ -180,7 +181,7 @@ def run_comparison(source_key, src):
     # Convert each scenario DataFrame to long format and merge on Date/PartB/PartC
     long_dfs = []
     included_labels = []
-    for df, label in zip(dss_data_by_file, SCENARIO_LABELS):
+    for df, label in zip(dss_data_by_file, labels):
         if df.empty:
             print(f"  WARNING: {label} returned no data, skipping in merge")
             continue
@@ -210,7 +211,7 @@ def run_comparison(source_key, src):
     merged_df = merged_df.drop(columns=['PartBC', 'SortOrder'])
 
     # -- Save merged CSV -----------------------------------------------------------
-    out_dir = os.path.join(COMPARE_DIR, source_key)
+    out_dir = os.path.join(OUTPUT_ROOT, WEATHER_SETS[product]["name"], source_key)
     os.makedirs(out_dir, exist_ok=True)
 
     merged_csv = os.path.join(out_dir, src["compare_csv"])
@@ -291,17 +292,17 @@ def to_validation_csv(df, start_wy, end_wy):
     return csv_io.to_validation_df(df, start_wy, end_wy)
 
 
-def run_validation(source_key, src):
-    """Extract Product A data and write a standard validation CSV.
+def run_validation(source_key, src, product):
+    """Extract the set's data and write its delivery CSV.
 
     Output format: Part B, Part C, Year, Month, Value
-    Filtered to the WY range [START_WY, END_WY].
+    Filtered to utils.paths.DELIVERY_WY.
     """
     print(f"\n{'-' * 60}")
     print(f"  Validation: {src['label']}")
     print(f"{'-' * 60}")
 
-    dss_path = src["validate_dss"]
+    dss_path = run_dss(src, WEATHER_SETS[product]["name"])
     if not dss_path.exists():
         print(f"  WARNING: DSS not found, skipping: {dss_path}")
         return
@@ -309,20 +310,19 @@ def run_validation(source_key, src):
     excel_partcs, _ = load_inventory(src["inv_filter"])
     print(f"  Inventory SVs: {len(excel_partcs)}")
 
-    # Read Product A DSS file
+    # Read the set's DSS file
     df = extract_dss_data(str(dss_path), excel_partcs)
     print(f"  Extracted: {df.shape[1]} variables, "
           f"{df.index.min().strftime('%Y-%m')} - {df.index.max().strftime('%Y-%m')}")
 
     # Convert to long format and filter to water year window
-    val_df = to_validation_csv(df, START_WY, END_WY)
+    val_df = to_validation_csv(df, *DELIVERY_WY)
     if val_df.empty:
         print("  WARNING: No data found in validation period.")
         return
 
-    os.makedirs(VALIDATE_DIR, exist_ok=True)
-    out_file = os.path.join(VALIDATE_DIR, src["validate_csv"])
-    val_df.to_csv(out_file, index=False)
+    out_file = csv_io.write_delivery_csv(val_df, delivery_dir(OUTPUT_ROOT, product),
+                                         src["validate_stem"], product)
 
     n_vars = val_df.groupby(['Part B', 'Part C']).ngroups
     print(f"  Written: {out_file}")
@@ -333,7 +333,11 @@ def run_validation(source_key, src):
 
 def parse_args():
     parser = argparse.ArgumentParser(
-        description="Postprocess CalSimHydro Product A DSS outputs.",
+        description="Postprocess the CalSimHydro DSS outputs of a weather set.",
+    )
+    parser.add_argument(
+        "--product", choices=list(DELIVERY), required=True,
+        help="Weather set: historical (Historical_Unsplit) or A",
     )
     parser.add_argument(
         "--sources", nargs="+",
@@ -355,19 +359,19 @@ def main():
     args = parse_args()
 
     print("=" * 80)
-    print("CalSimHydro -- Product A Postprocessing")
+    print(f"CalSimHydro -- {WEATHER_SETS[args.product]['name']} Postprocessing")
     print(f"Sources: {', '.join(args.sources)}")
     print(f"Compare: {'yes' if not args.skip_compare else 'skip'}")
     print(f"Validate: {'yes' if not args.skip_validate else 'skip'}")
-    print(f"Period: WY {START_WY}-{END_WY}")
+    print(f"Period: WY {DELIVERY_WY[0]}-{DELIVERY_WY[1]}")
     print("=" * 80)
 
     for key in args.sources:
         src = SOURCES[key]
         if not args.skip_compare:
-            run_comparison(key, src)
+            run_comparison(key, src, args.product)
         if not args.skip_validate:
-            run_validation(key, src)
+            run_validation(key, src, args.product)
 
     print(f"\n{'=' * 80}")
     print("Postprocessing complete.")

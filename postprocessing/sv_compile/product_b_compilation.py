@@ -73,7 +73,7 @@ from collections import OrderedDict
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 from utils import dss_io
-from utils.wgen_calendar import N_CHUNKS
+from utils.wgen_calendar import CHUNK_MONTHS, LABEL_MONTHS, LABEL_WY, N_CHUNKS
 from utils.paths import (get_base_dir, get_generated_dir, get_module_generated_dir, get_inventory_dir,
                          get_rim_inflow_outputs)
 
@@ -96,14 +96,15 @@ INVENTORY_XLSX = get_inventory_dir() / "_MASTER_INVENTORY_FOR_STOCHASTIC_INPUT_G
 
 DSS_PATTERN = "/*/*/*/*/1MON/*"
 
-# Product B canonical period: 100 WY per chunk  (Oct 1921 - Sep 2021)
+# Product B canonical period: 100 WY per chunk, the label months Oct 1921 - Sep 2021
+# (utils.wgen_calendar.LABEL_MONTHS), as Year * 100 + Month
 CHUNK_TAGS   = [f"n{i:02d}" for i in range(1, N_CHUNKS + 1)]
-PB_START_YM  = (1921, 10)   # first data month
-PB_END_YM    = (2021,  9)   # last data month
+PB_FIRST_YM  = int(LABEL_MONTHS["Year"].iloc[0] * 100 + LABEL_MONTHS["Month"].iloc[0])
+PB_LAST_YM   = int(LABEL_MONTHS["Year"].iloc[-1] * 100 + LABEL_MONTHS["Month"].iloc[-1])
 
 # CalSim baseline comparison window (full period, WY 1922-2021)
-CB_START = pd.Timestamp(1921, 10, 31)
-CB_END   = pd.Timestamp(2021,  9, 30)
+CB_START = pd.Timestamp(LABEL_WY[0] - 1, 10, 31)
+CB_END   = pd.Timestamp(LABEL_WY[1],  9, 30)
 
 
 # Junction lifecycle (mklink /J + Windows long-path handling) lives in
@@ -456,17 +457,13 @@ def build_constant_rept_rows(dss_in, baseline_bucket, part_key):
     # Tile pattern across the Product B window
     rows = []
     partb, partc = part_key
-    start = pd.Timestamp(PB_START_YM[0], PB_START_YM[1], 1)
-    end = pd.Timestamp(PB_END_YM[0], PB_END_YM[1], 1)
-    months = pd.date_range(start, end, freq="MS")
-    for dt in months:
-        m = dt.month
+    for y, m in LABEL_MONTHS.itertuples(index=False):
         if m in pattern:
             rows.append({
                 "Part B": partb,
                 "Part C": partc,
-                "Year": dt.year,
-                "Month": m,
+                "Year": int(y),
+                "Month": int(m),
                 "Value": pattern[m],
             })
 
@@ -1989,7 +1986,7 @@ for chunk_idx in ACTIVE_CHUNKS:
 
     # Trim to canonical Product B window (Oct 1921 - Sep 2021)
     ym = compiled["Year"] * 100 + compiled["Month"]
-    compiled = compiled[(ym >= 192110) & (ym <= 202109)].copy()
+    compiled = compiled[(ym >= PB_FIRST_YM) & (ym <= PB_LAST_YM)].copy()
 
     # De-duplicate: keep last occurrence for each (Part B, Part C, Year, Month)
     compiled = compiled.drop_duplicates(
@@ -2014,9 +2011,9 @@ for chunk_idx in ACTIVE_CHUNKS:
     # Per-SV month counts for this chunk
     sv_counts = compiled.groupby(["Part B", "Part C"]).size()
     chunk_sv_month_counts[tag] = sv_counts
-    wrong_months = sv_counts[sv_counts != 1200]
+    wrong_months = sv_counts[sv_counts != CHUNK_MONTHS]
     if not wrong_months.empty:
-        print(f"  {tag}: WARNING -- {len(wrong_months)} SVs with != 1200 months:")
+        print(f"  {tag}: WARNING -- {len(wrong_months)} SVs with != {CHUNK_MONTHS} months:")
         for (b, c), cnt in wrong_months.items():
             print(f"    {b} / {c}: {cnt} months")
 
@@ -2235,12 +2232,12 @@ fp = OUTPUT_DIR / "sv_coverage_by_chunk.csv"
 coverage_df.to_csv(fp, index=False)
 incomplete = coverage_df[~coverage_df.get("All_Chunks", True)].shape[0]
 non_uniform = int((~coverage_df.get("Months_Uniform", pd.Series([True]*len(coverage_df)))).sum())
-not_1200 = int((coverage_df.get("Min_Months", pd.Series([1200]*len(coverage_df))) != 1200).sum())
+not_1200 = int((coverage_df.get("Min_Months", pd.Series([CHUNK_MONTHS]*len(coverage_df))) != CHUNK_MONTHS).sum())
 print(f"  {fp.name:45s}  {len(coverage_df):>6,} SVs")
 if incomplete > 0:
     print(f"  WARNING: {incomplete} SVs are missing from at least one chunk!")
 if not_1200 > 0:
-    print(f"  WARNING: {not_1200} SVs have != 1200 months in at least one chunk!")
+    print(f"  WARNING: {not_1200} SVs have != {CHUNK_MONTHS} months in at least one chunk!")
 if non_uniform > 0:
     print(f"  WARNING: {non_uniform} SVs have different month counts across chunks!")
 print()
@@ -2360,7 +2357,7 @@ if not CLI_ARGS.skip_comparison:
 
     pb_means_cb = _compute_pb_chunk_means(
         compiled_chunks, ACTIVE_TAGS,
-        start_ym=192110, end_ym=202109,
+        start_ym=PB_FIRST_YM, end_ym=PB_LAST_YM,
     )
 
     cmp_b = _build_comparison_df(

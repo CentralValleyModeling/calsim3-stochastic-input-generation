@@ -3,13 +3,14 @@ Shared standard-value (SV) CSV helpers
 ======================================
 Centralizes the CSV read/normalize idioms repeated across the pipeline for the
 standard SV format ``Part B, Part C, Year, Month, Value``, and
-``write_product_a_csv``, which writes a Product A series over ``PRODUCT_A_WY``.
+``write_delivery_csv``, which writes a Historical_Unsplit or Product A series over
+``DELIVERY_WY``.
 
 Behavior-preservation note
 --------------------------
 ``to_validation_df`` is a *faithful copy* of a pre-existing function and must
 keep its exact behavior (no tests exist): it reproduces
-``mod_hydrology/calsimhydro/_3_postprocess_product_a.to_validation_csv``
+``mod_hydrology/calsimhydro/_3_postprocess_single.to_validation_csv``
 (water-year window filter, column order, sort, empty-frame shape).
 ``load_sv_series`` reads with a plain ``pd.read_csv``, not the normalized
 :func:`read_sv_csv`, which would change what it returns.
@@ -25,7 +26,7 @@ from pathlib import Path
 
 import pandas as pd
 
-from utils.paths import PRODUCT_A_WY
+from utils.paths import DELIVERY, DELIVERY_WY
 
 # Canonical column order for the standard SV / validation CSV format.
 SV_COLUMNS = ["Part B", "Part C", "Year", "Month", "Value"]
@@ -45,22 +46,30 @@ def read_sv_csv(path) -> pd.DataFrame:
     return df
 
 
-# -- Product A writer ----------------------------------------------------------
+# -- Delivery writer -----------------------------------------------------------
 
-def write_product_a_csv(df: pd.DataFrame, folder, stem: str) -> Path:
+def delivery_name(stem: str, product: str, span=DELIVERY_WY) -> str:
+    """The file name of a delivery CSV: ``<stem>_<tag>_<first WY>_<last WY>.csv``, with the
+    tag of ``product`` in ``utils.paths.DELIVERY`` (``productA``, ``historicalUnsplit``)."""
+    return f"{stem}_{DELIVERY[product]['tag']}_{span[0]}_{span[1]}.csv"
+
+
+def write_delivery_csv(df: pd.DataFrame, folder, stem: str, product: str) -> Path:
     """Write the rows of ``df`` (with ``Year`` and ``Month``) that fall in
-    ``utils.paths.PRODUCT_A_WY`` as ``<folder>/<stem>_<first WY>_<last WY>.csv``, and remove the
-    folder's other ``<stem>_<WY>_<WY>.csv`` files: the compiler reads every CSV in a folder, so
-    two spans of one series would give it two values for a month. Returns the path written."""
+    ``utils.paths.DELIVERY_WY`` as ``<folder>/<stem>_<tag>_<first WY>_<last WY>.csv``
+    (:func:`delivery_name`), and remove the folder's other spans of the same stem and tag: the
+    compiler reads every CSV in a folder, so two spans of one series would give it two values
+    for a month. Returns the path written."""
     wy = df["Year"].astype(int) + (df["Month"].astype(int) >= 10)
-    keep = wy.between(*PRODUCT_A_WY)
+    keep = wy.between(*DELIVERY_WY)
     if not keep.any():
-        raise ValueError(f"{stem}: no rows in WY{PRODUCT_A_WY[0]}-{PRODUCT_A_WY[1]}")
+        raise ValueError(f"{stem}: no rows in WY{DELIVERY_WY[0]}-{DELIVERY_WY[1]}")
     folder = Path(folder)
     folder.mkdir(parents=True, exist_ok=True)
-    out = folder / f"{stem}_{wy[keep].min()}_{wy[keep].max()}.csv"
-    span = re.compile(re.escape(stem) + r"_\d{4}_\d{4}\.csv")
-    for old in folder.glob(f"{stem}_*.csv"):
+    out = folder / delivery_name(stem, product, (wy[keep].min(), wy[keep].max()))
+    prefix = f"{stem}_{DELIVERY[product]['tag']}"
+    span = re.compile(re.escape(prefix) + r"_\d{4}_\d{4}\.csv")
+    for old in folder.glob(f"{prefix}_*.csv"):
         if old.name != out.name and span.fullmatch(old.name):
             old.unlink()
     df[keep].to_csv(out, index=False)
@@ -98,7 +107,7 @@ def to_validation_df(df, start_wy, end_wy) -> pd.DataFrame:
     Filters to the water-year window [Oct 1 of ``start_wy``-1,
     Sep 30 of ``end_wy``], splits the ``"B/C"`` column label, sorts, and
     returns an empty 5-column frame when nothing falls in the window.
-    Faithful copy of ``_3_postprocess_product_a.to_validation_csv``.
+    Faithful copy of ``_3_postprocess_single.to_validation_csv``.
     """
     start_date = pd.Timestamp(start_wy - 1, 10, 1)
     end_date = pd.Timestamp(end_wy, 9, 30)

@@ -1,24 +1,25 @@
 """
 Stochastic Precipitation Exploration Plots
 ==========================================
-Interactive exploration of area-weighted precipitation for a single VIC basin
-across Product A (historical WGEN) and Product B (stochastic WGEN).
+Interactive exploration of area-weighted precipitation for a single basin across Product A and
+Product B (``utils.wgen``). Each Product B chunk is one 100-year trace on the label water years
+WY1922-2021 (``utils.wgen_calendar``), drawn over Product A's water years.
 
 Plots
 -----
-1. Multi-window rolling mean precipitation (2, 5, 20 yr)
-2. Rolling precipitation KDEs (1, 2, 5, 10 yr)
+1. Multi-window rolling mean water-year precipitation (2, 5, 20 yr)
+2. Rolling water-year precipitation KDEs (1, 2, 5, 10 yr)
 3. January daily precipitation ECDF
 
 Configuration
 -------------
 Set LOCATION at the top to switch basins (e.g. CS3_8RI_OROVI, CS3_I_SHSTA).
-Grid info is read from mod_forcing/climate/reference/GridInfo/.
+Grid info is read from mod_forcing/climate/reference/GridInfo/; a cell's weight is the
+fraction of it inside the basin (f2 / f1).
 
 Inputs
 ------
-- Product A WGEN meteo:  WGEN/Product_A/1/
-- Product B WGEN meteo:  WGEN/Product_B/1/
+- The daily weather of Product A and Product B (``utils.wgen.read_met``)
 - Grid info:             mod_forcing/climate/reference/GridInfo/<LOCATION>_GridInfo.txt
 
 Outputs
@@ -31,7 +32,7 @@ Usage
 """
 
 # %% imports
-import os, sys
+import sys
 from pathlib import Path
 import pandas as pd
 import numpy as np
@@ -41,7 +42,9 @@ from matplotlib.patches import Rectangle
 from matplotlib.lines import Line2D
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
-from utils.paths import get_base_dir, get_module_generated_dir, REPO_ROOT
+from utils.paths import get_module_generated_dir, REPO_ROOT
+from utils.wgen import met_path, read_met
+from utils.wgen_calendar import N_CHUNKS, monthly
 
 # %% style
 sns.set_style("ticks")
@@ -65,7 +68,6 @@ _GRID_DIR = REPO_ROOT / "mod_forcing" / "climate" / "reference" / "GridInfo"
 # %% settings
 LOCATION   = 'CS3_8RI_OROVI'   # CS3_8RI_OROVI | CS3_I_SHSTA
 GRID_INFO  = str(_GRID_DIR / f'{LOCATION}_GridInfo.txt')
-METEO_COLS = ['Year', 'Month', 'Day', 'PRECIP', 'TMAX', 'TMIN']
 _FIG_DIR = _gen / "output" / "_0_stochastic_precipitation"
 _FIG_DIR.mkdir(parents=True, exist_ok=True)
 
@@ -88,20 +90,22 @@ def _legend_handles(cs3=False):
     return handles
 
 
-def gather_precip(meteo_dir, grid_info, start_date):
-    """Area-weighted precipitation from WGEN meteo files. Returns (daily, monthly, annual)."""
-    precip = pd.Series(dtype=float)
-    area_sum = 0.0
-    for _, row in grid_info.iterrows():
-        path = os.path.join(meteo_dir, f"meteo_{row.Lat}_{row.Lon}")
-        if not os.path.exists(path):
-            raise FileNotFoundError(f"Meteo file not found: {path}")
-        df = pd.read_csv(path, sep='  ', header=None, engine='python', names=METEO_COLS)
-        precip = precip.add(df['PRECIP'], fill_value=0)
-        area_sum += row['f2'] / row['f1']
-    precip = (precip / area_sum) * 0.0393701  # mm → in
-    precip.index = pd.date_range(start=start_date, periods=len(precip), freq='D')
-    return precip, precip.resample('ME').sum(), precip.resample('YE').sum()
+def gather_precip(product, grid_info):
+    """Area-weighted precipitation (in) of the basin: the daily rows (Year, Month, Day, precip;
+    stamp days for Product B), the labelled monthly table (chunk, Year, Month, WY, precip) and
+    the water-year totals of complete water years (chunk, WY, precip)."""
+    total, weight, first = None, 0.0, None
+    for row in grid_info.itertuples(index=False):
+        met = read_met(product, met_path(product, row.Lat, row.Lon), usecols=['precip'])
+        w = row.f2 / row.f1
+        total = met['precip'] * w if total is None else total + met['precip'] * w
+        weight += w
+        first = met if first is None else first
+    daily = first[['Year', 'Month', 'Day']].assign(precip=total / weight * 0.0393701)
+    m = monthly(product, daily, 'sum')
+    g = m.groupby(['chunk', 'WY'])['precip']
+    annual = g.sum()[g.size() == 12].reset_index()
+    return daily, m, annual
 
 
 def _grid(ax, axis='both'):
@@ -121,21 +125,19 @@ def _ecdf(series):
 
 grid_info = pd.read_csv(GRID_INFO, sep=r'\s+', header=None, names=['id', 'Lat', 'Lon', 'f1', 'f2'])
 
-hist_precip,  hist_precip_monthly,  hist_precip_annual  = gather_precip(str(get_base_dir() / 'WGEN' / 'Product_A' / '1'), grid_info, '1915-01-01')
-stoch_precip, stoch_precip_monthly, stoch_precip_annual = gather_precip(str(get_base_dir() / 'WGEN' / 'Product_B' / '1'), grid_info, '2025-01-01')
+hist_precip,  hist_precip_monthly,  hist_precip_annual_t  = gather_precip('A', grid_info)
+stoch_precip, stoch_precip_monthly, stoch_precip_annual_t = gather_precip('B', grid_info)
+hist_precip_annual = hist_precip_annual_t.set_index('WY')['precip']
 
-# Split stochastic annual into 100-yr traces
-TRACE_LEN = 100
-n_traces = min(10, len(stoch_precip_annual) // TRACE_LEN)
-if n_traces < 10:
-    print(f'Warning: only {n_traces} full 100-yr traces available.')
+# One 100-yr trace per Product B chunk, on its label water years
 stoch_traces = [
-    stoch_precip_annual.iloc[i*TRACE_LEN:(i+1)*TRACE_LEN].rename(f'Synthetic {i+1:02d}')
-    for i in range(n_traces)
+    stoch_precip_annual_t.loc[stoch_precip_annual_t['chunk'] == k].set_index('WY')['precip']
+    .rename(f'Synthetic {k:02d}')
+    for k in range(1, N_CHUNKS + 1)
 ]
 
 # ============================================================
-# %% plot 1 — rolling precip means (2, 5, 20 yr, shared x-axis)
+# %% plot 1 - rolling precip means (2, 5, 20 yr, shared x-axis)
 # ============================================================
 
 fig, axes = plt.subplots(3, 1, figsize=(6.5, 6), sharex=True)
@@ -146,17 +148,17 @@ for i, w in enumerate([2, 5, 20]):
     ax.plot(_rolling(hist_precip_annual, w),
             color=COLORS['hist'], linewidth=1.4, label='Product A (Historical)')
     ax.set(ylabel=f'{w}-Yr Rolling\nMean Precip (in)',
-           title=f'{LOCATION} — {w}-Year Rolling Mean Precipitation')
+           title=f'{LOCATION} - {w}-Year Rolling Mean Precipitation')
     _grid(ax)
 
 axes[0].legend(handles=_legend_handles(), bbox_to_anchor=(1.01, 1), loc='upper left')
-axes[-1].set_xlabel('Year')
+axes[-1].set_xlabel('Water year')
 plt.tight_layout()
 plt.savefig(_FIG_DIR / f'{LOCATION}_precip_rolling_means.svg')
 plt.show()
 
 # ============================================================
-# %% plot 2 — rolling precip KDEs (1, 2, 5, 10 yr)
+# %% plot 2 - rolling precip KDEs (1, 2, 5, 10 yr)
 # ============================================================
 
 fig, axes = plt.subplots(4, 1, figsize=(6.5, 5), sharex=True)
@@ -182,18 +184,18 @@ for i, w in enumerate([1, 2, 5, 10]):
     if i == 0:
         ax.legend(loc='upper right')
 
-axes[-1].set_xlabel('Rolling annual precipitation (in)')
+axes[-1].set_xlabel('Rolling water-year precipitation (in)')
 plt.tight_layout()
 plt.savefig(_FIG_DIR / f'{LOCATION}_precip_rolling_kdes.svg')
 
 # ============================================================
-# %% plot 3 — January daily precip ECDF
+# %% plot 3 - January daily precip ECDF
 # ============================================================
 
 THRESHOLD = 0.1
-hist_jan  = hist_precip[hist_precip.index.month == 1]
+hist_jan  = hist_precip.loc[hist_precip['Month'] == 1, 'precip']
 hist_jan  = hist_jan[hist_jan > THRESHOLD].dropna()
-stoch_jan = stoch_precip[stoch_precip.index.month == 1]
+stoch_jan = stoch_precip.loc[stoch_precip['Month'] == 1, 'precip']
 stoch_jan = stoch_jan[stoch_jan > THRESHOLD].dropna()
 
 hx, hp = _ecdf(hist_jan)
@@ -207,7 +209,7 @@ if sx.size:
     ax.step(sx, sp, where='post', color=COLORS['synth'], linewidth=2, alpha=0.8,
             label=f'Product B (Stoch) (n={sx.size})')
 ax.set(xlabel='January daily precipitation (in)', ylabel='Empirical CDF',
-       title=f'{LOCATION} — January Daily Precipitation ECDF (>{THRESHOLD} in)')
+       title=f'{LOCATION} - January Daily Precipitation ECDF (>{THRESHOLD} in)')
 _grid(ax)
 ax.legend(loc='lower right')
 plt.tight_layout()
@@ -220,11 +222,11 @@ plt.show()
 
 _out = _FIG_DIR
 for data, name in [
-    (hist_precip,          'hist_daily'),
-    (hist_precip_monthly,  'hist_monthly'),
-    (hist_precip_annual,   'hist_annual'),
-    (stoch_precip,         'stoch_daily'),
-    (stoch_precip_monthly, 'stoch_monthly'),
-    (stoch_precip_annual,  'stoch_annual'),
+    (hist_precip,           'hist_daily'),
+    (hist_precip_monthly,   'hist_monthly'),
+    (hist_precip_annual_t,  'hist_annual'),
+    (stoch_precip,          'stoch_daily'),
+    (stoch_precip_monthly,  'stoch_monthly'),
+    (stoch_precip_annual_t, 'stoch_annual'),
 ]:
-    data.to_csv(_out / f'{LOCATION}_precip_{name}.csv', header=False)
+    data.to_csv(_out / f'{LOCATION}_precip_{name}.csv', index=False)

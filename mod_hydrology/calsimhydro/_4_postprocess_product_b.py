@@ -49,7 +49,8 @@ import matplotlib.pyplot as plt
 # Add repo root to path for utils imports
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 from utils import dss_io
-from utils.paths import get_module_generated_dir, get_inventory_dir
+from utils.wgen_calendar import LABEL_WY, N_CHUNKS
+from utils.paths import WEATHER_SETS, get_module_generated_dir, get_inventory_dir
 
 
 # -- CONSTANTS -----------------------------------------------------------------
@@ -59,15 +60,11 @@ OUTPUT_DIR = _GEN_DIR / "output" / "_4_postprocess_product_b"
 EXCEL_PATH = str(get_inventory_dir() / "_MASTER_INVENTORY_FOR_STOCHASTIC_INPUT_GENERATION_.xlsx")
 SHEET_NAME = "MASTER"
 
-N_CHUNKS = 10          # 10 chunks of 100 water years each
-MONTHS_PER_CHUNK = 1200  # 100 WY x 12 months
-START_WY = 1922
-END_WY = 2021
 
 # DSS source definitions
 _cshydro_runs = _GEN_DIR / "CalSimHydro_Runs"
 _rebalance_runs = _GEN_DIR / "CalSimHydro_Rebalance_Runs"
-_PRODUCT_A_DIR = _GEN_DIR / "output" / "_3_postprocess_product_a"
+_PRODUCT_A_DIR = _GEN_DIR / "output" / "_3_postprocess_single" / WEATHER_SETS["A"]["name"]
 
 SOURCES = {
     "cshydro": {
@@ -77,7 +74,7 @@ SOURCES = {
         "dss_template": "CS3L2015V0Hydro_SV_n{chunk:02d}.DSS",
         "csv_template": "_cshydro_sv_productB_n{chunk:02d}.csv",
         "summary_template": "_cshydro_sv_productB_n{chunk:02d}_summary.csv",
-        "prodA_merged": _PRODUCT_A_DIR / "cshydro" / "calsimHydro_1972-2018_SV_DSS.csv",
+        "prodA_merged": _PRODUCT_A_DIR / "cshydro" / "calsimHydro_SV_DSS.csv",
         "compare_a_csv": "_cshydro_sv_productB_vs_productA.csv",
     },
     "rebalance": {
@@ -87,7 +84,7 @@ SOURCES = {
         "dss_template": "HydroRebalanceSJRdemands_n{chunk:02d}.DSS",
         "csv_template": "_cshydro_rebalance_productB_n{chunk:02d}.csv",
         "summary_template": "_cshydro_rebalance_productB_n{chunk:02d}_summary.csv",
-        "prodA_merged": _PRODUCT_A_DIR / "rebalance" / "HydroRebalanceSJRdemands_1972-2018_DSS.csv",
+        "prodA_merged": _PRODUCT_A_DIR / "rebalance" / "HydroRebalanceSJRdemands_DSS.csv",
         "compare_a_csv": "_cshydro_rebalance_productB_vs_productA.csv",
     },
     "rice": {
@@ -309,7 +306,7 @@ def run_compare_a(source_key, src):
     if not prodA_path.exists():
         print(f"\nERROR: Product A merged CSV not found: {prodA_path}")
         print("Run Product A comparison postprocessing first:")
-        print(f"  python _3_postprocess_product_a.py --sources {source_key}")
+        print(f"  python _3_postprocess_single.py --product A --sources {source_key}")
         sys.exit(1)
 
     # -- Compute Product A stats from merged CSV -------------------------------
@@ -593,7 +590,7 @@ def main():
     print(f"Sources: {', '.join(args.sources)}")
     if not args.compare_a and not args.plot:
         print(f"Chunks: {', '.join(f'n{c:02d}' for c in args.chunks)}")
-        print(f"Canonical period: WY {START_WY}-{END_WY} (100 WY per chunk)")
+        print(f"Canonical period: WY {LABEL_WY[0]}-{LABEL_WY[1]} (100 WY per chunk)")
     if args.compare_a:
         print("Mode: Compare Product B vs Product A")
     if args.plot:

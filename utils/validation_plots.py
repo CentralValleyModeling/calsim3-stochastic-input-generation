@@ -8,8 +8,8 @@ on the time-series panel -- either from caller-supplied strings, or
 auto-computed against a designated baseline series.
 
 Designed to replace ~5 near-duplicate plot blocks across the Product A /
-historical validation scripts (``qmap_product_a_from_pairs._plot_timeseries_cdf``,
-``mod_reservoir/storage_curves/_4_oroville_level5._plot_product_a_vs_historical``,
+historical validation scripts (``qmap_single_from_pairs._plot_timeseries_cdf``,
+``mod_reservoir/storage_curves/_4_oroville_level5._plot_set_vs_calsim``,
 ``postprocessing/calsim_runs/_productA_postproc`` 2-panel block, etc.) so the
 canonical figure style lives in one place.
 

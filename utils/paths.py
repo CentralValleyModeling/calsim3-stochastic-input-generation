@@ -12,9 +12,9 @@ Quick start
 -----------
 ::
 
-    from utils.paths import get_base_dir, get_generated_dir, get_module_generated_dir
+    from utils.paths import get_base_dir, get_module_generated_dir, get_wgen_dir
 
-    wgen_dir = get_base_dir() / "WGEN" / "Product_A" / "1"
+    wgen_dir = get_wgen_dir("A")          # BASE/WGEN/Product_A/1
     output   = get_module_generated_dir("mod_hydrology/calsimhydro") / "output"
 """
 
@@ -141,23 +141,50 @@ def get_inflow_pin() -> str:
     return _CFG["inflow_pin"]
 
 
-#: The water years the compiled Product A DSS takes from the generated SVs; the CalSim 3
-#: baseline starts in October 1921. utils.csv_io.write_product_a_csv clips to it.
-PRODUCT_A_WY = (1922, 2018)
-
-#: Forcings of the rim-inflow model (``mod_forcing/inflows``) -> their output subfolder.
-INFLOW_FORCINGS = {
-    "historical": Path("Historical_Unsplit"),
-    "A": Path("Product_A") / "1",
-    "B": Path("Product_B") / "1",
+#: The weather sets, by the key every script's ``--product`` takes. ``name`` is the folder
+#: their outputs go to, ``slug`` the lowercase subfolder of a module's intermediates and
+#: figures, ``label`` the name on figures, ``wgen`` their folder under ``BASE/WGEN`` (and the
+#: subfolder of the rim-inflow model's outputs), ``prefix`` the prefix of its files.
+#: Historical_Unsplit is the record without the temperature detrending; Products A and B are
+#: WGEN scenario 1 (see ``BASE/WGEN/README.md``). utils.wgen reads them.
+WEATHER_SETS = {
+    "historical": {"name": "Historical_Unsplit", "slug": "historical_unsplit", "label": "Historical_Unsplit",
+                   "wgen": Path("Historical_Unsplit"), "prefix": "data"},
+    "A": {"name": "Product_A", "slug": "product_a", "label": "Product A",
+          "wgen": Path("Product_A") / "1", "prefix": "meteo"},
+    "B": {"name": "Product_B", "slug": "product_b", "label": "Product B",
+          "wgen": Path("Product_B") / "1", "prefix": "meteo"},
 }
+
+#: The water years a compiled DSS of Historical_Unsplit or Product A takes from the generated
+#: SVs; the CalSim 3 baseline starts in October 1921. utils.csv_io.write_delivery_csv clips to it.
+DELIVERY_WY = (1922, 2018)
+
+#: Historical_Unsplit and Product A, the sets delivered as one series per SV: the folder in
+#: which each module leaves its delivery CSVs for the compiler, and the tag in their names.
+DELIVERY = {
+    "historical": {"dir": "_historical_unsplit_validation", "tag": "historicalUnsplit"},
+    "A": {"dir": "_product_a_validation", "tag": "productA"},
+}
+
+
+def get_wgen_dir(product: str) -> Path:
+    """Return the WGEN folder of ``product`` (a key of ``WEATHER_SETS``)."""
+    return get_base_dir() / "WGEN" / WEATHER_SETS[product]["wgen"]
+
+
+def delivery_dir(output_root, product: str) -> Path:
+    """Return the folder under ``output_root`` that holds a module's delivery CSVs of
+    ``product`` (a key of ``DELIVERY``)."""
+    return Path(output_root) / DELIVERY[product]["dir"]
+
 
 def get_arc_inflows(forcing: str) -> Path:
     """Return the rim-inflow model's monthly arc flows for ``forcing`` (a key of
-    ``INFLOW_FORCINGS``): the ``arc_inflow_monthly.csv`` written by
+    ``WEATHER_SETS``): the ``arc_inflow_monthly.csv`` written by
     ``mod_forcing/inflows/_2_run_product.py``."""
     return (get_module_generated_dir("mod_forcing/inflows") / "output" / "_2_run_product"
-            / INFLOW_FORCINGS[forcing] / "arc_inflow_monthly.csv")
+            / WEATHER_SETS[forcing]["wgen"] / "arc_inflow_monthly.csv")
 
 
 #: Beside ``arc_inflow_monthly.csv``, and copied into each rim-inflow SV folder: the manifest
@@ -196,7 +223,7 @@ def require_pinned_run(folder: Path) -> dict:
                            "files, or an environment that runs another folder), so it is not "
                            "the pinned version's")
     identity = (get_module_generated_dir("mod_forcing/inflows") / "output" / "_1_build_forcing"
-                / INFLOW_FORCINGS[manifest["forcing"]] / "forcing_identity.csv")
+                / WEATHER_SETS[manifest["forcing"]]["wgen"] / "forcing_identity.csv")
     with open(identity, newline="") as fh:
         checked = {r["input"]: r["input_sha256"] for r in csv.DictReader(fh)}
     used = {k: manifest["sha256"].get(k) for k in manifest["files"]["inputs"]}
@@ -216,19 +243,46 @@ def get_rim_inflow_outputs(product: str) -> dict:
     - ``ts`` (historical, A): ``calsim_qmap_validation_TS.csv``, one long table of every SV
       (CalSim, Matched_inflow, Year, Month, qmap_postAdj), over WY1916-2018, the whole model
       run.
-    - ``sv``, ``sv_dir`` (A): the Product A values over ``PRODUCT_A_WY`` in SV format (Part B,
-      Part C, Year, Month, Value), ``_riminflow_productA_1922_2018.csv``, and its folder, which
-      the Product A compiler scans.
+    - ``sv``, ``sv_dir`` (historical, A): the values over ``DELIVERY_WY`` in SV format (Part B,
+      Part C, Year, Month, Value), e.g. ``_riminflow_productA_1922_2018.csv``, and the
+      delivery folder that holds it, which the compiler scans.
     """
     root = (get_module_generated_dir("mod_hydrology/rim_inflow") / "output"
-            / "_1_build_rim_inflow" / INFLOW_FORCINGS[product])
+            / "_1_build_rim_inflow" / WEATHER_SETS[product]["wgen"])
     out = {"dir": root}
-    if product != "B":
+    if product in DELIVERY:
         out["ts"] = root / "calsim_qmap_validation_TS.csv"
-    if product == "A":
-        out["sv_dir"] = root / "_product_a_validation"
-        out["sv"] = out["sv_dir"] / "_riminflow_productA_{}_{}.csv".format(*PRODUCT_A_WY)
+        out["sv_dir"] = delivery_dir(root, product)
+        out["sv"] = out["sv_dir"] / "_riminflow_{}_{}_{}.csv".format(DELIVERY[product]["tag"],
+                                                                     *DELIVERY_WY)
     return out
+
+
+#: The output folder of each module that holds its delivery folder (``delivery_dir``), relative
+#: to GENERATED, by the SV compiler's module label; the rim inflows' sits with their run
+#: (``get_rim_inflow_outputs``). The compiler reads these folders in this order.
+DELIVERY_ROOTS = {
+    "calsimhydro": "mod_hydrology/calsimhydro/output/_3_postprocess_single",
+    "calsimhydro_ee": "mod_hydrology/calsimhydro_ee/output/_2_postprocess_single",
+    "evaporation": "mod_reservoir/evaporation/output/_2_run_reservoir_evap",
+    "rim_inflow": None,
+    "delta_channel_depletion": "mod_hydrology/delta_channel_depletion/output/_2_postprocess_single",
+    "small_watersheds": "mod_hydrology/small_watersheds/output/_2_postprocess_single",
+    "storage_curves": "mod_reservoir/storage_curves/output",
+    "instream_flows": "mod_other/instream_flows/output",
+    "tulare_gw_terms": "mod_hydrology/tulare_gw_terms/output/_1_wyt_monthlyavg",
+    "climate": "mod_forcing/climate/output",
+    "miscellaneous": "mod_other/miscellaneous/output",
+    "upper_watershed": "mod_other/upper_watershed/output",
+}
+
+
+def delivery_dirs(product: str) -> dict:
+    """Return every module's delivery folder of ``product`` (a key of ``DELIVERY``), keyed as
+    ``DELIVERY_ROOTS``."""
+    return {label: get_rim_inflow_outputs(product)["sv_dir"] if rel is None
+            else delivery_dir(get_generated_dir() / rel, product)
+            for label, rel in DELIVERY_ROOTS.items()}
 
 
 def _clear_readonly(func, path, _exc_info):

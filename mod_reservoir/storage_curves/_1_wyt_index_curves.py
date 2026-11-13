@@ -1,10 +1,11 @@
 #!/usr/bin/env python3
 """
-Reservoir Storage-Level Index Curve Generator (Product A & B)
-=============================================================
+Reservoir Storage-Level Index Curve Generator
+=============================================
 
-Generates reservoir storage-level index curves for Product A and Product B
-using schedule tables from reference CSVs and water year type series.
+Generates reservoir storage-level index curves for a weather set
+(Historical_Unsplit, Product A, Product B) using schedule tables from reference
+CSVs and water year type series.
 
 Two types of series are supported:
   - **Monthly repeating** (from reservoir_schedule_monthly.csv): same 12 values
@@ -14,26 +15,30 @@ Two types of series are supported:
     assignment (Sac or SJ).
 
 Dependencies:
-  - mod_hydrology/water_year_types/_1_calc_WYTs.py  (Product A/B WYT CSVs)
+  - mod_hydrology/water_year_types/_1_calc_WYTs.py  (WYT CSVs of the set)
   - BASE/CalSim3/__calsim_sv_default__.dss           (historical validation + first-month gap fill)
 
 Inputs:
   - reference/reservoir_schedule_monthly.csv  (partb, partc, month_wy, target_storage_taf, pattern)
   - reference/reservoir_schedule_wyt.csv      (partb, partc, year_type, target_storage_taf, year_type_basis, basin_wyt)
   - mod_hydrology/water_year_types/reference/  (_Historical_SacWYT.csv, _Historical_SJWYT.csv)
-  - GENERATED/mod_hydrology/water_year_types/output/_1_calc_WYTs/Product_A/  (_SacWYT.csv, _SJWYT.csv)
+  - GENERATED/mod_hydrology/water_year_types/output/_1_calc_WYTs/<Historical_Unsplit|Product_A>/
+    (_SacWYT.csv, _SJWYT.csv)
   - GENERATED/mod_hydrology/water_year_types/output/_1_calc_WYTs/Product_B/  (_SacWYT_{ens}.csv, _SJWYT_{ens}.csv)
 
 Outputs are written under:
   <generated>/output/_1_wyt_index_curves/          (historical validation CSV + figures/historical/ per-series TS+CDF with R2/NSE/PBIAS)
-  <generated>/output/_1_wyt_index_curves/figures/product_a/  (Product A vs historical actuals per-series TS+CDF, --product A)
-  <generated>/output/_product_a_validation/         (Product A)
+  <generated>/output/_1_wyt_index_curves/figures/<historical_unsplit|product_a>/
+      (the set vs historical actuals per-series TS+CDF, --product historical, A)
+  <generated>/output/<_historical_unsplit_validation|_product_a_validation>/
+      (storage_curves_<historicalUnsplit|productA>_1922_2018.csv)
   <generated>/output/_product_b_final/              (Product B)
 
 Output CSV format: Part B, Part C, Year, Month, Value
 
 Usage
 -----
+    python mod_reservoir/storage_curves/_1_wyt_index_curves.py --product historical
     python mod_reservoir/storage_curves/_1_wyt_index_curves.py --product A
     python mod_reservoir/storage_curves/_1_wyt_index_curves.py --product B
 """
@@ -47,10 +52,11 @@ import numpy as np
 import pandas as pd
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
-from utils.csv_io import write_product_a_csv
-from utils.paths import PRODUCT_A_WY, get_base_dir, get_module_generated_dir
+from utils.csv_io import write_delivery_csv
+from utils.paths import DELIVERY_WY, WEATHER_SETS, delivery_dir, get_base_dir, get_module_generated_dir
 from utils import dss_io
 from utils.validation_plots import Series, plot_ts_cdf
+from utils.wgen_calendar import LABEL_WY, N_CHUNKS, water_year, write_chunk_csvs
 
 # -- CONSTANTS -------------------------------------------------------------
 _SCRIPT_DIR = Path(__file__).resolve().parent
@@ -60,13 +66,11 @@ _gen = get_module_generated_dir("mod_reservoir/storage_curves")
 BASE_RESULTS_DIR = _gen / "output"
 HIST_VALIDATION_DIR = BASE_RESULTS_DIR / "_1_wyt_index_curves"
 HIST_PLOT_DIR = HIST_VALIDATION_DIR / "figures" / "historical"
-PROD_A_PLOT_DIR = HIST_VALIDATION_DIR / "figures" / "product_a"
-PRODUCT_A_DIR = BASE_RESULTS_DIR / "_product_a_validation"
 PRODUCT_B_DIR = BASE_RESULTS_DIR / "_product_b_final"
 
 _WYT_HIST_DIR = _REPO_ROOT / "mod_hydrology" / "water_year_types" / "reference"
 _WYT_GEN = get_module_generated_dir("mod_hydrology/water_year_types")
-_WYT_PRODUCT_DIRS = {"A": "Product_A", "B": "Product_B"}
+_WYT_SET_DIR = _WYT_GEN / "output" / "_1_calc_WYTs"
 
 _MONTH_NUM = {
     "October": 10, "November": 11, "December": 12,
@@ -76,8 +80,8 @@ _MONTH_NUM = {
 }
 
 _BASIN_WYT_FILES = {
-    "sac": {"hist": "_Historical_SacWYT.csv", "prodA": "_SacWYT.csv", "prodB": "_SacWYT_{ens}.csv"},
-    "sj":  {"hist": "_Historical_SJWYT.csv",  "prodA": "_SJWYT.csv",  "prodB": "_SJWYT_{ens}.csv"},
+    "sac": {"calsim": "_Historical_SacWYT.csv", "single": "_SacWYT.csv", "chunk": "_SacWYT_{ens}.csv"},
+    "sj":  {"calsim": "_Historical_SJWYT.csv",  "single": "_SJWYT.csv",  "chunk": "_SJWYT_{ens}.csv"},
 }
 
 OUTPUT_PREFIX = "storage_curves"
@@ -151,19 +155,13 @@ def read_dss_data(
 
 # -- HELPERS ----------------------------------------------------------------
 
-def water_year(dt) -> int:
-    """CA convention: WY N is Oct(N-1) - Sep(N)."""
-    dt = pd.Timestamp(dt)
-    return int(dt.year + (1 if dt.month >= 10 else 0))
-
-
 def _make_monthly_index(wy_min: int, wy_max: int) -> pd.DataFrame:
     """Monthly dates spanning WY_min..WY_max inclusive, aligned to month-end."""
     start = pd.Timestamp(wy_min - 1, 10, 1) + pd.offsets.MonthEnd(0)
     end = pd.Timestamp(wy_max, 9, 1) + pd.offsets.MonthEnd(0)
     dates = pd.date_range(start=start, end=end, freq="ME")
     out = pd.DataFrame({"date": dates})
-    out["WY"] = out["date"].apply(water_year).astype(int)
+    out["WY"] = water_year(out["date"].dt.year, out["date"].dt.month)
     out["month"] = out["date"].dt.month.astype(int)
     return out
 
@@ -208,19 +206,20 @@ def _load_wyt(wyt_dir: Path, basins: set, product: str, ensemble: str = "") -> D
     Parameters
     ----------
     product : str
-        'hist', 'A', or 'B'.
+        'calsim' (the CalSim historical classification in water_year_types/reference),
+        or a weather set: 'historical', 'A', 'B'.
     ensemble : str
         Required for Product B, e.g. 'n01'.
     """
     tables = {}
     for basin in sorted(basins):
         info = _BASIN_WYT_FILES[basin]
-        if product == "hist":
-            fname = info["hist"]
-        elif product == "A":
-            fname = info["prodA"]
+        if product == "calsim":
+            fname = info["calsim"]
         elif product == "B":
-            fname = info["prodB"].format(ens=ensemble)
+            fname = info["chunk"].format(ens=ensemble)
+        elif product in WEATHER_SETS:
+            fname = info["single"]
         else:
             raise ValueError(f"Unknown product '{product}'")
         path = wyt_dir / fname
@@ -343,18 +342,17 @@ def generate_targets(
 
 # -- OUTPUT WRITERS ---------------------------------------------------------
 
-def _write_product_a(df: pd.DataFrame, prefix: str) -> None:
-    """Write Product A validation CSV."""
-    print(f"  [OK] {write_product_a_csv(df, PRODUCT_A_DIR, f'{prefix}_productA')}")
+def _write_single(df: pd.DataFrame, prefix: str, product: str) -> None:
+    """Write the delivery CSV of a single series (Historical_Unsplit or Product A)."""
+    print(f"  [OK] {write_delivery_csv(df, delivery_dir(BASE_RESULTS_DIR, product), prefix, product)}")
 
 
-def _write_product_b(df: pd.DataFrame, ensemble: str) -> None:
-    """Write one Product B ensemble CSV, one file per Part B."""
-    PRODUCT_B_DIR.mkdir(parents=True, exist_ok=True)
+def _write_product_b(df: pd.DataFrame) -> None:
+    """Write the Product B chunk CSVs (``df`` with a ``chunk`` column), one set of
+    ``<Part B>_productB_n01.csv`` ... ``_n10.csv`` per Part B."""
     for partb, sub in df.groupby("Part B"):
-        out_path = PRODUCT_B_DIR / f"{partb}_productB_{ensemble}.csv"
-        sub.to_csv(out_path, index=False)
-        print(f"  [OK] {out_path.name}")
+        for out_path in write_chunk_csvs(sub, PRODUCT_B_DIR, f"{partb}_productB"):
+            print(f"  [OK] {out_path.name}")
 
 
 # -- PLOTTING ---------------------------------------------------------------
@@ -389,21 +387,24 @@ def _plot_actual_vs_reconstructed(
     print(f"  [PLOT] {out_path.name}")
 
 
-def run_product_a_plots(
+def run_single_plots(
     df: pd.DataFrame,
     dss_data: Dict[Tuple[str, str], pd.Series],
+    product: str,
 ) -> None:
-    """Plot Product A targets against historical DSS actuals over PRODUCT_A_WY.
+    """Plot the targets of a single series against historical DSS actuals over DELIVERY_WY.
 
-    Mirrors the historical validation figures but pairs the Product A series
-    (schedule targets applied to Product A WYT classifications) with the
-    historical CalSim inputs, labeled ``Historical`` vs ``Product A``.
-    Written to ``figures/product_a/<Part B>.png``.
+    Mirrors the historical validation figures but pairs the series of the set
+    (schedule targets applied to the set's WYT classifications) with the
+    historical CalSim inputs, labeled ``Historical`` vs the set's label.
+    Written to ``figures/<slug>/<Part B>.png``.
     """
+    label = WEATHER_SETS[product]["label"]
+    plot_dir = HIST_VALIDATION_DIR / "figures" / WEATHER_SETS[product]["slug"]
     print(f"\n{'='*60}")
-    print("Product A validation plots (actual vs Product A)")
+    print(f"{label} validation plots (actual vs {label})")
     print(f"{'='*60}")
-    PROD_A_PLOT_DIR.mkdir(parents=True, exist_ok=True)
+    plot_dir.mkdir(parents=True, exist_ok=True)
 
     tmp = df.copy()
     tmp["date"] = pd.to_datetime(
@@ -412,8 +413,8 @@ def run_product_a_plots(
         )
     ) + pd.offsets.MonthEnd(0)
 
-    plot_start = pd.Timestamp(PRODUCT_A_WY[0] - 1, 10, 1)
-    plot_end = pd.Timestamp(PRODUCT_A_WY[1], 9, 30)
+    plot_start = pd.Timestamp(DELIVERY_WY[0] - 1, 10, 1)
+    plot_end = pd.Timestamp(DELIVERY_WY[1], 9, 30)
     for (partb, partc), sub in tmp.groupby(["Part B", "Part C"]):
         key = (str(partb).strip().upper(), str(partc).strip().upper())
         if key not in dss_data:
@@ -427,8 +428,8 @@ def run_product_a_plots(
             actual=actual_s,
             reconstructed=pd.to_numeric(sub["Value"], errors="coerce"),
             partb=partb,
-            out_path=PROD_A_PLOT_DIR / f"{partb}.png",
-            recon_label="Product A",
+            out_path=plot_dir / f"{partb}.png",
+            recon_label=label,
         )
 
 
@@ -450,7 +451,7 @@ def run_historical_validation(
     basins = set(wyt_sched["basin_wyt"].str.strip().str.lower().unique())
 
     # Load historical WYT
-    wyt_tables = _load_wyt(_WYT_HIST_DIR, basins, product="hist")
+    wyt_tables = _load_wyt(_WYT_HIST_DIR, basins, product="calsim")
 
     # Generate reconstructed targets from schedule + historical WYT
     recon = generate_targets(monthly_sched, wyt_sched, wyt_tables, map_wyt_by=map_wyt_by)
@@ -479,7 +480,7 @@ def run_historical_validation(
     for _, r in recon.iterrows():
         partb = r["Part B"]
         date = r["date"]
-        wy = water_year(date)
+        wy = int(water_year(date.year, date.month))
         basin = basin_map.get(partb)
         if basin and basin in wyt_tables:
             wyt_row = wyt_tables[basin]
@@ -534,17 +535,16 @@ def run_historical_validation(
 
 def main():
     ap = argparse.ArgumentParser(
-        description="Generate reservoir storage-level index curves for Product A and B."
+        description="Generate reservoir storage-level index curves for a weather set."
     )
-    ap.add_argument("--product", type=str, choices=["A", "B"], required=True,
-                    help='Product to generate: A (historical 1921-2018) or B (stochastic 1000-yr chunks).')
+    ap.add_argument("--product", type=str, choices=list(WEATHER_SETS), required=True,
+                    help='Weather set: historical (Historical_Unsplit) or A (WY1922-2018), '
+                         'or B (stochastic 1000-yr chunks).')
     ap.add_argument("--yr-type-map", type=str, choices=["cy", "wy"], default=None,
                     help="Force all WYT series to map by Calendar Year (cy) or "
                          "Water Year (wy), ignoring per-series year_type_basis. "
                          "Default: use year_type_basis from CSV")
     args = ap.parse_args()
-
-    products = [args.product.strip().upper()]
 
     # Read schedule CSVs
     monthly_sched = read_monthly_schedule(_REF / "reservoir_schedule_monthly.csv")
@@ -562,8 +562,6 @@ def main():
     run_historical_validation(
         monthly_sched, wyt_sched, dss_data, map_wyt_by=args.yr_type_map
     )
-
-    wyt_product_dir = _WYT_GEN / "output" / "_1_calc_WYTs"
 
     def _fill_from_dss(df: pd.DataFrame) -> None:
         """
@@ -658,33 +656,34 @@ def main():
                 "that must be addressed. Example points: "
                 + "; ".join(examples)
             )
-    for prod in products:
-        print(f"\n{'='*60}")
-        print(f"Generating Product {prod}")
-        print(f"{'='*60}")
+    prod = args.product
+    print(f"\n{'='*60}")
+    print(f"Generating {WEATHER_SETS[prod]['name']}")
+    print(f"{'='*60}")
+    wyt_dir = _WYT_SET_DIR / WEATHER_SETS[prod]["name"]
 
-        if prod == "A":
-            wyt_dir = wyt_product_dir / _WYT_PRODUCT_DIRS["A"]
-            wyt_tables = _load_wyt(wyt_dir, basins, product="A")
+    if prod == "B":
+        chunks = []
+        for i in range(1, N_CHUNKS + 1):
+            ensemble = f"n{i:02d}"
+            print(f"\n  --- Ensemble {ensemble} ---")
+            wyt_tables = _load_wyt(wyt_dir, basins, product="B", ensemble=ensemble)
             df = generate_targets(
                 monthly_sched, wyt_sched, wyt_tables, map_wyt_by=args.yr_type_map,
-                wy_range=PRODUCT_A_WY,
+                wy_range=LABEL_WY,
             )
             _fill_from_dss(df)
-            _write_product_a(df, OUTPUT_PREFIX)
-            run_product_a_plots(df, dss_data)
-
-        elif prod == "B":
-            for i in range(1, 11):
-                ensemble = f"n{i:02d}"
-                print(f"\n  --- Ensemble {ensemble} ---")
-                wyt_dir = wyt_product_dir / _WYT_PRODUCT_DIRS["B"]
-                wyt_tables = _load_wyt(wyt_dir, basins, product="B", ensemble=ensemble)
-                df = generate_targets(
-                    monthly_sched, wyt_sched, wyt_tables, map_wyt_by=args.yr_type_map
-                )
-                _fill_from_dss(df)
-                _write_product_b(df, ensemble)
+            chunks.append(df.assign(chunk=i))
+        _write_product_b(pd.concat(chunks, ignore_index=True))
+    else:
+        wyt_tables = _load_wyt(wyt_dir, basins, product=prod)
+        df = generate_targets(
+            monthly_sched, wyt_sched, wyt_tables, map_wyt_by=args.yr_type_map,
+            wy_range=DELIVERY_WY,
+        )
+        _fill_from_dss(df)
+        _write_single(df, OUTPUT_PREFIX, prod)
+        run_single_plots(df, dss_data, prod)
 
     print("\nDone.")
 

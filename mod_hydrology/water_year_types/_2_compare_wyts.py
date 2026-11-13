@@ -47,7 +47,7 @@ import matplotlib.pyplot as plt
 matplotlib.rcParams['font.size'] = 8
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
-from utils.paths import PRODUCT_A_WY, get_module_generated_dir
+from utils.paths import DELIVERY_WY, get_module_generated_dir
 
 _SCRIPT_DIR = Path(__file__).resolve().parent
 _wyt_gen = get_module_generated_dir("mod_hydrology/water_year_types")
@@ -386,11 +386,11 @@ def create_cdf_comparison(comparison):
     hist_sac = cdec_100['sac_index_hist'].dropna().values
     hist_sj = cdec_100['sj_index_hist'].dropna().values
 
-    # Product A (PRODUCT_A_WY)
+    # Product A (DELIVERY_WY)
     prod_a_sac_df = pd.read_csv(PRODUCT_A_DIR / '_SacWYT.csv')
     prod_a_sj_df = pd.read_csv(PRODUCT_A_DIR / '_SJWYT.csv')
-    pa_mask_sac = prod_a_sac_df['water_year'].between(*PRODUCT_A_WY)
-    pa_mask_sj = prod_a_sj_df['water_year'].between(*PRODUCT_A_WY)
+    pa_mask_sac = prod_a_sac_df['water_year'].between(*DELIVERY_WY)
+    pa_mask_sj = prod_a_sj_df['water_year'].between(*DELIVERY_WY)
     prod_a_sac_vals = prod_a_sac_df.loc[pa_mask_sac, 'index'].dropna().values
     prod_a_sj_vals = prod_a_sj_df.loc[pa_mask_sj, 'index'].dropna().values
     pa_n = len(prod_a_sac_vals)
@@ -442,7 +442,7 @@ def create_cdf_comparison(comparison):
         # Product A
         x, y = ecdf(pa_vals)
         ax.step(x, y, where="post", color="#ff7f0e", linewidth=1.5,
-                label="Product A ({}-{})".format(*PRODUCT_A_WY))
+                label="Product A ({}-{})".format(*DELIVERY_WY))
 
         # Threshold lines with labels inside plot at top-left of each line
         for label_t, val in thresholds.items():

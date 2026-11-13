@@ -40,6 +40,7 @@ import pandas as pd
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 from utils.paths import get_module_generated_dir, get_rim_inflow_outputs
+from utils.wgen_calendar import LABEL_WY, N_CHUNKS, require_label_months, water_year
 
 _wyt_gen = get_module_generated_dir("mod_hydrology/water_year_types")
 
@@ -109,9 +110,7 @@ def aggregate_flows(df, components, months):
     df_filtered['total'] = df_filtered[components].sum(axis=1)
     
     # Group by water year (Oct-Sep, so WY 2022 = Oct 2021 - Sep 2022)
-    # Shift months Oct-Dec (10,11,12) to next year
-    df_filtered['water_year'] = df_filtered.index.year
-    df_filtered.loc[df_filtered.index.month >= 10, 'water_year'] += 1
+    df_filtered['water_year'] = water_year(df_filtered.index.year, df_filtered.index.month)
     
     # Sum by water year and convert TAF to MAF (divide by 1000)
     annual_totals = df_filtered.groupby('water_year')['total'].sum() / 1000.0
@@ -352,9 +351,9 @@ def process_product_b(input_dir, output_dir, thresholds):
     output_path = Path(output_dir)
     output_path.mkdir(parents=True, exist_ok=True)
     
-    # Process each of 10 chunks
-    for chunk_num in range(1, 11):
-        print(f"  Processing chunk n{chunk_num:02d} (years {(chunk_num-1)*100 + 1}-{chunk_num*100})...")
+    # Process each chunk, labelled WY1922-2021 (utils.wgen_calendar)
+    for chunk_num in range(1, N_CHUNKS + 1):
+        print(f"  Processing chunk n{chunk_num:02d}...")
         
         # Read all rim inflow components for this chunk
         chunk_data = {}
@@ -369,6 +368,7 @@ def process_product_b(input_dir, output_dir, thresholds):
             
             # Read the component data
             comp_df = pd.read_csv(file_path)
+            require_label_months(comp_df['Year'], comp_df['Month'], file_name)
             comp_df['date'] = pd.to_datetime(comp_df[['Year', 'Month']].assign(Day=1))
             comp_df = comp_df.set_index('date')
             chunk_data[component] = comp_df['qmap_postAdj']
@@ -382,10 +382,11 @@ def process_product_b(input_dir, output_dir, thresholds):
         if missing:
             raise ValueError(f"chunk n{chunk_num:02d}: no series for {sorted(missing)}")
         
-        wyt_df = calculate_wyts(df_chunk, thresholds, *CDEC_INDEX[1921])
-
-        # Remap water years to CalSim convention (WY 1922-2021)
-        wyt_df['water_year'] = list(range(1922, 1922 + len(wyt_df)))
+        # The CDEC index of the water year before the label years seeds the chunk
+        wyt_df = calculate_wyts(df_chunk, thresholds, *CDEC_INDEX[LABEL_WY[0] - 1])
+        if wyt_df['water_year'].tolist() != list(range(LABEL_WY[0], LABEL_WY[1] + 1)):
+            raise ValueError(f"chunk n{chunk_num:02d}: water years {wyt_df['water_year'].min()}-"
+                             f"{wyt_df['water_year'].max()}, not WY{LABEL_WY[0]}-{LABEL_WY[1]}")
 
         write_wyts(wyt_df, output_path, f"_n{chunk_num:02d}")
         print(f"    Saved _SacWYT_n{chunk_num:02d}.csv and _SJWYT_n{chunk_num:02d}.csv, "

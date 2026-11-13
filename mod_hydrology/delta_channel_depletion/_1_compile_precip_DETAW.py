@@ -1,393 +1,161 @@
 """
-Compile Daily Precipitation (mm) for DCD Stations from WGEN Met Files
-====================================================================
-Averages WGEN daily precipitation across the grids nearest each DCD station
-(and the Lodi point) and writes the DETAW precipitation inputs for
-Product A (historical) or Product B (10 stochastic chunks).
+Compile Daily Precipitation (mm) for DCD Stations
+=================================================
+Averages the daily precipitation of one weather set (``utils.wgen``) across the grid cells
+nearest each DCD station, and Lodi's temperatures too, and writes the DETAW precipitation inputs.
+Values are rounded to 2 decimals.
 
 Inputs
 ------
-- DCD station coordinate CSV (Lat, Lon, Station)
-- WGEN met files (Product_A / Product_B)
+- reference/USBR_LTO_ClimateChange_DCD_StnsVICCoordinates_20210425.csv (Lat, Lon or Long, Station)
+- reference/mm_pcp4.csv, reference/LODI_PT4.csv: the 30 Sep 1921 row that heads every Product B
+  chunk
+- The daily weather of the set (``utils.wgen.read_met``)
 
 Outputs
 -------
-- mm_pcp4.csv, LODI_PT4.csv  (Product A)
-- 10 chunk files for stations + Lodi  (Product B)
-
-Dependencies
-------------
-- utils/paths.py  (data-dir resolution)
+- output/_1_compile_precip_DETAW/<set>/mm_pcp4.csv (year, month, day, DOY, one column per
+  station) and LODI_PT4.csv (Date, Year, Month, DOY, Pcp(mm), Tx(oC), Tn(oC)), over every day of
+  the weather files or --clip_period; <set> is Historical_Unsplit or Product_A
+- output/_1_compile_precip_DETAW/Product_B/mm_pcp4_n01.csv ... n10.csv and LODI_PT4_n01.csv ...
+  n10.csv, each 30 Sep 1921 - 30 Sep 2021 (``utils.wgen_calendar.chunk_days``)
 
 Usage
 -----
-Product A (historical, writes mm_pcp4.csv and LODI_PT4.csv):
+    python mod_hydrology/delta_channel_depletion/_1_compile_precip_DETAW.py --product historical
+    python mod_hydrology/delta_channel_depletion/_1_compile_precip_DETAW.py --product A
     python mod_hydrology/delta_channel_depletion/_1_compile_precip_DETAW.py --product A --clip_period 1921-09-30 2018-09-30
-
-Product B (stochastic, writes 10 chunk files for stations + Lodi):
     python mod_hydrology/delta_channel_depletion/_1_compile_precip_DETAW.py --product B
 """
 
 import argparse
-import os
 import sys
 from pathlib import Path
 
+import numpy as np
 import pandas as pd
 
-# Add repo root to path for utils imports
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
-from utils.paths import get_base_dir, get_module_generated_dir
-from utils.wgen_calendar import N_CHUNKS, STAMP_DAYS, chunk_days
+from utils.paths import WEATHER_SETS, get_module_generated_dir
+from utils.wgen import dates, met_path, read_met
+from utils.wgen_calendar import LABEL_DAYS, N_CHUNKS, chunk_days
+
+STATIONS = ['Brentwood', 'Davis', 'Galt', 'Lodi', 'RioVista', 'Stockton', 'Tracy']
+LODI_COLUMNS = {'precip': 'Pcp(mm)', 'tmax': 'Tx(oC)', 'tmin': 'Tn(oC)'}
+# The label days of a chunk with the reference row (the day before) first
+CHUNK_DAYS = pd.date_range(LABEL_DAYS[0] - pd.Timedelta(days=1), LABEL_DAYS[-1], freq='D')
 
 
-class CompileStationsPrecipMM:
-    """
-    Compile daily precipitation (mm) for specified stations by averaging across WGEN grids.
-
-    Inputs:
-  - coord_file: CSV with columns Lat, Lon (or Long), Station
-  - met files: one per grid, named {met_prefix}_{Lat}_{Lon}
-               with columns (no header): Year Month Day precip tmax tmin  (precip in mm, tmax/tmin in degC)
-
-    Output:
-    - Single CSV with columns:
-        year,month,day,DOY,Brentwood,Davis,Galt,Lodi,RioVista,Stockton,Tracy
-
-    Additional:
-    - Method export_lodi_with_temps to separately output Lodi daily series:
-        columns: Date,Year,Month,DOY,Pcp(mm),Tx(oC),Tn(oC)
-    """
-
-    def __init__(
-        self,
-        coord_file,
-        met_path,
-        output_csv,
-        start_date='1915-01-01',
-        end_date='2018-12-31',
-        met_prefix='meteo',
-        met_sep='\\s+',
-        clip_period=None,
-        product_b=False,
-    ):
-        self.coord_file = coord_file
-        self.met_path = met_path
-        self.output_csv = output_csv
-        self.start_date = start_date
-        self.end_date = end_date
-        self.met_prefix = met_prefix
-        self.met_sep = met_sep
-        self.clip_period = clip_period
-        self.product_b = product_b
-        self.ref_dir = os.path.dirname(os.path.abspath(coord_file))
-        self.met_columns = ['Year', 'Month', 'Day', 'precip', 'tmax', 'tmin']
-        if self.product_b:
-            # Product B: one WGEN row per stamp day (utils.wgen_calendar)
-            self.dates = pd.RangeIndex(STAMP_DAYS)
-        else:
-            self.dates = pd.date_range(start=self.start_date, end=self.end_date, freq='D')
-
-        # Expected stations and final column order
-        self.station_order = ['Brentwood', 'Davis', 'Galt', 'Lodi', 'RioVista', 'Stockton', 'Tracy']
-
-    def _latlon_str(self, lat, lon):
-        # Match file naming with fixed precision (VIC/WGEN grids typically use 5 decimals like 37.90625)
-        return f"{lat:.5f}", f"{lon:.5f}"
-
-    def _met_filename(self, lat, lon):
-        lat_s, lon_s = self._latlon_str(lat, lon)
-        return f"{self.met_prefix}_{lat_s}_{lon_s}"
-
-    def _read_met_precip_series(self, filepath):
-        df = pd.read_csv(filepath, sep=self.met_sep, header=None, names=self.met_columns, engine='python')
-        # Return precip Series (mm), length must match self.dates
-        return df['precip']
-
-    def _read_met_vars_series(self, filepath):
-        """
-        Return (precip, tmax, tmin) as three Series for a single grid file.
-        """
-        df = pd.read_csv(filepath, sep=self.met_sep, header=None, names=self.met_columns, engine='python')
-        return df['precip'], df['tmax'], df['tmin']
-
-    def _compute_station_series(self, station_df):
-        # Deduplicate grid locations
-        cols = ['Lat', 'Lon'] if 'Lon' in station_df.columns else ['Lat', 'Long']
-        station_df = station_df.drop_duplicates(subset=cols)
-
-        series_list = []
-        missing = []
-
-        for _, row in station_df.iterrows():
-            lat = float(row['Lat'])
-            lon = float(row['Lon'] if 'Lon' in row else row['Long'])
-            fn = self._met_filename(lat, lon)
-            fp = os.path.join(self.met_path, fn)
-            if not os.path.exists(fp):
-                missing.append(fp)
-                continue
-            s = self._read_met_precip_series(fp)
-            series_list.append(s)
-
-        if missing:
-            raise FileNotFoundError(f"Missing met files for station {station_df.iloc[0]['Station']}: {missing}")
-
-        if not series_list:
-            raise ValueError(f"No precipitation series found for station {station_df.iloc[0]['Station']}.")
-
-        n_days = len(self.dates)
-        for s in series_list:
-            if len(s) != n_days:
-                raise ValueError(f"Length mismatch for station {station_df.iloc[0]['Station']}: "
-                                f"expected {n_days}, got {len(s)}")
-
-        # Simple average across grids (still in mm)
-        avg_mm = (sum(series_list) / len(series_list)).round(2)
-        avg_mm.index = self.dates
-        return avg_mm
-
-    def _compute_station_df_allvars(self, station_df):
-        """
-        Compute average precip (mm), tmax (degC), tmin (degC) across grids for the station.
-        Returns a DataFrame with index=self.dates and columns ['precip','tmax','tmin'].
-        """
-        cols = ['Lat', 'Lon'] if 'Lon' in station_df.columns else ['Lat', 'Long']
-        station_df = station_df.drop_duplicates(subset=cols)
-
-        p_list, tx_list, tn_list = [], [], []
-        missing = []
-
-        for _, row in station_df.iterrows():
-            lat = float(row['Lat'])
-            lon = float(row['Lon'] if 'Lon' in row else row['Long'])
-            fn = self._met_filename(lat, lon)
-            fp = os.path.join(self.met_path, fn)
-            if not os.path.exists(fp):
-                missing.append(fp)
-                continue
-            p, tx, tn = self._read_met_vars_series(fp)
-            p_list.append(p)
-            tx_list.append(tx)
-            tn_list.append(tn)
-            
-        if missing:
-            raise FileNotFoundError(f"Missing met files for station {station_df.iloc[0]['Station']}: {missing}")
-
-        if not p_list:
-            raise ValueError(f"No met series found for station {station_df.iloc[0]['Station']}.")
-
-        n_days = len(self.dates)
-        for s in p_list + tx_list + tn_list:
-            if len(s) != n_days:
-                raise ValueError(f"Length mismatch for station {station_df.iloc[0]['Station']}: "
-                                f"expected {n_days}, got {len(s)}")
-
-        df = pd.DataFrame(index=self.dates)
-        df['precip'] = (sum(p_list) / len(p_list)).values.round(2)
-        df['tmax'] = (sum(tx_list) / len(tx_list)).values.round(2)
-        df['tmin'] = (sum(tn_list) / len(tn_list)).values.round(2)
-        return df
-
-    def run(self):
-        coord = pd.read_csv(self.coord_file)
-        # Normalize longitude column name
-        if 'Lon' not in coord.columns and 'Long' in coord.columns:
-            coord = coord.rename(columns={'Long': 'Lon'})
-        coord = coord[coord['Station'].isin(self.station_order)].copy()
-
-        product_label = "Product B" if self.product_b else "Product A"
-        print(f"Compiling {len(self.station_order)} stations ({product_label})...")
-        results = {}
-        for idx, stn in enumerate(self.station_order, 1):
-            print(f"  [{idx}/{len(self.station_order)}] {stn}")
-            sub = coord[coord['Station'] == stn]
-            if sub.empty:
-                raise ValueError(f"No rows in coord_file for station '{stn}'")
-            results[stn] = self._compute_station_series(sub)
-
-        if self.product_b:
-            result_vals = {stn: s.values for stn, s in results.items()}
-            self._write_product_b_chunks(result_vals)
-            print("Done.")
-            return pd.DataFrame(result_vals)
-
-        # Product A: combine, clip, add calendar columns, write single CSV
-        df = pd.DataFrame(index=self.dates)
-        for stn in self.station_order:
-            df[stn] = results[stn].values
-
-        if self.clip_period:
-            df = df.loc[self.clip_period[0]:self.clip_period[1]]
-
-        df_out = pd.DataFrame({
-            'year':  df.index.year.astype(int),
-            'month': df.index.month.astype(int),
-            'day':   df.index.day.astype(int),
-            'DOY':   df.index.dayofyear.astype(int)
-        }, index=df.index)
-        for stn in self.station_order:
-            df_out[stn] = df[stn].values
-
-        os.makedirs(os.path.dirname(os.path.abspath(self.output_csv)), exist_ok=True)
-        df_out.to_csv(self.output_csv, index=False)
-        print(f"Wrote {len(df_out)} rows to {self.output_csv}")
-        return df_out
-
-    def _write_product_b_chunks(self, result_vals):
-        """Split the daily station precip into the 10 chunks of utils.wgen_calendar.chunk_days,
-        each labelled 30 Sep 1921 - 30 Sep 2021. The 30 Sep 1921 row comes from
-        reference/mm_pcp4.csv. Output files: {base}_n01{ext} ... {base}_n10{ext}
-        """
-        # Read Sep 30 1921 reference row from reference/mm_pcp4.csv
-        ref_mm = pd.read_csv(os.path.join(self.ref_dir, 'mm_pcp4.csv'), nrows=1)
-        sep30_ref = ref_mm.iloc[0]
-
-        # Full date template including Sep 30
-        date_template = pd.date_range('1921-09-30', '2021-09-30', freq='D')
-
-        out_dir = os.path.dirname(os.path.abspath(self.output_csv))
-        base, ext = os.path.splitext(os.path.basename(self.output_csv))
-        os.makedirs(out_dir, exist_ok=True)
-        print(f"  Product B: {len(date_template)} days per chunk, {N_CHUNKS} chunks")
-        for i in range(N_CHUNKS):
-            first, n = chunk_days(i + 1)
-            df_chunk = pd.DataFrame({
-                'year':  date_template.year.astype(int),
-                'month': date_template.month.astype(int),
-                'day':   date_template.day.astype(int),
-                'DOY':   date_template.dayofyear.astype(int),
-            })
-            for stn in self.station_order:
-                df_chunk[stn] = [float(sep30_ref[stn])] + list(result_vals[stn][first:first + n])
-            out_file = os.path.join(out_dir, f"{base}_n{i+1:02d}{ext}")
-            df_chunk.to_csv(out_file, index=False)
-            print(f"    Chunk {i+1:02d}/10: {os.path.basename(out_file)}")
-
-    def _write_product_b_lodi_chunks(self, df_vars, output_csv_lodi):
-        """Split the daily Lodi met into the 10 chunks of utils.wgen_calendar.chunk_days, as
-        _write_product_b_chunks does; the 30 Sep 1921 row comes from reference/LODI_PT4.csv."""
-        precip_vals = df_vars['precip'].values
-        tmax_vals   = df_vars['tmax'].values
-        tmin_vals   = df_vars['tmin'].values
-
-        # Read Sep 30 1921 reference row from reference/LODI_PT4.csv
-        ref_lodi = pd.read_csv(os.path.join(self.ref_dir, 'LODI_PT4.csv'), nrows=1)
-        sep30_lodi = ref_lodi.iloc[0]
-
-        # Full date template including Sep 30
-        date_template = pd.date_range('1921-09-30', '2021-09-30', freq='D')
-
-        out_dir = os.path.dirname(os.path.abspath(output_csv_lodi))
-        base, ext = os.path.splitext(os.path.basename(output_csv_lodi))
-        os.makedirs(out_dir, exist_ok=True)
-        print(f"  Product B Lodi: {len(date_template)} days per chunk, {N_CHUNKS} chunks")
-        for i in range(N_CHUNKS):
-            first, n = chunk_days(i + 1)
-            p_chunk  = precip_vals[first:first + n]
-            tx_chunk = tmax_vals[first:first + n]
-            tn_chunk = tmin_vals[first:first + n]
-            df_chunk = pd.DataFrame({
-                'Date':    date_template.strftime('%Y-%m-%d'),
-                'Year':    date_template.year.astype(int),
-                'Month':   date_template.month.astype(int),
-                'DOY':     date_template.dayofyear.astype(int),
-                'Pcp(mm)': [float(sep30_lodi['Pcp(mm)'])] + list(p_chunk),
-                'Tx(oC)':  [float(sep30_lodi['Tx(oC)'])] + list(tx_chunk),
-                'Tn(oC)':  [float(sep30_lodi['Tn(oC)'])] + list(tn_chunk),
-            })
-            out_file = os.path.join(out_dir, f"{base}_n{i+1:02d}{ext}")
-            df_chunk.to_csv(out_file, index=False)
-            print(f"    Lodi chunk {i+1:02d}/10: {os.path.basename(out_file)}")
-
-    def export_lodi_with_temps(self, output_csv_lodi):
-        """
-        Create a CSV for Lodi with columns:
-        Date,Year,Month,DOY,Pcp(mm),Tx(oC),Tn(oC)
-        """
-        coord = pd.read_csv(self.coord_file)
-        if 'Lon' not in coord.columns and 'Long' in coord.columns:
-            coord = coord.rename(columns={'Long': 'Lon'})
-
-        lodi_df = coord[coord['Station'] == 'Lodi'].copy()
-        if lodi_df.empty:
-            raise ValueError("No rows in coord_file for station 'Lodi'")
-
-        df_vars = self._compute_station_df_allvars(lodi_df)
-
-        if self.product_b:
-            self._write_product_b_lodi_chunks(df_vars, output_csv_lodi)
-            return df_vars
-
-        # Product A: clip, build output columns, write single CSV
-        if self.clip_period:
-            df_vars = df_vars.loc[self.clip_period[0]:self.clip_period[1]]
-
-        # Build output with requested columns and names
-        df_out = pd.DataFrame(index=df_vars.index)
-        df_out['Date'] = df_out.index.strftime('%Y-%m-%d')
-        df_out['Year'] = df_out.index.year.astype(int)
-        df_out['Month'] = df_out.index.month.astype(int)
-        df_out['DOY'] = df_out.index.dayofyear.astype(int)
-        df_out['Pcp(mm)'] = df_vars['precip'].astype(float).values
-        df_out['Tx(oC)'] = df_vars['tmax'].astype(float).values
-        df_out['Tn(oC)'] = df_vars['tmin'].astype(float).values
-
-        # Write CSV
-        df_out.to_csv(output_csv_lodi, index=False)
-        return df_out
+def station_daily(product: str, cells: pd.DataFrame, columns: list) -> pd.DataFrame:
+    """The mean of ``columns`` over a station's cells, rounded to 2 decimals, one row per day of
+    the weather files (dated; by stamp day for Product B)."""
+    cells = cells.drop_duplicates(subset=['Lat', 'Lon'])
+    paths = [met_path(product, r.Lat, r.Lon) for r in cells.itertuples(index=False)]
+    missing = [str(p) for p in paths if not p.exists()]
+    if missing:
+        raise FileNotFoundError(f"Missing weather files for station {cells.iloc[0]['Station']}: {missing}")
+    reads = [read_met(product, p, usecols=columns) for p in paths]
+    days = reads[0][['Year', 'Month', 'Day']].to_numpy()
+    for p, w in zip(paths[1:], reads[1:]):
+        if not np.array_equal(w[['Year', 'Month', 'Day']].to_numpy(), days):
+            raise ValueError(f"{p}: its days differ from the other cells of the station")
+    out = pd.DataFrame({c: (sum(w[c] for w in reads) / len(reads)).round(2) for c in columns})
+    if product != 'B':
+        out.index = dates(reads[0])
+    return out
 
 
-def main(): 
-    ap = argparse.ArgumentParser(description="Compile daily precipitation (mm) for DCD stations from WGEN met files.") 
+def calendar_columns(index: pd.DatetimeIndex, names) -> dict:
+    """year, month, (day,) DOY columns of ``index`` under ``names``."""
+    parts = {'Date': index.strftime('%Y-%m-%d'), 'year': index.year, 'month': index.month,
+             'day': index.day, 'DOY': index.dayofyear}
+    return {out: np.asarray(parts[key]).astype(int) if key != 'Date' else parts[key]
+            for key, out in names}
+
+
+def write_single(res: dict, output_csv: Path, lodi_csv: Path, clip_period) -> None:
+    pcp = pd.DataFrame({stn: res[stn]['precip'] for stn in STATIONS})
+    lodi = res['Lodi']
+    if clip_period:
+        pcp = pcp.loc[clip_period[0]:clip_period[1]]
+        lodi = lodi.loc[clip_period[0]:clip_period[1]]
+    out = pd.DataFrame(calendar_columns(pcp.index, [('year', 'year'), ('month', 'month'),
+                                                    ('day', 'day'), ('DOY', 'DOY')]))
+    for stn in STATIONS:
+        out[stn] = pcp[stn].to_numpy()
+    out.to_csv(output_csv, index=False)
+    print(f"Wrote {len(out)} rows to {output_csv}")
+    out = pd.DataFrame(calendar_columns(lodi.index, [('Date', 'Date'), ('year', 'Year'),
+                                                     ('month', 'Month'), ('DOY', 'DOY')]))
+    for col, name in LODI_COLUMNS.items():
+        out[name] = lodi[col].astype(float).to_numpy()
+    out.to_csv(lodi_csv, index=False)
+    print(f"Wrote {len(out)} rows to {lodi_csv}")
+
+
+def write_product_b(res: dict, output_csv: Path, lodi_csv: Path, ref_dir: Path) -> None:
+    """The 10 chunks of ``chunk_days``, each headed by the 30 Sep 1921 reference row."""
+    ref_pcp = pd.read_csv(ref_dir / 'mm_pcp4.csv', nrows=1).iloc[0]
+    ref_lodi = pd.read_csv(ref_dir / 'LODI_PT4.csv', nrows=1).iloc[0]
+    print(f"  Product B: {len(CHUNK_DAYS)} days per chunk, {N_CHUNKS} chunks")
+    for k in range(1, N_CHUNKS + 1):
+        first, n = chunk_days(k)
+        out = pd.DataFrame(calendar_columns(CHUNK_DAYS, [('year', 'year'), ('month', 'month'),
+                                                         ('day', 'day'), ('DOY', 'DOY')]))
+        for stn in STATIONS:
+            out[stn] = [float(ref_pcp[stn])] + list(res[stn]['precip'].to_numpy()[first:first + n])
+        out.to_csv(output_csv.with_name(f"{output_csv.stem}_n{k:02d}{output_csv.suffix}"), index=False)
+        out = pd.DataFrame(calendar_columns(CHUNK_DAYS, [('Date', 'Date'), ('year', 'Year'),
+                                                         ('month', 'Month'), ('DOY', 'DOY')]))
+        for col, name in LODI_COLUMNS.items():
+            out[name] = [float(ref_lodi[name])] + list(res['Lodi'][col].to_numpy()[first:first + n])
+        out.to_csv(lodi_csv.with_name(f"{lodi_csv.stem}_n{k:02d}{lodi_csv.suffix}"), index=False)
+        print(f"    Chunk {k:02d}/{N_CHUNKS} written")
+
+
+def main():
+    ap = argparse.ArgumentParser(description="Compile daily precipitation (mm) for the DCD stations.")
+    ap.add_argument('--product', choices=list(WEATHER_SETS), required=True,
+                    help='Weather set: historical (Historical_Unsplit), A or B')
     ap.add_argument('--coord_file', default=None,
-                    help='Path to station coordinate CSV. Defaults to ./input/USBR_LTO_ClimateChange_DCD_StnsVICCoordinates_20210425.csv') 
-    ap.add_argument('--met_path', default=None,
-                    help='Directory containing WGEN met files. Default resolved from config.') 
+                    help='Station coordinate CSV (default: reference/USBR_LTO_ClimateChange_DCD_'
+                         'StnsVICCoordinates_20210425.csv)')
     ap.add_argument('--output_csv', default=None,
-                    help='Output CSV path. Defaults to ./output/Product_A/mm_pcp4.csv or Product_B/mm_pcp4.csv.') 
-    ap.add_argument('--start_date', default='1915-01-01', help='Start date (YYYY-MM-DD)') 
-    ap.add_argument('--end_date', default='2018-12-31', help='End date (YYYY-MM-DD)') 
-    ap.add_argument('--met_prefix', default='meteo', help='Met file prefix (default: meteo)') 
-    ap.add_argument('--met_sep', default='\s+', help='Separator for met files (regex OK)') 
-    ap.add_argument('--clip_period', nargs=2, default=None, help='Optional clip start end (YYYY-MM-DD) [Product A only]') 
-    ap.add_argument('--lodi_output_csv', default=None, help='Optional path to write Lodi precip and temperature CSV') 
-    ap.add_argument('--product', choices=['A', 'B'], required=True,
-                    help='Product to generate: A (historical 1921-2018) or B (stochastic 1000-yr chunks).')
+                    help='Station CSV (default: output/_1_compile_precip_DETAW/<set>/mm_pcp4.csv)')
+    ap.add_argument('--lodi_output_csv', default=None,
+                    help='Lodi CSV (default: output/_1_compile_precip_DETAW/<set>/LODI_PT4.csv)')
+    ap.add_argument('--clip_period', nargs=2, default=None,
+                    help='First and last day (YYYY-MM-DD), Historical_Unsplit and Product A only '
+                         '(default: every day)')
     args = ap.parse_args()
 
     script_dir = Path(__file__).resolve().parent
-    _base = get_base_dir()
-    _gen = get_module_generated_dir("mod_hydrology/delta_channel_depletion")
+    coord_file = Path(args.coord_file or script_dir / 'reference'
+                      / 'USBR_LTO_ClimateChange_DCD_StnsVICCoordinates_20210425.csv')
+    out_dir = (get_module_generated_dir("mod_hydrology/delta_channel_depletion") / 'output'
+               / '_1_compile_precip_DETAW' / WEATHER_SETS[args.product]['name'])
+    output_csv = Path(args.output_csv or out_dir / 'mm_pcp4.csv')
+    lodi_csv = Path(args.lodi_output_csv or out_dir / 'LODI_PT4.csv')
+    output_csv.parent.mkdir(parents=True, exist_ok=True)
+    lodi_csv.parent.mkdir(parents=True, exist_ok=True)
 
-    coord_file = args.coord_file or str(
-        script_dir / 'reference' / 'USBR_LTO_ClimateChange_DCD_StnsVICCoordinates_20210425.csv'
-    )
-    product_b = args.product == 'B'
-    if product_b:
-        met_path   = args.met_path   or str(_base / 'WGEN' / 'Product_B' / '1')
-        output_csv = args.output_csv or str(_gen / 'output' / '_1_compile_precip_DETAW' / 'Product_B' / 'mm_pcp4.csv')
-        lodi_csv   = args.lodi_output_csv or str(_gen / 'output' / '_1_compile_precip_DETAW' / 'Product_B' / 'LODI_PT4.csv')
+    coord = pd.read_csv(coord_file)
+    if 'Lon' not in coord.columns and 'Long' in coord.columns:
+        coord = coord.rename(columns={'Long': 'Lon'})
+    print(f"Compiling {len(STATIONS)} stations ({WEATHER_SETS[args.product]['name']})...")
+    res = {}
+    for i, stn in enumerate(STATIONS, 1):
+        print(f"  [{i}/{len(STATIONS)}] {stn}")
+        cells = coord[coord['Station'] == stn]
+        if cells.empty:
+            raise ValueError(f"No rows in {coord_file.name} for station '{stn}'")
+        res[stn] = station_daily(args.product, cells, list(LODI_COLUMNS) if stn == 'Lodi' else ['precip'])
+    if args.product == 'B':
+        write_product_b(res, output_csv, lodi_csv, coord_file.parent)
     else:
-        met_path   = args.met_path   or str(_base / 'WGEN' / 'Product_A' / '1')
-        output_csv = args.output_csv or str(_gen / 'output' / '_1_compile_precip_DETAW' / 'Product_A' / 'mm_pcp4.csv')
-        lodi_csv   = args.lodi_output_csv or str(_gen / 'output' / '_1_compile_precip_DETAW' / 'Product_A' / 'LODI_PT4.csv')
+        write_single(res, output_csv, lodi_csv, args.clip_period)
+    print("Done.")
 
-    runner = CompileStationsPrecipMM(
-        coord_file=coord_file,
-        met_path=met_path,
-        output_csv=output_csv,
-        start_date=args.start_date,
-        end_date=args.end_date,
-        met_prefix=args.met_prefix,
-        met_sep=args.met_sep,
-        clip_period=args.clip_period,
-        product_b=product_b,
-    )
-    runner.run()
-
-    if product_b or lodi_csv:
-        runner.export_lodi_with_temps(lodi_csv)
 
 if __name__ == "__main__":
     main()

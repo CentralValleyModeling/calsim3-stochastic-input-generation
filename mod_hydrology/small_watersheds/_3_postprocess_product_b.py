@@ -43,7 +43,8 @@ import matplotlib.pyplot as plt
 # Add repo root to path for utils imports
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 from utils import dss_io
-from utils.paths import get_module_generated_dir, get_inventory_dir
+from utils.wgen_calendar import LABEL_WY, N_CHUNKS
+from utils.paths import WEATHER_SETS, get_module_generated_dir, get_inventory_dir
 
 
 # -- CONSTANTS -----------------------------------------------------------------
@@ -53,10 +54,6 @@ OUTPUT_DIR = _GEN_DIR / "output" / "_3_postprocess_product_b"
 EXCEL_PATH = str(get_inventory_dir() / "_MASTER_INVENTORY_FOR_STOCHASTIC_INPUT_GENERATION_.xlsx")
 SHEET_NAME = "MASTER"
 
-N_CHUNKS = 10           # 10 chunks of 100 water years each
-MONTHS_PER_CHUNK = 1200  # 100 WY x 12 months
-START_WY = 1922
-END_WY = 2021
 
 # AF to TAF conversion
 AF_TO_TAF = 1.0 / 1000.0
@@ -65,7 +62,7 @@ AF_TO_TAF = 1.0 / 1000.0
 _SWS_RUNS = _GEN_DIR / "SmallWatersheds_Runs"
 _PRODUCT_B_DIR = _SWS_RUNS / "SmallWatershed_Product_B"
 _PRODUCT_A_MERGED = (
-    _GEN_DIR / "output" / "_2_postprocess_product_a" / "SmallWatersheds_2DSS.csv"
+    _GEN_DIR / "output" / "_2_postprocess_single" / WEATHER_SETS["A"]["name"] / "SmallWatersheds_2DSS.csv"
 )
 
 _DSS_BASE = "CVSWShed_FlowContribution3pcntWBA24_2013Init_2021"
@@ -334,7 +331,7 @@ def run_compare_a():
     if not _PRODUCT_A_MERGED.exists():
         print(f"\nERROR: Product A merged CSV not found: {_PRODUCT_A_MERGED}")
         print("Run Product A postprocessing first:")
-        print("  python _2_postprocess_product_a.py")
+        print("  python _2_postprocess_single.py --product A")
         sys.exit(1)
 
     # -- Compute Product A stats from merged CSV -------------------------------
@@ -593,7 +590,7 @@ def main():
     print("SmallWatersheds -- Product B Postprocessing")
     if not args.compare_a and not args.plot:
         print(f"Chunks: {', '.join(f'n{c:02d}' for c in args.chunks)}")
-        print(f"Canonical period: WY {START_WY}-{END_WY} (100 WY per chunk)")
+        print(f"Canonical period: WY {LABEL_WY[0]}-{LABEL_WY[1]} (100 WY per chunk)")
     if args.compare_a:
         print("Mode: Compare Product B vs Product A")
     if args.plot:

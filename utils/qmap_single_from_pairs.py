@@ -1,8 +1,10 @@
 """
-Reusable Product A quantile mapping driven by qmap_pairs.csv
-============================================================
-Maps the rim-inflow model's Product A predictor onto each target of a
-``qmap_pairs.csv`` file, and compares the result with the CalSim3 target.
+Single-series quantile mapping driven by qmap_pairs.csv
+=======================================================
+Maps the rim-inflow model's predictor of a single series (Historical_Unsplit or
+Product A) onto each target of a ``qmap_pairs.csv`` file, and compares the
+result with the CalSim3 target. Product B's chunks go through
+``utils.qmap_product_b_from_pairs``.
 
 Workflow per (target, predictor) pair
 -------------------------------------
@@ -10,27 +12,26 @@ Workflow per (target, predictor) pair
    by the pair's ``fit`` (``utils.qmap_fit``): the CalSim3 predictor (pass)
    or the model's historical-unsplit predictor (absorb).
 2. Fit the quantile map on WY1950-2018 (``utils.qmap_fit.FIT_WY``).
-3. Load the model's Product A predictor from the rim-inflow SV CSV for the
-   simulation window (default ``utils.paths.PRODUCT_A_WY``, WY1922-2018). A ``+``
+3. Load the model's predictor of the set from its rim-inflow SV CSV for the
+   simulation window (default ``utils.paths.DELIVERY_WY``, WY1922-2018). A ``+``
    predictor is summed.
-4. Apply the map to produce the Product A target.
+4. Apply the map to produce the set's target.
 5. Compare with the CalSim3 target (R2, NSE, PBIAS). The fit window covers the
-   simulation window and Product A weather is detrended, so this is a
-   comparison, not a held-out validation.
-6. Write detail CSVs, CalSim-format validation CSVs, and three plot types.
+   simulation window, so this is a comparison, not a held-out validation.
+6. Write detail CSVs, the delivery CSVs (``utils.csv_io.write_delivery_csv``),
+   and three plot types.
 
 """
 from __future__ import annotations
 
 import os
-import re
 from pathlib import Path
 
 import numpy as np
 import pandas as pd
 
 from utils import csv_io, dss_io
-from utils.paths import PRODUCT_A_WY
+from utils.paths import DELIVERY, DELIVERY_WY, WEATHER_SETS
 from utils.qmap_fit import (
     FIT_END, FIT_START, FIT_WY, predictor_label, predictor_parts, read_fit_column,
     read_historical_predictors, sum_parts, training_basis,
@@ -45,8 +46,8 @@ _REQUIRED_COLS = ["target_part_b", "target_part_c",
 _OPTIONAL_COLS = ["lower_bound", "upper_bound", "allow_negative"]
 
 # -- Defaults -----------------------------------------------------------------
-SIM_START = f"{PRODUCT_A_WY[0] - 1}-10-01"
-SIM_END = f"{PRODUCT_A_WY[1]}-09-30"
+SIM_START = f"{DELIVERY_WY[0] - 1}-10-01"
+SIM_END = f"{DELIVERY_WY[1]}-09-30"
 DSS_READ_START = "1915-01-31"
 DSS_READ_END = "2018-12-31"
 ALLOW_NEGATIVE = False
@@ -183,16 +184,17 @@ def ser_to_df(series):
 # -- Plotting -----------------------------------------------------------------
 
 def _plot_timeseries_cdf(common_sim, actual_vals, qmap_vals, target_b,
-                         r2_val, nse_val, pbias_val, plots_dir):
+                         r2_val, nse_val, pbias_val, plots_dir, label):
     """Two-panel figure: monthly time series (left) + non-exceedance CDF (right).
 
     Thin wrapper over ``utils.validation_plots.plot_ts_cdf`` that supplies the
-    pre-computed Product A vs Historical metrics as a single annotation line.
+    pre-computed metrics of the set (``label``) vs Historical as a single
+    annotation line.
     """
     plot_ts_cdf(
         series=[
             Series("Historical", common_sim, actual_vals, linewidth=0.8),
-            Series("Product A", common_sim, qmap_vals),
+            Series(label, common_sim, qmap_vals),
         ],
         title=f"{target_b} (TAF)",
         metric_lines=[format_metric_line(r2_val, nse_val, pbias_val)],
@@ -212,11 +214,12 @@ def _plot_monthly_box(detail, target_b, column, ylabel,
 
 # -- Main entry point ---------------------------------------------------------
 
-def run_product_a_qmap_from_pairs(
+def run_single_qmap_from_pairs(
     *,
+    product,
     pair_csv,
     dss_file,
-    product_a_rim_csv,
+    rim_csv,
     output_dir,
     validation_dir,
     sim_start=SIM_START,
@@ -225,24 +228,26 @@ def run_product_a_qmap_from_pairs(
     dss_read_end=DSS_READ_END,
     allow_negative=ALLOW_NEGATIVE,
 ):
-    """Run Product A QM for all pairs in a CSV, fitted on WY1950-2018.
+    """Run the QM of a single series for all pairs in a CSV, fitted on WY1950-2018.
 
     Parameters
     ----------
+    product : str
+        Weather set with a delivery (utils.paths.DELIVERY): historical or A.
     pair_csv : str or Path
         Path to qmap_pairs.csv (target/predictor definitions and fit).
     dss_file : str or Path
         Path to CalSim baseline DSS (targets; predictors of pass fits).
-    product_a_rim_csv : str or Path
-        Path to the Product A rim-inflow SV CSV (simulation predictor source).
+    rim_csv : str or Path
+        Path to the set's rim-inflow SV CSV (simulation predictor source).
     output_dir : str or Path
         Per-context directory (caller is expected to encode the context, e.g.
         ``.../_2_qmap/product_a``). Detail CSVs and a ``figures/`` subdir are
         written here.
     validation_dir : str or Path
-        Directory for CalSim-format validation CSVs.
+        Directory for the delivery CSVs.
     sim_start, sim_end : str
-        Simulation/validation period boundaries (default ``PRODUCT_A_WY``).
+        Simulation/validation period boundaries (default ``DELIVERY_WY``).
     dss_read_start, dss_read_end : str
         DSS read window boundaries.
     allow_negative : bool
@@ -254,8 +259,11 @@ def run_product_a_qmap_from_pairs(
     dict
         ``{pairs_requested, pairs_processed, pairs_skipped}``.
     """
+    if product not in DELIVERY:
+        raise ValueError(f"product must be one of {list(DELIVERY)}")
+    name = WEATHER_SETS[product]["name"]
     pair_csv = Path(pair_csv)
-    product_a_rim_csv = Path(product_a_rim_csv)
+    rim_csv = Path(rim_csv)
     output_dir = str(output_dir)
     validation_dir = str(validation_dir)
     plots_dir = os.path.join(output_dir, "figures")
@@ -344,19 +352,19 @@ def run_product_a_qmap_from_pairs(
         print(f"  Training: {len(pred_train)} months "
               f"({common_train.min().date()} to {common_train.max().date()})")
 
-        # 3) Load Product A simulation predictor (summed over its parts)
+        # 3) Load the set's simulation predictor (summed over its parts)
         pred_sim = sum_parts(
-            parts, lambda p: csv_io.load_sv_series(product_a_rim_csv, p, pred_c),
+            parts, lambda p: csv_io.load_sv_series(rim_csv, p, pred_c),
         )
         if pred_sim is None:
-            print(f"  WARNING: No Product A data for a part of predictor "
+            print(f"  WARNING: No {name} data for a part of predictor "
                   f"{pred_b}/{pred_c}, skipping.")
             pairs_skipped += 1
             continue
         pred_sim = pred_sim.loc[sim_start:sim_end].dropna()
 
         if pred_sim.empty:
-            print(f"  WARNING: No Product A data for predictor "
+            print(f"  WARNING: No {name} data for predictor "
                   f"{pred_b}/{pred_c}, skipping.")
             pairs_skipped += 1
             continue
@@ -420,7 +428,7 @@ def run_product_a_qmap_from_pairs(
             index=False,
         )
 
-        # 9) Write CalSim-format validation CSV
+        # 9) Write the delivery CSV
         val_df = pd.DataFrame({
             "Part B": target_b,
             "Part C": target_c,
@@ -428,13 +436,13 @@ def run_product_a_qmap_from_pairs(
             "Month": common_sim.month.astype(int),
             "Value": qmap_vals,
         })
-        val_csv = csv_io.write_product_a_csv(val_df, validation_dir, f"{target_b}_productA")
+        val_csv = csv_io.write_delivery_csv(val_df, validation_dir, target_b, product)
         print(f"  Wrote: {val_csv}")
 
         # 10-12) Plots
         _plot_timeseries_cdf(
             common_sim, actual_vals, qmap_vals, target_b,
-            r2_val, nse_val, pbias_val, plots_dir,
+            r2_val, nse_val, pbias_val, plots_dir, WEATHER_SETS[product]["label"],
         )
         _plot_monthly_box(
             detail, target_b, "error", "Error (TAF)",

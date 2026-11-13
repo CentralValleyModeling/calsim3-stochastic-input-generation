@@ -1,26 +1,36 @@
 """
-WGEN Product B Calendar
-=======================
-Product B's weather (BASE/WGEN/Product_B/<scenario>/meteo_<lat>_<lon>, year month day prcp tmax
-tmin) is one daily sequence over the stamp years 1-1008, with a leap day in every 4th stamp year
-from year 1 (1, 5, 9, ...). Its leap years are not Gregorian ones, so no module should date the
-rows itself: the stamp year and month in each row are the calendar.
+Calendar of the Weather Sets
+============================
+The time axis of every series in the pipeline. Historical_Unsplit, Product A and LTO run on real
+dates. Product B's weather (BASE/WGEN/Product_B/<scenario>/meteo_<lat>_<lon>) is one daily
+sequence over the stamp years 1-1008, with a leap day in every 4th stamp year from year 1 (1, 5,
+9, ...). Its leap years are not Gregorian ones, so no module dates the rows itself: the stamp
+year and month in each row are the calendar.
 
-The pipeline cuts 10 chunks of 100 water years from the sequence. It skips Jan-Sep of stamp year
-1, so chunk k runs from October of stamp year 100(k-1)+1 to September of stamp year 100k+1, and
-the outputs (``*_n01.csv`` ... ``*_n10.csv``) label every chunk WY1922-2021 (Oct 1921 to Sep
-2021). closure_terms has always cut it this way.
+The pipeline cuts 10 chunks of 100 water years from that sequence. It skips Jan-Sep of stamp
+year 1, so chunk k runs from October of stamp year 100(k-1)+1 to September of stamp year
+100k+1, and the outputs (``*_n01.csv`` ... ``*_n10.csv``) label every chunk WY1922-2021 (Oct
+1921 to Sep 2021, ``LABEL_MONTHS``).
+
+A labelled table carries ``chunk`` (0 for a single series: Historical_Unsplit, Product A, LTO;
+1-10 for Product B), ``Year`` and ``Month`` (the label month) and ``WY`` (``water_year``).
+``monthly`` builds one from the daily rows of ``utils.wgen.read_met``. A module that works on
+the file's own months first (a quantile map fit over stamp months) takes ``month_totals`` and
+then ``label``. ``write_chunk_csvs`` writes Product B's chunk files, and
+``require_label_months`` checks a chunk file read back. ``wy_months`` lists the months of a span
+of water years (``LABEL_MONTHS`` is WY1922-2021's). The daily consumers take ``chunk_days`` or
+``daily_chunk_1920_2021`` and date their rows with ``LABEL_DAYS`` or ``DAYS_1920_2021``.
 
 Usage
 -----
-    from utils.wgen_calendar import chunk_months
-    w = pd.read_csv(path, sep=r"\\s+", header=None, names=["y", "m", "d", "prcp", "tmax", "tmin"])
-    monthly = w.groupby(["y", "m"], as_index=False)["prcp"].sum()
-    monthly = monthly.join(chunk_months(monthly["y"], monthly["m"]))
-    monthly = monthly[monthly["chunk"] > 0]      # chunk, Year, Month: the label of each month
+    from utils.wgen import met_path, read_met
+    from utils.wgen_calendar import monthly
+    rows = read_met("B", met_path("B", lat, lon), usecols=["precip"])
+    m = monthly("B", rows, "sum")      # chunk, Year, Month, WY, precip: 10 x 1,200 label months
 """
 
 import functools
+from pathlib import Path
 
 import numpy as np
 import pandas as pd
@@ -104,6 +114,109 @@ def chunk_days(chunk: int) -> tuple[int, int]:
     (y0, m0), (y1, _) = chunk_span(chunk)
     first = stamp_day_index(y0, m0, 1)
     return first, stamp_day_index(y1, 10, 1) - first
+
+
+def water_year(year, month) -> np.ndarray:
+    """The water year of a calendar or label month: October to December count toward the next
+    year."""
+    return np.asarray(year, dtype=np.int64) + (np.asarray(month) >= 10)
+
+
+def wy_months(first_wy: int, last_wy: int) -> pd.DataFrame:
+    """Year and Month of every month of water years ``first_wy``..``last_wy``, October of
+    ``first_wy - 1`` to September of ``last_wy``, in order."""
+    t = (first_wy - 1) * 12 + 9 + np.arange(12 * (last_wy - first_wy + 1))
+    return pd.DataFrame({"Year": t // 12, "Month": t % 12 + 1})
+
+
+#: The 1,200 label months every Product B chunk carries: Year and Month, Oct 1921 to Sep 2021.
+LABEL_MONTHS = wy_months(*LABEL_WY)
+
+#: The days a daily Product B output labels a chunk's 36,525 days with (``chunk_days``), in
+#: order: 1 October 1921 to 30 September 2021.
+LABEL_DAYS = pd.date_range(f"{LABEL_WY[0] - 1}-10-01", f"{LABEL_WY[1]}-09-30", freq="D")
+
+#: The days of the daily series CalSimHydro and CalSimHydroEE read, 1 January 1920 to
+#: 31 December 2021 (``daily_chunk_1920_2021``).
+DAYS_1920_2021 = pd.date_range("1920-01-01", "2021-12-31", freq="D")
+
+
+def require_label_months(year, month, what) -> None:
+    """Stop unless ``year`` and ``month`` are a chunk's 1,200 ``LABEL_MONTHS`` in order."""
+    ym = np.column_stack([np.asarray(year), np.asarray(month)])
+    if ym.shape != LABEL_MONTHS.shape or not (ym == LABEL_MONTHS.to_numpy()).all():
+        raise ValueError(f"{what}: {len(ym)} rows, not the {CHUNK_MONTHS} label months "
+                         "Oct 1921 - Sep 2021 in order")
+
+
+def label_months(product: str, year, month) -> pd.DataFrame:
+    """``chunk``, ``Year``, ``Month`` and ``WY`` of monthly rows of ``product`` given by their
+    file year and month: Product B's stamp months take their chunk labels (chunk 0 outside every
+    chunk), the other sets keep their dates with chunk 0. The index follows ``year`` when it is
+    a Series."""
+    if product == "B":
+        out = chunk_months(year, month)
+    else:
+        out = pd.DataFrame({"chunk": 0, "Year": np.asarray(year, dtype=np.int64),
+                            "Month": np.asarray(month, dtype=np.int64)},
+                           index=year.index if isinstance(year, pd.Series) else None)
+    out["WY"] = water_year(out["Year"], out["Month"])
+    return out
+
+
+def month_totals(rows: pd.DataFrame, how) -> pd.DataFrame:
+    """Daily ``rows`` (Year, Month, Day and value columns, as ``utils.wgen.read_met`` returns
+    them) aggregated by the months of the file with ``how`` ("sum", "mean" or a column ->
+    function dict), in file order: Year, Month (stamp months for Product B) and the values."""
+    values = [c for c in rows.columns if c not in ("Year", "Month", "Day")]
+    return rows.groupby(["Year", "Month"], sort=False)[values].agg(how).reset_index()
+
+
+def label(product: str, m: pd.DataFrame) -> pd.DataFrame:
+    """Monthly rows of ``product`` by file month (Year, Month and value columns) as a labelled
+    table: chunk, Year, Month, WY and the value columns. Product B keeps only the months
+    inside its chunks, in chunk order."""
+    values = [c for c in m.columns if c not in ("Year", "Month")]
+    out = pd.concat([label_months(product, m["Year"], m["Month"]), m[values]], axis=1)
+    if product == "B":
+        out = out[out["chunk"] > 0].reset_index(drop=True)
+    return out
+
+
+def monthly(product: str, rows: pd.DataFrame, how) -> pd.DataFrame:
+    """``label(product, month_totals(rows, how))``: the daily rows of ``product`` aggregated by
+    month as a labelled table."""
+    return label(product, month_totals(rows, how))
+
+
+def write_chunk_csvs(df: pd.DataFrame, folder, stem: str, columns=None) -> list[Path]:
+    """Write Product B's chunk files ``<folder>/<stem>_n01.csv`` ... ``_n10.csv`` from a labelled
+    table (``chunk`` plus ``columns``, by default Part B, Part C, Year, Month, Value). Rows of
+    chunk 0 (outside every chunk) are left out, and any other value outside 1..N_CHUNKS is an
+    error. Each chunk must hold every series of the table over the 1,200 ``LABEL_MONTHS`` in
+    order, which the compiler assumes. Returns the paths written."""
+    stray = set(pd.unique(df["chunk"])) - set(range(N_CHUNKS + 1))
+    if stray:
+        raise ValueError(f"{stem}: chunk values {sorted(map(str, stray))} outside 0..{N_CHUNKS}")
+    columns = columns or ["Part B", "Part C", "Year", "Month", "Value"]
+    keys = [c for c in columns if c not in ("Year", "Month", "Value")]
+    series = set(df.groupby(keys, sort=False).groups) if keys else None
+    folder = Path(folder)
+    folder.mkdir(parents=True, exist_ok=True)
+    out = []
+    for k in range(1, N_CHUNKS + 1):
+        part = df[df["chunk"] == k]
+        if part.empty:
+            raise ValueError(f"{stem} n{k:02d}: no rows")
+        groups = part.groupby(keys, sort=False) if keys else [((), part)]
+        if keys and set(groups.groups) != series:
+            raise ValueError(f"{stem} n{k:02d}: holds {len(groups.groups)} of the table's {len(series)} series")
+        for key, g in groups:
+            require_label_months(g["Year"], g["Month"], f"{stem} n{k:02d} {key}")
+        path = folder / f"{stem}_n{k:02d}.csv"
+        part[columns].to_csv(path, index=False)
+        out.append(path)
+    return out
 
 
 def daily_chunk_1920_2021(values, chunk: int) -> np.ndarray:
