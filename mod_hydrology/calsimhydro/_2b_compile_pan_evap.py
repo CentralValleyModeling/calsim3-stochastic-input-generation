@@ -50,7 +50,8 @@ from utils import dss_io
 from utils.paths import WEATHER_SETS, get_module_generated_dir
 from utils.quantile_mapping import qmap_single
 from utils.wgen import dates, met_path, read_met
-from utils.wgen_calendar import N_CHUNKS, monthly_chunk_1920_2021, stamp_day_of_year, stamp_month_of_day
+from utils.wgen_calendar import (N_CHUNKS, monthly_chunk_1920_2021, stamp_day_of_year, stamp_month_of_day,
+                                 water_year)
 
 REFERENCE_DIR = Path(__file__).resolve().parent / "reference"
 PAN_PATH = "/CALSIM/WBA02/PAN-EVAP//1MON/PAN-EVAP/"
@@ -128,7 +129,7 @@ def read_cs3_pan() -> pd.Series:
 def qmap_frame(monthly: pd.Series) -> pd.DataFrame:
     """The water year, month, value frame that qmap_single takes."""
     return pd.DataFrame({
-        "year": monthly.index.year + (monthly.index.month >= 10),
+        "year": water_year(monthly.index.year, monthly.index.month),
         "month": monthly.index.month,
         "value": monthly.to_numpy(),
     })

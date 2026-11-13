@@ -85,7 +85,7 @@ from collections import OrderedDict
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 from utils import dss_io
-from utils.wgen_calendar import CHUNK_MONTHS, LABEL_MONTHS, LABEL_WY, N_CHUNKS
+from utils.wgen_calendar import CHUNK_MONTHS, LABEL_MONTHS, LABEL_WY, N_CHUNKS, water_year
 from utils.paths import (get_base_dir, get_generated_dir, get_module_generated_dir, get_inventory_dir,
                          get_rim_inflow_outputs, require_pinned_run)
 
@@ -411,9 +411,9 @@ def scan_module_csvs(label, src_dir, reader_type):
 def _extract_wy_pattern(ser_clean):
     """Extract a 12-month repeating pattern from non-missing baseline data."""
     WY_MONTHS = [10, 11, 12, 1, 2, 3, 4, 5, 6, 7, 8, 9]
-    wy = ser_clean.index.year + (ser_clean.index.month >= 10).astype(int)
-    for water_year in sorted(wy.unique(), reverse=True):
-        wy_slice = ser_clean[wy == water_year]
+    wy = water_year(ser_clean.index.year, ser_clean.index.month)
+    for year in sorted(set(wy), reverse=True):
+        wy_slice = ser_clean[wy == year]
         months_present = set(wy_slice.index.month)
         if months_present == set(WY_MONTHS):
             pattern = {}
@@ -1030,7 +1030,7 @@ def _generate_comparison_figures(cmp_df, fig_dir, ref_label, active_tags,
         work = work[np.isfinite(work["Value"])]
         if work.empty:
             return np.array([], dtype=float)
-        work["WY"] = work["Year"] + (work["Month"] >= 10).astype(int)
+        work["WY"] = water_year(work["Year"], work["Month"])
         grouped = work.groupby("WY")["Value"]
         counts = grouped.count()
         if str(unit).upper() in _SUM_UNITS:

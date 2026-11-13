@@ -14,7 +14,7 @@ Plots
 Configuration
 -------------
 LOCATION at the top (e.g. CS3_8RI_OROVI, CS3_I_SHSTA) names the basin's GridInfo file; a
-cell's weight is its fraction inside the basin (f2 / f1).
+cell's weight is its area inside the basin (f2).
 
 Inputs
 ------
@@ -100,7 +100,7 @@ def gather_precip(product, grid_info):
     """Area-weighted precipitation (in) of the basin: the daily rows (Year, Month, Day, precip;
     stamp days for Product B), the labelled monthly table (chunk, Year, Month, WY, precip) and
     the water-year totals of complete water years (chunk, WY, precip)."""
-    basin = weighted_daily(product, [(met_path(product, row.Lat, row.Lon), row.f2 / row.f1)
+    basin = weighted_daily(product, [(met_path(product, row.Lat, row.Lon), row.f2)
                                      for row in grid_info.itertuples(index=False)], ['precip'])
     daily = basin[['Year', 'Month', 'Day']].assign(precip=basin['precip'] * 0.0393701)
     m = monthly(product, daily, 'sum')

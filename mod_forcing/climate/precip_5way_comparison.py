@@ -32,7 +32,7 @@ Outputs
 
 Dependencies
 ------------
-utils.paths, utils.wgen, _2_uhh_basin_averages (GridInfo, location and DSS readers);
+utils.paths, utils.wgen, utils.wgen_calendar, _2_uhh_basin_averages (GridInfo, location and DSS readers);
 pydsstools, matplotlib
 
 Usage
@@ -55,6 +55,7 @@ import matplotlib.pyplot as plt
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 from utils.paths import get_base_dir, get_module_generated_dir
 from utils.wgen import dates, met_dir, read_met
+from utils.wgen_calendar import water_year
 
 # Reuse the DSS historical reader and GridInfo/location helpers from the sibling
 # UHH module (module name starts with a digit-friendly underscore, so import by name).
@@ -109,7 +110,7 @@ def _prism_cell_wy(path):
     Keeps only complete (12-month) water years."""
     df = pd.read_csv(path, sep="\t")
     df = df.dropna(subset=["ppt"])
-    df["WY"] = df["Year"] + (df["Month"] >= 10).astype(int)
+    df["WY"] = water_year(df["Year"], df["Month"])
     g = df.groupby("WY")["ppt"]
     tot, cnt = g.sum(), g.count()
     return (tot[cnt == 12]) / MM_PER_IN
@@ -120,7 +121,7 @@ def _daily_cell_wy(path, product):
     WY -> inches/yr. Keeps complete WYs (>=365 days)."""
     w = read_met(product, path, usecols=["precip"])
     d = dates(w)
-    df = pd.DataFrame({"p": w["precip"].to_numpy(), "WY": d.year + (d.month >= 10).astype(int)})
+    df = pd.DataFrame({"p": w["precip"].to_numpy(), "WY": water_year(d.year, d.month)})
     g = df.groupby("WY")["p"]
     tot, cnt = g.sum(), g.count()
     return (tot[cnt >= 365]) / MM_PER_IN

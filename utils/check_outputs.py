@@ -27,7 +27,7 @@ Outputs
 
 Dependencies
 ------------
-utils.paths; pandas
+utils.paths, utils.wgen_calendar; pandas
 
 Usage
 -----
@@ -44,6 +44,7 @@ import pandas as pd
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from utils.paths import DELIVERY, WEATHER_SETS, delivery_dirs, get_generated_dir
+from utils.wgen_calendar import water_year
 
 KEY = ["Part B", "Part C", "Year", "Month"]
 
@@ -74,7 +75,7 @@ def check_file(path: Path, tag: str, problems: list) -> tuple | None:
         problems.append(f"{rel(path)}: no column {sorted(missing)}")
         return None
     df["Part B"], df["Part C"] = norm(df["Part B"]), norm(df["Part C"])
-    wy = df["Year"].astype(int) + (df["Month"].astype(int) >= 10)
+    wy = water_year(df["Year"].astype(int), df["Month"].astype(int))
     if wy.min() != wy0 or wy.max() != wy1:
         problems.append(f"{rel(path)}: rows cover WY{wy.min()}-{wy.max()}, the name WY{wy0}-{wy1}")
     n_months = 12 * (wy1 - wy0 + 1)

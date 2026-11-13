@@ -27,7 +27,7 @@ Outputs
 
 Dependencies
 ------------
-utils.paths, utils.dss_io; pydsstools
+utils.paths, utils.dss_io, utils.wgen_calendar; pydsstools
 
 Usage
 -----
@@ -44,6 +44,7 @@ import pandas as pd
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 from utils import dss_io
 from utils.paths import get_base_dir, get_module_generated_dir
+from utils.wgen_calendar import water_year
 
 # %% Paths
 _GEN_DIR = get_module_generated_dir("mod_other/day_volume_fractions")
@@ -147,7 +148,7 @@ def compute_annual_index(df_inflows: pd.DataFrame, components: list) -> pd.Serie
     """Sum listed components over each water year (Oct-Sep)."""
     df = df_inflows.copy()
     df.index = pd.to_datetime(df.index)
-    df["WY"] = df.index.year + (df.index.month >= 10).astype(int)
+    df["WY"] = water_year(df.index.year, df.index.month)
 
     # Keep only requested columns that exist
     cols = [c for c in components if c in df.columns]
@@ -193,7 +194,7 @@ def compute_rmse_matrix(df_vf: pd.DataFrame, target_wys, candidate_wys) -> pd.Da
     """
     df = df_vf.copy()
     df.index = pd.to_datetime(df.index)
-    df["WY"] = df.index.year + (df.index.month >= 10).astype(int)
+    df["WY"] = water_year(df.index.year, df.index.month)
 
     # Build WY x (month*location) matrix -- flatten each WY into a single vector
     grouped = df.drop(columns="WY").groupby(df["WY"])

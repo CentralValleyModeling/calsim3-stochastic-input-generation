@@ -56,7 +56,7 @@ historicalUnsplit or productA:
 
 Dependencies
 ------------
-utils.dss_io, utils.paths; numpy, pandas, matplotlib, openpyxl, pydsstools
+utils.dss_io, utils.paths, utils.wgen_calendar; numpy, pandas, matplotlib, openpyxl, pydsstools
 
 Usage
 -----
@@ -91,6 +91,7 @@ from utils import dss_io
 from utils.paths import (DELIVERY, DELIVERY_WY, WEATHER_SETS, delivery_dirs, get_base_dir,
                          get_module_generated_dir, get_inventory_dir, get_rim_inflow_outputs,
                          require_pinned_run)
+from utils.wgen_calendar import water_year
 
 # Suppress noisy warnings from empty slices (e.g. all-NaN columns in stats)
 warnings.filterwarnings("ignore", message="Mean of empty slice")
@@ -304,11 +305,11 @@ def _extract_wy_pattern(ser_clean):
     WY_MONTHS = [10, 11, 12, 1, 2, 3, 4, 5, 6, 7, 8, 9]
 
     # Assign each timestamp a water year (Oct = start of next WY)
-    wy = ser_clean.index.year + (ser_clean.index.month >= 10).astype(int)
+    wy = water_year(ser_clean.index.year, ser_clean.index.month)
 
     # Try to find the last complete WY (has all 12 months)
-    for water_year in sorted(wy.unique(), reverse=True):
-        wy_slice = ser_clean[wy == water_year]
+    for year in sorted(set(wy), reverse=True):
+        wy_slice = ser_clean[wy == year]
         months_present = set(wy_slice.index.month)
         if months_present == set(WY_MONTHS):
             pattern = {}
@@ -757,7 +758,7 @@ def generate_per_variable_plots(stats_csv: Path, cached_series: dict = None):
 
         # -- 2) Annual time-series + scatter --------------------------
         idx = b_ser.index
-        wy_labels = np.where(idx.month >= 10, idx.year + 1, idx.year)
+        wy_labels = water_year(idx.year, idx.month)
         df_wy = pd.DataFrame({"base": b_ser.values, "mod": m_ser.values},
                              index=wy_labels)
         wy_counts = df_wy.groupby(level=0).size()
@@ -1589,8 +1590,7 @@ def compute_modification_statistics(all_modified_keys, baseline_bucket):
             row["R2-Monthly"]  = _r2(b_v.values, m_v.values)
             row["NSE-Monthly"] = _nse(b_v.values, m_v.values)
 
-            wy_labels = np.where(eom_v.month >= 10,
-                                 eom_v.year + 1, eom_v.year)
+            wy_labels = water_year(eom_v.year, eom_v.month)
             df_wy = pd.DataFrame({"base": b_v.values, "mod": m_v.values},
                                  index=wy_labels)
             wy_counts = df_wy.groupby(level=0).size()

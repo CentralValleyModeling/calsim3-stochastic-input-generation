@@ -42,7 +42,7 @@ Outputs
 
 Dependencies
 ------------
-utils.dss_io, utils.paths; numpy, pandas, matplotlib, pydsstools
+utils.dss_io, utils.paths, utils.wgen_calendar; numpy, pandas, matplotlib, pydsstools
 
 Usage
 -----
@@ -58,6 +58,7 @@ import pandas as pd
 sys.path.insert(0, str(Path(__file__).resolve().parents[3]))
 from utils import dss_io
 from utils.paths import get_base_dir, get_generated_dir
+from utils.wgen_calendar import water_year
 COMPILED = (get_generated_dir() / "postprocessing" / "sv_compile"
             / "product_b_compilation" / "_product_b_compiled_sv")
 RIM_DIR = (get_generated_dir() / "postprocessing" / "sv_compile"
@@ -173,7 +174,7 @@ if not err_cmp.empty:
 # Per-chunk annual inflow stats
 print("\nPer-chunk SJR inflow annual stats:")
 inflow_df = big[big['Part B'].isin(SJR_INFLOW_VARS)].copy()
-inflow_df['WY'] = inflow_df['Year'] + (inflow_df['Month'] >= 10).astype(int)
+inflow_df['WY'] = water_year(inflow_df['Year'], inflow_df['Month'])
 wy_sums = inflow_df.groupby(['Part B', 'chunk', 'status', 'WY'])['Value'].sum().reset_index()
 chunk_stats = wy_sums.groupby(['Part B', 'chunk', 'status'])['Value'].agg(
     ann_min='min', ann_max='max', ann_mean='mean'
@@ -284,7 +285,7 @@ print("=" * 80)
 
 for chunk_id in [3, 7]:
     df_c = big[big['chunk'] == chunk_id].copy()
-    df_c['WY'] = df_c['Year'] + (df_c['Month'] >= 10).astype(int)
+    df_c['WY'] = water_year(df_c['Year'], df_c['Month'])
     wy_data = df_c[df_c['WY'] == FAIL_YEAR]
 
     print(f"\n--- n{chunk_id:02d}: WY {FAIL_YEAR} ---")
@@ -313,7 +314,7 @@ hist = load_calsim_hist(SJR_INFLOW_VARS + ['I_BCK040', 'I_DED044'])
 hist['date'] = pd.to_datetime(hist['date'])
 hist['Year'] = hist['date'].dt.year
 hist['Month'] = hist['date'].dt.month
-hist['WY'] = hist['Year'] + (hist['Month'] >= 10).astype(int)
+hist['WY'] = water_year(hist['Year'], hist['Month'])
 hist = hist.dropna(subset=['I_MLRTN'])
 
 # Historical May-Jul averages by WY
@@ -333,7 +334,7 @@ for var in SJR_INFLOW_VARS:
 # n03 and n07 May-Jul WY1922
 for chunk_id in [3, 7]:
     df_c = big[big['chunk'] == chunk_id].copy()
-    df_c['WY'] = df_c['Year'] + (df_c['Month'] >= 10).astype(int)
+    df_c['WY'] = water_year(df_c['Year'], df_c['Month'])
     mjj = df_c[(df_c['WY'] == FAIL_YEAR) & (df_c['Month'].isin([5, 6, 7]))]
     print(f"\nn{chunk_id:02d} May-Jul WY{FAIL_YEAR}:")
     total = 0.0
@@ -425,7 +426,7 @@ for v in SJR_INFLOW_VARS:
         all_wy_avgs = []
         for i in range(1, 11):
             df = pd.read_csv(RIM_DIR / f"{v}_qmo_n{i:02d}.csv")
-            df['WY'] = df['Year'] + (df['Month'] >= 10).astype(int)
+            df['WY'] = water_year(df['Year'], df['Month'])
             mjj = df[df['Month'].isin([5, 6, 7])]
             wy_avg = mjj.groupby('WY')['qmap_postAdj'].mean()
             all_wy_avgs.extend(wy_avg.tolist())

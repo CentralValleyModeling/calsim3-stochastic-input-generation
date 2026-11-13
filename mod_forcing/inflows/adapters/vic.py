@@ -41,7 +41,7 @@ import pandas as pd
 from mod_forcing.inflows.adapters import x10_days, ymd
 from utils.paths import (WEATHER_SETS, get_base_dir, get_module_generated_dir, remove_tree,
                          sha256_file)
-from utils.wgen_calendar import require_stamp_days, stamp_month_of_day
+from utils.wgen_calendar import require_stamp_days, stamp_month_of_day, water_year
 
 LABEL = "VIC"
 FORCINGS = {"historical": "Historical_Unsplit", "A": "WGEN_Product_A_1", "B": "WGEN_Product_B_1"}
@@ -441,13 +441,12 @@ def route(forcing: str, store: Path) -> pd.DataFrame:
         year, month = np.arange(n) // 12 + 1, np.arange(n) % 12 + 1      # stamp years from 1
     else:
         year, month = first.pop() + np.arange(n) // 12, np.arange(n) % 12 + 1
-    wy = pd.Series(year + (month >= 10))
+    wy = pd.Series(water_year(year, month))
     whole = (wy.map(wy.value_counts()) == 12).to_numpy()        # complete water years only
     rows = []
     for arc, g in grids.items():
-        frac = (g["f2"] / g["f1"]).to_numpy()
-        depth = sum(fr * cell[k] for fr, k in zip(frac, g["key"])) / frac.sum()
-        taf = depth * g["f2"].sum() * MM_KM2_TO_TAF
+        area = g["f2"].to_numpy()                       # km^2 of each cell inside the arc
+        taf = sum(a * cell[k] for a, k in zip(area, g["key"])) * MM_KM2_TO_TAF
         rows.append(pd.DataFrame({"arc": arc, "year": year[whole], "month": month[whole],
                                   "taf": taf[whole],
                                   "kind": "valley" if arc == VALLEY_NODE else "area_weighted"}))

@@ -76,7 +76,7 @@ from utils.paths import (WEATHER_SETS, INFLOW_PROVENANCE, get_arc_inflows, get_i
                          get_inflow_model, get_inflow_pin, get_inflow_repo,
                          get_module_generated_dir, remove_tree, require_chain_model,
                          sha256_file)
-from utils.wgen_calendar import chunk_months
+from utils.wgen_calendar import chunk_months, water_year
 
 _gen = get_module_generated_dir("mod_forcing/inflows")
 
@@ -116,7 +116,7 @@ def tidy(forcing: str, flows: pd.DataFrame) -> pd.DataFrame:
         year, month = flows["year"].to_numpy(), flows["month"].to_numpy()
     start = pd.to_datetime(pd.DataFrame({"year": year, "month": month, "day": 1}))
     out["date"] = (start + pd.offsets.MonthEnd(0)).to_numpy()
-    out["WY"] = year + (month >= 10)
+    out["WY"] = water_year(year, month)
     out["month"] = month
     return out[cols].sort_values(keys).reset_index(drop=True)
 

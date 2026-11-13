@@ -49,7 +49,7 @@ Outputs
 
 Dependencies
 ------------
-utils.dss_io, utils.paths; numpy, pandas, matplotlib, pydsstools
+utils.dss_io, utils.paths, utils.wgen_calendar; numpy, pandas, matplotlib, pydsstools
 
 Usage
 -----
@@ -68,6 +68,7 @@ import matplotlib.pyplot as plt
 sys.path.insert(0, str(Path(__file__).resolve().parents[3]))
 from utils import dss_io
 from utils.paths import get_base_dir, get_generated_dir
+from utils.wgen_calendar import water_year
 
 COMPILED = (get_generated_dir() / "postprocessing" / "sv_compile"
             / "product_b_compilation" / "_product_b_compiled_sv")
@@ -167,8 +168,7 @@ print("=" * 80)
 for var in SJR_INFLOW_VARS:
     try:
         df = pd.read_csv(RIM_DIR / f"{var}_qmo_n{FAIL_CHUNK:02d}.csv")
-        mask = ((df['Year'] == FAIL_YEAR - 1) & (df['Month'] >= 10)) | \
-               ((df['Year'] == FAIL_YEAR) & (df['Month'] <= 9))
+        mask = water_year(df['Year'], df['Month']) == FAIL_YEAR
         sub = df[mask]
         print(f"\n{var}:")
         for _, r in sub.iterrows():

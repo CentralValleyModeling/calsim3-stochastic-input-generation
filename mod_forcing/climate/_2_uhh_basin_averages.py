@@ -500,11 +500,8 @@ def read_reference_data(excel_file, location_name, variable_type):
     
     # For VPD only, filter to Oct-1971 through Sept-2018 (WY1972-2018)
     if variable_type == 'vpd':
-        mask = (
-            ((result['year'] == 1971) & (result['month'] >= 10)) |
-            ((result['year'] > 1971) & (result['year'] < 2018)) |
-            ((result['year'] == 2018) & (result['month'] <= 9))
-        )
+        wy = water_year(result['year'], result['month'])
+        mask = (wy >= 1972) & (wy <= 2018)
         result = result[mask]
     
     return result[['year', 'month', 'value']]
@@ -541,11 +538,8 @@ def read_output_data(output_file, variable_type):
     
     # For VPD only, filter to Oct-1971 through Sept-2018 (WY1972-2018)
     if variable_type == 'vpd':
-        mask = (
-            ((result['year'] == 1971) & (result['month'] >= 10)) |
-            ((result['year'] > 1971) & (result['year'] < 2018)) |
-            ((result['year'] == 2018) & (result['month'] <= 9))
-        )
+        wy = water_year(result['year'], result['month'])
+        mask = (wy >= 1972) & (wy <= 2018)
         result = result[mask]
     
     return result
