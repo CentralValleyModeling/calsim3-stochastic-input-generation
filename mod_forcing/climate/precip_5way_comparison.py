@@ -12,8 +12,8 @@ each UHH location, with Trinity (TR_UHH) highlighted for GitHub issue #78:
 Both Livneh sources are read through utils.wgen.read_met, which corrects the unsplit
 files' x10 precipitation days.
 
-The four gridded per-cell sources (all named data_<lat>_<lon>) are area-weighted
-to each UHH location using the GridInfo weights (mod_forcing/climate/
+The four gridded per-cell sources (all named data_<lat>_<lon>) are averaged over
+each UHH location, each cell weighted by its area inside the basin (mod_forcing/climate/
 reference/GridInfo); Hist_CalSim is read per location from the default CalSim SV DSS. All
 series are annual WY totals in inches.
 
@@ -140,7 +140,7 @@ def location_series(gi_df, source, idx):
         if s is None or s.empty:
             continue
         cols.append(s.rename(len(cols)))
-        weights.append(float(r["weight1"]))
+        weights.append(float(r["basin_area"]))
     if not cols:
         return None, 0, len(gi_df)
     df = pd.concat(cols, axis=1, join="inner")

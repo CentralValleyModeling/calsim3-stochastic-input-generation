@@ -3,7 +3,7 @@ Extract Monthly Basin-Averaged Climate for UHH Locations
 ========================================================
 Computes weighted-average monthly precipitation, temperature, and VPD for
 UHH (Upper Headwater Hydrology) locations specified in reference/uhh_locations.csv.
-Grid cell weights are read from reference/GridInfo/ files.
+Each grid cell is weighted by its area inside the basin (reference/GridInfo/ files).
 VPD is derived via quantile mapping from temperature using CalSim historical VPD.
 
 Historical_Unsplit, Product A, LTO: one CSV per variable per location; the first two also
@@ -60,7 +60,8 @@ def parse_grid_info_file(grid_info_path):
     """
     Parse a grid info file to extract grid cell coordinates and weights.
     
-    Format: GridID  Latitude  Longitude  Weight1  Weight2
+    Format: GridID  Latitude  Longitude  CellArea  BasinArea (km2; BasinArea is the part of
+    the cell inside the basin)
     
     Parameters:
     -----------
@@ -69,21 +70,21 @@ def parse_grid_info_file(grid_info_path):
         
     Returns:
     --------
-    pd.DataFrame with columns: grid_id, lat, lon, weight1, weight2
+    pd.DataFrame with columns: grid_id, lat, lon, cell_area, basin_area
     """
     df = pd.read_csv(
         grid_info_path, 
         sep=r'\s+', 
         header=None,
-        names=['grid_id', 'lat', 'lon', 'weight1', 'weight2']
+        names=['grid_id', 'lat', 'lon', 'cell_area', 'basin_area']
     )
     return df
 
 
 def calculate_basin_monthly_averages(grid_info_df, product, date_index=None):
     """
-    Basin-averaged monthly precipitation (inches) and temperature (degF), weighted by the
-    grid info's weight1 column, from the daily weather of each cell (utils.wgen).
+    Basin-averaged monthly precipitation (inches) and temperature (degF), each cell weighted by
+    its area inside the basin (``basin_area``), from the daily weather of each cell (utils.wgen).
 
     A single series (Historical_Unsplit, Product A, LTO) is aligned to ``date_index`` first,
     and its days outside the files' span are left out, so the series ends with the weather
@@ -101,7 +102,7 @@ def calculate_basin_monthly_averages(grid_info_df, product, date_index=None):
     days = None
 
     for _, row in grid_info_df.iterrows():
-        weight = row['weight1']
+        weight = row['basin_area']
         path = met_path(product, row['lat'], row['lon'])
         if not path.exists():
             raise FileNotFoundError(f"no weather file for grid cell ({row['lat']}, {row['lon']}): {path}")
@@ -373,7 +374,7 @@ def process_location(shorthand, grid_info_file, grid_info_folder, product, outpu
     
     grid_info_df = parse_grid_info_file(grid_info_path)
     print(f"  Number of grid cells: {len(grid_info_df)}")
-    print(f"  Total weight: {grid_info_df['weight1'].sum():.2f}")
+    print(f"  Basin area: {grid_info_df['basin_area'].sum():.1f} km2")
     
     # Calculate basin-averaged monthly data
     monthly_data = calculate_basin_monthly_averages(
@@ -441,7 +442,7 @@ def process_location(shorthand, grid_info_file, grid_info_folder, product, outpu
         'vpd_enabled': vpd_enabled,
         'grid_info_file': grid_info_file,
         'num_grid_cells': len(grid_info_df),
-        'total_weight': grid_info_df['weight1'].sum(),
+        'basin_area_km2': grid_info_df['basin_area'].sum(),
         'mean_monthly_precip_inches': monthly_data['precip_inches'].mean(),
         'mean_monthly_tavg_f': monthly_data['tavg_f'].mean(),
         'total_months': len(monthly_data),
@@ -1024,9 +1025,9 @@ def _ppt_filename_stem(shorthand: str) -> str:
 
 
 def _basin_weight_from_gridinfo(grid_info_folder: Path, grid_info_file: str) -> float:
-    """Return total basin area weight (sum of weight1) for a UHH basin."""
+    """The area (km2) of a UHH basin: the sum of its cells' basin_area."""
     df = parse_grid_info_file(grid_info_folder / grid_info_file)
-    return float(df['weight1'].sum())
+    return float(df['basin_area'].sum())
 
 
 def _historical_wy_totals_from_dss(ppt_part_b: str, start_wy: int = 1922, end_wy: int = 2021) -> pd.DataFrame:
