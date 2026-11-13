@@ -33,7 +33,8 @@ Outputs
                            its sha256, which _2_run_product.py records in its manifest too)
 
 _2_run_product.py runs the model only if this file shows a pass on every input. A sample of
-cells is a quick check: it prints its table and leaves the file as it was.
+cells is a quick check: it prints its table and leaves the file as it was, or removes it when
+the sample fails, so no gate reads the earlier pass.
 
 Usage
 -----
@@ -117,10 +118,14 @@ def main():
                                           outside_tol=("outside_tol", "sum"),
                                           x10_pairs=("x10_pairs", "sum"),
                                           passed=("pass", "all")).to_string())
+    record = out_dir / "forcing_identity.csv"
     if n_cells is None:
-        out.to_csv(out_dir / "forcing_identity.csv", index=False)
-        print(f"Wrote {out_dir / 'forcing_identity.csv'}")
+        out.to_csv(record, index=False)
+        print(f"Wrote {record}")
     if not out["pass"].all():
+        if n_cells is not None and record.exists():
+            record.unlink()
+            print(f"Removed {record}: the pass it recorded no longer holds")
         raise SystemExit("G2 FAIL: the input differs from BASE")
     print("G2 PASS" if n_cells is None else f"G2 PASS on {n_cells} sampled cells (not recorded)")
 
