@@ -4,8 +4,8 @@ Centralized path resolver for data directories.
 Reads the data root from ``config.json`` (user-local, git-ignored) at the repo
 root, falling back to ``config_default.json`` (tracked) when the user file is
 absent.  The environment variable ``CSSTOCHASTIC_CONFIG`` names another user
-file in place of ``config.json``, e.g. the config of a chain built on another
-rim-inflow model.  All module scripts should import helpers from this module
+file in place of ``config.json`` (a relative name from the repo root), e.g. the
+config of a chain built on another rim-inflow model.  All module scripts should import helpers from this module
 instead of hard-coding ``../../data/`` relative paths.
 
 Quick start
@@ -52,7 +52,9 @@ def _long_path(p: Path) -> Path:
 # ---------------------------------------------------------------------------
 # Load user config, falling back to the default
 # ---------------------------------------------------------------------------
-_USER_CFG = Path(os.environ.get("CSSTOCHASTIC_CONFIG", REPO_ROOT / "config.json"))
+_USER_CFG = Path(os.environ.get("CSSTOCHASTIC_CONFIG", "config.json"))
+if not _USER_CFG.is_absolute():
+    _USER_CFG = REPO_ROOT / _USER_CFG       # scripts run from their own folders
 _DEFAULT_CFG = REPO_ROOT / "config_default.json"
 
 
@@ -80,7 +82,8 @@ _CFG = _load_config()
 
 # Resolve data_dir relative to the repo root (or use absolute if given)
 _raw = Path(_CFG["data_dir"])
-DATA_DIR: Path = _long_path(_raw if _raw.is_absolute() else (REPO_ROOT / _raw).resolve())
+_DATA_ROOT = _raw if _raw.is_absolute() else (REPO_ROOT / _raw).resolve()
+DATA_DIR: Path = _long_path(_DATA_ROOT)
 
 
 # ---------------------------------------------------------------------------
@@ -100,8 +103,10 @@ def get_base_dir() -> Path:
 def get_generated_dir() -> Path:
     """Return ``<data_dir>/<generated_dir>`` (``GENERATED`` by default; an absolute
     ``generated_dir`` stands alone): all module input/output. The SAC-SMA chain uses
-    ``GENERATED``; a chain on another rim-inflow model keeps its own folder."""
-    return _long_path(DATA_DIR / _CFG["generated_dir"])
+    ``GENERATED``; a chain on another rim-inflow model keeps its own folder. The path is
+    normalized before the long-path prefix, which Windows reads literally, so a ``..`` in it
+    works."""
+    return _long_path(Path(os.path.normpath(_DATA_ROOT / _CFG["generated_dir"])))
 
 
 def get_module_generated_dir(module: str) -> Path:
