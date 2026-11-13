@@ -38,7 +38,6 @@ from concurrent.futures import ProcessPoolExecutor, as_completed
 from pathlib import Path
 from typing import Dict, List, Optional
 
-import numpy as np
 import pandas as pd
 from pydsstools.core import TimeSeriesContainer
 
@@ -46,7 +45,8 @@ from pydsstools.core import TimeSeriesContainer
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 from utils import dss_io
 from utils.paths import get_archive_dir, get_module_generated_dir
-from utils.wgen_calendar import CHUNK_MONTHS, N_CHUNKS, SKIP_MONTHS, STAMP_DAYS, stamp_month_of_day
+from utils.wgen_calendar import (CHUNK_MONTHS, N_CHUNKS, SKIP_MONTHS, STAMP_DAYS, monthly_chunk_1920_2021,
+                                 stamp_month_of_day)
 
 # Local quantile mapping utility
 from utils.quantile_mapping import qmap_single
@@ -280,31 +280,6 @@ class CompileWBAET:
 		mapped = qmap_single(ETsim, EThist, ETTargetHist)
 		return pd.Series(mapped["quantile_mapped_value"].values, name="ET_QMAP")
 
-	def _build_product_b_monthly_chunk(self, values, chunk_idx):
-		"""Build Jan 1920 - Dec 2021 monthly data array for one Product B chunk.
-
-		Core (non-overlapping): Oct 1921 - Sep 2021 (1200 months = 100 WY).
-		Jan 1921 - Sep 1921: data preceding this chunk's core.
-		Oct 2021 - Dec 2021: data following this chunk's core.
-		Jan 1920 - Dec 1920: Backfill (duplicate of Jan-Dec 1921).
-		"""
-		pre_core_months = 9
-		suffix_months = 3
-
-		core_start = SKIP_MONTHS + chunk_idx * CHUNK_MONTHS
-
-		pre_core = values[core_start - pre_core_months : core_start]
-		core = values[core_start : core_start + CHUNK_MONTHS]
-		post_core = values[core_start + CHUNK_MONTHS : core_start + CHUNK_MONTHS + suffix_months]
-
-		# Jan 1921 - Dec 2021 natural data
-		natural = np.concatenate([pre_core, core, post_core])
-
-		# Backfill: Jan 1920 - Dec 1920 = copy of Jan-Dec 1921
-		backfill = natural[:12]
-
-		return np.concatenate([backfill, natural])
-
 	def _write_product_b_chunks_csv(self, results: Dict[str, pd.Series]) -> None:
 		"""Split 1000-year monthly QM ET into 10 chunks.
 		Each chunk outputs Jan 1920 - Dec 2021 (1224 months).
@@ -322,7 +297,7 @@ class CompileWBAET:
 			if len(vals) < total_needed:
 				raise ValueError(f"{wba}: need {total_needed} months, got {len(vals)}")
 			for i in range(N_CHUNKS):
-				chunk = self._build_product_b_monthly_chunk(vals, i)
+				chunk = monthly_chunk_1920_2021(vals, i + 1)
 				df = pd.DataFrame({
 					'y': date_template.year,
 					'm': date_template.month,
@@ -344,7 +319,7 @@ class CompileWBAET:
 			print(f"  Writing DSS chunk {i+1:02d}/{N_CHUNKS}: {os.path.basename(dss_out)}")
 			with dss_io.open_dss(dss_out, version=6, catalog_flag=False) as dss:
 				for wba, series in results.items():
-					chunk = self._build_product_b_monthly_chunk(series.values, i)
+					chunk = monthly_chunk_1920_2021(series.values, i + 1)
 					tsc = TimeSeriesContainer()
 					if self.et_type == 'CropET':
 						tsc.pathname = f"/IWFM/{wba}/RATE_INCH//1MON/EVAPOTRANSPIRATION/"

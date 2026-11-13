@@ -20,7 +20,8 @@ then ``label``. ``write_chunk_csvs`` writes Product B's chunk files, and
 ``require_label_months`` checks a chunk file read back, and ``in_label_months`` cuts an
 external model's run of a chunk to its label months. ``wy_months`` lists the months of a span
 of water years (``LABEL_MONTHS`` is WY1922-2021's). The daily consumers take ``chunk_days`` or
-``daily_chunk_1920_2021`` and date their rows with ``LABEL_DAYS`` or ``DAYS_1920_2021``.
+``daily_chunk_1920_2021`` and date their rows with ``LABEL_DAYS`` or ``DAYS_1920_2021``;
+CalSimHydro's monthly inputs take ``monthly_chunk_1920_2021``.
 
 Usage
 -----
@@ -105,6 +106,17 @@ def stamp_days() -> np.ndarray:
     lengths = np.bincount(month)
     first = np.repeat(np.cumsum(lengths) - lengths, lengths)
     out = np.stack([month // 12 + 1, month % 12 + 1, np.arange(len(month)) - first + 1], axis=1)
+    out.setflags(write=False)
+    return out
+
+
+@functools.cache
+def stamp_day_of_year() -> np.ndarray:
+    """Per row of a Product B file (stamp day), its day of the stamp year: 1 on 1 January, 366
+    on 31 December of a leap stamp year. Read-only."""
+    lengths = np.bincount(stamp_days()[:, 0])[1:]
+    first = np.repeat(np.cumsum(lengths) - lengths, lengths)
+    out = np.arange(STAMP_DAYS) - first + 1
     out.setflags(write=False)
     return out
 
@@ -266,3 +278,16 @@ def daily_chunk_1920_2021(values, chunk: int) -> np.ndarray:
     from_1921 = np.concatenate([jan_sep, values[first:first + n + 92]])
     y1921 = from_1921[:365]
     return np.concatenate([y1921[:59], y1921[58:59], y1921[59:], from_1921])
+
+
+def monthly_chunk_1920_2021(values, chunk: int) -> np.ndarray:
+    """A monthly series of chunk ``chunk`` laid out January 1920 to December 2021, the span of
+    CalSimHydro's monthly inputs (1,224 months), from ``values`` by stamp month (index 0 is
+    January of stamp year 1). The chunk's months are WY1922-2021, Jan-Sep 1921 holds the 9
+    months before them, Oct-Dec 2021 the 3 after them, and 1920 is a copy of 1921."""
+    (year, month), _ = chunk_span(chunk)
+    first = int(stamp_month_index(year, month))
+    from_1921 = np.asarray(values)[first - 9:first + CHUNK_MONTHS + 3]
+    if len(from_1921) != CHUNK_MONTHS + 12:
+        raise ValueError(f"chunk {chunk}: {len(values)} stamp months do not reach its Oct-Dec 2021")
+    return np.concatenate([from_1921[:12], from_1921])
