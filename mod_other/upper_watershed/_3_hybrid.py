@@ -109,10 +109,17 @@ SIM_IN_DIR_B = get_rim_inflow_outputs("B")["dir"]
 
 
 # -- Helpers -----------------------------------------------------------
+def read_terms(path: Path) -> pd.DataFrame:
+    """The hybrid_terms CSV with lower-case column names, without the rows whose every cell is
+    blank (a spreadsheet can leave them below the table)."""
+    df = pd.read_csv(path).dropna(how="all")
+    df.columns = [str(c).strip().lower() for c in df.columns]
+    return df
+
+
 def prepare_hybrid_input_files(input_csv: Path) -> tuple[pd.DataFrame, pd.DataFrame]:
     """Split hybrid_terms CSV into WYT and QMap DataFrames."""
-    df = pd.read_csv(input_csv)
-    df.columns = [str(c).strip().lower() for c in df.columns]
+    df = read_terms(input_csv)
 
     required = ["term_part_b", "term_part_c", "basin_wyt",
                 "predictor_part_b", "predictor_part_c", "fit"]
@@ -316,9 +323,8 @@ def run_final_hybrid_single(product: str, wyt_intermediate_dir: Path,
     """Average WYT and QMap results and write the final delivery CSVs of a single series."""
     final_dir.mkdir(parents=True, exist_ok=True)
 
-    terms_df = pd.read_csv(HYBRID_TERMS_CSV)
-    terms_df.columns = [str(c).strip().lower() for c in terms_df.columns]
-    terms = terms_df[["term_part_b", "term_part_c"]].drop_duplicates()
+    terms_df = read_terms(HYBRID_TERMS_CSV)
+    terms =terms_df[["term_part_b", "term_part_c"]].drop_duplicates()
 
     total = 0
     for _, term in terms.iterrows():
@@ -365,9 +371,8 @@ def run_final_hybrid_single(product: str, wyt_intermediate_dir: Path,
 def run_final_hybrid_b(wyt_intermediate_dir: Path, qmap_intermediate_dir: Path,
                        final_dir: Path) -> None:
     """Average WYT and QMap results per chunk and write final Product B CSVs."""
-    terms_df = pd.read_csv(HYBRID_TERMS_CSV)
-    terms_df.columns = [str(c).strip().lower() for c in terms_df.columns]
-    terms = terms_df[["term_part_b", "term_part_c"]].drop_duplicates()
+    terms_df = read_terms(HYBRID_TERMS_CSV)
+    terms =terms_df[["term_part_b", "term_part_c"]].drop_duplicates()
 
     total = 0
     for _, term in terms.iterrows():

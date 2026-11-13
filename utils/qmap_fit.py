@@ -33,8 +33,9 @@ FIT_END = f"{FIT_WY[1]}-09-30"
 
 
 def predictor_parts(part_b: str) -> list[str]:
-    """The rim-inflow SVs a predictor sums: ``"I_DER001+I_DER004"`` -> ``["I_DER001", "I_DER004"]``."""
-    return [p.strip() for p in str(part_b).split("+") if p.strip()]
+    """The rim-inflow SVs a predictor sums, upper-cased as every lookup of them matches:
+    ``"I_DER001+i_der004"`` -> ``["I_DER001", "I_DER004"]``."""
+    return [p.strip().upper() for p in str(part_b).split("+") if p.strip()]
 
 
 def predictor_label(part_b: str) -> str:
@@ -81,7 +82,8 @@ def read_historical_predictors(parts) -> dict[str, pd.Series]:
             "Run: python mod_hydrology/rim_inflow/_1_build_rim_inflow.py --product historical")
     require_pinned_run(out_files["dir"])
     ts = pd.read_csv(path)
-    ts = ts[ts["CalSim"].isin(set(parts))]
+    ts = ts.assign(CalSim=ts["CalSim"].str.upper())
+    ts = ts[ts["CalSim"].isin({p.upper() for p in parts})]
     out = {}
     for name, g in ts.groupby("CalSim"):
         dates = (pd.to_datetime(pd.DataFrame({"year": g["Year"], "month": g["Month"], "day": 1}))

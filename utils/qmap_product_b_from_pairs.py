@@ -127,9 +127,11 @@ def read_qmap_pairs(pair_csv: str | Path) -> pd.DataFrame:
 
     Optional columns (created as NaN if missing):
       lower_bound, upper_bound
+
+    Rows with every cell blank, as a spreadsheet can leave below the table, are dropped.
     """
     pair_csv = Path(pair_csv)
-    df = pd.read_csv(pair_csv, skipinitialspace=True)
+    df = pd.read_csv(pair_csv, skipinitialspace=True).dropna(how="all")
     df.columns = [str(c).strip() for c in df.columns]
 
     missing = [c for c in _REQUIRED_COLS if c not in df.columns]
