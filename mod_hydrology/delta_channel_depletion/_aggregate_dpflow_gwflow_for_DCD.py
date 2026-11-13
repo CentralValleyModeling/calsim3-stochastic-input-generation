@@ -19,7 +19,7 @@ Outputs
 
 Dependencies
 ------------
-pydsstools; does not import utils.paths
+utils.dss_io; pydsstools. Does not import utils.paths.
 
 Usage
 -----
@@ -31,10 +31,13 @@ Author: mbastani, 10/02/2025
 #%%# ========================= 1) Imports & File Paths =========================
 import re
 import argparse
+import sys
 import pandas as pd
 from pathlib import Path
-from pydsstools.heclib.dss import HecDss
 from pydsstools.core import TimeSeriesContainer as TSC
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
+from utils import dss_io
 
 _SCRIPT_DIR = Path(__file__).resolve().parent
 
@@ -116,21 +119,20 @@ if __name__ == "__main__":
     w = w.set_index("Island")
 
     # Read DSS inputs
-    fin  = HecDss.Open(DSS_IN)
-    dp   = get_paths(fin, "DP-FLOW")
-    gw   = get_paths(fin, "GW-FLOW")
+    with dss_io.open_dss(DSS_IN, version=None) as fin:
+        dp   = get_paths(fin, "DP-FLOW")
+        gw   = get_paths(fin, "GW-FLOW")
 
-    # Aggregate (sum-product in CFS)
-    dp_delta  = sum_weighted(fin, dp, w, "Delta")
-    dp_wba50  = sum_weighted(fin, dp, w, "WBA50")
-    gw_delta  = sum_weighted(fin, gw, w, "Delta")
-    gw_wba50  = sum_weighted(fin, gw, w, "WBA50")
+        # Aggregate (sum-product in CFS)
+        dp_delta  = sum_weighted(fin, dp, w, "Delta")
+        dp_wba50  = sum_weighted(fin, dp, w, "WBA50")
+        gw_delta  = sum_weighted(fin, gw, w, "Delta")
+        gw_wba50  = sum_weighted(fin, gw, w, "WBA50")
 
-    # Write outputs
-    fout = HecDss.Open(DSS_OUT)
-    write_series(fout, dp[0], "DP_DELTA_DCD",  dp_delta)
-    write_series(fout, dp[0], "DP_WBA50_DCD",  dp_wba50)
-    write_series(fout, gw[0], "GW_DELTA_DCD",  gw_delta)
-    write_series(fout, gw[0], "GW_WBA50_DCD",  gw_wba50)
-    fin.close(); fout.close()
+    # Write outputs; version=None creates a new DSS_OUT as DSS 7, like the DCD outputs CalSim reads
+    with dss_io.open_dss(DSS_OUT, version=None) as fout:
+        write_series(fout, dp[0], "DP_DELTA_DCD",  dp_delta)
+        write_series(fout, dp[0], "DP_WBA50_DCD",  dp_wba50)
+        write_series(fout, gw[0], "GW_DELTA_DCD",  gw_delta)
+        write_series(fout, gw[0], "GW_WBA50_DCD",  gw_wba50)
     print(f"Wrote 4 records to {DSS_OUT}")

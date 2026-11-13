@@ -30,7 +30,7 @@ Outputs
 
 Dependencies
 ------------
-utils.paths; pydsstools, seaborn, matplotlib
+utils.paths, utils.dss_io; pydsstools, seaborn, matplotlib
 
 Usage
 -----
@@ -48,10 +48,10 @@ import seaborn as sns
 from pathlib import Path
 from matplotlib.patches import Rectangle
 from matplotlib.lines import Line2D
-from pydsstools.heclib.dss import HecDss
 
 # Add repo root to path for utils imports
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
+from utils import dss_io
 from utils.paths import get_base_dir, get_module_generated_dir, get_rim_inflow_outputs
 
 # %% style
@@ -117,7 +117,7 @@ def _ecdf(series):
 # ============================================================
 
 # CS3 baseline (L2020A)
-with HecDss.Open(CS3_DSS) as fid:
+with dss_io.open_dss(CS3_DSS) as fid:
     _ts = fid.read_ts(f"/CALSIM/{CS3_PATH}//1MON/L2020A/")
 cs3 = pd.DataFrame(
     {LOCATION: _ts.values},

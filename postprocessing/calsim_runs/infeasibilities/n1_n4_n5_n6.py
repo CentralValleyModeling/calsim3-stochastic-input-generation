@@ -51,7 +51,7 @@ Outputs
 
 Dependencies
 ------------
-utils.paths; numpy, pandas, pydsstools
+utils.dss_io, utils.paths; numpy, pandas, pydsstools
 
 Usage
 -----
@@ -63,9 +63,9 @@ from pathlib import Path
 
 import numpy as np
 import pandas as pd
-from pydsstools.heclib.dss import HecDss
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[3]))
+from utils import dss_io
 from utils.paths import get_base_dir, get_generated_dir
 RIM_DIR = (get_generated_dir() / "postprocessing" / "sv_compile"
            / "product_b_compilation" / "compiled_input_files" / "rim_inflow")
@@ -78,7 +78,7 @@ OUT_DIR = Path(__file__).resolve().parent
 def load_calsim_hist(wanted_vars):
     """Read monthly inflows from CalSim default DSS (WY1922-WY2021)."""
     full_idx = pd.date_range("1921-01-31", "2021-12-31", freq="ME")
-    with HecDss.Open(str(DSS_PATH), version=6, catalog_flag=True) as fid:
+    with dss_io.open_dss(DSS_PATH) as fid:
         paths = fid.getPathnameList("/*/*/*/*/1MON/*")
         buckets = {}
         for p in paths:
