@@ -195,7 +195,7 @@ def _date_range_me(start, end=None, **kwargs) -> pd.DatetimeIndex:
 # -- Filesystem helper --------------------------------------------------------
 
 def safe_makedirs(path):
-    """Create directories, stripping the ``\\?\`` long-path prefix first.
+    r"""Create directories, stripping the ``\\?\`` long-path prefix first.
 
     On Python 3.8 + Windows, ``os.makedirs`` cannot resolve the root of a
     ``\\?\X:\`` path, causing infinite recursion.  Stripping the prefix

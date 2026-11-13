@@ -10,7 +10,7 @@ Inputs
 - <base>/WGEN/Historical_Unsplit/data_<lat>_<lon>, x10 days corrected (utils.wgen.read_met)
 - <base>/Historical_Climate_LTO/1_Historical/data_<lat>_<lon> (utils.wgen.read_met)
 - SAC-SMA checkout (``inflow_repo``; stops unless ``inflow_model`` is sacsma):
-  data/hru/hruinfo_11obs.csv, hruinfo_9unimp.csv (basin cells and area_weight; a cell shared
+  data/inputs/domains/<11obs|9unimp>/hruinfo.csv (basin cells and area_weight; a cell shared
   by nested basins counts in each)
 
 Outputs
@@ -99,7 +99,7 @@ def main():
 
     rows = []
     for dom in ["11obs", "9unimp"]:
-        h = pd.read_csv(os.path.join(SACSMA_REPO, "data", "hru", f"hruinfo_{dom}.csv"))
+        h = pd.read_csv(os.path.join(SACSMA_REPO, "data", "inputs", "domains", dom, "hruinfo.csv"))
         for basin, gall in h.groupby("basin"):
             g = gall.drop_duplicates(["lat", "lon"])
             w = g["area_weight"].to_numpy(float)

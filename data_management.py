@@ -28,7 +28,8 @@ Outputs
 
 Dependencies
 ------------
-Standard library; utils.paths for sync and for the default ``--data-dir`` (``data_dir``)
+Standard library; utils.paths for sync and for the default ``--data-dir`` (``data_dir``; <repo>/data when
+utils.paths does not load)
 
 Usage
 -----
@@ -615,11 +616,15 @@ def sync_loose_files(
 # ---------------------------------------------------------------------------
 
 def _default_data_dir() -> Path:
+    """The configured data_dir, or <repo>/data when utils.paths does not load (it stops a Python
+    without the pipeline's environment, and a bad config)."""
     try:
         sys.path.insert(0, str(_REPO_ROOT))
         from utils.paths import get_data_dir
         return get_data_dir()
-    except Exception:
+    except (Exception, SystemExit) as exc:
+        reason = str(exc).strip().splitlines()[0] if str(exc).strip() else type(exc).__name__
+        print(f"utils.paths did not load ({reason}); data root {_REPO_ROOT / 'data'}")
         return _REPO_ROOT / "data"
 
 
@@ -856,6 +861,8 @@ def cmd_acquire(args) -> None:
         print("Nothing to download.")
         return
 
+    if args.data_dir is None:
+        args.data_dir = _default_data_dir()
     print(f"Data root: {args.data_dir}\n")
 
     token = args.token or os.environ.get(BOX_TOKEN_ENV)
@@ -916,7 +923,6 @@ def main() -> None:
     p_sync.set_defaults(func=cmd_sync)
 
     # -- acquire --------------------------------------------------------------
-    default_dir = _default_data_dir()
     p_acq = sub.add_parser(
         "acquire",
         help="Download and unpack zips from Box shared links (data_links.json).",
@@ -924,8 +930,9 @@ def main() -> None:
                     "into the local data directory. Skips entries that are already "
                     "populated unless --force is given.",
     )
-    p_acq.add_argument("--data-dir", type=Path, default=default_dir,
-                       help=f"Root directory to unpack data into (default: {default_dir})")
+    p_acq.add_argument("--data-dir", type=Path, default=None,
+                       help="Root directory to unpack data into (default: data_dir of the "
+                            "config, or <repo>/data when utils.paths does not load)")
     p_acq.add_argument("--force", action="store_true",
                        help="Re-download even if destination already has files")
     p_acq.add_argument("--dry-run", action="store_true",
