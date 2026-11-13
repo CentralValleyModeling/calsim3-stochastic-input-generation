@@ -40,7 +40,7 @@ import pandas as pd
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 from utils.paths import WEATHER_SETS, get_module_generated_dir
-from utils.wgen import dates, met_path, read_met
+from utils.wgen import dates, met_path, weighted_daily
 from utils.wgen_calendar import CHUNK_MONTHS, N_CHUNKS, label, month_totals
 
 MM_TO_IN = 0.0393701
@@ -54,21 +54,8 @@ FIRST_COLUMN = 1393    # template column of the first watershed
 def watershed_daily(product: str, cells: pd.DataFrame) -> pd.DataFrame:
     """Area-weighted daily precipitation (mm) of one watershed: Year, Month, Day, precip on the
     rows of the weather files."""
-    total, weight, first = None, 0.0, None
-    for row in cells.itertuples(index=False):
-        path = met_path(product, row.Lat, row.Lon)
-        if not path.exists():
-            raise FileNotFoundError(f"Missing weather file: {path}")
-        met = read_met(product, path, usecols=["precip"])
-        if first is None:
-            first = met
-        elif not np.array_equal(met[["Year", "Month", "Day"]].to_numpy(),
-                                first[["Year", "Month", "Day"]].to_numpy()):
-            raise ValueError(f"{path}: its days differ from the other cells of the watershed")
-        w = row.f2 / row.f1
-        total = met["precip"] * w if total is None else total + met["precip"] * w
-        weight += w
-    return first[["Year", "Month", "Day"]].assign(precip=total / weight)
+    return weighted_daily(product, [(met_path(product, row.Lat, row.Lon), row.f2 / row.f1)
+                                    for row in cells.itertuples(index=False)], ["precip"])
 
 
 def monthly_single(daily: pd.DataFrame) -> pd.Series:

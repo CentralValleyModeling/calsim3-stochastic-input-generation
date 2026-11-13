@@ -40,7 +40,7 @@ import pandas as pd
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 from utils.paths import get_module_generated_dir
-from utils.wgen import SETS, dates, met_path, read_met, set_name
+from utils.wgen import SETS, dates, met_path, set_name, weighted_daily
 from utils.wgen_calendar import LABEL_DAYS, N_CHUNKS, chunk_days
 
 _gen = get_module_generated_dir("mod_reservoir/storage_curves")
@@ -73,22 +73,10 @@ def parse_grid_info_file(grid_info_path):
 def basin_daily_precip(grid_info_df, product):
     """Weighted basin-average daily precipitation (inches): Year, Month, Day and precip_inches
     on the rows of the weather files (stamp days for Product B)."""
-    total, weight_total, first = None, 0.0, None
     print(f"  Processing {len(grid_info_df)} grid cells...")
-    for row in grid_info_df.itertuples(index=False):
-        path = met_path(product, row.lat, row.lon)
-        if not path.exists():
-            raise FileNotFoundError(f"{path}: grid cell ({row.lat}, {row.lon}) of the basin has no weather file")
-        met = read_met(product, path, usecols=['precip'])
-        if first is None:
-            first = met
-        elif not np.array_equal(met[['Year', 'Month', 'Day']].to_numpy(),
-                                first[['Year', 'Month', 'Day']].to_numpy()):
-            raise ValueError(f"{path}: its days differ from the other cells of the basin")
-        contrib = met['precip'].to_numpy() * row.basin_area
-        total = contrib if total is None else total + contrib
-        weight_total += row.basin_area
-    return first[['Year', 'Month', 'Day']].assign(precip_inches=total / weight_total / 25.4)
+    daily = weighted_daily(product, [(met_path(product, row.lat, row.lon), row.basin_area)
+                                     for row in grid_info_df.itertuples(index=False)], ['precip'])
+    return daily[['Year', 'Month', 'Day']].assign(precip_inches=daily['precip'] / 25.4)
 
 
 def write_single(daily, product, output_dir):

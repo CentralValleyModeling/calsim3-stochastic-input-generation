@@ -30,14 +30,13 @@ import argparse
 import sys
 from pathlib import Path
 
-import numpy as np
 import pandas as pd
 from pydsstools.core import TimeSeriesContainer
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 from utils import dss_io
 from utils.paths import WEATHER_SETS, get_module_generated_dir
-from utils.wgen import dates, met_path, read_met
+from utils.wgen import dates, met_path, weighted_daily
 from utils.wgen_calendar import DAYS_1920_2021, N_CHUNKS, daily_chunk_1920_2021
 
 MM_TO_IN = 0.0393701
@@ -52,21 +51,11 @@ def cell_weight(row) -> float:
 def wba_daily_precip(product: str, cells: pd.DataFrame) -> pd.Series:
     """Area-weighted daily precipitation (in/day) of one WBA from its rows of the grid-info
     file, indexed by date (by stamp day for Product B)."""
-    total, weight, first = None, 0.0, None
-    for row in cells.itertuples(index=False):
-        met = read_met(product, met_path(product, row.Lat, row.Lon), usecols=['precip'])
-        ymd = met[['Year', 'Month', 'Day']].to_numpy()
-        if first is None:
-            first = met
-        elif not np.array_equal(ymd, first[['Year', 'Month', 'Day']].to_numpy()):
-            raise ValueError(f"{met_path(product, row.Lat, row.Lon)}: its days differ from the "
-                             "other cells of the WBA")
-        pcp = met['precip'] * cell_weight(row)
-        total = pcp if total is None else total + pcp
-        weight += cell_weight(row)
-    out = total / weight * MM_TO_IN
+    daily = weighted_daily(product, [(met_path(product, row.Lat, row.Lon), cell_weight(row))
+                                     for row in cells.itertuples(index=False)], ['precip'])
+    out = daily['precip'] * MM_TO_IN
     if product != 'B':
-        out.index = dates(first)
+        out.index = dates(daily)
     return out
 
 

@@ -37,7 +37,7 @@ import pandas as pd
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 from utils.paths import WEATHER_SETS, get_module_generated_dir
-from utils.wgen import dates, met_path, read_met
+from utils.wgen import dates, met_path, weighted_daily
 from utils.wgen_calendar import LABEL_DAYS, N_CHUNKS, chunk_days
 
 STATIONS = ['Brentwood', 'Davis', 'Galt', 'Lodi', 'RioVista', 'Stockton', 'Tracy']
@@ -54,14 +54,10 @@ def station_daily(product: str, cells: pd.DataFrame, columns: list) -> pd.DataFr
     missing = [str(p) for p in paths if not p.exists()]
     if missing:
         raise FileNotFoundError(f"Missing weather files for station {cells.iloc[0]['Station']}: {missing}")
-    reads = [read_met(product, p, usecols=columns) for p in paths]
-    days = reads[0][['Year', 'Month', 'Day']].to_numpy()
-    for p, w in zip(paths[1:], reads[1:]):
-        if not np.array_equal(w[['Year', 'Month', 'Day']].to_numpy(), days):
-            raise ValueError(f"{p}: its days differ from the other cells of the station")
-    out = pd.DataFrame({c: (sum(w[c] for w in reads) / len(reads)).round(2) for c in columns})
+    daily = weighted_daily(product, [(p, 1.0) for p in paths], columns)
+    out = daily[columns].round(2)
     if product != 'B':
-        out.index = dates(reads[0])
+        out.index = dates(daily)
     return out
 
 
