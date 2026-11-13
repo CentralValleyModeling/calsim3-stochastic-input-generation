@@ -775,3 +775,23 @@ def compute_product_targets(
             targets[name] = compute_target_from_wyt(wyt_tables, pat_wide, term_specs)
 
     return targets
+
+
+def target_sv(df: pd.DataFrame) -> pd.DataFrame:
+    """A target of :func:`compute_product_targets` (part_b, part_c, date, wyt_monthly_avg) in
+    SV format: Part B, Part C, Year, Month, Value."""
+    return pd.DataFrame({
+        "Part B": df["part_b"],
+        "Part C": df["part_c"],
+        "Year": df["date"].dt.year,
+        "Month": df["date"].dt.month,
+        "Value": df["wyt_monthly_avg"],
+    })
+
+
+def product_b_target_table(targets: Dict[str, pd.DataFrame]) -> pd.DataFrame:
+    """The Product B targets of :func:`compute_product_targets` (``{"product_b_n01": frame,
+    ...}``) as one SV-format table with a ``chunk`` column, for
+    utils.wgen_calendar.write_chunk_csvs."""
+    return pd.concat([target_sv(df).assign(chunk=int(name.removeprefix("product_b_n")))
+                      for name, df in targets.items()], ignore_index=True)

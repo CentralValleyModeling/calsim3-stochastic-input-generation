@@ -74,7 +74,9 @@ from utils.paths import (DELIVERY, WEATHER_SETS, delivery_dir, get_base_dir, get
 from utils.wyt_monthlyavg_framework import (
     compute_wyt_pattern,
     compute_product_targets,
+    product_b_target_table,
     plot_actual_vs_recon_validation,
+    target_sv,
 )
 from utils.qmap_single_from_pairs import run_single_qmap_from_pairs
 from utils.qmap_product_b_from_pairs import (
@@ -152,17 +154,6 @@ def prepare_hybrid_input_files(input_csv: Path) -> tuple[pd.DataFrame, pd.DataFr
     return wyt_df, qmap_df
 
 
-def _to_sv_format(df: pd.DataFrame) -> pd.DataFrame:
-    """Convert framework long-format target to Part B, Part C, Year, Month, Value."""
-    return pd.DataFrame({
-        "Part B": df["part_b"],
-        "Part C": df["part_c"],
-        "Year": df["date"].dt.year,
-        "Month": df["date"].dt.month,
-        "Value": df["wyt_monthly_avg"],
-    })
-
-
 def _load_final_single_as_long(final_dir: Path, product: str) -> pd.DataFrame:
     """Load the delivery CSVs of a single series into long format for
     plot_actual_vs_recon_validation."""
@@ -230,11 +221,10 @@ def run_wyt(product: str, prefix: str, wyt_terms_df: pd.DataFrame,
     wyt_intermediate_dir.mkdir(parents=True, exist_ok=True)
     if product != "B":
         for name, df in targets.items():
-            for part_b, grp in _to_sv_format(df).groupby("Part B"):
+            for part_b, grp in target_sv(df).groupby("Part B"):
                 print(f"  - {write_delivery_csv(grp, wyt_intermediate_dir, part_b, product)}")
     else:  # targets {"product_b_nXX": frame}
-        sv = pd.concat([_to_sv_format(df).assign(chunk=int(name[-2:])) for name, df in targets.items()],
-                       ignore_index=True)
+        sv = product_b_target_table(targets)
         for part_b, grp in sv.groupby("Part B"):
             for out in write_chunk_csvs(grp, wyt_intermediate_dir, f"{part_b}_product_b"):
                 print(f"  - {out}")
