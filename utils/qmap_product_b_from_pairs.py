@@ -19,6 +19,7 @@ Core assumptions
 - Simulation value column is ``qmap_postAdj``.
 - Output files are written as:
       <target_part_b>_qmap_<timeseries>.csv
+  and ``write_product_b_sv`` reformats them into SV-format chunk CSVs.
 """
 
 import re
@@ -34,7 +35,7 @@ from utils.qmap_fit import (
     read_historical_predictors, sum_parts, training_basis,
 )
 from utils.quantile_mapping import qmap_single
-from utils.wgen_calendar import N_CHUNKS, require_label_months
+from utils.wgen_calendar import N_CHUNKS, require_label_months, write_chunk_csvs
 
 # -----------------------------------------------------------------------------
 # Defaults
@@ -108,6 +109,39 @@ def find_timeseries_in_dir(sim_dir: str | Path) -> list[str]:
 
 def build_output_filename(target_partb: str, timeseries: str, output_tag: str = OUTPUT_TAG) -> str:
     return f"{target_partb}_{output_tag}_{timeseries}.csv"
+
+
+def write_product_b_sv(detail_dir, out_dir, pair_csv, suffix: str,
+                       remove_details: bool = False) -> int:
+    """Reformat the per-chunk detail CSVs the quantile map wrote into ``detail_dir``
+    (``build_output_filename(target, chunk, output_tag="qmap")``, one per pair of ``pair_csv``
+    and chunk) into SV-format chunk CSVs ``<target_part_b>_<suffix>_n01.csv`` ... ``_n10.csv``
+    in ``out_dir`` (utils.wgen_calendar.write_chunk_csvs). With ``remove_details``, each
+    detail CSV is deleted once read. Returns the number of files written."""
+    total = 0
+    for _, row in read_qmap_pairs(pair_csv).iterrows():
+        target_b = row["target_part_b"]
+        target_c = row["target_part_c"]
+        frames = []
+        for chunk, ts in enumerate(PRODUCT_B_CHUNKS, 1):
+            src_path = Path(detail_dir) / build_output_filename(target_b, ts, output_tag="qmap")
+            if not src_path.exists():
+                raise FileNotFoundError(f"{src_path}: the quantile map wrote no {ts} output "
+                                        f"for {target_b}")
+            df = pd.read_csv(src_path)
+            if remove_details:
+                src_path.unlink()
+            frames.append(pd.DataFrame({
+                "chunk": chunk,
+                "Part B": target_b,
+                "Part C": target_c,
+                "Year": df["year"].astype(int),
+                "Month": df["month"].astype(int),
+                "Value": df["target_qm_sim"],
+            }))
+        total += len(write_chunk_csvs(pd.concat(frames, ignore_index=True), out_dir,
+                                      f"{target_b}_{suffix}"))
+    return total
 
 
 # -----------------------------------------------------------------------------

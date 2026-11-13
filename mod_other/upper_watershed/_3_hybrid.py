@@ -82,8 +82,7 @@ from utils.qmap_single_from_pairs import run_single_qmap_from_pairs
 from utils.qmap_product_b_from_pairs import (
     PRODUCT_B_CHUNKS,
     run_product_b_qmap_from_pairs,
-    read_qmap_pairs,
-    build_output_filename,
+    write_product_b_sv,
 )
 from utils.wgen_calendar import write_chunk_csvs
 
@@ -275,30 +274,8 @@ def run_qmap_b(qmap_pairs_df: pd.DataFrame, base_dir: Path,
     )
 
     # Reformat per-chunk detail CSVs into SV-format intermediates
-    df_pairs = read_qmap_pairs(qmap_csv)
-
-    total = 0
-    for _, row in df_pairs.iterrows():
-        target_b = row["target_part_b"]
-        target_c = row["target_part_c"]
-        frames = []
-        for chunk, ts in enumerate(PRODUCT_B_CHUNKS, 1):
-            src_path = base_dir / build_output_filename(target_b, ts, output_tag="qmap")
-            if not src_path.exists():
-                raise FileNotFoundError(f"{src_path}: the quantile map wrote no {ts} output "
-                                        f"for {target_b}")
-            df = pd.read_csv(src_path)
-            src_path.unlink()
-            frames.append(pd.DataFrame({
-                "chunk": chunk,
-                "Part B": target_b,
-                "Part C": target_c,
-                "Year": df["year"].astype(int),
-                "Month": df["month"].astype(int),
-                "Value": df["target_qm_sim"],
-            }))
-        total += len(write_chunk_csvs(pd.concat(frames, ignore_index=True), qmap_intermediate_dir,
-                                      f"{target_b}_product_b"))
+    total = write_product_b_sv(base_dir, qmap_intermediate_dir, qmap_csv, "product_b",
+                               remove_details=True)
 
     qmap_csv.unlink(missing_ok=True)
     print(f"  QMap intermediates: {total} file(s)")

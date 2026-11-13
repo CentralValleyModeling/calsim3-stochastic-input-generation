@@ -54,54 +54,16 @@ import argparse
 import sys
 from pathlib import Path
 
-import pandas as pd
-
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 from utils.paths import WEATHER_SETS, delivery_dir, get_base_dir, get_module_generated_dir, get_rim_inflow_outputs
 from utils.qmap_single_from_pairs import run_single_qmap_from_pairs
 from utils.qmap_product_b_from_pairs import (
-    PRODUCT_B_CHUNKS,
     run_product_b_qmap_from_pairs,
-    read_qmap_pairs,
-    build_output_filename,
+    write_product_b_sv,
 )
-from utils.wgen_calendar import write_chunk_csvs
 
 # Fallback when qmap_pairs.csv has no allow_negative column (single series only).
 ALLOW_NEGATIVE = False
-
-
-def _write_product_b_final(out_dir: Path, final_dir: Path, pair_csv: Path) -> None:
-    """Reformat per-chunk detail CSVs into final CalSim Part B/C/Year/Month/Value CSVs.
-
-    Each target gets one CSV per chunk, ``<target_part_b>_productB_n01.csv`` ...
-    ``_n10.csv`` (utils.wgen_calendar.write_chunk_csvs).
-    """
-    df_pairs = read_qmap_pairs(pair_csv)
-
-    total = 0
-    for _, row in df_pairs.iterrows():
-        target_b = row["target_part_b"]
-        target_c = row["target_part_c"]
-        frames = []
-        for chunk, ts in enumerate(PRODUCT_B_CHUNKS, 1):
-            src_path = out_dir / build_output_filename(target_b, ts, output_tag="qmap")
-            if not src_path.exists():
-                raise FileNotFoundError(f"{src_path}: the quantile map wrote no {ts} output "
-                                        f"for {target_b}")
-            df = pd.read_csv(src_path)
-            frames.append(pd.DataFrame({
-                "chunk": chunk,
-                "Part B": target_b,
-                "Part C": target_c,
-                "Year": df["year"].astype(int),
-                "Month": df["month"].astype(int),
-                "Value": df["target_qm_sim"],
-            }))
-        total += len(write_chunk_csvs(pd.concat(frames, ignore_index=True), final_dir,
-                                      f"{target_b}_productB"))
-
-    print(f"  Product B final: {total} file(s) written to {final_dir}")
 
 
 def main() -> None:
@@ -146,7 +108,8 @@ def main() -> None:
     )
 
     print("\nWriting final Product B CSVs ...")
-    _write_product_b_final(out_dir, final_dir, pair_csv)
+    total = write_product_b_sv(out_dir, final_dir, pair_csv, "productB")
+    print(f"  Product B final: {total} file(s) written to {final_dir}")
 
 
 if __name__ == "__main__":
