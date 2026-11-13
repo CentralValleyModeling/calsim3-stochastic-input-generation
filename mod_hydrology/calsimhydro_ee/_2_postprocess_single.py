@@ -2,15 +2,13 @@
 Postprocess CalSimHydroEE Run Outputs
 =====================================
 Monthly SVs of the external CalSimHydroEE run of Historical_Unsplit or Product A as a delivery
-CSV, and a comparison with three other runs: merged long CSV, monthly/quarterly/annual mean and
-median by Part C, and boxplots per Part C.
+CSV, and a comparison with the baseline run on CalSim 3 historical weather: merged long CSV,
+monthly/quarterly/annual mean and median by Part C, and boxplots per Part C.
 
 Runs compared
 -------------
-- Historical  : CalSimHydroEE_Historical_1972-2018
-- VIC_Precip  : CalSimHydroEE_VICPrecip_1972-2018
-- QM_ET       : CalSimHydroEE_QMET_1972-2018
-- the set     : CalSimHydroEE_Historical_Unsplit or CalSimHydroEE_Product_A
+- Historical : CalSimHydroEE_Historical_1921-2018, the baseline
+- the set    : CalSimHydroEE_Historical_Unsplit_1921-2018 or CalSimHydroEE_Product_A_1921-2018
 
 Inputs
 ------
@@ -78,11 +76,14 @@ desired_order = [excel_to_part_BC(name) for name in CalSimHydroEE_rows.iloc[:, 7
 _ee_runs = _GEN_DIR / "CalSimHydroEE_Runs"
 
 
+BASELINE_RUN = "CalSimHydroEE_Historical_1921-2018"     # CalSim 3 historical weather
+RUN_SPAN = "1921-2018"
+
+
 def dss_paths(product):
-    """The three comparison runs, then the set's run (CalSimHydroEE_<set name>)."""
+    """The baseline run, then the set's run (CalSimHydroEE_<set name>_RUN_SPAN)."""
     return [str(_ee_runs / run / "CalSimHydroEE_DP_EA.dss")
-            for run in ("CalSimHydroEE_Historical_1972-2018", "CalSimHydroEE_VICPrecip_1972-2018",
-                        "CalSimHydroEE_QMET_1972-2018", f"CalSimHydroEE_{WEATHER_SETS[product]['name']}")]
+            for run in (BASELINE_RUN, f"CalSimHydroEE_{WEATHER_SETS[product]['name']}_{RUN_SPAN}")]
 
 
 # Function to Extract DSS Time Series
@@ -134,7 +135,7 @@ def main():
     # Convert to Long Format
 
     # Define meaningful scenario names matching DSS file order
-    scenario_labels = ['Historical', 'VIC_Precip', 'QM_ET', name]
+    scenario_labels = ['Historical', name]
 
     long_dfs = []
     for df, label in zip(dss_data_by_file, scenario_labels):
@@ -249,6 +250,7 @@ def main():
 
         # Optional save
         plt.savefig(os.path.join(OUTPUT_DIR, f"Boxplot_{partc}_with_mean.png"), dpi=300)
+        plt.close()
 
     # CalSim Historical Validation Extraction
     print("\n" + "=" * 80)
@@ -256,8 +258,8 @@ def main():
     print(f"Period: WY {DELIVERY_WY[0]}-{DELIVERY_WY[1]}")
     print("=" * 80)
 
-    # Reuse the already-extracted data of the set (index 3 in dss_data_by_file)
-    val_df = csv_io.to_validation_df(dss_data_by_file[3], *DELIVERY_WY)
+    # Reuse the already-extracted data of the set (the second DSS file)
+    val_df = csv_io.to_validation_df(dss_data_by_file[1], *DELIVERY_WY)
 
     if val_df.empty:
         print("  No data in validation period.")
@@ -276,40 +278,3 @@ def main():
 if __name__ == "__main__":
     main()
 
-
-################################################################################################################
-######################## The following lines show box plot with outlier data #######################
-
-# # --- Prepare Data ---
-# # Melt the data to long format
-# plot_df = merged_df[['PartC', 'Historical', 'VIC_Precip', 'QM_ET']].copy()
-# plot_df_melted = plot_df.melt(id_vars='PartC',
-#                               value_vars=['Historical', 'VIC_Precip', 'QM_ET'],
-#                               var_name='Scenario', value_name='Value')
-# # Drop NaNs
-# plot_df_melted = plot_df_melted.dropna()
-
-# # Get unique PartC values
-# unique_partcs = plot_df_melted['PartC'].unique()
-
-# # --- Plot Loop ---
-# for partc in unique_partcs:
-#     partc_df = plot_df_melted[plot_df_melted['PartC'] == partc]
-
-#     plt.figure(figsize=(6, 6))
-#     sns.boxplot(x='Scenario', y='Value', data=partc_df,
-#                 width=0.6, showfliers=True,  # showfliers = True to show outliers
-#                 boxprops=dict(facecolor='skyblue', edgecolor='black'),
-#                 medianprops=dict(color='red'),
-#                 whiskerprops=dict(color='black'),
-#                 capprops=dict(color='black'))
-
-#     plt.title(f"Boxplot for PartC: {partc}", fontsize=14)
-#     plt.xlabel("Scenario")
-#     plt.ylabel("Value")
-#     plt.tight_layout()
-
-#     # Optional: Save each plot
-#     plt.savefig(os.path.join(OUTPUT_DIR, f"Boxplot_{partc}.png"), dpi=300)
-
-#     plt.show()  # Opens each plot in a new window

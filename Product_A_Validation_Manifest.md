@@ -4,9 +4,8 @@
 > (`--product historical`, WGEN `Historical_Unsplit`) and Product A
 > (`--product A`, WGEN `Product_A/1`). Each is delivered and compared with
 > CalSim 3 over WY 1922-2018 (`utils.paths.DELIVERY_WY`; the CalSim 3 baseline
-> starts in October 1921). A module whose run covers less (the CalSimHydro family
-> runs on the span of its ET) delivers the water years it has, and the compiler
-> lists those SVs in `paths_partial_window.csv`. The quantile maps are fitted on
+> starts in October 1921). A module whose run covers less delivers the water
+> years it has, and the compiler lists those SVs in `paths_partial_window.csv`. The quantile maps are fitted on
 > WY 1950-2018 (`utils/qmap_fit.py`). One continuous monthly time series per study
 > variable (SV).
 >
@@ -169,7 +168,8 @@ identical inputs.
 
 Each external-run model is a contiguous block: compile inputs ->
 [EXTERNAL] model run -> postprocess the set's run DSS into delivery CSVs. The
-runs live in `<Model>_<set>` folders (`<set>`: `Historical_Unsplit`, `Product_A`).
+runs live in `<Model>_<set>_1921-2018` folders (`SmallWatershed_<set>` for Small
+Watersheds; `<set>`: `Historical_Unsplit`, `Product_A`).
 
 ### CalSimHydro (746 vars)
 
@@ -184,10 +184,10 @@ runs live in `<Model>_<set>` folders (`<set>`: `Historical_Unsplit`, `Product_A`
    - **Inputs:** WGEN temperature
    - **Outputs:** Gerber pan evaporation per WBA
 4. **[EXTERNAL] CalSimHydro model run** -- manual; consumes the precip + ET above.
-   - **Outputs:** `CalSimHydro_<set>/CS3L2015V0Hydro_SV.dss`, `RiceOutput.dss`, `Rebalance_<set>/DSS/HydroRebalanceSJRdemands.dss` (+ the Historical/VICPrecip/QMET 1972-2018 comparison runs)
+   - **Outputs:** `CalSimHydro_<set>_1921-2018/CS3L2015V0Hydro_SV.dss`, `RiceOutput.dss`, `Rebalance_<set>_1921-2018/DSS/HydroRebalanceSJRdemands.dss` (+ `Rebalance_Historical_1921-2018`, the baseline run on CalSim 3 historical weather)
 5. `python mod_hydrology/calsimhydro/_3_postprocess_single.py --product A --sources cshydro rebalance rice`
    - **Inputs:** the set's CalSimHydro and Rebalance DSS; master inventory
-   - **Outputs:** merged-scenario + summary CSVs under `_3_postprocess_single/<set>/<source>/` + `_cshydro_<sv|rebalance|rice>_productA_<span>.csv`, the run's water years within WY 1922-2018
+   - **Outputs:** merged CSVs under `_3_postprocess_single/<set>/<source>/` (rebalance also summary CSV and boxplots against its baseline) + `_cshydro_<sv|rebalance|rice>_productA_<span>.csv`, the run's water years within WY 1922-2018
 
 ### CalSimHydroEE (17 vars)
 
@@ -195,7 +195,7 @@ runs live in `<Model>_<set>` folders (`<set>`: `Historical_Unsplit`, `Product_A`
    - **Inputs:** WGEN met files; East-Side grid info
    - **Outputs:** daily East-Side precip CSVs
 2. **[EXTERNAL] CalSimHydroEE model run**
-   - **Outputs:** `CalSimHydroEE_<set>/CalSimHydroEE_DP_EA.dss` (+ Historical/VICPrecip/QMET)
+   - **Outputs:** `CalSimHydroEE_<set>_1921-2018/CalSimHydroEE_DP_EA.dss` (+ `CalSimHydroEE_Historical_1921-2018`, the baseline run)
 3. `python mod_hydrology/calsimhydro_ee/_2_postprocess_single.py --product A`
    - **Inputs:** the set's CSHydroEE DSS; master inventory
    - **Outputs:** `_cshydroEE_productA_<span>.csv`, the run's water years within WY 1922-2018 (+ merged/summary/boxplots under `_2_postprocess_single/<set>/`)
@@ -223,7 +223,7 @@ runs live in `<Model>_<set>` folders (`<set>`: `Historical_Unsplit`, `Product_A`
    - **Inputs:** WGEN met files; DCD station list
    - **Outputs:** daily DCD-station precip
 2. **[EXTERNAL] DETAW/DCD model run**
-   - **Outputs:** `DCD_Calsim3_PlanningStudy_<set>/DCD/Output/CALSIM3/CS3sv_DCD_PRISM_Dtrnd.dss`
+   - **Outputs:** `DCD_<set>_1921-2018/DCD/Output/CALSIM3/CS3sv_DCD_PRISM_Dtrnd.dss` (+ `DCD_Calsim3_PlanningStudy_1921-2018`, the baseline run)
 3. `python mod_hydrology/delta_channel_depletion/_2_postprocess_single.py --product A`
    - **Inputs:** the set's DCD DSS; master inventory (CFS->TAF)
    - **Outputs:** `_dcd_productA_1922_2018.csv` (+ merged/summary/boxplots under `_2_postprocess_single/<set>/`)

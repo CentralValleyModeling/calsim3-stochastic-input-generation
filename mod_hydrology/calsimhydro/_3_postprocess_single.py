@@ -2,13 +2,14 @@
 Postprocess CalSimHydro DSS Outputs of a Single Weather Series
 ==============================================================
 Monthly SVs of the external CalSimHydro and Rebalance runs of Historical_Unsplit or Product A
-(sources cshydro, rice, rebalance) as delivery CSVs, and a comparison of each source's run with
-the Historical, VICPrecip and QMET 1972-2018 runs (merged CSV, summary statistics, boxplots).
+(sources cshydro, rice, rebalance) as delivery CSVs, and per source a merged CSV of the set's run
+and of its baseline run on CalSim 3 historical weather. Only rebalance has a baseline run
+(Rebalance_Historical_1921-2018), and only a source with one gets summary statistics and boxplots.
 
 Inputs
 ------
-Under <generated>/mod_hydrology/calsimhydro/, per run <Historical_1972-2018|VICPrecip_1972-2018|
-QMET_1972-2018|Historical_Unsplit|Product_A>:
+Under <generated>/mod_hydrology/calsimhydro/, per run <Historical_Unsplit|Product_A>_1921-2018
+(and Historical_1921-2018 for rebalance):
 - CalSimHydro_Runs/CalSimHydro_<run>/CS3L2015V0Hydro_SV.dss (cshydro) and RiceOutput.dss (rice)
 - CalSimHydro_Rebalance_Runs/Rebalance_<run>/DSS/HydroRebalanceSJRdemands.dss (rebalance)
 - inventory/_MASTER_INVENTORY_FOR_STOCHASTIC_INPUT_GENERATION_.xlsx, sheet MASTER: the
@@ -17,8 +18,10 @@ QMET_1972-2018|Historical_Unsplit|Product_A>:
 Outputs
 -------
 Under <generated>/mod_hydrology/calsimhydro/output/_3_postprocess_single/:
-- <Historical_Unsplit|Product_A>/<source>/: merged CSV of the four runs, summary statistics
-  by Part C, Boxplot_<PartC>_with_mean.png (skipped with --skip-compare)
+- <Historical_Unsplit|Product_A>/<source>/: merged CSV (columns Historical and the set name; the
+  set's column is read by _4_postprocess_product_b.py --compare-a); with a baseline also
+  summary statistics by Part C and Boxplot_<PartC>_with_mean.png (all skipped with
+  --skip-compare)
 - _historical_unsplit_validation/ or _product_a_validation/:
   _cshydro_<sv|rice|rebalance>_<historicalUnsplit|productA>_<first WY>_<last WY>.csv, the
   run's water years within utils.paths.DELIVERY_WY (skipped with --skip-validate)
@@ -60,9 +63,9 @@ OUTPUT_ROOT = _GEN_DIR / "output" / "_3_postprocess_single"
 EXCEL_PATH = str(get_inventory_dir() / "_MASTER_INVENTORY_FOR_STOCHASTIC_INPUT_GENERATION_.xlsx")
 SHEET_NAME = "MASTER"
 
-# The comparison runs; the set's run comes last, labelled with the set name
-COMPARISON_RUNS = (("Historical", "Historical_1972-2018"), ("VIC_Precip", "VICPrecip_1972-2018"),
-                   ("QM_ET", "QMET_1972-2018"))
+# A set's run is <set name>_RUN_SPAN; a source's "baseline" is its run on CalSim 3 historical
+# weather, None where there is none
+RUN_SPAN = "1921-2018"
 
 # DSS source definitions
 _cshydro_runs = _GEN_DIR / "CalSimHydro_Runs"
@@ -74,6 +77,7 @@ SOURCES = {
         "label": "CS3L2015V0Hydro_SV",
         "inv_filter": "CS3L2015V0Hydro_SV.dss",
         "runs": _cshydro_runs, "prefix": "CalSimHydro", "dss": Path("CS3L2015V0Hydro_SV.dss"),
+        "baseline": None,
         "compare_csv": "calsimHydro_SV_DSS.csv",
         "summary_csv": "calsimHydro_summary_statistics_by_PartC.csv",
         "validate_stem": "_cshydro_sv",
@@ -82,6 +86,7 @@ SOURCES = {
         "label": "HydroRebalanceSJRdemands",
         "inv_filter": "RebalancedSJR_AW_TW_DP.dss",
         "runs": _rebalance_runs, "prefix": "Rebalance", "dss": Path("DSS") / "HydroRebalanceSJRdemands.dss",
+        "baseline": "Historical_1921-2018",
         "compare_csv": "HydroRebalanceSJRdemands_DSS.csv",
         "summary_csv": "HydroRebalanceSJRdemands_summary_statistics_by_PartC.csv",
         "validate_stem": "_cshydro_rebalance",
@@ -90,6 +95,7 @@ SOURCES = {
         "label": "RiceOutput",
         "inv_filter": "RiceOutput.dss",
         "runs": _cshydro_runs, "prefix": "CalSimHydro", "dss": Path("RiceOutput.dss"),
+        "baseline": None,
         "compare_csv": "RiceOutput_DSS.csv",
         "summary_csv": "RiceOutput_summary_statistics_by_PartC.csv",
         "validate_stem": "_cshydro_rice",
@@ -102,10 +108,15 @@ def run_dss(src, run):
     return src["runs"] / f"{src['prefix']}_{run}" / src["dss"]
 
 
+def set_run(product):
+    """Run folder suffix of a set: <set name>_RUN_SPAN."""
+    return f"{WEATHER_SETS[product]['name']}_{RUN_SPAN}"
+
+
 def scenarios(src, product):
-    """(label, DSS) of the comparison runs, then of the set's run."""
-    name = WEATHER_SETS[product]["name"]
-    return [(label, run_dss(src, run)) for label, run in COMPARISON_RUNS] + [(name, run_dss(src, name))]
+    """(label, DSS) of the source's baseline run, when it has one, then of the set's run."""
+    base = [("Historical", run_dss(src, src["baseline"]))] if src["baseline"] else []
+    return base + [(WEATHER_SETS[product]["name"], run_dss(src, set_run(product)))]
 
 
 # -- HELPER FUNCTIONS ----------------------------------------------------------
@@ -160,7 +171,7 @@ def extract_dss_data(dss_path, excel_partcs):
 # -- COMPARISON MODE -----------------------------------------------------------
 
 def run_comparison(source_key, src, product):
-    """Extract all scenarios, merge, compute stats, and generate boxplots."""
+    """Merge the baseline and set runs; with a baseline, also summary statistics and boxplots."""
     print(f"\n{'-' * 60}")
     print(f"  Comparison: {src['label']}")
     print(f"{'-' * 60}")
@@ -168,7 +179,7 @@ def run_comparison(source_key, src, product):
     excel_partcs, desired_order = load_inventory(src["inv_filter"])
     print(f"  Inventory: {len(excel_partcs)} SVs from master spreadsheet")
 
-    # Read all 4 scenario DSS files (Historical, VIC_Precip, QM_ET, the set)
+    # Read the baseline run (if any) and the set's run
     runs = scenarios(src, product)
     labels = [label for label, _ in runs]
     dss_data_by_file = []
@@ -218,6 +229,9 @@ def run_comparison(source_key, src, product):
     merged_csv = os.path.join(out_dir, src["compare_csv"])
     merged_df.to_csv(merged_csv, index=False)
     print(f"  Merged CSV saved: {merged_csv}")
+    if len(included_labels) < 2:
+        print("  No baseline run: merged CSV only")
+        return
 
     # -- Summary statistics (monthly/quarterly/annual mean & median) ------------
     merged_df['Date'] = pd.to_datetime(merged_df['Date'])
@@ -303,7 +317,7 @@ def run_validation(source_key, src, product):
     print(f"  Validation: {src['label']}")
     print(f"{'-' * 60}")
 
-    dss_path = run_dss(src, WEATHER_SETS[product]["name"])
+    dss_path = run_dss(src, set_run(product))
     if not dss_path.exists():
         print(f"  WARNING: DSS not found, skipping: {dss_path}")
         return
@@ -347,7 +361,7 @@ def parse_args():
     )
     parser.add_argument(
         "--skip-compare", action="store_true", default=False,
-        help="Skip scenario comparison (merged CSV, summary, boxplots)",
+        help="Skip the merged CSV, summary statistics and boxplots",
     )
     parser.add_argument(
         "--skip-validate", action="store_true", default=False,
