@@ -1,33 +1,33 @@
 """
 Day-Volume Fraction Analysis and WY Matching Validation
 =======================================================
-Reverse-engineers the historical bootstrap methodology used to assign
-daily VOL-FRACTION patterns to water years 1921-1954 by matching them
-to observation-based candidate years 1955-2003 via annual flow index.
+Tests whether the CalSim3 baseline VOL-FRACTION patterns of WY1921-1954 are copied from WY1955-2003
+years of similar annual flow: matches each early water year to the candidate year with the nearest
+annual flow index and compares the match with the RMSE of the 12-month vol-fraction patterns.
 
 Workflow
 --------
-1. Extract all VOL-FRACTION records (Part C) from CalSim baseline DSS.
-2. Extract reference inflow series (14 Part B/C pairs) from the same DSS.
-3. Compute annual flow index per water year (sum of all reference inflows).
-4. Match each target WY (1921-1954) to the nearest candidate WY (1955-2003).
-5. Validate matches by computing RMSE of vol-fraction pattern vectors.
-
-Dependencies
-------------
-None -- reads directly from CalSim baseline DSS (no upstream scripts required).
+1. Read every series of Part C VOL-FRACTION from the baseline DSS.
+2. Read the reference inflows of reference/reference_inflows.csv from the same DSS.
+3. Annual flow index per water year: sum of all reference inflows.
+4. Match each target WY (1921-1954) to the candidate WY (1955-2003) of nearest index.
+5. RMSE between the vol-fraction patterns of each target and candidate year; flag whether the
+   flow-index match is the candidate of lowest RMSE.
 
 Inputs
 ------
-- CalSim baseline DSS: BASE/CalSim3/__calsim_sv_default__.dss
-    VOL-FRACTION records and reference inflow series
-- Reference inflows:   reference/reference_inflows.csv
-    14 Part B / Part C pairs defining the flow index components
+- <base>/CalSim3/__calsim_sv_default__.dss: VOL-FRACTION series and reference inflows
+- reference/reference_inflows.csv: 14 Part B / Part C pairs of the flow index
 
 Outputs
 -------
-- GENERATED/mod_other/day_volume_fractions/output/_1_vol_fractions_analysis/
-    wy_matches.csv  (target WY, matched candidate WY, flow indices, RMSE)
+- <generated>/mod_other/day_volume_fractions/output/_1_vol_fractions_analysis/wy_matches.csv:
+  WY_target, WY_matched_by_flow_index, annual_flow_target, annual_flow_matched,
+  RMSE_of_flow_index_match, WY_best_RMSE_match, flow_index_confirms_RMSE
+
+Dependencies
+------------
+utils.paths; pydsstools
 
 Usage
 -----

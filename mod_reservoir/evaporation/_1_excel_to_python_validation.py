@@ -1,13 +1,35 @@
 """
 Validation Script: Compare Python vs Excel Calculations
 =======================================================
-Validates the Python evaporation calculations against the original Excel
-spreadsheets using the same input temperature data.
+Recomputes the monthly-regression evaporation of each reservoir workbook (H-S Evaporation Rate
+sheet, up to 120 months from row 13) from the workbook's own Tmax and Tmin with evaporation.py,
+and compares it with the workbook's value (5 percent tolerance).
 
-Usage:
-    python _1_excel_to_python_validation.py                    # Validate all reservoirs
-    python _1_excel_to_python_validation.py FOLSM              # Validate single reservoir
-    python _1_excel_to_python_validation.py FOLSM SHSTA OROVL # Validate specific reservoirs
+Inputs
+------
+- <base>/CalSim3/ReservoirEvaporationSpreadsheets/<Sacramento Valley|San Joaquin Valley|Other>/
+  CS3_ER_<CODE>_*.xls*
+- reference/reservoir_parameters.json (through evaporation.py)
+
+Outputs
+-------
+Under <generated>/mod_reservoir/evaporation/output/_1_excel_to_python_validation/:
+- validation_results.csv: statistics per reservoir
+- validation_summary_table.csv: summary per region
+- reservoir_details/<CODE>.csv: monthly Tmax, Tmin, Excel and Python evaporation
+- figures/validation_scatter.png
+
+_2_run_reservoir_evap.py --product A reads validation_results.csv and reservoir_details/ for its
+figures.
+
+Dependencies
+------------
+evaporation.py; utils.paths; openpyxl, matplotlib
+
+Usage
+-----
+    python mod_reservoir/evaporation/_1_excel_to_python_validation.py
+    python mod_reservoir/evaporation/_1_excel_to_python_validation.py FOLSM SHSTA OROVL
 """
 
 import openpyxl

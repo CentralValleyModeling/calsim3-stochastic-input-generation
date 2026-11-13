@@ -1,24 +1,31 @@
 """
 Compile Daily Precipitation (mm) for DCD Stations
 =================================================
-Averages the daily precipitation of one weather set (``utils.wgen``) across the grid cells
-nearest each DCD station, and Lodi's temperatures too, and writes the DETAW precipitation inputs.
-Values are rounded to 2 decimals.
+Daily precipitation (mm) of the seven DCD stations, each the simple mean over the grid cells
+the coordinate file lists for it, and Lodi's tmax and tmin, from the --product weather: the
+DETAW precipitation inputs, rounded to 2 decimals.
 
 Inputs
 ------
-- reference/USBR_LTO_ClimateChange_DCD_StnsVICCoordinates_20210425.csv (Lat, Lon or Long, Station)
-- reference/mm_pcp4.csv, reference/LODI_PT4.csv: the 30 Sep 1921 row that heads every Product B
-  chunk
-- The daily weather of the set (``utils.wgen.read_met``)
+- reference/USBR_LTO_ClimateChange_DCD_StnsVICCoordinates_20210425.csv (or --coord_file):
+  Station, Lat, Lon or Long
+- reference/mm_pcp4.csv, reference/LODI_PT4.csv (beside the coordinate file): the 30 Sep 1921
+  row that heads every Product B chunk
+- daily weather of the set (utils.wgen.weighted_daily)
 
 Outputs
 -------
-- output/_1_compile_precip_DETAW/<set>/mm_pcp4.csv (year, month, day, DOY, one column per
-  station) and LODI_PT4.csv (Date, Year, Month, DOY, Pcp(mm), Tx(oC), Tn(oC)), over every day of
-  the weather files or --clip_period; <set> is Historical_Unsplit or Product_A
-- output/_1_compile_precip_DETAW/Product_B/mm_pcp4_n01.csv ... n10.csv and LODI_PT4_n01.csv ...
-  n10.csv, each 30 Sep 1921 - 30 Sep 2021 (``utils.wgen_calendar.chunk_days``)
+Under <generated>/mod_hydrology/delta_channel_depletion/output/_1_compile_precip_DETAW/ (or
+--output_csv, --lodi_output_csv):
+- <Historical_Unsplit|Product_A>/mm_pcp4.csv (year, month, day, DOY, one column per station)
+  and LODI_PT4.csv (Date, Year, Month, DOY, Pcp(mm), Tx(oC), Tn(oC)), over every day of the
+  weather files or --clip_period
+- Product_B/mm_pcp4_n01.csv ... _n10.csv and LODI_PT4_n01.csv ... _n10.csv, each 30 Sep 1921 -
+  30 Sep 2021 (utils.wgen_calendar.chunk_days)
+
+Dependencies
+------------
+utils.paths, utils.wgen, utils.wgen_calendar
 
 Usage
 -----

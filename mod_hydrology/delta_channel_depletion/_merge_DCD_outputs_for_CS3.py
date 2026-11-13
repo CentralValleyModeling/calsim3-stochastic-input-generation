@@ -1,33 +1,31 @@
 # -*- coding: utf-8 -*-
 """
-Created on 10/2/2025
-@author: mbastani
-
-This script merges two DSS files called "DCD_island_month_C3" and "DCD_Sep2018_Lch5_mon_C3" into a
-single DSS v6 file called "CS3sv_DCD_PRISM_Dtrnd.dss". It copies all time-series
-records (preserving units/type and A-F parts), preferring records from the 2nd file on conflicts.
-
-Usage
------
-    python _3_merge_DCD_outputs_for_CS3.py <run_dir>
-
-Example
--------
-    python _3_merge_DCD_outputs_for_CS3.py "C:\path\to\data\GENERATED\mod_hydrology\delta_channel_depletion\DeltaChannelDepletion_Runs\DCD_Calsim3_PlanningStudy_1921-2018"
-
-Arguments
----------
-run_dir : Path
-    Path to the DCD model run directory containing the source DSS files.
+Merge DCD Outputs for CalSim 3
+==============================
+Copies every time-series record of two DSS files of one DCD run into CS3sv_DCD_PRISM_Dtrnd.dss,
+keeping pathnames, units and type. Where both files hold a pathname, the second file's record
+is taken; a record that fails to read from one file is read from the other.
 
 Inputs
 ------
-- <run_dir>/DCD_island_month_C3.dss
+- <run_dir>/DCD_island_month_C3.dss (written by _aggregate_dpflow_gwflow_for_DCD.py)
 - <run_dir>/DCD_Sep2018_Lch5_mon_C3.dss
+(run_dir: the positional argument, a DCD run folder)
 
 Outputs
 -------
-- <run_dir>/CS3sv_DCD_PRISM_Dtrnd.dss
+- <run_dir>/CS3sv_DCD_PRISM_Dtrnd.dss (_2_postprocess_single.py reads it from
+  <run>/DCD/Output/CALSIM3/)
+
+Dependencies
+------------
+pydsstools; does not import utils.paths
+
+Usage
+-----
+    python mod_hydrology/delta_channel_depletion/_merge_DCD_outputs_for_CS3.py <run_dir>
+
+Author: mbastani, 10/2/2025
 """
 
 

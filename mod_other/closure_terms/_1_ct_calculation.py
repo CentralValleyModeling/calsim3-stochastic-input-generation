@@ -1,49 +1,43 @@
 """
 WGEN Closure Terms: Weighted vs 4-Year-Block Stitched, with Correlations
-=======================================================================
+========================================================================
+Product B closure terms (the 13 CT_*_SV terms of PART_B, Part C CLOSURE-TERM) from the WGEN
+resampling record: each stamp month takes the mean of the CalSim3 baseline closure terms of the
+historical months its days were resampled from, weighted by their share of the days (days
+grouped by the month of wgen_date).
 
-What this does
---------------
-1) Reads closure terms from a CalSim DSS file Part C ='CLOSURE-TERM'.
-2) Reads WGEN resampled dates CSV (daily mapping of WGEN -> historical date).
-3) For each WGEN month:
-   - Weighted-average closure terms using sampled-day shares across (hist_year, hist_month).
-   - Build a "block-stitched" closure term series by, for each WGEN 4-year block,
-     detecting the dominant historic 4-year window and stitching those monthly closure values from history.
-4) Computes R-squared between the two series (overall and per 4-year block) for each closure term.
+--diagnostics compares this weighted series with a 4-year-block stitched series (each WGEN
+4-year block copies the 48 months of the historical window that starts in the dominant
+historical year of the block's first year) and writes R-squared by term and block, block
+coverage and plots, but no SV CSV. No Historical_Unsplit or Product A closure terms are written.
 
-Key outputs (in --outdir)
--------------------------
-- closure_weighted_timeseries.csv
-- closure_blockstitched_timeseries.csv
-- closure_correlation_overall.csv
-- wgen_block_hist_window.csv
-- closure_terms_historical_timeseries.csv
-- closure_term_correlation_boxplot.png
-- coverage_pct_boxplot.png
-- r_squared_vs_coverage_scatter.png
-- r_squared_vs_coverage.csv
+Inputs
+------
+- <base>/CalSim3/__calsim_sv_default__.dss: <term>/CLOSURE-TERM, Oct 1921 - Sep 2021 (--dss)
+- <base>/WGEN/resampled.dates_Product_B_1000yr.csv: per stamp day its resampled historical date
+  (resmplDatesLoc), stamp_year, stamp_month and wgen_date (--resampled)
 
-Product B outputs (in DEFAULT_PROD_B_DIR)
------------------------------------------
-- <TERM>_productB_n01.csv through <TERM>_productB_n10.csv (10 chunks x 13 terms)
+Outputs
+-------
+- --product B: <generated>/mod_other/closure_terms/output/_product_b_final/
+  <term>_productB_n01.csv ... _n10.csv, <term> without the CT_ prefix and _SV suffix (e.g.
+  BENDBRIDGE_productB_n01.csv); Part B, Part C, Year, Month, Value; gaps filled forward, then
+  backward, within each chunk
+- --diagnostics: in <generated>/mod_other/closure_terms/output/_1_ct_calculation/
+  wgen_analysis_outputs/ (--outdir), closure_weighted_timeseries.csv,
+  closure_blockstitched_timeseries.csv, closure_terms_historical_timeseries.csv,
+  closure_correlation_overall.csv, wgen_block_hist_window.csv, r_squared_vs_coverage.csv,
+  closure_term_correlation_boxplot.png, coverage_pct_boxplot.png,
+  r_squared_vs_coverage_scatter.png, wgen_num_distinct_pairs_cdf.png
 
 Dependencies
 ------------
-- utils.paths (get_base_dir, get_module_generated_dir)
-- pydsstools
-- numpy, pandas, matplotlib
+utils.paths, utils.dss_io, utils.wgen_calendar; pydsstools, matplotlib
 
 Usage
 -----
     python mod_other/closure_terms/_1_ct_calculation.py --product B
     python mod_other/closure_terms/_1_ct_calculation.py --diagnostics
-
-Closure terms are Product B only. The Product A pipeline auto-fills them
-from the CalSim baseline via the Constant/Rept pathway (same as salinity).
-The --diagnostics mode is a non-product analysis used to characterize the
-WGEN-resampling-based weighted-average methodology against a 4-yr-block
-stitched alternative; it does not emit any SV CSV.
 """
 from __future__ import annotations
 

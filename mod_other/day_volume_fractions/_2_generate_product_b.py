@@ -1,36 +1,32 @@
 """
 Generate Product B Day-Volume Fractions
 =======================================
-For each Product B chunk (10 x 100 water years), match every synthetic
-water year to the nearest historical water year by annual flow index,
-then borrow the matched year's daily VOL-FRACTION pattern.
+Daily VOL-FRACTION patterns of each Product B chunk: every chunk water year takes the CalSim3
+baseline pattern of the donor water year (WY1955 or later, 12 complete months) with the nearest
+annual flow index, the water-year sum of the reference inflows.
 
-February leap-year handling: if source and target February have different
-day counts (28 vs 29), the daily fractions are resampled via cumulative-
-volume interpolation so the monthly sum stays 1.
-
-Dependencies
-------------
-Upstream scripts that must run first:
-  - mod_hydrology/rim_inflow/_1_build_rim_inflow.py  (Product B rim inflows)
+When donor and target February differ in day count, the February fractions are resampled by
+cumulative-volume interpolation so the month sums to 1. Days without a fraction get 0.
 
 Inputs
 ------
-- CalSim baseline DSS:  BASE/CalSim3/__calsim_sv_default__.dss
-    VOL-FRACTION records (Part C) and reference inflow series
-- Reference inflows:    reference/reference_inflows.csv
-    Part B / Part C pairs defining the annual flow index components
-- Product B rim inflows (utils.paths.get_rim_inflow_outputs):
-    <PartB>_qmo_n01.csv ... n10.csv (qmap_postAdj)
+- <base>/CalSim3/__calsim_sv_default__.dss: VOL-FRACTION series and the reference inflows
+- reference/reference_inflows.csv: Part B / Part C pairs of the annual flow index
+- Product B rim inflows (utils.paths.get_rim_inflow_outputs): <Part B>_qmo_n01.csv ... _n10.csv
+  of each reference inflow (qmap_postAdj), from
+  mod_hydrology/rim_inflow/_1_build_rim_inflow.py --product B
 
 Outputs
 -------
-- GENERATED/mod_other/day_volume_fractions/output/_product_b_final/
-    vol_fraction_productB_n01.csv ... n10.csv
-        Columns: Part B, Part C, Year, Month, Value
-- GENERATED/mod_other/day_volume_fractions/output/_2_generate_product_b/
-    wy_matches_n01.csv ... n10.csv
-        Columns: WY, matched_historical_WY, annual_flow_synthetic, annual_flow_historical
+- <generated>/mod_other/day_volume_fractions/output/_product_b_final/
+  vol_fraction_productB_n01.csv ... _n10.csv: Part B, Part C, Year, Month, Value
+- <generated>/mod_other/day_volume_fractions/output/_2_generate_product_b/
+  wy_matches_n01.csv ... _n10.csv: WY, matched_historical_WY, annual_flow_synthetic,
+  annual_flow_historical
+
+Dependencies
+------------
+utils.paths, utils.dss_io, utils.wgen_calendar; pydsstools
 
 Usage
 -----

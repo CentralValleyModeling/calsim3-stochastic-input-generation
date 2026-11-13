@@ -1,33 +1,34 @@
 """
 Reservoir Parameter Database Extractor
 ======================================
-Extracts evaporation calculation parameters (location, Ra values, calibration
-factors) from the CalSim 3.0 reservoir Excel spreadsheets and writes them to
-reference/reservoir_parameters.json, which is tracked in the repository and
-used by all downstream evaporation scripts.
+Extracts the Hargreaves-Samani parameters of each CalSim 3.0 reservoir (location, elevation,
+monthly Ra, monthly and annual calibration, adjustment factor) from the reservoir evaporation
+workbooks into reference/reservoir_parameters.json, the parameter file of evaporation.py.
 
-Run --extract whenever the Excel spreadsheets are updated. The default mode
-(no flag) reads the existing reference JSON and prints a summary.
+Without --extract, prints a summary of reference/reservoir_parameters.json and the
+Historical_Climate_LTO cell nearest FOLSM, SHSTA and OROVL, and exports the table to
+reference/reservoir_database.csv.
 
 Inputs
 ------
-- CalSim3/ReservoirEvaporationSpreadsheets/ (reservoir Excel workbooks)
+- <base>/CalSim3/ReservoirEvaporationSpreadsheets/<Sacramento Valley|San Joaquin Valley|Other>/
+  CS3_ER_<CODE>_*.xls* (--extract; ReadAll workbooks skipped)
+- reference/reservoir_parameters.json (default mode)
+- <base>/Historical_Climate_LTO/1_Historical/ cell files (utils.wgen.nearest_cell; default mode)
 
 Outputs
 -------
-- mod_reservoir/evaporation/reference/reservoir_parameters.json
+- reference/reservoir_parameters.json (--extract)
+- reference/reservoir_database.csv (default mode)
 
 Dependencies
 ------------
-- utils/paths.py  (data-dir resolution)
+utils.paths, utils.wgen; openpyxl
 
 Usage
 -----
-    # Re-extract from Excel spreadsheets -> overwrites reference/reservoir_parameters.json
-    python _0_extract_reservoir_database.py --extract
-
-    # Print database summary from reference/reservoir_parameters.json (default)
-    python _0_extract_reservoir_database.py
+    python mod_reservoir/evaporation/_0_extract_reservoir_database.py --extract
+    python mod_reservoir/evaporation/_0_extract_reservoir_database.py
 """
 
 import argparse

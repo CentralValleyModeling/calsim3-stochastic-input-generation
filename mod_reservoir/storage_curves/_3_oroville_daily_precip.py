@@ -1,34 +1,39 @@
 """
 Extract Daily Basin-Averaged Precipitation for Oroville / Feather River
-======================================================================
-Daily basin-average precipitation (inches) for the Oroville/Feather River basin from the daily
-weather of one set (``utils.wgen``), each grid cell of CS3_8RI_OROVI_GridInfo.txt weighted by
-its area inside the basin.
+=======================================================================
+Daily basin-average precipitation (inches) of the Oroville/Feather River basin from the daily
+weather of one set (utils.wgen), each grid cell of CS3_8RI_OROVI_GridInfo.txt weighted by its
+area inside the basin. Input of _4_oroville_level5.py.
 
-Historical_Unsplit, Product A and LTO give one series over ``WINDOWS``. Product B gives 10
-chunk CSVs of 100 water years each, cut by ``utils.wgen_calendar.chunk_days`` and labelled in
-order with the days of WY1922-WY2021.
+Historical_Unsplit and Product A give one series over Oct 1915 - Sep 2018, LTO
+(Historical_Climate_LTO) over Oct 1915 - Sep 2015 (WINDOWS). Product B gives 10 chunks of 100
+water years, cut by utils.wgen_calendar.chunk_days and labelled in order with the days of
+WY1922-2021. With --product, --compare runs first and reads the outputs already on disk.
 
 Inputs
 ------
-- The daily weather of the set (``utils.wgen.read_met``)
-- mod_forcing/climate/reference/GridInfo/CS3_8RI_OROVI_GridInfo.txt (override with --grid_info)
+- WGEN daily weather of the --product set, or Historical_Climate_LTO (utils.wgen.weighted_daily)
+- mod_forcing/climate/reference/GridInfo/CS3_8RI_OROVI_GridInfo.txt (or --grid_info)
 
 Outputs
 -------
-- <generated>/output/_3_oroville_daily_precip/Oroville_Daily_Precip_<set>.csv, <set> being
-  Historical_Unsplit, Product_A or LTO (year, month, day, precip_inches)
-- <generated>/output/_3_oroville_daily_precip/oroville_daily_precip_productB_n01.csv ... n10.csv
-- <generated>/output/_3_oroville_daily_precip/_compare_ab/comparison_monthly_avg.csv (--compare)
+Under <generated>/mod_reservoir/storage_curves/output/_3_oroville_daily_precip/:
+- Oroville_Daily_Precip_<Historical_Unsplit|Product_A|LTO>.csv: year, month, day, precip_inches
+- oroville_daily_precip_productB_n01.csv ... _n10.csv: year, month, day, precip_inches
+- _compare_ab/comparison_monthly_avg.csv: mean daily precipitation by calendar month of Product A
+  and of each Product B chunk (--compare)
+
+Dependencies
+------------
+utils.paths, utils.wgen, utils.wgen_calendar
 
 Usage
 -----
-    python _3_oroville_daily_precip.py --product historical
-    python _3_oroville_daily_precip.py --product A
-    python _3_oroville_daily_precip.py --product B
-    python _3_oroville_daily_precip.py --product LTO
-    python _3_oroville_daily_precip.py --compare
-    python _3_oroville_daily_precip.py --product B --compare
+    python mod_reservoir/storage_curves/_3_oroville_daily_precip.py --product historical
+    python mod_reservoir/storage_curves/_3_oroville_daily_precip.py --product A
+    python mod_reservoir/storage_curves/_3_oroville_daily_precip.py --product B
+    python mod_reservoir/storage_curves/_3_oroville_daily_precip.py --product LTO
+    python mod_reservoir/storage_curves/_3_oroville_daily_precip.py --compare
 """
 
 import argparse

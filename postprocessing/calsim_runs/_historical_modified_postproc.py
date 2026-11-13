@@ -1,27 +1,25 @@
 """
 Historical vs Modified Historical Postprocessing
 ================================================
-Thin wrapper around the Product A postprocessing engine
-(``_productA_postproc.run_post_processing_package``). Only the input pickle
-dir, output dir, and default WY periods differ.
+Runs the Product A postprocessing (``_productA_postproc.run_post_processing_package``)
+on the Historical vs Modified Historical pickle cache, over Full_WY1922_2021 and
+Drought_WY1987_1992 (``--skip-drought``: the full period only).
 
 Inputs
 ------
-- Pickle cache: ``GENERATED/postprocessing/calsim_runs/historical_modified/
-  pickle_files/`` (values.pkl, diffs.pkl, units.pkl, fields.pkl)
+- <generated>/postprocessing/calsim_runs/historical_modified/pickle_files/ (``--pickle-dir``):
+  values.pkl, diffs.pkl, units.pkl, fields.pkl of ``_historical_modified_pickle_builder.py``;
+  baseline scenario ``--baseline-name`` (default Historical)
 
 Outputs
 -------
-- ``GENERATED/postprocessing/calsim_runs/historical_modified/output/``
-  - ``annual_WY_summary.xlsx``
-  - ``figures/<period>/<metric>.png`` (monthly time series + non-exceedance CDF)
+- <generated>/postprocessing/calsim_runs/historical_modified/output/ (``--out-dir``)
+  - annual_WY_summary.xlsx: one sheet per period
+  - figures/<period>/<metric>.png: monthly time series and non-exceedance CDF
 
 Dependencies
 ------------
-- ``_productA_postproc.run_post_processing_package`` (same module dir)
-- utils.paths
-- utils.validation_plots (transitive, via _productA_postproc)
-- pandas, openpyxl
+_productA_postproc (same folder), utils.paths, utils.validation_plots; pandas, openpyxl
 
 Usage
 -----

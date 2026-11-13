@@ -1,45 +1,42 @@
 """
-Build no-Goose-Lake GridInfo variants
+Build no-Goose-Lake GridInfo Variants
 =====================================
-Derives ``*_no_gooselake_GridInfo.txt`` variants by eliminating grid cells that
-fall outside the authoritative drainage in the CalSim3 watershed layer. Two
-targets:
+GridInfo variants of the Shasta inflow and the Bend Bridge composite without the cells outside
+the drainage of the CalSim3 watershed layer: CS3_I_SHSTA reaches into the endorheic Goose Lake
+basin, which is not part of the routed Shasta or Bend Bridge inflow.
 
-- ``I_SHSTA``  CS3_I_SHSTA_GridInfo.txt  -> CS3_I_SHSTA_no_gooselake_GridInfo.txt
-              mask = the "Inflow to Shasta Lake" polygon (Connect_No SHSTA).
-- ``SRBB``     CS3_8RI_SRBB_GridInfo.txt -> CS3_8RI_SRBB_no_gooselake_GridInfo.txt
-              mask = SHSTA inflow + all CT_BENDBRIDGE pieces (rim tribs + valley).
+Targets
+-------
+- I_SHSTA : CS3_I_SHSTA_GridInfo.txt to CS3_I_SHSTA_no_gooselake_GridInfo.txt; mask the
+            Connect_No SHSTA polygon
+- SRBB    : CS3_8RI_SRBB_GridInfo.txt to CS3_8RI_SRBB_no_gooselake_GridInfo.txt; mask SHSTA
+            plus every CT_BENDBRIDGE polygon (rim tributaries and valley)
 
-Why
----
-The Shasta-inflow delineation (CS3_I_SHSTA) was rasterized to extend ~1000 sq mi
-into the endorheic Goose Lake basin on the California/Oregon border. The CalSim3
-layer's authoritative SHSTA polygon (6588 sq mi) excludes Goose Lake, which
-spills to the Pit River only in rare wet sequences and is not part of the routed
-Shasta / Bend Bridge inflow. So both CS3_I_SHSTA and the CS3_8RI_SRBB composite
-(which contains the Shasta cells) carry 94 Goose Lake cells (~1000 sq mi) that
-drain nowhere relevant.
+Per target, drops every cell whose 1/16-degree footprint does not touch the mask and clips the
+f2 (basin area) of an edge cell to its area inside the mask (EPSG:3310); other lines are copied
+unchanged. Build-time only.
 
-What it does
+Inputs
+------
+- reference/GridInfo/<source> above; build_8RI_SRBB_gridinfo.py writes the SRBB source
+- calsim3.gpkg, layer CalSim3_And_GooseLake (--gpkg; default <data_dir>/BASE/CalSim3/calsim3.gpkg,
+  data_dir read from config.json or config_default.json)
+
+Outputs
+-------
+- reference/GridInfo/<output> above (tab-separated id, lat, lon, f1, f2); adapters/vic.py
+  routes I_SHSTA through CS3_I_SHSTA_no_gooselake
+
+Dependencies
 ------------
-For each target, drop every cell whose 1/16-degree footprint does not touch the
-authoritative mask (the Goose Lake block), and clip the basin area (f2) of each
-cell that straddles the mask's edge to its area inside the mask (EPSG:3310), so
-no area outside the drainage is counted: the 10 cells on the Goose Lake divide
-held 84 sq mi outside it. Every other line is kept as it is in the source.
-
-Outputs go to GridInfo/. The VIC adapter (mod_forcing/inflows/adapters/vic.py)
-routes I_SHSTA through CS3_I_SHSTA_no_gooselake.
-
-Run the SRBB target after build_8RI_SRBB_gridinfo.py (it reads that output). Like
-the valley generator, this needs geopandas and runs under a GIS env, not
-csstochastic.
+geopandas, shapely; a GIS environment (e.g. sacsma), not csstochastic. Does not import
+utils.paths.
 
 Usage
 -----
-    # gpkg defaults to <data_dir>/BASE/CalSim3/calsim3.gpkg (resolved from config.json)
-    python mod_forcing/climate/reference/build_no_gooselake_gridinfo.py            # both targets
+    python mod_forcing/climate/reference/build_no_gooselake_gridinfo.py               # both targets
     python mod_forcing/climate/reference/build_no_gooselake_gridinfo.py --target I_SHSTA
+    python mod_forcing/climate/reference/build_no_gooselake_gridinfo.py --target SRBB
     python mod_forcing/climate/reference/build_no_gooselake_gridinfo.py --gpkg /path/to/calsim3.gpkg
 """
 

@@ -1,23 +1,23 @@
 """
 Extract "Other" baseline monthly series from the CalSim3 SV DSS
 ===============================================================
-Reads the MASTER inventory, selects SVs whose module column starts with
-"Other", pulls every available monthly value for the matching DSS Part B
-series, and writes them to a single workbook for downstream miscellaneous
-reconstruction (WYT / hybrid / QM).
+Every monthly series of the CalSim3 baseline whose Part B is an SV of the master inventory with
+an Input_Category (column I of sheet MASTER) starting with "Other", over the whole record, in one
+workbook.
 
 Inputs
 ------
-- CalSim baseline DSS: CalSim3/__calsim_sv_default__.dss
-- Master inventory: inventory/_MASTER_INVENTORY_FOR_STOCHASTIC_INPUT_GENERATION_.xlsx
+- <base>/CalSim3/__calsim_sv_default__.dss
+- inventory/_MASTER_INVENTORY_FOR_STOCHASTIC_INPUT_GENERATION_.xlsx, sheet MASTER
 
 Outputs
 -------
-- <generated>/output/_0_extract_others/other_monthly_from_dss.xlsx
+- <generated>/mod_other/miscellaneous/output/_0_extract_others/other_monthly_from_dss.xlsx,
+  sheet OtherMonthly: one column per SV, month-end dates
 
 Dependencies
 ------------
-- utils/paths.py  (data-dir resolution)
+utils.paths, utils.dss_io; pydsstools, openpyxl
 
 Usage
 -----

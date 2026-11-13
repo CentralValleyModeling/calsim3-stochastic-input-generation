@@ -1,42 +1,26 @@
 """
-Pipeline Environment Sanity Check
-=================================
-Fast preflight that catches the most common foot-gun: running a pipeline
-script in the wrong shell / wrong Python where the project's dependencies
-aren't installed. Without this, scripts fail dozens of frames deep with a
-generic ``ModuleNotFoundError: No module named 'pandas'`` (or similar)
-instead of a clear "wrong env" message.
+Pipeline Environment Check
+==========================
+``require_env`` stops a run whose interpreter lacks the pipeline's environment with one clear
+message, before an import fails deep inside a script.
 
-How it triggers
----------------
-``utils/paths.py`` calls ``require_env()`` once at module load, and every
-numbered pipeline script imports from ``utils.paths``. So just opening any
-pipeline script in the wrong env produces the clear error -- no per-script
-``require_env()`` call is needed.
+Checks:
 
-Library modules (``utils/dss_io.py``, ``utils/csv_io.py``,
-``utils/quantile_mapping.py``, ``utils/qmap_product_*_from_pairs.py``,
-``utils/wyt_monthlyavg_framework.py``, ``utils/dss_pickle_builder.py``,
-``utils/check_scripts.py``) do not import ``utils.paths``, so they do not
-trigger the check -- intentional: the CI lint workflow (which only has
-pyflakes installed, not pydsstools) runs ``python utils/check_scripts.py``
-and would otherwise spuriously fail this check.
+- Python at least ``MIN_PYTHON`` (3.11, as in ``environment.yml``).
+- ``pydsstools`` importable, which stands for the whole conda env. The env's name is not
+  checked, so an env under another name or a venv with the same packages passes.
 
-Invariants enforced
--------------------
-- Python interpreter version >= ``MIN_PYTHON`` (matches ``environment.yml``).
-- ``pydsstools`` is importable. This is the project's canary dep: if it
-  imports, the conda env (or equivalent) is essentially correct. We do
-  not check the conda env name itself because that is brittle (users may
-  use venv, may rename the env, may run without ``conda activate`` from
-  a Python they know is correct).
+On failure it exits with a non-zero status and a message listing each failed check, the fix
+``conda activate csstochastic`` (``EXPECTED_CONDA_ENV``) and ``sys.executable``.
 
-On failure
-----------
-Prints a multi-line diagnostic naming each failing invariant, suggests
-``conda activate csstochastic``, prints ``sys.executable`` so the user
-can see which interpreter is running, and ``sys.exit(...)`` with a
-non-zero status.
+``utils/paths.py`` calls ``require_env()`` on import, so every script and module that imports
+``utils.paths`` runs the check. ``utils/check_scripts.py`` imports no project module, so the CI
+lint job (``.github/workflows/lint.yml``, pyflakes only) runs it without pydsstools.
+
+Usage
+-----
+    from utils.env_check import require_env
+    require_env()
 """
 from __future__ import annotations
 

@@ -1,37 +1,34 @@
 """
-Compare Water Year Type indices across products.
+Compare Water Year Types with CDEC
+==================================
+Sacramento and San Joaquin indices and year types of Product A against the CDEC record
+(matches, mismatched years with the nearest threshold, index plots), and CDFs of the indices of
+CDEC (WY1922-2021), Product A (utils.paths.DELIVERY_WY) and the 10 Product B chunks.
+Diagnostic; the comparison prints to the console.
 
-Provides:
-1. Basic comparison statistics (Product A vs Historical/CDEC)
-2. Detailed mismatch analysis with index values
-3. Visual plots comparing indices over time
-4. CDF comparison of Sac/SJ indices: Historical, Product A, Product B (10 chunks)
+Inputs
+------
+- reference/cdec_wyt.txt: CDEC index and year type per water year
+- <generated>/mod_hydrology/water_year_types/output/_1_calc_WYTs/Product_A/_SacWYT.csv,
+  _SJWYT.csv
+- <generated>/mod_hydrology/water_year_types/output/_1_calc_WYTs/Product_B/_SacWYT_n01.csv ...
+  _n10.csv, _SJWYT_n01.csv ... _n10.csv (--compare-cdf; a missing chunk is skipped)
 
-Inputs (auto-resolved via utils.paths):
-- reference/cdec_wyt.txt              -- Historical CDEC WYT index file
-- data/GENERATED/.../water_year_types/output/_1_calc_WYTs/Product_A/_SacWYT.csv
-- data/GENERATED/.../water_year_types/output/_1_calc_WYTs/Product_A/_SJWYT.csv
-- data/GENERATED/.../water_year_types/output/_1_calc_WYTs/Product_B/_SacWYT_n01..n10.csv
-- data/GENERATED/.../water_year_types/output/_1_calc_WYTs/Product_B/_SJWYT_n01..n10.csv
+Outputs
+-------
+<generated>/mod_hydrology/water_year_types/output/_2_compare_WYTs/:
+- wyt_index_comparison.png, wyt_index_difference.png (--compare-a)
+- wyt_index_cdf_comparison.png (--compare-cdf)
 
-Outputs:
-- data/GENERATED/.../water_year_types/output/_2_compare_WYTs/wyt_index_comparison.png
-- data/GENERATED/.../water_year_types/output/_2_compare_WYTs/wyt_index_difference.png
-- data/GENERATED/.../water_year_types/output/_2_compare_WYTs/wyt_index_cdf_comparison.png
+Dependencies
+------------
+utils.paths; matplotlib
 
-Examples
---------
-# Run all comparisons (default):
-    cd mod_hydrology/water_year_types && python _2_compare_wyts.py
-
-# Only Product A vs Historical comparison:
-    cd mod_hydrology/water_year_types && python _2_compare_wyts.py --compare-a
-
-# Only CDF distribution comparison (Hist + Product A + Product B):
-    cd mod_hydrology/water_year_types && python _2_compare_wyts.py --compare-cdf
-
-# Both:
-    cd mod_hydrology/water_year_types && python _2_compare_wyts.py --compare-a --compare-cdf
+Usage
+-----
+    python mod_hydrology/water_year_types/_2_compare_wyts.py                 # both comparisons
+    python mod_hydrology/water_year_types/_2_compare_wyts.py --compare-a
+    python mod_hydrology/water_year_types/_2_compare_wyts.py --compare-cdf
 """
 
 import sys

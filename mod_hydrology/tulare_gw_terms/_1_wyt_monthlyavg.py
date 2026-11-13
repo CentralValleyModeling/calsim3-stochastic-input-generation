@@ -1,33 +1,33 @@
 """
 Tulare Groundwater Terms - WYT Monthly-Average Reconstruction
 =============================================================
-Runner that defines the Tulare GW term specs, calls the shared WYT
-monthly-average framework, and writes the Product A / Product B outputs.
+Tulare groundwater terms as the CalSim3 monthly average by water-year type and month
+(utils.wyt_monthlyavg_framework), applied to the year types of the --product set.
 
 Inputs
 ------
-- CalSim baseline DSS (historical term series)
-- reference/wyt_avg_terms.csv (term specs + WYT basin per term)
-- water_year_types WYT indices of the weather set (Historical_Unsplit, Product A or Product B)
+- <base>/CalSim3/__calsim_sv_default__.dss: historical term series, Oct 1921 - Sep 2021
+- reference/wyt_avg_terms.csv: term_part_b, term_part_c, basin_wyt (sac or sj) per term
+- mod_hydrology/water_year_types/reference/: historical WYT CSVs of the pattern
+- <generated>/mod_hydrology/water_year_types/output/_1_calc_WYTs/<Historical_Unsplit|Product_A|Product_B>/:
+  the set's year types
 
 Outputs
 -------
-- <generated>/output/_1_wyt_monthlyavg/monthly_avg_historical/
-    pattern CSV and actual-vs-reconstructed CSV
-- <generated>/output/_1_wyt_monthlyavg/figures/historical/
-    TS+CDF and monthly error box per term (historical method check)
-- <generated>/output/_1_wyt_monthlyavg/<_historical_unsplit_validation|_product_a_validation>/
-    final delivery SV CSVs (--product historical, A)
-- <generated>/output/_1_wyt_monthlyavg/figures/<historical_unsplit|product_a>/
-    TS+CDF and monthly error box per term (--product historical, A)
-- <generated>/output/_1_wyt_monthlyavg/_product_b_final/
-    final Product B per-chunk SV CSVs (--product B)
+Under <generated>/mod_hydrology/tulare_gw_terms/output/_1_wyt_monthlyavg/:
+- monthly_avg_historical/tulare_gw_terms_pattern_by_WYT_month.csv and
+  tulare_gw_terms_actual_vs_reconstructed.csv (every run)
+- figures/historical/: TS+CDF and monthly error box per term (every run)
+- _historical_unsplit_validation/ or _product_a_validation/:
+  tulare_gw_terms_<historicalUnsplit|productA>_<first WY>_<last WY>.csv, and
+  figures/<historical_unsplit|product_a>/ (--product historical, A)
+- Product B: _product_b_final/tulare_gw_terms_productB_qmo_n01.csv ... _n10.csv, labelled
+  WY1922-2021
 
 Dependencies
 ------------
-- utils/wyt_monthlyavg_framework.py  (WYT reconstruction engine)
-- utils/validation_plots.py          (TS+CDF and monthly box helpers; transitive)
-- utils/paths.py                     (data-dir resolution)
+utils.paths, utils.csv_io, utils.wgen_calendar, utils.wyt_monthlyavg_framework (with
+utils.validation_plots, utils.dss_io); pydsstools
 
 Usage
 -----

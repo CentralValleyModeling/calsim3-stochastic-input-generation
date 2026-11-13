@@ -1,37 +1,61 @@
-"""Diagnose high-flow SJR cycle 14 infeasibilities: n01, n04, n05, n06.
+"""
+Chunks n01, n04, n05, n06 High-Flow Infeasibility Diagnostics
+=============================================================
+Prints the SJR rim inflows and SVs of Product B chunks n01, n04, n05 and n06 around
+their WRIMS failures, against every chunk and the CalSim 3 historical SVs, and a
+markdown table for docs/source/calsim-run/sjr_infeasibility_report.md. Diagnostic;
+not part of the pipeline.
 
-All four chunks fail in June with the identical mechanism: extreme Millerton
-inflow overflows the Mendota Pool DMC water balance bookkeeping cap
-(mdota_max = 10000 cfs in SJR_Cycle_Defs_Local.wresl).
+Each chunk fails in June, cycle 14 (sjrbase, "Linear relaxation not feasible"): n01
+1980, n04 2006, n05 1968, n06 1944. Extreme Millerton inflow overflows the Mendota
+Pool bookkeeping cap, mdota_max = 10000 cfs (SJR_Cycle_Defs_Local.wresl, lines
+~147-163):
 
-Failure timestamps:
-  n01 -- 1980_06_c14 Solve_c__ infeasible (Linear relaxation not feasible)
-  n04 -- 2006_06_c14 Solve_c__ infeasible (Linear relaxation not feasible)
-  n05 -- 1968_06_c14 Solve_c__ infeasible (Linear relaxation not feasible)
-  n06 -- 1944_06_c14 Solve_c__ infeasible (Linear relaxation not feasible)
-
-Root cause: SJR_Cycle_Defs_Local.wresl lines ~147-163
    - MendotaBalance:  mdota_above - mdota_below = mp_inflow - mp_deliveries - Sack_short
    - MPInf_abv_force: mdota_above < INT_MPInflow_abv * 10000
    - MPInf_blw_force: mdota_below < 10000 - INT_MPInflow_abv * 10000
-   When mp_inflow (= C_FSL005 + C_SJR205) - mp_deliveries - Sack_short > 10000,
-   neither integer setting can satisfy MendotaBalance: mdota_above hits 10000 cap
-   (INT=1) or mdota_below goes negative (INT=0). LP infeasible under both settings.
 
-The physical routing is NOT the bottleneck -- all SJR channel arcs are unbounded.
-The infeasibility is purely in the bookkeeping layer.
+When mp_inflow (C_FSL005 + C_SJR205) - mp_deliveries - Sack_short exceeds 10000, no
+integer setting satisfies MendotaBalance: mdota_above passes the cap (INT=1) or
+mdota_below turns negative (INT=0). The SJR channel arcs are unbounded, so the
+physical routing does not bind; only the bookkeeping does. Fix: mdota_max 50000 in
+wresl_modifications/SJR_Cycle_Defs_Local.wresl.
 
-IIS co-member constraints (not independently infeasible, same across all 4):
-  1. Millerton storage zones (friant adj fld spc.wresl)
-  2. SJR East connectivity/seepage (setpossg*/setnegsg* for sjr205..sjr265)
-  3. SJR channel splits (meetsjrr, boundd_sjr214_ebp001, mp_inflow_alias)
-  4. Contract limits (limitd_mdota_64_xa, limitd_mdota_90_pa1)
-  5. Friant-Kern delivery (split_d910_16b, lim_d910_16b_pc)
-  6. SJR West wufactors (parcels 72_pr2, 72_pr3, 64_pa3, 91_pr)
-  7. XCC connectivity (continuityxcc010, continuityxcc025, continuityxcc033)
-  8. Millerton continuity (continuitymlrtn)
+Other members of the irreducible infeasible set, the same in all four chunks and not
+infeasible on their own: Millerton storage zones (friant adj fld spc.wresl); SJR East
+connectivity and seepage (setpossg*/setnegsg*, sjr205-sjr265); SJR channel splits
+(meetsjrr, boundd_sjr214_ebp001, mp_inflow_alias); contract limits
+(limitd_mdota_64_xa, limitd_mdota_90_pa1); Friant-Kern delivery (split_d910_16b,
+lim_d910_16b_pc); SJR West wufactors (72_pr2, 72_pr3, 64_pa3, 91_pr); XCC connectivity
+(continuityxcc010/025/033); Millerton continuity (continuitymlrtn).
 
-Fix: increase mdota_max from 10000 to 50000 in SJR_Cycle_Defs_Local.wresl.
+Sections printed, per chunk: (1) rim inflows over the failure water year;
+(2) historical SVs over that year; (3) the failure month in every chunk and the
+historical record; (4) percentile among all chunks' Junes and against the historical
+maximum; (5) the failure water year and the one before; (6) compiled SVs against n02.
+Then (7) the
+rim inflows of the four failures side by side, with the quantile-map ceiling shared by
+I_MLRTN and I_MCLRE, and (8) the report table.
+
+Inputs
+------
+- <generated>/postprocessing/sv_compile/product_b_compilation/compiled_input_files/rim_inflow/
+  <SV>_qmo_n01.csv ... _n10.csv
+- <generated>/postprocessing/sv_compile/product_b_compilation/_product_b_compiled_sv/
+  ProductB_SV_n01.csv, _n02.csv, _n04.csv, _n05.csv, _n06.csv
+- <base>/CalSim3/__calsim_sv_default__.dss
+
+Outputs
+-------
+- Tables on stdout
+
+Dependencies
+------------
+utils.paths; numpy, pandas, pydsstools
+
+Usage
+-----
+    python postprocessing/calsim_runs/infeasibilities/n1_n4_n5_n6.py
 """
 # %% Imports and paths
 import sys

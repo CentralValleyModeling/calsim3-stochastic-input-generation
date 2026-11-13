@@ -1,54 +1,55 @@
 """
 Product B Stochastic Run Postprocessing
 =======================================
-Consumes the shared CalView-style pickle cache (values.pkl / diffs.pkl /
-units.pkl / fields.pkl) built by ``_productB_pickle_builder.py`` and
-produces block-vs-historical diagnostic tables and figures over the
-10 x 100-year Product B block structure. Optional Product A pickle cache
-adds a 10-year rolling overlay on the stitched 1000-year time series.
-
-Assumes: values.pkl metric columns are in TAF; block scenarios are named
-n01..n10 (or contain those tokens); non-storage metrics are monthly
-volumes summed to water years; storage metrics use end-of-September
-carryover.
+Reads the pickle cache of ``_productB_pickle_builder.py`` and writes tables and
+figures that compare each 100-year chunk (block) with the historical run
+(benchmark): annual statistics, worst rolling-window means, CDFs, block box plots
+and the stitched 1000-year series. A Storage metric's water-year value is its
+end-of-September value, any other metric's the sum of its months (values in TAF).
+A scenario whose name carries n01 ... n10 is that block. The heat map leaves out
+C_CSL004A (Cache Slough); the below-historical counts also leave out DEL_CVP_TOTAL
+and S_SLUIS_TOTAL, which their components already count.
 
 Inputs
 ------
-- Product B pickle cache: ``GENERATED/postprocessing/calsim_runs/product_b/
-  pickle_files/`` (values.pkl, diffs.pkl, units.pkl, fields.pkl)
-- (optional) Product A pickle cache for the historical-region overlay on
-  the stitched 1000-year time series:
-  ``GENERATED/postprocessing/calsim_runs/product_a/pickle_files/``
+- <generated>/postprocessing/calsim_runs/product_b/pickle_files/ (``--pickle-dir``):
+  values.pkl, diffs.pkl, units.pkl, fields.pkl; benchmark scenario ``--benchmark-name``
+  (default Historical)
+- Optional, for the Product A 10-year rolling mean on the 1000-year series:
+  <generated>/postprocessing/calsim_runs/product_a/pickle_files/ (``--product-a-pickle-dir``;
+  "" turns it off), from water year ``--product-a-start-wy`` (default 1972; 0 for all)
 
-Outputs (all in ``GENERATED/postprocessing/calsim_runs/product_b/output/``)
---------------------------------------------------------------------------
-- ``heatmap_block_summary.xlsx`` -- %-diff vs benchmark for mean annual,
-  P5 annual, worst 5-yr rolling, worst 10-yr rolling
-- ``annual_block_summary.xlsx`` -- historical_summary / block_summary /
-  annual_values_long
-- ``rolling_minima.xlsx`` -- historical + stochastic rolling minima
-- ``compact_summary.xlsx`` -- one-row-per-metric summary
-- ``rolling_minima_vs_historical_counts.xlsx``
-- ``figures/annual_cdf/<metric>.png`` -- annual WY CDFs
-- ``figures/monthly_cdf/<metric>.png`` -- monthly CDFs
-- ``figures/block_boxplots/<metric>.png`` -- per-block boxplots
-- ``figures/worst_window_sequences/<W>yr/<metric>_worst_<W>yr.png`` --
-  historical + per-block worst-window overlays (2-yr / 5-yr)
-- ``figures/timeseries_1000yr/<metric>.png`` -- historical + stitched
-  1000-year stochastic (with optional Product A 10-yr rolling overlay)
-- ``figures/rolling_minima_vs_historical_counts/*.png`` -- grouped bars
-- ``figures/annual_block_range/range_100yr_block_means_vs_historical.{png,svg}``
+Outputs
+-------
+- <generated>/postprocessing/calsim_runs/product_b/output/ (``--out-dir``)
+  - compact_summary.xlsx: one row per metric
+  - heatmap_block_summary.xlsx: percent difference from the benchmark per block of the mean
+    annual value, the P``--drought-percentile`` annual value (default 5) and the worst 5- and
+    10-year rolling means
+  - annual_block_summary.xlsx: historical_summary, block_summary, annual_values_long
+  - rolling_minima.xlsx: historical and stochastic worst rolling means over
+    ``--min-window-years`` to ``--max-window-years`` (default 2 to 10)
+  - rolling_minima_vs_historical_counts.xlsx: per block and 2-, 5- or 10-year window, the
+    metrics whose worst rolling mean is below the historical one
+  - figures/heatmap/heatmap_<stat>.png
+  - figures/annual_cdf/<metric>.png, figures/monthly_cdf/<metric>.png
+  - figures/block_boxplots/<metric>.png
+  - figures/worst_window_sequences/<W>yr/<metric>_worst_<W>yr.png for ``--sequence-window-years``
+    (default 2 5), framed by ``--sequence-frame-years`` (default 15; 6 for 2 years)
+  - figures/timeseries_1000yr/<metric>.png
+  - figures/rolling_minima_vs_historical_counts/block_rolling_minima_below_historical_counts.png
+    and ``_no5yr.png``
+  - figures/annual_block_range/range_100yr_block_means_vs_historical.png and .svg
 
 Dependencies
 ------------
-- utils.paths
-- Python 3.10+ (PEP 604 ``X | None`` syntax)
-- pandas, numpy, matplotlib, openpyxl
+utils.paths; pandas, numpy, matplotlib, openpyxl
 
 Usage
 -----
     python postprocessing/calsim_runs/_productB_postproc.py
-    python postprocessing/calsim_runs/_productB_postproc.py --benchmark-name Historical
+    python postprocessing/calsim_runs/_productB_postproc.py --product-a-pickle-dir ""
+    python postprocessing/calsim_runs/_productB_postproc.py --sequence-window-years 2 5 10 --drought-percentile 10
 """
 
 from __future__ import annotations

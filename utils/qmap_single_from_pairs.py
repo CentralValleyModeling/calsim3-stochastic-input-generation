@@ -6,8 +6,8 @@ Product A) onto each target of a ``qmap_pairs.csv`` file, and compares the
 result with the CalSim3 target. Product B's chunks go through
 ``utils.qmap_product_b_from_pairs``.
 
-Workflow per (target, predictor) pair
--------------------------------------
+Workflow per (target, predictor) pair (``run_single_qmap_from_pairs``)
+----------------------------------------------------------------------
 1. Read the CalSim3 target from the baseline DSS, and the training predictor
    by the pair's ``fit`` (``utils.qmap_fit``): the CalSim3 predictor (pass)
    or the model's historical-unsplit predictor (absorb).
@@ -15,12 +15,42 @@ Workflow per (target, predictor) pair
 3. Load the model's predictor of the set from its rim-inflow SV CSV for the
    simulation window (default ``utils.paths.DELIVERY_WY``, WY1922-2018). A ``+``
    predictor is summed.
-4. Apply the map to produce the set's target.
-5. Compare with the CalSim3 target (R2, NSE, PBIAS). The fit window covers the
-   simulation window, so this is a comparison, not a held-out validation.
-6. Write detail CSVs, the delivery CSVs (``utils.csv_io.write_delivery_csv``),
-   and three plot types.
+4. Apply the map (``utils.quantile_mapping.qmap_single``) and clip the result
+   to the pair's ``lower_bound`` and ``upper_bound``.
+5. Compare with the CalSim3 target (R2, NSE, PBIAS). The fit window lies within
+   the simulation window, so this is a comparison, not a held-out validation.
+6. Write the detail CSV, the delivery CSV and three figures.
 
+A pair without training data, target or simulation months is skipped with a
+warning. ``read_qmap_pairs`` reads the pairs file: target_part_b, target_part_c,
+predictor_part_b, predictor_part_c and fit, optional lower_bound, upper_bound and
+allow_negative (absent: the ``allow_negative`` argument); target_part_b must be
+unique, and reversed bounds are swapped.
+
+Inputs
+------
+- ``pair_csv``: a module's ``reference/qmap_pairs.csv``
+- ``dss_file``: the CalSim3 baseline DSS (targets; predictors of pass fits), read
+  Jan 1915 to Dec 2018 by default
+- ``rim_csv``: the set's rim-inflow SVs (``utils.paths.get_rim_inflow_outputs(product)["sv"]``)
+- absorb fits: the historical rim-inflow run (``utils.qmap_fit.read_historical_predictors``)
+
+Outputs
+-------
+- ``<output_dir>/<target_part_b>_qmap_validation.csv``: year, month, basis_qm_sim,
+  target_historical_sim, target_qm_sim, error, error_pct
+- ``<output_dir>/figures/<target_part_b>_timeseries.png``, ``_monthly_error.png``,
+  ``_monthly_pct_error.png``
+- ``<validation_dir>/<target_part_b>_<tag>_<first WY>_<last WY>.csv``
+  (``utils.csv_io.write_delivery_csv``)
+
+Usage
+-----
+    from utils.qmap_single_from_pairs import run_single_qmap_from_pairs
+    run_single_qmap_from_pairs(product="A", pair_csv=pair_csv, dss_file=dss_file,
+                               rim_csv=get_rim_inflow_outputs("A")["sv"],
+                               output_dir=gen / "output" / "_2_qmap" / "product_a",
+                               validation_dir=delivery_dir(gen / "output", "A"))
 """
 from __future__ import annotations
 

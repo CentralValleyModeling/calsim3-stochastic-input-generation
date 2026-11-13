@@ -1,109 +1,63 @@
 """
 Feather River Minimum Instream Flow (MINFLOWFEATHER)
 ====================================================
-Computes MINFLOWFEATHER (Feather River minimum instream flow, cfs) by
-replicating the logic in MIF_FEATHER_Logic_Reconstruction.xlsx.
+MINFLOWFEATHER/FLOW-MIN-REQUIRED (cfs) from unimpaired Oroville inflow UNIMP_OROV (TAF), by the
+schedule logic of MIF_FEATHER_Logic_Reconstruction.xlsx.
 
---------------------------------------------------------------------------
-LOGIC SUMMARY
---------------------------------------------------------------------------
-The schedule is assigned on an APRIL-to-MARCH cycle ("CY" = calendar year of
-April). For each CY N the schedule covers Apr(N)-Sep(N) and Oct(N)-Mar(N+1).
+Method
+------
+A schedule year CY runs Apr(CY) - Mar(CY+1); month (Y, M) belongs to CY = Y if M >= 4, else Y - 1.
+Three tests per CY:
+- Apr-Jul UNIMP_OROV of CY below APR_JUL_THRESH = 0.55 x 1942 = 1068.10 TAF: dry
+- UNIMP_OROV of water year CY below ANN_THRESH = 0.28492 x 4373.11 = 1245.99 TAF: deficiency
+- mean of water years CY-1 and CY below TWOY_THRESH = 0.72503 x 4373.11 = 3170.64 TAF: deficiency
+4373.11 TAF is the mean annual UNIMP_OROV of WY1921-2021. Schedule: driest with a deficiency,
+else dry when Apr-Jul is dry, else wet. The validation run takes ANN_THRESH and TWOY_THRESH from
+the spreadsheet.
 
-Three schedule inputs are evaluated each CY:
+    Month:    Apr  May  Jun  Jul  Aug  Sep  Oct  Nov  Dec  Jan  Feb  Mar
+    wet:     1000 1000 1000 1000 1000 1000 1700 1700 1700 1700 1700 1700
+    dry:     1000 1000 1000 1000 1000 1000 1200 1200 1200 1200 1200 1000
+    driest:   750  750  750  750  750  750  900  900  900  900  900  750
 
-  1. Apr-Jul runoff (CY N)  - sum of Apr+May+Jun+Jul UNIMP_OROV (TAF)
-        Dry  if  Apr_Jul < APR_JUL_THRESH  (1068.1 TAF)
-        Wet  otherwise
+Inputs
+------
+- <base>/CalSim3/__calsim_sv_default__.dss: UNIMP_OROV/FLOW-UNIMPAIRED (validation input, and
+  WY1921 ahead of each Product B chunk for the CY1921 schedule and the WY1922 two-year mean) and
+  MINFLOWFEATHER/FLOW-MIN-REQUIRED (validation Value_CS3)
+- <generated>/mod_other/instream_flows/term_development/MINFLOWFEATHER/
+  MIF_FEATHER_Logic_Reconstruction.xlsx, sheet Main_WA: thresholds and Value_Spreadsheet
+  (validation)
+- Historical_Unsplit, Product A: UNIMP_OROV rows of the set's calsim_qmap_validation_TS.csv
+  (utils.paths.get_rim_inflow_outputs), WY1916-2018
+- Product B: UNIMP_OROV_qmo_n01.csv ... _n10.csv (qmap_postAdj; utils.paths.get_rim_inflow_outputs)
 
-  2. Annual WY (N) unimpaired Oroville inflow  (TAF, Oct-Sep water year)
-        Deficiency  if  Annual_WY < ANN_THRESH  (1245.99 TAF)
-        Normal      otherwise
+Outputs
+-------
+Under <generated>/mod_other/instream_flows/output/:
+- _1_min_flow_feather/_minflowfeather_validation_1922_2021.csv (--product validation): Part B,
+  Part C, Year, Month, Value_CS3, Value_Spreadsheet, Value_Python, Oct 1921 - Sep 2021
+- _historical_unsplit_validation/_minflowfeather_historicalUnsplit_1922_2018.csv,
+  _product_a_validation/_minflowfeather_productA_1922_2018.csv
+- _product_b_final/_minflowfeather_productB_qmo_n01.csv ... _n10.csv
 
-  3. 2-year rolling average of Annual WY (TAF)
-        Deficiency  if  TwoYrAvg_WY < TWOY_THRESH  (3170.64 TAF)
-        Normal      otherwise
+Delivery and chunk CSVs: Part B, Part C, Year, Month, Value.
 
-  Schedule selection:
-        driest  if  Annual Deficiency  OR  2Y Deficiency
-        wet     elif  Apr-Jul Wet
-        dry     else  (Apr-Jul Dry, no Deficiency)
+Dependencies
+------------
+utils.paths, utils.csv_io, utils.dss_io, utils.wgen_calendar; pydsstools, openpyxl
 
-  Monthly flow schedules (cfs):
-        Month:    Apr  May  Jun  Jul  Aug  Sep  Oct  Nov  Dec  Jan  Feb  Mar
-        wet:     1000 1000 1000 1000 1000 1000 1700 1700 1700 1700 1700 1700
-        dry:     1000 1000 1000 1000 1000 1000 1200 1200 1200 1200 1200 1000
-        driest:   750  750  750  750  750  750   900  900  900  900  900  750
-
-  Schedule-to-date assignment:
-        For a date (Year=Y, Month=M):  CY = Y  if  M >= 4  else  Y - 1
-
---------------------------------------------------------------------------
-THRESHOLDS  (calibrated on 1921-2021 historical record, fixed constants)
---------------------------------------------------------------------------
-  APR_JUL_THRESH = 0.55 x 1942           =  1068.10  TAF  (hardcoded in xlsx)
-  ANN_THRESH     = 0.28492 x 4373.11     =  1245.99  TAF
-  TWOY_THRESH    = 0.72503 x 4373.11     =  3170.64  TAF
-  Mean annual UNIMP_OROV (1921-2021)     =  4373.11  TAF
-
---------------------------------------------------------------------------
-INPUTS / OUTPUTS
---------------------------------------------------------------------------
-  UNIMP_OROV inflow sources by run:
-
-  Validation  <-  CalSim SV DSS  __calsim_sv_default__.dss
-    UNIMP_OROV/FLOW-UNIMPAIRED CalSim baseline monthly unimpaired inflow,
-    read via utils.dss_io.  The spreadsheet still supplies the calibrated
-    thresholds and the Value_Spreadsheet reference column.
-
-  Historical_Unsplit, Product A  <-  the set's rim-inflow table
-    calsim_qmap_validation_TS.csv: UNIMP_OROV over the whole model run
-    (WY 1916-2018), so the schedule cycles of the delivered years have their
-    preceding years.
-
-  Product B  <-  rim-inflow Product B chunks  UNIMP_OROV_qmo_n01..n10.csv
-    UNIMP_OROV; the WY-1921 rolling-average seed comes from
-    the CalSim SV DSS.
-
-  Rim-inflow files are found through utils.paths.get_rim_inflow_outputs.
-
-  Output 1 - Validation (WY 1922-2021)
-    Classifies with historical CS3 data; dates from Oct 1921 - Sep 2021.
-    Compares Python output against:
-      - CalSim3 reference CSV (Value_CS3)
-      - Spreadsheet Main_WA cols G-S, rows 4-104 (CY 1921-2021) (Value_Spreadsheet)
-    Wide format: Year, Month, Value_CS3 (CalSim3 reference),
-                 Value_Spreadsheet (original xlsx computation),
-                 Value_Python (this script).
-    Written to:
-      output/_1_min_flow_feather/_minflowfeather_validation_1922_2021.csv
-    Primary comparison: Value_Spreadsheet (MIF_FEATHER_Logic_Reconstruction.xlsx
-      Main_WA cols G-S, rows 4-104, CY 1921-2021)
-
-  Output 2 - Historical_Unsplit or Product A (WY 1922-2018, utils.paths.DELIVERY_WY)
-    Classifies with the set's UNIMP_OROV; dates from Oct 1921 - Sep 2018.
-    Written to:
-      output/_historical_unsplit_validation/_minflowfeather_historicalUnsplit_1922_2018.csv
-      output/_product_a_validation/_minflowfeather_productA_1922_2018.csv
-
-  Output 3 - Product B (10 chunks, WY 1922-2021 each)
-    Classifies with each chunk's own qmap_postAdj data plus CS3 WY 1921 seed
-    for 2-year rolling average priming.
-    Written to:
-      output/_product_b_final/_minflowfeather_productB_qmo_n01.csv
-      output/_product_b_final/_minflowfeather_productB_qmo_n02.csv
-      ... through n10.csv
-
-Reference:
-  Feather River Levee Repair Project, Draft EIR - DWR / TRLIA
-  https://cms9files1.revize.com/trlia/Environmental%20Docs/5.4%20Fisheries.pdf
+Reference
+---------
+Feather River Levee Repair Project, Draft EIR, DWR / TRLIA:
+https://cms9files1.revize.com/trlia/Environmental%20Docs/5.4%20Fisheries.pdf
 
 Usage
 -----
-    python mod_other/instream_flows/_1_min_flow_feather.py --product validation  # Output 1
-    python mod_other/instream_flows/_1_min_flow_feather.py --product historical  # Output 2
-    python mod_other/instream_flows/_1_min_flow_feather.py --product A           # Output 2
-    python mod_other/instream_flows/_1_min_flow_feather.py --product B           # Output 3
+    python mod_other/instream_flows/_1_min_flow_feather.py --product validation
+    python mod_other/instream_flows/_1_min_flow_feather.py --product historical
+    python mod_other/instream_flows/_1_min_flow_feather.py --product A
+    python mod_other/instream_flows/_1_min_flow_feather.py --product B
 """
 
 import os

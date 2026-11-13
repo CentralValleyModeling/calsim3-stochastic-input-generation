@@ -1,38 +1,35 @@
 """
 Historical vs Modified Historical Pickle Cache Builder
 ======================================================
-Two-scenario wrapper around the shared CalView-style DSS pickle builder
-(``utils.dss_pickle_builder``) that compares one historical CalSim 3 DV
-against a modified historical run for the Freeport / Vernalis metrics
-listed in ``reference/metrics_historical_modified_freeport_vernalis.csv``.
+Two-scenario wrapper around the CalView-style DSS pickle builder
+(``utils.dss_pickle_builder``) that compares the historical CalSim 3 DV with a
+modified historical run for the Freeport / Vernalis metrics of
+``reference/metrics_historical_modified_freeport_vernalis.csv``. Stops when an
+input file is missing.
 
 Inputs
 ------
-- Historical baseline DV DSS:
-  ``BASE/CalSim3/Studies/9.3.1_danube_hist/DSS/output/
-  DCR2023_DV_9.3.1_Danube_Hist_v1.7.dss``
-- Modified historical DV DSS:
-  ``GENERATED/postprocessing/calsim_runs/historical_modified/dv_out/
-  DCR2023_DV_9.3.1_Danube_Hist_v1.7.dss``
-- Metric definitions: ``reference/metrics_historical_modified_freeport_vernalis.csv``
+- Historical DV DSS (``--baseline-dss``, scenario ``--baseline-name``, default Historical):
+  <base>/CalSim3/Studies/9.3.1_danube_hist/DSS/output/DCR2023_DV_9.3.1_Danube_Hist_v1.7.dss
+- Modified historical DV DSS (``--compare-dss``, scenario ``--compare-name``, default
+  Modified Historical):
+  <generated>/postprocessing/calsim_runs/historical_modified/dv_out/DCR2023_DV_9.3.1_Danube_Hist_v1.7.dss
+- Metric definitions (``--metrics-csv``):
+  postprocessing/calsim_runs/reference/metrics_historical_modified_freeport_vernalis.csv
 
 Outputs
 -------
-- ``GENERATED/postprocessing/calsim_runs/historical_modified/pickle_files/``
-  (values.pkl, diffs.pkl, units.pkl, fields.pkl, meta.json)
+- <generated>/postprocessing/calsim_runs/historical_modified/pickle_files/ (``--out-dir``):
+  values.pkl, diffs.pkl, units.pkl, fields.pkl, meta.json
 
 Dependencies
 ------------
-- utils.dss_pickle_builder, utils.paths
-- pandas, numpy, pydsstools
+utils.dss_pickle_builder, utils.paths; pandas, numpy, pydsstools
 
 Usage
 -----
     python postprocessing/calsim_runs/_historical_modified_pickle_builder.py
-
-Long Windows file paths (e.g. on OneDrive) are handled transparently by the
-shared builder via ``utils.dss_io.open_dss``, which shortens the path that
-HEC-DSS sees via a ``_dss_link_<pid>_<n>`` directory junction.
+    python postprocessing/calsim_runs/_historical_modified_pickle_builder.py --compare-dss <DV DSS> --compare-name <name>
 """
 
 from __future__ import annotations

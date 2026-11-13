@@ -1,13 +1,28 @@
 """
-Interactive comparison of original vs. regenerated CVprecip .dat files.
+Compare the Compiled CVprecip with the Template
+===============================================
+Per-watershed statistics (mean and sum differences, RMSE, correlation) of the Product A CVprecip
+.dat of _1_compile_precip_sws.py against the template, with scatter, histogram and CDF plots.
+Diagnostic; runs cell by cell or whole.
 
-Computes per-watershed statistics (mean difference, RMSE, correlation) and
-generates diagnostic scatter, histogram, and CDF plots.
-Can be run cell-by-cell in VS Code IPython or as a complete script.
+Inputs
+------
+- reference/CVprecipWY1921_2021.dat: the template (month rows after its 104 header rows,
+  watersheds from column 1394)
+- <generated>/mod_hydrology/small_watersheds/output/_1_compile_precip_sws/Product_A/CVprecipWY1921_2021.dat
+
+Outputs
+-------
+<generated>/mod_hydrology/small_watersheds/output/_1_compile_precip_sws/Product_A/:
+comparison_summary.csv, comparison_diagnostics.png, comparison_cdf.png
+
+Dependencies
+------------
+utils.paths; seaborn, matplotlib
 
 Usage
 -----
-    python _1b_check_precip_output.py
+    python mod_hydrology/small_watersheds/_1b_check_precip_output.py
 """
 # %%
 import os

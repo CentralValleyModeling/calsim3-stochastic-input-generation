@@ -1,25 +1,39 @@
 """
-Delivery-file check of the single series
+Delivery-File Check of the Single Series
 ========================================
 Lists every module's delivery CSVs of Historical_Unsplit and Product A
 (utils.paths.delivery_dirs, the folders the SV compiler reads) and checks them
 before a compile:
 
-1. Name   -- each CSV is ``<stem>_<tag>_<first WY>_<last WY>.csv`` with the set's
-             tag (utils.csv_io.delivery_name). A file left behind under an older
-             name fails here.
-2. Span   -- every series has a value for every month of the water years its
-             name gives (the compiler drops a NaN and keeps the baseline).
-3. Once   -- no Part B / Part C has two rows for a month within a folder, and no
-             Part B / Part C comes from two modules' folders.
-4. Twins  -- when both sets have delivery files, each file of one set has a file
-             of the same stem and span in the other.
+1. Name: each CSV is ``<stem>_<tag>_<first WY>_<last WY>.csv`` with the set's tag
+   (utils.csv_io.delivery_name), holds Part B, Part C, Year, Month and Value, and
+   its rows span the water years its name gives. A file under any other name fails.
+2. Span: every series has a value for every month of those water years (the
+   compiler drops a NaN and keeps the baseline).
+3. Once: no Part B / Part C has two rows for a month within a folder, and no
+   Part B / Part C comes from two modules' folders.
+4. Twins: when both sets are checked and both have delivery files, each file of
+   one set has a file of the same stem and span in the same module of the other.
 
-Inputs       : the delivery folders under GENERATED.
-Outputs      : a report on stdout (files per module and set, then each failure);
-               exit code 0 (clean) or 1.
-Usage        : python utils/check_outputs.py                  # both sets
-               python utils/check_outputs.py --product A      # one set
+Inputs
+------
+- <generated>/<module output>/_historical_unsplit_validation/*.csv and
+  _product_a_validation/*.csv (utils.paths.delivery_dirs)
+
+Outputs
+-------
+- A report on stdout (CSV count per module and set, then each failure); exit
+  code 0 when clean, 1 otherwise
+
+Dependencies
+------------
+utils.paths; pandas
+
+Usage
+-----
+    python utils/check_outputs.py
+    python utils/check_outputs.py --product historical
+    python utils/check_outputs.py --product A
 """
 import argparse
 import re

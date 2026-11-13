@@ -1,45 +1,46 @@
 """
 Reservoir Evaporation Processing Script
 =======================================
-Monthly evaporation of the CalSim 3.0 reservoirs by the Hargreaves-Samani method, from the daily
-weather of one set at the cell nearest each reservoir.
+Monthly evaporation rate (in/month) of the CalSim 3.0 reservoirs by the Hargreaves-Samani method
+(evaporation.py), from the daily weather of one set at the cell nearest each reservoir, as
+ER_<CODE>/EVAPORATION-RATE.
 
 Inputs
 ------
-- The daily weather of the set (utils.wgen): Historical_Unsplit, Product A or Product B
-- reference/reservoir_parameters.json (from _0_extract_reservoir_database)
+- WGEN daily weather of the --product set (utils.wgen.read_met, through evaporation.py)
+- reference/reservoir_parameters.json (_0_extract_reservoir_database.py --extract)
+- --product A figures: <generated>/mod_reservoir/evaporation/output/_1_excel_to_python_validation/
+  validation_results.csv and reservoir_details/<CODE>.csv
+- --compare-a: the Product A combined_evaporation.csv and the Product B chunk CSVs below
+
+Outputs
+-------
+Under <generated>/mod_reservoir/evaporation/output/_2_run_reservoir_evap/, <set> being
+Historical_Unsplit or Product_A:
+- <set>/individual_reservoirs/<Sacramento_Valley|San_Joaquin_Valley|Other>/<CODE>.csv,
+  Oct 1921 - Sep 2018
+- <set>/combined_evaporation.csv (month x reservoir) and <set>/summary_statistics.csv
+- _historical_unsplit_validation/_reservoir_evaporation_historicalUnsplit_1922_2018.csv,
+  _product_a_validation/_reservoir_evaporation_productA_1922_2018.csv
+- Product_A/figures/annual_evaporation_distribution.png, temperature_range_comparison.png,
+  climate_variable_comparison.png (--product A)
+- _product_b_final/reservoir_evaporation_productB_n01.csv ... _n10.csv (--product B)
+- _compare_ab/comparison_monthly_aggregated.csv and comparison_monthly_by_reservoir.csv: monthly
+  means of Product A and of each Product B chunk (--compare-a)
+
+Delivery and chunk CSVs: Part B, Part C, Year, Month, Value.
 
 Dependencies
 ------------
-- evaporation.py  (Hargreaves-Samani engine)
-- utils/paths.py, utils/csv_io.py, utils/wgen_calendar.py
+evaporation.py; utils.paths, utils.csv_io, utils.wgen, utils.wgen_calendar; matplotlib
 
-Usage:
-    python mod_reservoir/evaporation/_2_run_reservoir_evap.py --product historical    # Historical_Unsplit, all reservoirs
-    python mod_reservoir/evaporation/_2_run_reservoir_evap.py --product A             # Product A, all reservoirs
-    python mod_reservoir/evaporation/_2_run_reservoir_evap.py --product A FOLSM       # Product A, single reservoir
-    python mod_reservoir/evaporation/_2_run_reservoir_evap.py --product A FOLSM SHSTA OROVL  # Product A, specific reservoirs
-    python mod_reservoir/evaporation/_2_run_reservoir_evap.py --product B             # Product B, all reservoirs
-    python mod_reservoir/evaporation/_2_run_reservoir_evap.py --product B FOLSM       # Product B, single reservoir
-    python mod_reservoir/evaporation/_2_run_reservoir_evap.py --compare-a             # Compare B vs A (reads pre-generated outputs)
-
-Output (Historical_Unsplit, Product A; <set> is Historical_Unsplit or Product_A):
-    - Individual CSV files: output/_2_run_reservoir_evap/<set>/individual_reservoirs/{Region}/{CODE}.csv
-    - Combined CSV file:    output/_2_run_reservoir_evap/<set>/combined_evaporation.csv
-    - Summary statistics:   output/_2_run_reservoir_evap/<set>/summary_statistics.csv
-    - Delivery CSV:         output/_2_run_reservoir_evap/_historical_unsplit_validation/_reservoir_evaporation_historicalUnsplit_{start_wy}_{end_wy}.csv
-                            and output/_2_run_reservoir_evap/_product_a_validation/_reservoir_evaporation_productA_{start_wy}_{end_wy}.csv
-    - Figures (Product A):  output/_2_run_reservoir_evap/Product_A/figures/
-
-Output (Product B):
-    - Chunk CSVs: output/_2_run_reservoir_evap/_product_b_final/reservoir_evaporation_productB_n01.csv ... n10.csv
-    - Format: Part B, Part C, Year, Month, Value (long format)
-
-Output (--compare-a):
-    - output/_2_run_reservoir_evap/_compare_ab/comparison_monthly_aggregated.csv
-        Monthly mean evaporation averaged across all reservoirs; Product A vs B.
-    - output/_2_run_reservoir_evap/_compare_ab/comparison_monthly_by_reservoir.csv
-        Monthly mean evaporation per reservoir; Product A vs B.
+Usage
+-----
+    python mod_reservoir/evaporation/_2_run_reservoir_evap.py --product historical
+    python mod_reservoir/evaporation/_2_run_reservoir_evap.py --product A
+    python mod_reservoir/evaporation/_2_run_reservoir_evap.py --product B
+    python mod_reservoir/evaporation/_2_run_reservoir_evap.py --product A FOLSM SHSTA
+    python mod_reservoir/evaporation/_2_run_reservoir_evap.py --compare-a
 """
 
 import sys

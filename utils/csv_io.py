@@ -1,23 +1,27 @@
 """
-Shared standard-value (SV) CSV helpers
-======================================
-Centralizes the CSV read/normalize idioms repeated across the pipeline for the
-standard SV format ``Part B, Part C, Year, Month, Value``, and
-``write_delivery_csv``, which writes a Historical_Unsplit or Product A series over
-``DELIVERY_WY``.
+SV CSV Helpers
+==============
+Readers and writers of the standard SV format ``Part B, Part C, Year, Month, Value``
+(``SV_COLUMNS``).
 
-Behavior-preservation note
---------------------------
-``to_validation_df`` is a *faithful copy* of a pre-existing function and must
-keep its exact behavior (no tests exist): it reproduces
-``mod_hydrology/calsimhydro/_3_postprocess_single.to_validation_csv``
-(water-year window filter, column order, sort, empty-frame shape).
-``load_sv_series`` reads with a plain ``pd.read_csv``, not the normalized
-:func:`read_sv_csv`, which would change what it returns.
+- ``read_sv_csv``: ``pd.read_csv(skipinitialspace=True)`` with stripped column names (e.g. a
+  ``qmap_pairs.csv``).
+- ``load_sv_series``: one Part B / Part C series of an SV CSV, matched case-insensitively, as a
+  month-end Series (empty when absent). Reads with plain ``pd.read_csv``, column names as written.
+- ``to_validation_df``: a wide frame (date index, ``"B/C"`` columns) as SV rows within a
+  water-year window, NaN dropped, sorted by Part B, Part C, Year, Month; an empty five-column
+  frame when no row falls in the window.
+- ``delivery_name``, ``write_delivery_csv``: the delivery CSV of a Historical_Unsplit or Product A
+  series, ``<folder>/<stem>_<tag>_<first WY>_<last WY>.csv`` (tag from ``utils.paths.DELIVERY``),
+  clipped to ``utils.paths.DELIVERY_WY``. The writer removes the folder's other spans of the same
+  stem and tag, since the compiler reads every CSV of a folder.
 
-``read_sv_csv`` captures the ``pd.read_csv(skipinitialspace=True)`` +
-strip-column-names idiom used by ``read_qmap_pairs`` and many numbered
-scripts.
+Usage
+-----
+    from utils import csv_io
+    from utils.paths import delivery_dir
+    csv_io.write_delivery_csv(df, delivery_dir(out_root, "A"), "_dcd", "A")   # _dcd_productA_1922_2018.csv
+    s = csv_io.load_sv_series(path, "I_SHSTA", "FLOW-INFLOW")
 """
 from __future__ import annotations
 

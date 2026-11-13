@@ -1,39 +1,42 @@
 # %% Fix ProductB_SV_n10.dss -- restore baseline values through Oct 1921
-"""Diagnose/fix n10 initial-timestep infeasibility at October 1921.
+"""
+Chunk n10 First-Month Fix, October 1921
+=======================================
+Writes a copy of the Product B chunk n10 SV DSS whose values through October 1921
+are the CalSim 3 baseline's, so the run starts from the baseline state; November
+1921 to September 2021 keep n10's values. The original file is left unchanged.
 
-Infeasibility summary
----------------------
-n10 -- 1921_10 (first simulation timestep) infeasible. Reported as
-``maxdiversionrate_total in svar definition: Initial data of
-rnchowr_rem_totaldv in dss file doesn't exist`` (wr_ranchomurieta.wresl,
-cycle 14 sjrbase). ``rnchowr_rem_totaldv`` is a decision variable (not an
-SV), so it is absent from the SV DSS by design -- the message is a
-downstream symptom of the first-timestep LP failing, not a missing record.
+n10 fails at its first timestep, October 1921 (wr_ranchomurieta.wresl, cycle 14
+sjrbase), reported as ``maxdiversionrate_total in svar definition: Initial data of
+rnchowr_rem_totaldv in dss file doesn't exist``. ``rnchowr_rem_totaldv`` is a
+decision variable, absent from any SV DSS, so the message follows from the failed
+first-month LP rather than a missing record. The compiled n10 DSS holds all 19,063
+paths at October 1921 with valid values. The trigger is n10's October 1921 draw:
+I_CSM035 (Cosumnes inflow, which drives the Rancho Murieta water right) is 19.5 TAF
+against the baseline's 0.33, with Sacramento unimpaired flows 10-17 times the
+baseline's, in the first month of the run. The binding LP constraint is not
+isolated. The other chunks fail later in their runs (WRESL fixes).
 
-A baseline-vs-n10 diff at Oct 1921 confirms the compile introduces no data
-defect (all 19,063 paths present, valid, no sentinels). The trigger is a
-pathological stochastic cold-start: n10's Oct 1921 ``I_CSM035`` (Cosumnes
-inflow, which drives the Rancho Murieta water right) is 19.5 TAF vs 0.33
-baseline (~59x), with Sacramento unimpaired flows 10-17x baseline. October
-is the cold-start timestep, so there is no prior month to absorb the shock.
-The exact binding LP constraint was not isolated, but the Cosumnes inflow
-matches the variable in the error. n10 is the only chunk whose extreme draw
-lands on the cold-start month; the others fail mid-run (WRESL fixes).
+Steps: copy ProductB_SV_n10.dss (and its .dsd, .dsk, .dsc) to ProductB_SV_n10_fixed.dss;
+for every monthly path of the baseline whose D part holds 1920, write the n10 block
+back with the baseline's values for the months through October 1921.
 
-Fix
----
-Replace all SV values at and before October 1921 with historical baseline
-values from __calsim_sv_default__.dss. This restores the initialization
-state to the known-good baseline while preserving the stochastic sequence
-for November 1921 through September 2021. The fix produces a new file
-(ProductB_SV_n10_fixed.dss) without modifying the original.
+Inputs
+------
+- <base>/CalSim3/__calsim_sv_default__.dss
+- <generated>/postprocessing/sv_compile/product_b_compilation/_product_b_compiled_sv/ProductB_SV_n10.dss
 
-Approach:
-  1. Copy existing n10 DSS -> n10_fixed DSS
-  2. For each monthly SV path in the 01JAN1920 decade block:
-     a. Read that block from both baseline and the n10 copy
-     b. Replace values for months <= Oct 1921 with baseline values
-     c. Write the merged block back to the n10 copy
+Outputs
+-------
+- <generated>/postprocessing/sv_compile/product_b_compilation/_product_b_compiled_sv/ProductB_SV_n10_fixed.dss
+
+Dependencies
+------------
+utils.dss_io, utils.paths; numpy, pandas, pydsstools
+
+Usage
+-----
+    python postprocessing/calsim_runs/infeasibilities/n10.py
 """
 
 import sys

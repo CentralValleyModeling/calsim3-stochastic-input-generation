@@ -1,78 +1,77 @@
 """
-Consolidated Historical-Validation Compiler of a Single Weather Series
-======================================================================
-Compiles the delivery CSVs of Historical_Unsplit (``--product historical``) or
-Product A (``--product A``) into one CalSim SV DSS over ``utils.paths.DELIVERY_WY``.
+Single-Series SV Compiler
+=========================
+Compiles the delivery CSVs of Historical_Unsplit (``--product historical``) or Product A
+(``--product A``) into one CalSim SV DSS: the CalSim 3 baseline with every delivered SV
+replaced over ``utils.paths.DELIVERY_WY`` (Oct 1921 to Sep 2018). Cross-checks the result
+against the master inventory and compares it with the baseline.
 
-Workflow
---------
-1. Scan each module's delivery folder of the set (``utils.paths.delivery_dir``:
-   ``_historical_unsplit_validation/`` or ``_product_a_validation/``) for data CSVs
-2. Copy those CSVs into ``compiled_input_files/<module>/``
-3. For each module, build an intermediate DSS by overriding the baseline
-   ``__calsim_sv_default__.dss`` with the CSV values. A module with two rows for
-   one SV and month, or an SV that two modules provide, stops the run.
-4. Merge all intermediate DSS records into a single
-   ``<HistoricalUnsplit|ProductA>_Historical_Validation_SV.dss``
-5. Cross-reference against the master inventory to report:
-   - Expected (Part B, C) that were successfully modified
-   - Expected (Part B, C) that are MISSING (not provided by any module)
-   - Unexpected (Part B, C) modifications (not in the inventory)
+1. Reads each module's delivery folder of the set (``utils.paths.delivery_dirs``, in that
+   order) and copies its CSVs to compiled_input_files/<module>/. Stops when no module has
+   CSVs, and, when rim inflows are delivered, unless their run comes from the configured
+   model at its pin (``utils.paths.require_pinned_run``).
+2. Writes per module a DSS of the baseline records of its SVs with its values over the
+   window; a NaN keeps the baseline value. Stops when a module has two rows for one SV and
+   month, or when two modules provide one SV. An SV absent from the baseline is reported.
+3. Fills each Constant/Rept SV of the inventory that no module provides with the baseline's
+   last complete water year, repeated over the window.
+4. Copies the baseline to the compiled DSS and writes the module layers onto it.
+5. Cross-references the inventory (sheet MASTER): expected SVs modified or missing, and
+   modified SVs it does not expect; SVs flagged Missing = T or Used in DCR = F are skipped.
+6. Writes the diagnostics, then the statistics of every modified SV against the baseline,
+   their report and the figures.
 
-Inventory flags
----------------
-- **Missing = T** -> SV does not exist in the baseline; skip entirely
-- **Used in DCR = F** -> SV not used in the DCR study; skip entirely
-- **Constant/Rept = T** -> repeat the last 12 WY months of the baseline across
-  the full overwrite window (auto-generated, no CSV needed)
+A compile waits until the inventory workbook is closed in Excel.
 
-Diagnostic outputs  (all written to ``historical_unsplit_validation/`` or
-``product_a_validation/``; <tag> is historicalUnsplit or productA)
-------------------------------------------------------------------------
-- ``compiled_input_files/<module>/*.csv``  - local copies of source CSVs
-- ``<module>__<tag>.dss``                  - per-module intermediate DSS
-- ``_constant_rept__<tag>.dss``            - auto-filled Constant/Rept DSS
-- ``<HistoricalUnsplit|ProductA>_Historical_Validation_SV.dss`` - final compiled DSS
-- ``paths_modified.csv``                   - every (Part B/C, module) modified
-- ``paths_unchanged.csv``                  - baseline paths untouched by any module
-- ``paths_not_in_baseline.csv``            - module paths absent from the baseline
-- ``paths_partial_window.csv``             - module paths that cover only part of the
-                                             overwrite window (the baseline fills the rest)
-- ``inventory_expected_modified.csv``      - inventory SVs successfully modified
-- ``inventory_expected_missing.csv``       - inventory SVs that should have been
-                                             modified but were not
-- ``inventory_constant_rept.csv``          - auto-filled Constant/Rept SVs
-- ``inventory_skipped_missing.csv``        - SVs skipped (Missing = T)
-- ``inventory_skipped_not_in_dcr.csv``     - SVs skipped (Used in DCR = F)
-- ``inventory_unexpected.csv``             - modifications not in the inventory
-- ``modification_statistics.csv``          - per-path monthly & annual comparison
-                                             stats (base vs modified) when enabled
-- ``modification_statistics_report.txt``   - summary report by input category
-- ``figures/r2_nse_by_category.png``       - R2/NSE box plots by category
-- ``figures/pctchange_monthly_by_category.png`` - monthly % change heatmap
-- ``figures/abschange_annual_by_category.png``  - annual abs-change box plots
-- ``figures/r2_nse_scatter.png``           - R2 vs NSE scatter by category
-- ``figures/all-terms/``                   - per-variable plots (regular terms)
-- ``figures/all-terms-constant-rept/``     - per-variable plots (12-month repeat)
-- ``figures/all-terms-constant/``          - per-variable plots (constant value)
-- ``compilation_summary.txt``              - full statistics
-- ``summary_tables.csv``                   - per-category summary table
-                                             (R2, NSE, annual averages)
+Inputs
+------
+- Delivery CSVs (Part B, Part C, Year, Month, Value) of each module in
+  <generated>/<module output>/_historical_unsplit_validation/ or _product_a_validation/
+  (``utils.paths.DELIVERY_ROOTS``); the rim inflows' in
+  <generated>/mod_hydrology/rim_inflow/output/_1_build_rim_inflow/<wgen folder>/, beside the
+  run_manifest.json of their run
+- <base>/CalSim3/__calsim_sv_default__.dss
+- inventory/_MASTER_INVENTORY_FOR_STOCHASTIC_INPUT_GENERATION_.xlsx
 
-CLI flags
----------
-- ``--product {historical,A}``  The weather set (required).
-- ``--compute-stats``  Skip compilation; compute per-path modification
-  statistics from an existing compiled DSS and ``paths_modified.csv``.
-  Errors out if the compiled DSS has not been created yet.
-- ``--stats-report``   Generate summary report and figures from an existing
-  ``modification_statistics.csv``.  Can be combined with ``--compute-stats``
-  or run independently after stats have already been computed.
-- ``--no-term-plots``  Skip per-variable diagnostic plots (time series + scatter).
-- ``--summary-tables``  Generate per-category summary Excel workbook
-  (``summary_tables.csv``) from ``modification_statistics.csv``.  Produces
-  one section per input category with R2, NSE, and annual-average columns.
-  Standalone mode -- exits after writing.
+Outputs
+-------
+In <generated>/postprocessing/sv_compile/<historical_unsplit|product_a>_validation/, <tag>
+historicalUnsplit or productA:
+
+- <HistoricalUnsplit|ProductA>_Historical_Validation_SV.dss: the compiled DSS
+- compiled_input_files/<module>/*.csv: copies of the source CSVs
+- <module>__<tag>.dss, _constant_rept__<tag>.dss: the layers
+- paths_modified.csv, paths_unchanged.csv, paths_not_in_baseline.csv, paths_partial_window.csv
+  (SVs that cover part of the window; the baseline fills the rest)
+- inventory_expected_modified.csv, inventory_expected_missing.csv, inventory_constant_rept.csv,
+  inventory_skipped_missing.csv, inventory_skipped_not_in_dcr.csv, inventory_unexpected.csv
+- compilation_summary.txt
+- modification_statistics.csv: per SV, monthly and annual R2, NSE, means and changes of the
+  compiled values against the baseline; modification_statistics_report.txt: by input category
+- figures/r2_monthly_by_category.png, nse_monthly_by_category.png, r2_annual_by_category.png,
+  nse_annual_by_category.png, pctchange_monthly_by_category.png, annual_scatter/<category>.png
+- figures/all-terms*/<category>/<B>__<C>*.png: monthly, annual and monthly-average figures per
+  SV, in separate folders for regular, Constant/Rept and constant terms
+- summary_tables.csv (``--summary-tables``): R2, NSE and annual means by category
+
+Dependencies
+------------
+utils.dss_io, utils.paths; numpy, pandas, matplotlib, openpyxl, pydsstools
+
+Usage
+-----
+    python postprocessing/sv_compile/single_series_compilation.py --product historical
+    python postprocessing/sv_compile/single_series_compilation.py --product A
+    python postprocessing/sv_compile/single_series_compilation.py --product A --no-term-plots
+    python postprocessing/sv_compile/single_series_compilation.py --product A --compute-stats --stats-report
+    python postprocessing/sv_compile/single_series_compilation.py --product A --stats-report
+    python postprocessing/sv_compile/single_series_compilation.py --product A --summary-tables
+
+``--compute-stats`` recomputes modification_statistics.csv from the compiled DSS and
+paths_modified.csv of an earlier compile (with ``--stats-report`` also the report and
+figures); ``--stats-report`` alone redraws the report and figures from
+modification_statistics.csv; ``--summary-tables`` writes summary_tables.csv from it. Each
+skips the compile. ``--no-term-plots`` leaves out the per-SV figures.
 """
 
 import os

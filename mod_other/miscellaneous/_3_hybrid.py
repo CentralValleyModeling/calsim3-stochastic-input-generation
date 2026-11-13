@@ -1,55 +1,43 @@
 """
 Miscellaneous Hybrid Terms = (WYT_avg + QMap) / 2
 =================================================
-Single driver for Hybrid = (WYT monthly average + Quantile Mapping) / 2 over
-the miscellaneous terms in ``reference/hybrid_terms_miscellaneous.csv``.
-Three logical parts run in sequence:
+Each term of reference/hybrid_terms_miscellaneous.csv (C_CBD001HIST, C_KLR005HIST) as the mean of
+its WYT monthly average (utils.wyt_monthlyavg_framework) and its quantile map from a rim-inflow
+predictor (utils.qmap_single_from_pairs for Historical_Unsplit and Product A,
+utils.qmap_product_b_from_pairs for Product B).
 
-  1. WYT monthly averaging (calls utils.wyt_monthlyavg_framework).
-  2. Quantile mapping (calls the single-series or the Product B engine).
-  3. Average the two intermediate per-term results to produce the final SV.
-
-The QM part follows each term's ``fit`` column (utils.qmap_fit) and is
-fitted on WY1950-2018, one fit for A and B: ``pass`` trains on the CalSim3
-predictor, ``absorb`` on the rim-inflow model's historical-unsplit
-predictor. The WYT part keeps the CalSim3 pattern and follows the year
-types computed from the model's flows.
+The quantile map is fitted on WY1950-2018 by the term's fit (utils.qmap_fit): pass trains on the
+CalSim3 predictor, absorb on the rim-inflow model's Historical_Unsplit predictor. The WYT part
+applies the CalSim3 pattern to the year types of the set.
 
 Inputs
 ------
-- ``reference/hybrid_terms_miscellaneous.csv``
-- ``BASE/CalSim3/__calsim_sv_default__.dss`` (targets, WYT patterns and the
-  predictors of pass fits, for both A and B)
-- WYT historical reference: ``mod_hydrology/water_year_types/reference/``
-- WYT target by weather set:
-    * historical: ``mod_hydrology/water_year_types/output/_1_calc_WYTs/Historical_Unsplit/``
-    * A: ``mod_hydrology/water_year_types/output/_1_calc_WYTs/Product_A/``
-    * B: ``mod_hydrology/water_year_types/output/_1_calc_WYTs/Product_B/``
-- Rim inflow simulation (utils.paths.get_rim_inflow_outputs):
-    * historical: ``_riminflow_historicalUnsplit_1922_2018.csv``
-    * A: ``_riminflow_productA_1922_2018.csv``
-    * B: ``<PartB>_qmo_n{01..10}.csv``
-    * the historical-unsplit run, for absorb fits
+- reference/hybrid_terms_miscellaneous.csv: term_part_b, term_part_c, basin_wyt,
+  predictor_part_b, predictor_part_c, fit, lower_bound, upper_bound
+- <base>/CalSim3/__calsim_sv_default__.dss: the terms (WYT pattern, QM target) and the predictors
+  of pass fits
+- mod_hydrology/water_year_types/reference/_Historical_SacWYT.csv, _Historical_SJWYT.csv
+- <generated>/mod_hydrology/water_year_types/output/_1_calc_WYTs/<set name>/: the set's WYT CSVs
+- Rim-inflow SVs (utils.paths.get_rim_inflow_outputs): _riminflow_historicalUnsplit_1922_2018.csv,
+  _riminflow_productA_1922_2018.csv, or <Part B>_qmo_n01.csv ... _n10.csv for Product B; the
+  Historical_Unsplit calsim_qmap_validation_TS.csv for absorb fits
 
 Outputs
 -------
-- ``output/_3_hybrid/<historical_unsplit|product_a|product_b>/``: intermediates
-  (``hybrid_wyt/``, ``hybrid_qmap/``, ``hybrid_wyt_monthly_avg_historical/``)
-- ``output/_3_hybrid/figures/<historical_unsplit|product_a>/`` -- per-term TS+CDF
-  and monthly error box (--product historical, A)
-- ``output/<_historical_unsplit_validation|_product_a_validation>/``
-  ``<part_b>_<historicalUnsplit|productA>_<wy>_<wy>.csv`` (--product historical, A)
-  -- final hybrid SV
-- ``output/_product_b_final/<part_b>_product_b_n{01..10}.csv``
-  (--product B) -- final hybrid SV per chunk
+Under <generated>/mod_other/miscellaneous/output/:
+- _3_hybrid/<historical_unsplit|product_a|product_b>/: hybrid_wyt/ and hybrid_qmap/ (the two
+  parts per term), hybrid_wyt_monthly_avg_historical/ (pattern and baseline check)
+- _3_hybrid/figures/<historical_unsplit|product_a>/<Part B>.png and <Part B>_monthly_error.png
+- _historical_unsplit_validation/<Part B>_historicalUnsplit_1922_2018.csv,
+  _product_a_validation/<Part B>_productA_1922_2018.csv
+- _product_b_final/<Part B>_product_b_n01.csv ... _n10.csv (--product B)
+
+Delivery and chunk CSVs: Part B, Part C, Year, Month, Value.
 
 Dependencies
 ------------
-- utils.wyt_monthlyavg_framework
-- utils.qmap_single_from_pairs
-- utils.qmap_product_b_from_pairs
-- utils.validation_plots (transitive)
-- utils.paths
+utils.paths, utils.csv_io, utils.wgen_calendar, utils.wyt_monthlyavg_framework,
+utils.qmap_single_from_pairs, utils.qmap_product_b_from_pairs; pydsstools
 
 Usage
 -----

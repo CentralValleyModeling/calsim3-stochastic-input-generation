@@ -1,48 +1,48 @@
-"""Pipeline script-convention gate.
+"""
+Pipeline Script Convention Check
+================================
+Checks the pipeline scripts against the repo's script convention; CI runs it on every push and
+pull request (.github/workflows/lint.yml). It checks the scripts of PRODUCT_A_SCRIPTS (the
+single-series and shared scripts) and PRODUCT_B_SCRIPTS, or the paths given; EXEMPT_SCRIPTS
+(diagnostics) are not checked.
 
-Single source of truth for the numbered-pipeline script convention,
-used both for a local pre-commit check and by CI
-(.github/workflows/lint.yml). For every script in the Product A and
-Product B pipelines it enforces five rules:
+Rules of each checked script:
 
-Per-file rules (run on every gated script):
+  1. ASCII only: no character above 0x7F.
+  2. No Jupyter cell markers (``# %%``, ``#%%``).
+  3. A module docstring with the ``===`` title underline.
+  4. pyflakes-clean.
+  5. No raw ``HecDss.Open``: DSS files open through ``utils.dss_io.open_dss``
+     (long-path junction, the 256-character Fortran path limit).
+  6. No hard-coded ``../data`` path: data locations come from utils.paths.
+  7. Every ``"reference" / "X.csv"`` the script names exists in its reference/ folder.
+  8. No deprecated pandas offset aliases in ``freq=`` or ``.resample(`` ('ME', 'YE',
+     'QE', 'YS-OCT', not 'M', 'A', 'AS-OCT'); a line marked ``# period-resample`` passes.
+  9. PBIAS as ``100 * sum(sim - obs) / sum(obs)``, never ``(obs - sim)``.
+ 10. No ``np.random.seed``: quantile-map determinism comes from
+     ``utils.quantile_mapping.QMAP_SEED``.
 
-  1. ASCII only         -- no byte >= 0x80 anywhere (CLAUDE.md hard rule).
-  2. No Jupyter cells   -- no ``# %%`` / ``#%%`` cell markers (scripts are
-                           CLI, not notebooks).
-  3. Header docstring   -- a module docstring containing the ``===``
-                           standardized title underline.
-  4. pyflakes-clean     -- no unused imports / undefined names, etc.
-  5. No raw HecDss.Open -- route DSS opens through ``utils.dss_io.open_dss``
-                           (handles Windows long-path junction + the
-                           256-char Fortran CNAME limit). Only
-                           ``utils/dss_io.py`` + ``utils/dss_pickle_builder.py``
-                           are sanctioned raw callers (neither is gated).
-  6. No hard-coded data paths -- resolve data locations via utils.paths
-                           helpers, never a literal ``../../data/``.
-  7. Reference CSVs exist -- any ``"reference" / "X.csv"`` a script names
-                           must exist on disk under the script's reference/.
-  8. No deprecated pandas freq aliases -- use the pandas 2.2 forms
-                           ('ME','YE','QE','YS-OCT', ...) not 'M'/'A'/'AS-OCT'.
-  9. PBIAS sign         -- PBIAS must be 100 * sum(sim - obs) / sum(obs)
-                           (positive = overestimation); reject (obs - sim).
- 10. No np.random.seed  -- QM determinism comes from the single QMAP_SEED
-                           in utils/quantile_mapping.py; do not re-seed.
+A run without paths also checks manifest drift: every numbered ``_N_*.py`` (or ``_Nb_*.py``)
+under mod_*/ and every ``*.py`` under postprocessing/ must be in one of the three lists, and
+every listed path under those roots must exist.
 
-Plus one cross-cutting check (only run during a full sweep):
+Inputs
+------
+- The scripts of PRODUCT_A_SCRIPTS and PRODUCT_B_SCRIPTS, or the paths given; the reference/
+  folder beside each
 
- 11. Manifest-drift cross-check -- every pipeline-shaped .py file on disk
-     (numbered ``_N_*.py`` under mod_*/, all ``*.py`` under postprocessing/)
-     must be listed in PRODUCT_A_SCRIPTS, PRODUCT_B_SCRIPTS, or
-     EXEMPT_SCRIPTS; conversely, no listed entry may be missing from disk.
+Outputs
+-------
+- A report on stdout; exit code 0 when every check passes, 1 otherwise
 
-Inputs       : the Product A + Product B script lists below
-               (or paths given as argv to check a subset; subset runs skip
-               the manifest-drift cross-check).
-Outputs      : a report on stdout; exit code 0 (clean) or 1 (violations).
-Dependencies : pyflakes (see environment.yml pip section).
-Usage        : python utils/check_scripts.py            # both lists + drift
-               python utils/check_scripts.py path ...   # subset (no drift)
+Dependencies
+------------
+Standard library; pyflakes, run as ``python -m pyflakes`` by the same interpreter
+
+Usage
+-----
+    python utils/check_scripts.py
+    python utils/check_scripts.py mod_hydrology/calsimhydro/_1_compile_precip.py
 """
 import ast
 import re

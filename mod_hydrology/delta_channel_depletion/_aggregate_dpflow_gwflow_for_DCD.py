@@ -1,44 +1,31 @@
 # -*- coding: utf-8 -*-
 """
-Created on 10/02/2025
-@author: mbastani
-
-This script uses Sum-Product calculation to aggregate 168 island monthly flow time series (in cfs)
-into Delta & WBA50 weighted totals for DP-FLOW and GW-FLOW, and write four
-new records into "DCD_island_month_C3.dss".
-
-Note: If you want the weighted average instead of sum, just divide
-each result by w["Delta"].sum() or w["WBA50"].sum() before writing.
-
-Python configurations:
-It works with both "read_ts" or "get_ts", parses island IDs from Part B, and
-writes via "TimeSeriesContainer" (most compatible). Handles "pytimes" vs "times".
-
-Usage
------
-    python _2_aggregate_dpflow_gwflow_for_DCD.py <run_dir>
-
-Example
--------
-    python _2_aggregate_dpflow_gwflow_for_DCD.py "C:\path\to\data\GENERATED\mod_hydrology\delta_channel_depletion\DeltaChannelDepletion_Runs\DCD_Calsim3_PlanningStudy_1921-2018"
-
-Arguments
----------
-run_dir : Path
-    Path to the DCD model run directory containing DCD_island_month.dss.
+Aggregate DCD Island DP and GW Flows to Delta and WBA 50
+========================================================
+Weighted sums (CFS, PER-AVER) of the monthly DP-FLOW and GW-FLOW of every DCD island into Delta
+and WBA 50 totals, written as four records of one DCD run. Each island's weight comes from its
+id in Part B; an island missing from the weight table counts 0.
 
 Inputs
 ------
-- <run_dir>/DCD_island_month.dss
-- reference/WeightedRatiosForDCD.csv  (columns: Island, Delta, WBA50; tab or comma separated)
+- <run_dir>/DCD_island_month.dss (run_dir: the positional argument, a DCD run folder)
+- reference/WeightedRatiosForDCD.csv: Island, Delta, WBA50 (tab or comma separated)
 
 Outputs
 -------
-- <run_dir>/DCD_island_month_C3.dss with:
-  /<A>/DP_DELTA_DCD/DP-FLOW/<D>/<E>/<F>/
-  /<A>/DP_WBA50_DCD/DP-FLOW/<D>/<E>/<F>/
-  /<A>/GW_DELTA_DCD/GW-FLOW/<D>/<E>/<F>/
-  /<A>/GW_WBA50_DCD/GW-FLOW/<D>/<E>/<F>/
+- <run_dir>/DCD_island_month_C3.dss, Parts D and E from the first input record:
+  /CALSIM/DP_DELTA_DCD/DP-FLOW/<D>/<E>/L2015A/, /CALSIM/DP_WBA50_DCD/DP-FLOW/<D>/<E>/L2015A/,
+  /CALSIM/GW_DELTA_DCD/GW-FLOW/<D>/<E>/L2015A/, /CALSIM/GW_WBA50_DCD/GW-FLOW/<D>/<E>/L2015A/
+
+Dependencies
+------------
+pydsstools; does not import utils.paths
+
+Usage
+-----
+    python mod_hydrology/delta_channel_depletion/_aggregate_dpflow_gwflow_for_DCD.py <run_dir>
+
+Author: mbastani, 10/02/2025
 """
 
 #%%# ========================= 1) Imports & File Paths =========================

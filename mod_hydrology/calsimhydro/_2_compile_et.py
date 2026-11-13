@@ -1,33 +1,43 @@
 """
 Compile Area-Weighted VIC ET per WBA, Quantile-Mapped to CS3 Monthly ET
 =======================================================================
-Computes area-weighted VIC ET per Water Balance Area and quantile-maps it to
-the CalSim3 monthly ET baseline, writing the CalSimHydro ET inputs for
-Product A (1921-2018) or Product B (chunked).
+Monthly VIC short-grass ET (in/month) per Water Balance Area, area-weighted over its cells and
+quantile-mapped onto the CalSim3 reference ET (RefET) or each crop's ET (CropET): the
+CalSimHydro ET inputs of Product A or Product B.
+
+Quantile mapping
+----------------
+- Product A: fit on WY1921-1971 (VIC Product A against CS3), applied to WY1972-2018.
+- Product B: fit on WY1921-2018 of VIC Product A against CS3, applied to every stamp month.
 
 Inputs
 ------
-- VIC flux files; WBA grid info
-- CS3 RefETo / CropET DSS (quantile-mapping target)
+- reference/WBA_Grid_Info.txt (or --grid_info_file): WBA cells and pct_area weights; the
+  Gerber cells are skipped (_2b_compile_pan_evap.py reads them)
+- <archive>/mod_forcing/vic/output/fluxes/Product_A/1/fluxes_<lat>_<lon> (A, and the fit of
+  B) and .../Product_B/1/ (B), column --vic_col_index
+- reference/CS3_RefETo.dss (/CALSIM/<WBA>/REF-ET//1MON/REFETO/) and reference/CS3_ET.dss
+  (/IWFM/<WBA>_<crop>_ET/RATE_INCH//1MON/EVAPOTRANSPIRATION/, every crop but SL and UR),
+  Oct 1920 - Sep 2021
 
 Outputs
 -------
-- <generated>/output/_2_compile_et/Product_A/  (monthly QM'd ET CSVs; optional DSS)
-- <generated>/output/_2_compile_et/Product_B/  (with --product B)
+Under <generated>/mod_hydrology/calsimhydro/output/_2_compile_et/ (or --output_path):
+- Product_A/<RefET|CropET>_QMAP_results.csv: monthly ET per record, WY1972-2018
+- Product_A/CS3_RefET.dss, CS3_ET.dss (--write_dss; CS3_ET.dss also takes the static
+  01JAN4000 CropET records of the reference)
+- Product_B/wba/<record>_<RefET|CropET>_n01.csv ... _n10.csv (year, month, value;
+  Jan 1920 - Dec 2021, utils.wgen_calendar.monthly_chunk_1920_2021)
+- Product_B/CS3_RefET_n01.dss ... _n10.dss and CS3_ET_n01.dss ... _n10.dss (--write_dss)
 
 Dependencies
 ------------
-- utils/paths.py  (data-dir resolution)
+utils.paths, utils.dss_io, utils.wgen_calendar, utils.quantile_mapping; pydsstools
 
 Usage
 -----
-Product A - single type:
     python mod_hydrology/calsimhydro/_2_compile_et.py --product A --et_type RefET --vic_col_index 7 --write_dss --n_workers 8
-
-Product A - all types at once:
     python mod_hydrology/calsimhydro/_2_compile_et.py --product A --et_type all --vic_col_index 7 --write_dss --n_workers 8
-
-Product B - all types at once:
     python mod_hydrology/calsimhydro/_2_compile_et.py --product B --et_type all --vic_col_index 7 --write_dss --n_workers 16
 """
 

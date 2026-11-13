@@ -1,46 +1,38 @@
 """
 Storage Curves Quantile Mapping
 ===============================
-Thin driver around the shared QM engines for the reservoir storage_curves
-module. For ``--product historical`` and ``A`` it calls
-``utils.qmap_single_from_pairs.run_single_qmap_from_pairs`` (1922-2018 simulation). For ``--product B``
-it calls ``utils.qmap_product_b_from_pairs.run_product_b_qmap_from_pairs``
-for each of the 10 stochastic chunks, then reformats the per-chunk detail
-CSVs into final ``Part B, Part C, Year, Month, Value`` files.
+Quantile-maps each target of reference/qmap_pairs.csv (MAMMOTH_STORAGE from I_MLRTN) from its
+rim-inflow predictor: utils.qmap_single_from_pairs for Historical_Unsplit and Product A over
+WY1922-2018, utils.qmap_product_b_from_pairs for the 10 Product B chunks.
 
-For each (target, predictor) pair in ``reference/qmap_pairs.csv``:
-
-- The map is fitted on WY1950-2018, the same fit for A and B, by the pair's
-  ``fit`` (utils.qmap_fit): ``pass`` trains on the CalSim3 predictor,
-  ``absorb`` on the rim-inflow model's historical-unsplit predictor. The
-  target is CalSim3's.
-- Simulation (Historical_Unsplit and A: 1922-2018; B: 10 chunks of 100 WY each) maps the
-  rim-inflow model's predictor onto the target domain.
+Each map is fitted on WY1950-2018 by the pair's fit (utils.qmap_fit): pass trains on the CalSim3
+predictor, absorb on the rim-inflow model's Historical_Unsplit predictor; the target is CalSim3's.
+Mapped values are clipped to the pair's bounds.
 
 Inputs
 ------
-- ``reference/qmap_pairs.csv`` (pair definitions and fit; shared by A and B)
-- CalSim baseline DSS: ``BASE/CalSim3/__calsim_sv_default__.dss``
-- Rim-inflow predictors (utils.paths.get_rim_inflow_outputs): Historical_Unsplit
-  ``_riminflow_historicalUnsplit_1922_2018.csv``, Product A
-  ``_riminflow_productA_1922_2018.csv``, Product B ``<PartB>_qmo_n{01..10}.csv``;
-  the historical-unsplit run for absorb fits
+- reference/qmap_pairs.csv: target, predictor, fit, allow_negative (single series), bounds
+- <base>/CalSim3/__calsim_sv_default__.dss: targets and the predictors of pass fits
+- Rim-inflow SVs (utils.paths.get_rim_inflow_outputs): _riminflow_historicalUnsplit_1922_2018.csv,
+  _riminflow_productA_1922_2018.csv, or <Part B>_qmo_n01.csv ... _n10.csv for Product B; the
+  Historical_Unsplit calsim_qmap_validation_TS.csv for absorb fits
 
 Outputs
 -------
-- ``output/_2_qmap/<historical_unsplit|product_a>/`` -- detail CSVs + figures
-  (--product historical, A)
-- ``output/<_historical_unsplit_validation|_product_a_validation>/`` -- delivery CSVs
-- ``output/_2_qmap/product_b/`` -- B per-chunk detail CSVs (--product B)
-- ``output/_product_b_final/<part_b>_productB_n{01..10}.csv`` -- B final
-  per-chunk CSVs in CalSim format
+Under <generated>/mod_reservoir/storage_curves/output/:
+- _2_qmap/<historical_unsplit|product_a>/<target>_qmap_validation.csv and figures/
+  <target>_timeseries.png, <target>_monthly_error.png, <target>_monthly_pct_error.png
+- _historical_unsplit_validation/<target>_historicalUnsplit_1922_2018.csv,
+  _product_a_validation/<target>_productA_1922_2018.csv
+- _2_qmap/product_b/<target>_qmap_n01.csv ... _n10.csv: Product B detail
+- _product_b_final/<target>_productB_n01.csv ... _n10.csv
+
+Delivery and chunk CSVs: Part B, Part C, Year, Month, Value.
 
 Dependencies
 ------------
-- utils.qmap_single_from_pairs (single-series QM engine)
-- utils.qmap_product_b_from_pairs (chunked Product B QM engine)
-- utils.quantile_mapping (qmap_single; deterministic via QMAP_SEED)
-- utils.paths
+utils.paths, utils.qmap_single_from_pairs, utils.qmap_product_b_from_pairs (utils.qmap_fit,
+utils.quantile_mapping); pydsstools
 
 Usage
 -----

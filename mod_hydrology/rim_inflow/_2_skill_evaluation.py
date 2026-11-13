@@ -1,11 +1,12 @@
 """
 Rim-Inflow Skill Evaluation (Gates G3 and G3r)
 ==============================================
-Scores the rim-inflow model (SAC-SMA dPL-CalSim) against CalSim3 next to the VIC model it
-replaces, and measures how both respond to the Product A detrending.
+Scores the SAC-SMA dPL-CalSim rim inflows against CalSim3, beside the raw VIC run of the v1.0
+archive, and measures how both models respond to the Product A detrending. Stops unless
+``inflow_model`` is sacsma.
 
-G3, skill. The model's historical-unsplit SVs (direct, no bias correction; built by
-_1_build_rim_inflow.py) and the raw VIC historical-unsplit run of the v1.0 archive (routed,
+G3, skill. The model's Historical_Unsplit SVs (direct, no bias correction; built by
+_1_build_rim_inflow.py) and the raw VIC Historical_Unsplit run of the v1.0 archive (routed,
 before quantile mapping and the anchor mass balance; see VIC's historical run below), each
 against CalSim3, monthly, on three windows of water years:
 
@@ -20,25 +21,25 @@ their precipitation, so the difference is the detrending's temperature signal.
 
 Also the Sacramento four-river annual bias by year class, for the dry-year evidence.
 
-VIC's historical run. The historical WGEN weather has precipitation 10 times too high on 289
-grid-cell days (reference/prcp_x10_artifacts.csv; 259 of them in July 1974). Products A and B
-and SAC-SMA's historical forcing carry a tenth of those values; v1.0's VIC run on the
-historical weather used them as they were. The script reads that run redone with the values
-divided by 10 (routed/Historical_Unsplit_x10fix in the v1.0 archive, made by
+VIC's historical run. The Historical_Unsplit weather has precipitation 10 times too high on 289
+grid-cell days (reference/prcp_x10_artifacts.csv). Products A and B and SAC-SMA's historical
+forcing carry a tenth of those values, and so does the VIC run read here
+(routed/Historical_Unsplit_x10fix in the v1.0 archive, made by
 mod_forcing/vic/x10fix/vic_x10fix.py there), so every month is scored.
 
-For the quantile-mapped SVs (aliases and gap arcs) no window is out of sample, since their maps are fitted
-on CalSim3 over WY1950-2018, and VIC's series is the arc v1.0 matched to them.
+For the quantile-mapped SVs (aliases and gap arcs) no window is out of sample, since their maps
+are fitted on CalSim3 over WY1950-2018; VIC's series is the one CalSim3_VIC_name_mapping.csv
+names for them.
 
 Inputs
 ------
 - the model's historical SVs: utils.paths.get_rim_inflow_outputs("historical")
 - the model's arc flows: utils.paths.get_arc_inflows("historical"), get_arc_inflows("A")
 - reference/CalSim3_inflow_mapping.csv (anchor sums)
-- reference/CalSim3_VIC_name_mapping.csv (CalSim3 SV -> VIC routed series)
-- v1.0 archive: mod_forcing/vic/output/routed/{Historical_Unsplit_x10fix, Product_A/1}/CS3_<VIC>_qmo.csv
-- CalSim3 baseline DSS: CalSim3/__calsim_sv_default__.dss
-- master inventory (Part C)
+- reference/CalSim3_VIC_name_mapping.csv (CalSim3 SV to VIC routed series)
+- <archive>/mod_forcing/vic/output/routed/<Historical_Unsplit_x10fix|Product_A/1>/CS3_<VIC>_qmo.csv
+- <base>/CalSim3/__calsim_sv_default__.dss
+- inventory/_MASTER_INVENTORY_FOR_STOCHASTIC_INPUT_GENERATION_.xlsx (Part C)
 
 Outputs
 -------
@@ -48,6 +49,11 @@ Outputs
   - detrending_response.csv     per series, model and period: volume and Apr-Jul share change
   - sacramento_four_annual.csv  per WY: CalSim3, SAC and VIC volumes, training status, class
   - dry_year_bias.csv           Sacramento four bias by training status and year class
+
+Dependencies
+------------
+mod_hydrology.rim_inflow._1_build_rim_inflow (CalSim3 and inventory readers), utils.paths,
+utils.validation_plots; pydsstools
 
 Usage
 -----

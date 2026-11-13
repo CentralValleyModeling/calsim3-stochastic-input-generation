@@ -1,35 +1,36 @@
 """
 Delta Accretion for NDOI - Direct Calculation from Daily Precipitation
 ======================================================================
-Calculates the Delta precipitation accretion term (DELTAACCRETIONFORNDOI) for CalSim 3.0 from
-the daily precipitation of one weather set (``utils.wgen``) at the grid cell nearest to:
+DELTAACCRETIONFORNDOI/FLOW (TAF) for CalSim 3.0 from the monthly precipitation of one weather set
+at the grid cell nearest Stockton Fire Station 4 (CNRFC SCKC1, 38.00 N, 121.32 W).
 
-    Station: STOCKTON FIRE STA 4  (CNRFC ID: SCKC1)
-    Latitude: 38.00degN, Longitude: 121.32degW
-
-Formula (replicates "Direct Calculation" tab of
-    ./data/GENERATED/mod_other/miscellaneous/term_development/DELTAACCRETIONFORNDOI/
-    Reconstructed_DeltaAccretionForNDOI_Directly.xlsx, column J):
+Formula (column J of the "Direct Calculation" tab of
+<generated>/mod_other/miscellaneous/term_development/DELTAACCRETIONFORNDOI/
+Reconstructed_DeltaAccretionForNDOI_Directly.xlsx):
 
     TAF = (precip_in / 12) * DELTA_AREA * (DELTA_AREA / watershed_area) / 1000
+    precip_in = precip_mm * 0.0393701, DELTA_AREA = 679,699 acres
 
-    where  precip_in = precip_mm * 0.0393701
+Watershed area, Historical_Unsplit and Product A: 682,230 acres to WY1955, 738,000 acres
+WY1956-1980, 682,230 acres from WY1981. Product B: 682,230 acres throughout.
 
-Historical_Unsplit and Product A take the watershed area of the water year:
-    WY1955 and earlier -> watershed_area = 682,230 acres
-    WY1956 - WY1980    -> watershed_area = 738,000 acres
-    WY1981 onwards     -> watershed_area = 682,230 acres
-
-Product B takes the area of the final period:
-    Always             -> watershed_area = 682,230 acres
+Inputs
+------
+- WGEN daily precipitation of the --product set at the nearest cell (utils.wgen.nearest_cell,
+  read_met), summed by month (Product B by stamp month, labelled by chunk)
 
 Outputs
 -------
-    output/_historical_unsplit_validation/_deltaaccretionforndoi_historicalUnsplit_1922_2018.csv
-    output/_product_a_validation/_deltaaccretionforndoi_productA_1922_2018.csv
-    output/_product_b_final/_deltaaccretionforndoi_productB_1922_2021_qmo_n01.csv ... n10.csv
+Under <generated>/mod_other/miscellaneous/output/:
+- _historical_unsplit_validation/_deltaaccretionforndoi_historicalUnsplit_1922_2018.csv
+- _product_a_validation/_deltaaccretionforndoi_productA_1922_2018.csv
+- _product_b_final/_deltaaccretionforndoi_productB_1922_2021_qmo_n01.csv ... _n10.csv
 
-CSV format: Part B, Part C, Year, Month, Value
+Delivery and chunk CSVs: Part B, Part C, Year, Month, Value.
+
+Dependencies
+------------
+utils.paths, utils.csv_io, utils.wgen, utils.wgen_calendar
 
 Usage
 -----

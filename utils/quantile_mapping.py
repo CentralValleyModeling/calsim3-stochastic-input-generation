@@ -1,3 +1,25 @@
+"""
+Empirical Quantile Mapping
+==========================
+``qmap_single`` maps a simulated series onto a target distribution, calendar month by calendar
+month: a value's non-exceedance probability in the historical basis (Weibull plotting position,
+linear interpolation) is read off the target's empirical distribution. Beyond the range of
+either distribution the map extends with a two-parameter gamma fit (method of moments) of that
+month. A month whose target holds a single value maps to it.
+
+- ``qmap_single(basis_sim, basis_hist, target, allow_negative=False)``: frames with ``year``,
+  ``month`` and ``value``; the map is fitted on ``basis_hist`` against ``target`` and applied to
+  ``basis_sim``. Returns ``year``, ``month``, ``quantile_mapped_value``, negatives set to 0 unless
+  ``allow_negative``.
+- ``QMAP_SEED``: seed of the tie-break among equal basis values (42, or the environment variable
+  ``CSSTOCHASTIC_QMAP_SEED``). Each call seeds its own Generator, so a result does not depend on
+  the calls before it.
+
+Usage
+-----
+    from utils.quantile_mapping import qmap_single
+    out = qmap_single(model_sim, model_train, calsim3_train)   # year, month, quantile_mapped_value
+"""
 import os
 
 import numpy as np

@@ -1,35 +1,34 @@
 """
 Product B Stochastic Run Pickle Cache Builder
 =============================================
-11-scenario wrapper around the shared CalView-style DSS pickle builder
-(``utils.dss_pickle_builder``) that pairs the historical baseline DV DSS
-with the ten Product B block DV DSS files (n01 .. n10) produced by an
-external CalSim 3 run. Used as input to ``_productB_postproc.py``. The
-n01..n10 labels are auto-detected from the DSS filenames (case-insensitive).
+Wrapper around the CalView-style DSS pickle builder (``utils.dss_pickle_builder``)
+that pairs the historical DV DSS with the Product B DV DSS of each chunk (scenarios
+n01 ... n10) from external CalSim 3 runs; ``_productB_postproc.py`` reads the cache.
+A DSS file under ``--product-b-root`` that matches ``--glob`` (default ``*.dss``)
+takes the chunk label its path carries (n01 ... n10, any case; the first file per
+label); a chunk without a file is reported and left out.
 
 Inputs
 ------
-- Historical baseline DV DSS:
-  ``BASE/CalSim3/Studies/9.3.1_danube_hist/DSS/output/
-  DCR2023_DV_9.3.1_Danube_Hist_v1.7.dss``
-- 10 Product B DV DSS (auto-discovered under ``--product-b-root`` by default):
-  ``GENERATED/postprocessing/calsim_runs/product_b/dv_out/
-  DCR2023_DV_9.3.1_Danube_Hist_v1.7_ProductB_n{01..10}.dss``
-- Metric definitions: ``reference/metrics.csv``
+- Historical DV DSS (``--baseline-dss``, scenario ``--baseline-name``, default Historical):
+  <base>/CalSim3/Studies/9.3.1_danube_hist/DSS/output/DCR2023_DV_9.3.1_Danube_Hist_v1.7.dss
+- Product B DV DSS: <generated>/postprocessing/calsim_runs/product_b/dv_out/
+  DCR2023_DV_9.3.1_Danube_Hist_v1.7_ProductB_n01.dss ... _n10.dss
+- Metric definitions (``--metrics-csv``): postprocessing/calsim_runs/reference/metrics.csv
 
 Outputs
 -------
-- ``GENERATED/postprocessing/calsim_runs/product_b/pickle_files/``
-  (values.pkl, diffs.pkl, units.pkl, fields.pkl, meta.json)
+- <generated>/postprocessing/calsim_runs/product_b/pickle_files/ (``--out-dir``):
+  values.pkl, diffs.pkl, units.pkl, fields.pkl, meta.json
 
 Dependencies
 ------------
-- utils.dss_pickle_builder, utils.paths
-- pandas, numpy, pydsstools
+utils.dss_pickle_builder, utils.paths; pandas, numpy, pydsstools
 
 Usage
 -----
     python postprocessing/calsim_runs/_productB_pickle_builder.py
+    python postprocessing/calsim_runs/_productB_pickle_builder.py --product-b-root <folder> --glob "**/*.dss"
 """
 
 from __future__ import annotations

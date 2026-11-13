@@ -1,29 +1,41 @@
 """
 Extract Monthly Basin-Averaged Climate for UHH Locations
 ========================================================
-Computes weighted-average monthly precipitation, temperature, and VPD for
-UHH (Upper Headwater Hydrology) locations specified in reference/uhh_locations.csv.
-Each grid cell is weighted by its area inside the basin (reference/GridInfo/ files).
-VPD is derived via quantile mapping from temperature using CalSim historical VPD.
-
-Historical_Unsplit, Product A, LTO: one CSV per variable per location; the first two also
-write delivery CSVs. Product B: 10 long-format chunk CSVs per variable (100 WY each, Oct 1921 -
-Sep 2021). The weather is read through utils.wgen and labelled by utils.wgen_calendar.
+Monthly basin-average precipitation (inches) and temperature (degF) for each UHH (Upper
+Headwater Hydrology) location of reference/uhh_locations.csv, each cell weighted by its area
+inside the basin, and VPD (kPa) quantile-mapped from that temperature onto CalSim historical VPD.
 
 Inputs
 ------
-- reference/uhh_locations.csv
-- reference/GridInfo/<location>_GridInfo.txt
-- BASE/WGEN/<Historical_Unsplit | Product_A/1 | Product_B/1>, or BASE/Historical_Climate_LTO
-- reference/calsim_climate_sv.xlsx  (historical VPD target for quantile mapping)
+- reference/uhh_locations.csv (location, grid_info_file)
+- reference/GridInfo/<grid_info_file>: basin cells and their areas inside the basin
+- daily weather of the --product set (utils.wgen.weighted_daily): WGEN Historical_Unsplit,
+  Product_A/1 or Product_B/1, or <base>/Historical_Climate_LTO/1_Historical
+- reference/calsim_climate_sv.xlsx: VPD<XX>_UHH, the QM target (fit over Oct 1921 - Sep 1971;
+  Product B: the first 1,200 months by position). A location whose fit fails gets no VPD.
+- --compare-historical-productB: <base>/CalSim3/__calsim_sv_default__.dss (PPT_*_UHH) and the
+  Product A and B precipitation outputs below
 
 Outputs
 -------
-- output/_2_uhh_basin_averages/<Historical_Unsplit|Product_A|LTO>/PPT_<name>_UHH.csv,
-  T<name>_UHH.csv, VPD<name>_UHH.csv
-- output/_historical_unsplit_validation/_uhh_{precip,temperature,vpd}_historicalUnsplit_1922_2018.csv
-- output/_product_a_validation/_uhh_{precip,temperature,vpd}_productA_1922_2018.csv
-- output/_product_b_final/_uhh_precip_productB_n01.csv ... n10.csv  (same pattern for temp/vpd)
+Under <generated>/mod_forcing/climate/output/:
+- _2_uhh_basin_averages/<Historical_Unsplit|Product_A|LTO>/PPT_<name>_UHH.csv, T<XX>_UHH.csv,
+  VPD<XX>_UHH.csv, over --start_date to --end_date (default WY1921-2021, cut to the weather)
+- _2_uhh_basin_averages/<set name>/_summary.csv
+- _historical_unsplit_validation/_uhh_{precip,temperature,vpd}_historicalUnsplit_1922_2018.csv
+- _product_a_validation/_uhh_{precip,temperature,vpd}_productA_1922_2018.csv
+- Product B: _product_b_final/_uhh_{precip,temperature,vpd}_productB_n01.csv ... _n10.csv,
+  labelled WY1922-2021
+- --validate-outputs: _3_validation/validation_summary.csv, monthly_boxplot_*.png and
+  annual_comparison_*.png (the Product_A files against calsim_climate_sv.xlsx)
+- --compare-historical-productB: _2_uhh_basin_averages/Product_B/_compare_historical_productB/
+  boxplot_precip_hist_vs_productB_*.png (per location and SacValley, SJValley, All) and
+  _annual_precip_stats.csv
+
+Dependencies
+------------
+utils.paths, utils.csv_io, utils.wgen, utils.wgen_calendar, utils.quantile_mapping,
+utils.dss_io; pydsstools, matplotlib
 
 Usage
 -----
@@ -31,9 +43,8 @@ Usage
     python mod_forcing/climate/_2_uhh_basin_averages.py --product A
     python mod_forcing/climate/_2_uhh_basin_averages.py --product B
     python mod_forcing/climate/_2_uhh_basin_averages.py --product LTO
-
-    # Validate Product A outputs against historical reference
     python mod_forcing/climate/_2_uhh_basin_averages.py --validate-outputs
+    python mod_forcing/climate/_2_uhh_basin_averages.py --compare-historical-productB
 """
 
 import sys

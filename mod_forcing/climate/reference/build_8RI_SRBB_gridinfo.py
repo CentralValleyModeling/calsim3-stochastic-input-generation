@@ -1,60 +1,44 @@
 """
 Build the CS3_8RI_SRBB Composite GridInfo (rim + valley floor)
 ==============================================================
-One-off generator for ``GridInfo/CS3_8RI_SRBB_GridInfo.txt``, the grid-weight
-file of the Sacramento River at Bend Bridge (CalSim node SAC257, anchor for
-UNIMP_SRBB), which v1.0 routed directly as one basin, and of
-``GridInfo/CS3_I_SRBB_VAL_GridInfo.txt``, the valley floor alone: the VIC
-adapter (mod_forcing/inflows/adapters/vic.py) routes it as the valley node
-I_SRBB_VAL, and UNIMP_SRBB is the 8 rim arcs plus that node.
+Grid weights of the Sacramento River at Bend Bridge (CalSim node SAC257, anchor of UNIMP_SRBB):
+the eight rim component GridInfo files merged with the CT_BENDBRIDGE valley floor (WBA 02 and
+03) rasterized onto the 1/16-degree grid, and the valley floor alone.
 
-The Shasta-only routing (CS3_I_SHSTA) stops at the dam and under-represents Bend
-Bridge by roughly 30 percent. Bend Bridge drains Shasta inflow plus everything
-the CalSim 3 domain GIS tags as draining to it (CT_Name == "CT_BENDBRIDGE"):
-the seven rim tributaries (Type == "Rim") AND the valley floor between them and
-the gauge (Type == "Valley", the WBA 02 and WBA 03 watersheds, ~682 sq mi).
+Method
+------
+1. Merge the rim components (I_SHSTA, I_COW014, I_BTL006, I_BCN010, I_CLR011, I_WKYTN,
+   I_CWD018, I_SCW008): each cell once, f2 (area inside the basin) summed over the components
+   that share it, f1 (full cell area) at its most precise.
+2. Rasterize the gpkg polygons with CT_Name == "CT_BENDBRIDGE" and Type == "Valley" in
+   California Albers (EPSG:3310): f1 and f2 in km^2 per cell. Rim cells keep their f1 and gain
+   the valley f2 (capped at f1). Valley cells found in another committed GridInfo keep its id
+   and f1; valley-only cells get a computed f1 and a synthetic id from 900001
+   (``VALLEY_ID_BASE``). Routing matches cells by lat/lon, so the id is informational.
 
-This single script does both halves of the build:
+Build-time only; run when the component delineations change.
 
-1. Merge the eight rim component GridInfo files: each unique grid cell appears
-   once, with f2 (area-within-basin) summed across the sub-basins that share it
-   and f1 (full cell area) kept at full precision.
-2. Rasterize the CT_BENDBRIDGE valley-floor polygons from the CalSim3 watershed
-   gpkg onto the 1/16-degree VIC grid and merge them in: existing rim cells keep
-   their rim f1 and gain the valley area (capped at f1 on write), and valley-only
-   cells are added with their own f1/id.
+Inputs
+------
+- reference/GridInfo/CS3_<component>_GridInfo.txt of the eight components, and every other
+  CS3_*_GridInfo.txt there for canonical ids and f1
+- calsim3.gpkg, layer CalSim3_And_GooseLake (--gpkg; default <data_dir>/BASE/CalSim3/calsim3.gpkg,
+  data_dir read from config.json or config_default.json)
 
-The valley rasterization (formerly the separate build_valley_bendbridge_gridinfo.py)
-is now inlined here so there is a single 8RI_SRBB build. Because of step 2 this
-script now needs geopandas/pyproj and must run under a GIS env (e.g. sacsma), not
-the csstochastic pipeline env.
+Outputs
+-------
+Tab-separated id, lat, lon, f1, f2:
+- reference/GridInfo/CS3_8RI_SRBB_GridInfo.txt: rim plus valley floor
+- reference/GridInfo/CS3_I_SRBB_VAL_GridInfo.txt: valley floor alone, the valley node
+  I_SRBB_VAL of adapters/vic.py (UNIMP_SRBB is the 8 rim arcs plus this node)
 
-Valley rasterization detail
----------------------------
-Per cell, in California Albers (EPSG:3310, equal-area), compute f1 = full cell
-area and f2 = area of the cell within the dissolved valley, both in km^2 -- the
-same units as every committed GridInfo file (a 1/16-degree cell at 42.4N is
-35.69 km^2). The dissolved valley reproduces the gpkg WBA 02+03 total (681.8 vs
-682.0 sq mi), and the rim component files already reproduce their gpkg per-basin
-SQ_MI to within 0.1 sq mi, so both halves are rasterized consistently.
-
-The GridInfo ``id`` is a legacy GIS raster index the runtime is indifferent to --
-the VIC routing matches cells to VIC flux files by lat/lon, never by id. Valley cells that already appear in a committed GridInfo keep their canonical
-id and f1; valley-only cells (outside every existing rim delineation) get a
-computed f1 and a synthetic id in a reserved block (>= VALLEY_ID_BASE),
-collision-free and informational only.
-
-Routing the merged GridInfo reproduces the old sum-of-series aggregate to within
-~0.04 percent of annual volume; the small residual is the global (vs per-basin)
-area normalization in compile_rim_inflows.compute_runoff, and is the physically
-consistent result since every cell is now weighted once against the whole basin.
-
-This is a build-time artifact generator, not part of the runtime pipeline. Run
-it only if the component delineations change.
+Dependencies
+------------
+geopandas, shapely; a GIS environment (e.g. sacsma), not csstochastic. Does not import
+utils.paths.
 
 Usage
 -----
-    # gpkg defaults to <data_dir>/BASE/CalSim3/calsim3.gpkg (resolved from config.json)
     python mod_forcing/climate/reference/build_8RI_SRBB_gridinfo.py
     python mod_forcing/climate/reference/build_8RI_SRBB_gridinfo.py --gpkg /path/to/calsim3.gpkg
 """

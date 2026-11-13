@@ -1,29 +1,43 @@
-"""Five-way precipitation comparison at the UHH basins.
+"""
+Five-Way Precipitation Comparison at the UHH Basins
+===================================================
+Water-year precipitation (inches) of five sources at each UHH location, with Trinity (TR_UHH)
+highlighted (issue #78).
 
-Compares annual (water-year) precipitation from five sources, area-weighted to
-each UHH location, with Trinity (TR_UHH) highlighted for GitHub issue #78:
+Sources
+-------
+- PRISM_AN       : PRISM all-networks monthly, <base>/PRISM/an/data_<lat>_<lon>[.txt]
+- PRISM_LT       : PRISM long-term monthly, <base>/PRISM/lt/data_<lat>_<lon>[.txt]
+- Hist_CalSim    : CalSim historical PPT_*_UHH, <base>/CalSim3/__calsim_sv_default__.dss
+- LIVNEH_UNSPLIT : WGEN Historical_Unsplit, x10 days corrected (utils.wgen.read_met)
+- LIVNEH_SPLIT   : Historical_Climate_LTO/1_Historical (utils.wgen.read_met)
 
-  1. PRISM_AN        PRISM all-networks, 4km      (independent reference)
-  2. PRISM_LT        PRISM long-term/stable, 800m (independent reference)
-  3. Hist_CalSim     CalSim historical SV precip  (__calsim_sv_default__.dss)
-  4. LIVNEH_UNSPLIT  Livneh "unsplit" forcing     (WGEN/Historical_Unsplit)
-  5. LIVNEH_SPLIT    Livneh "split" forcing       (Historical_Climate_LTO/1_Historical)
+The gridded sources keep complete water years and are weighted by each cell's area inside the
+basin, renormalized over the cells the source holds.
 
-Both Livneh sources are read through utils.wgen.read_met, which corrects the unsplit
-files' x10 precipitation days.
+Inputs
+------
+- reference/uhh_locations.csv, reference/GridInfo/<grid_info_file>
+- the five sources above
 
-The four gridded per-cell sources (all named data_<lat>_<lon>) are averaged over
-each UHH location, each cell weighted by its area inside the basin (mod_forcing/climate/
-reference/GridInfo); Hist_CalSim is read per location from the default CalSim SV DSS. All
-series are annual WY totals in inches.
+Outputs
+-------
+<generated>/mod_forcing/climate/output/precip_5way_comparison/:
+- precip_5way_annual_stats.csv: location, source, period (full WY1922-2018, pre1950,
+  post1950), mean/min/max (in/yr), n_WY
+- precip_5way_panel_<location>.png: annual series, and period means as percent difference
+  from Hist_CalSim
+- precip_5way_fullmean_bar.png: WY1922-2018 mean per source and location, as percent
+  difference from Hist_CalSim
 
-Repo data is resolved through utils.paths (so it follows config.json). The DSS
-reader and GridInfo/location helpers are reused from _2_uhh_basin_averages.
+Dependencies
+------------
+utils.paths, utils.wgen, _2_uhh_basin_averages (GridInfo, location and DSS readers);
+pydsstools, matplotlib
 
-Outputs (GENERATED/mod_forcing/climate/output/precip_5way_comparison/):
-  precip_5way_annual_stats.csv     tidy: location, source, period, mean/min/max (in/yr), n_WY
-  precip_5way_panel_<LOC>.png      per basin: time-series overlay + full/pre-1950/post-1950 bars
-  precip_5way_fullmean_bar.png     full-period mean per source, grouped by location
+Usage
+-----
+    python mod_forcing/climate/precip_5way_comparison.py
 """
 import os
 import re

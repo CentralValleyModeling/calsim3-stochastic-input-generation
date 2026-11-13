@@ -1,33 +1,35 @@
 """
 Postprocess Small Watersheds DSS Runs
 =====================================
-Extracts time series from the CalSim historical Small Watersheds run and the
-run of a single weather series (Historical_Unsplit or Product A), merges them
-into a single CSV, computes summary statistics, generates scenario-comparison
-boxplots, and writes the set's delivery CSV.
+Monthly SVs of the external Small Watersheds run of Historical_Unsplit or Product A as a
+delivery CSV (AF converted to TAF), and a comparison with the run on CalSim historical inputs
+(merged CSV, summary statistics by Part C, boxplots).
 
 Inputs
 ------
-- SmallWatersheds_Runs/SmallWatershed_Historical_1921-2018 (CalSim historical inputs)
-- SmallWatersheds_Runs/SmallWatershed_<Historical_Unsplit|Product_A> (the set's run, from
-  _1_compile_precip_sws.py inputs)
-- Master inventory xlsx
+Under <generated>/mod_hydrology/small_watersheds/SmallWatersheds_Runs/:
+- SmallWatershed_Historical_1921-2018/CVSWShed_FlowContribution3pcntWBA24_2013Init_2021.dss
+  (CalSim historical inputs)
+- SmallWatershed_<Historical_Unsplit|Product_A>/ the same file (the set's run, on the
+  precipitation of _1_compile_precip_sws.py)
+- inventory/_MASTER_INVENTORY_FOR_STOCHASTIC_INPUT_GENERATION_.xlsx, sheet MASTER: the Small
+  Watersheds SVs
 
 Outputs
 -------
-- <generated>/output/_2_postprocess_single/<Historical_Unsplit|Product_A>/
-  (merged + summary CSVs, boxplots)
-- <generated>/output/_2_postprocess_single/<_historical_unsplit_validation|_product_a_validation>/
-  (_smallwatersheds_<historicalUnsplit|productA>_1922_2018.csv)
+Under <generated>/mod_hydrology/small_watersheds/output/_2_postprocess_single/:
+- <Historical_Unsplit|Product_A>/SmallWatersheds_2DSS.csv,
+  SmallWatersheds_summary_statistics_by_PartC.csv, Boxplot_<PartC>_with_mean.png
+- _historical_unsplit_validation/ or _product_a_validation/:
+  _smallwatersheds_<historicalUnsplit|productA>_<first WY>_<last WY>.csv, within
+  utils.paths.DELIVERY_WY (the runs cover WY1921-2018)
 
 Dependencies
 ------------
-- utils/paths.py  (data-dir resolution)
+utils.paths, utils.dss_io, utils.csv_io; pydsstools, seaborn, matplotlib
 
 Usage
 -----
-Runs the postprocess and writes the delivery CSV over utils.paths.DELIVERY_WY
-(the SWS runs cover WY1921-2018):
     python mod_hydrology/small_watersheds/_2_postprocess_single.py --product historical
     python mod_hydrology/small_watersheds/_2_postprocess_single.py --product A
 """
