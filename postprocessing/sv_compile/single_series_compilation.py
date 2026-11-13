@@ -90,7 +90,8 @@ from collections import OrderedDict
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 from utils import dss_io
 from utils.paths import (DELIVERY, DELIVERY_WY, WEATHER_SETS, delivery_dirs, get_base_dir,
-                         get_module_generated_dir, get_inventory_dir)
+                         get_module_generated_dir, get_inventory_dir, get_rim_inflow_outputs,
+                         require_pinned_run)
 
 # Suppress noisy warnings from empty slices (e.g. all-NaN columns in stats)
 warnings.filterwarnings("ignore", message="Mean of empty slice")
@@ -1804,6 +1805,12 @@ print(f"\nModules available: {len(available_modules)} / {len(MODULE_CONFIG)}")
 if missing_modules:
     print(f"Modules skipped:  {', '.join(missing_modules)}")
 print()
+
+# The rim inflows come from the configured model at its pin, on inputs G2 passed
+# (utils.paths.require_pinned_run): a run of another model or version stops the compile.
+if "rim_inflow" in available_modules:
+    _run = require_pinned_run(get_rim_inflow_outputs(PRODUCT)["dir"])
+    print(f"Rim inflows: {_run['inflow_model']} at {_run['model_pin']}\n")
 
 
 # ------------------------------------------------------------------------------

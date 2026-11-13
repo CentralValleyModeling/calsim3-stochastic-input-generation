@@ -75,7 +75,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 from utils import dss_io
 from utils.wgen_calendar import CHUNK_MONTHS, LABEL_MONTHS, LABEL_WY, N_CHUNKS
 from utils.paths import (get_base_dir, get_generated_dir, get_module_generated_dir, get_inventory_dir,
-                         get_rim_inflow_outputs)
+                         get_rim_inflow_outputs, require_pinned_run)
 
 warnings.filterwarnings("ignore", message="Mean of empty slice")
 warnings.filterwarnings("ignore", message="All-NaN slice encountered")
@@ -1823,6 +1823,12 @@ if (missing_modules or incomplete_modules) and not CLI_ARGS.allow_missing:
 
 if not module_files:
     sys.exit("ERROR: No module CSVs found. Nothing to compile.")
+
+# The rim inflows come from the configured model at its pin, on inputs G2 passed
+# (utils.paths.require_pinned_run): a run of another model or version stops the compile.
+if "rim_inflow" in module_files:
+    _run = require_pinned_run(get_rim_inflow_outputs("B")["dir"])
+    print(f"Rim inflows: {_run['inflow_model']} at {_run['model_pin']}\n")
 
 # Collect all (Part B, Part C) provided by modules across all chunks
 all_module_keys = set()
