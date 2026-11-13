@@ -70,13 +70,18 @@ def met_path(product: str, lat, lon) -> Path:
 
 @functools.cache
 def cells(product: str) -> tuple[tuple[float, float, Path], ...]:
-    """Every cell of ``product``: (lat, lon, file), in file-name order."""
+    """Every cell of ``product``: (lat, lon, file), in file-name order. Stops on a file whose
+    name starts with the prefix but is not ``<prefix>_<lat>_<lon>``."""
     prefix = _prefix(product) + "_"
     out = []
     for p in sorted(met_dir(product).glob(prefix + "*")):
         if p.is_file():
-            lat, lon = p.name[len(prefix):].split("_")
-            out.append((float(lat), float(lon), p))
+            try:
+                lat, lon = (float(x) for x in p.name[len(prefix):].split("_"))
+            except ValueError:
+                raise ValueError(f"{p}: not a weather file name ({prefix}<lat>_<lon>); move it "
+                                 f"out of {p.parent}") from None
+            out.append((lat, lon, p))
     if not out:
         raise FileNotFoundError(f"{met_dir(product)}: no {prefix}* files")
     return tuple(out)
