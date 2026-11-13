@@ -9,7 +9,7 @@ Inputs
 ------
 - <base>/WGEN/Historical_Unsplit/data_<lat>_<lon>, x10 days corrected (utils.wgen.read_met)
 - <base>/Historical_Climate_LTO/1_Historical/data_<lat>_<lon> (utils.wgen.read_met)
-- SAC-SMA checkout (env SACSMA_REPO, default C:/Users/warnold_la/Local/repos/SAC-SMA):
+- SAC-SMA checkout (``inflow_repo``; stops unless ``inflow_model`` is sacsma):
   data/hru/hruinfo_11obs.csv, hruinfo_9unimp.csv (basin cells and area_weight; a cell shared
   by nested basins counts in each)
 
@@ -28,7 +28,6 @@ utils.paths, utils.wgen; matplotlib
 Usage
 -----
     python mod_forcing/climate/precip_split_vs_unsplit.py
-    SACSMA_REPO=<SAC-SMA checkout> python mod_forcing/climate/precip_split_vs_unsplit.py
 """
 import os
 import re
@@ -44,7 +43,7 @@ import matplotlib.pyplot as plt
 # Resolve repo data through utils.paths (the sanctioned resolver) instead of
 # hard-coded relative hops, so BASE inputs and GENERATED outputs follow config.json.
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
-from utils.paths import get_module_generated_dir
+from utils.paths import get_inflow_model, get_inflow_repo, get_module_generated_dir
 from utils.wgen import met_dir, read_met
 
 # Plain strings for os.listdir in index_dir (the long-path prefix is harmless here and
@@ -52,10 +51,11 @@ from utils.wgen import met_dir, read_met
 SP = os.path.normpath(str(met_dir("LTO")))         # split
 UN = os.path.normpath(str(met_dir("historical")))  # unsplit
 
-# external SAC-SMA repo: supplies the basin->cell definitions (hruinfo) read below.
-# Input only -- the comparison artifacts now go to this repo's GENERATED tree.
-# Override via the SACSMA_REPO env var if the checkout moves.
-SACSMA_REPO = os.environ.get("SACSMA_REPO", r"C:/Users/warnold_la/Local/repos/SAC-SMA")
+# The SAC-SMA checkout (inflow_repo) holds the basin cells (hruinfo) read below.
+if get_inflow_model() != "sacsma":
+    raise SystemExit(f"precip_split_vs_unsplit.py reads SAC-SMA's basin cells; inflow_model is "
+                     f"{get_inflow_model()!r}, not 'sacsma'")
+SACSMA_REPO = str(get_inflow_repo())
 
 N = 37986                                                 # 1915-01-01 .. 2018-12-31
 YR = pd.date_range("1915-01-01", "2018-12-31", freq="D").year.to_numpy()

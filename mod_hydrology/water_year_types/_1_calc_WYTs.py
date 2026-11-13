@@ -40,12 +40,11 @@ from pathlib import Path
 import pandas as pd
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
-from utils.paths import get_module_generated_dir, get_rim_inflow_outputs
+from utils.paths import WEATHER_SETS, get_module_generated_dir, get_rim_inflow_outputs
 from utils.wgen_calendar import LABEL_WY, N_CHUNKS, require_label_months, water_year
 
 _wyt_gen = get_module_generated_dir("mod_hydrology/water_year_types")
 
-OUT_DIRS = {"historical": "Historical_Unsplit", "A": "Product_A", "B": "Product_B"}
 
 # CDEC (Sacramento, San Joaquin) index by water year (reference/cdec_wyt.txt), which seeds
 # the recursion with the year before the first. Every Product B chunk is mapped to a WY1922
@@ -409,7 +408,7 @@ def main():
 
     rim = get_rim_inflow_outputs(args.product)
     input_path = args.input or rim['dir' if args.product == 'B' else 'ts']
-    output_dir = args.output or _wyt_gen / 'output' / '_1_calc_WYTs' / OUT_DIRS[args.product]
+    output_dir = args.output or _wyt_gen / 'output' / '_1_calc_WYTs' / WEATHER_SETS[args.product]["name"]
 
     print("Using WYT thresholds (MAF):")
     print(f"  Sacramento: {THRESHOLDS['sacramento']}")
