@@ -4,10 +4,11 @@ Compile Monthly Area-Weighted Precipitation for Small Watersheds
 Area-weighted monthly precipitation (inches/month) per small watershed from the daily weather of
 one set (``utils.wgen``), written into the CVprecip .dat template.
 
-The template holds WY1921-2021 (``WINDOW``). For Historical_Unsplit and Product A the months of
-the window run from October 1920, and a day of the window past the end of the weather files
-counts as 0 in its month. Each Product B chunk fills WY1922-2021 with the chunk's label months
-(``utils.wgen_calendar``) and keeps the template's WY1921 as initialization.
+The output holds the template's WY1921-2021 (``WINDOW``). Historical_Unsplit and Product A fill
+its months from October 1920 to the last month their weather covers (December 2018), and the
+months after it keep the template's values. Each Product B chunk fills WY1922-2021 with the
+chunk's label months (``utils.wgen_calendar``) and keeps the template's WY1921 as
+initialization.
 
 Inputs
 ------
@@ -44,6 +45,7 @@ from utils.wgen_calendar import CHUNK_MONTHS, N_CHUNKS, label, month_totals
 
 MM_TO_IN = 0.0393701
 WINDOW = pd.date_range("1920-10-01", "2021-09-30", freq="D")   # the template's WY1921-2021
+WINDOW_MONTHS = len(WINDOW.to_period("M").unique())            # 1,212
 HEADER_ROWS = 104      # template rows before the first month
 INIT_MONTHS = 12       # WY1921, kept from the template in every Product B chunk
 FIRST_COLUMN = 1393    # template column of the first watershed
@@ -70,9 +72,11 @@ def watershed_daily(product: str, cells: pd.DataFrame) -> pd.DataFrame:
 
 
 def monthly_single(daily: pd.DataFrame) -> pd.Series:
-    """Monthly inches over the months of ``WINDOW`` (Historical_Unsplit, Product A)."""
-    s = pd.Series(daily["precip"].to_numpy(), index=dates(daily)).reindex(WINDOW)
-    return (s * MM_TO_IN).resample("ME").sum()
+    """Monthly inches over the months of ``WINDOW`` that the weather files cover completely
+    (Historical_Unsplit, Product A)."""
+    s = pd.Series(daily["precip"].to_numpy(), index=dates(daily)).reindex(WINDOW) * MM_TO_IN
+    r = s.resample("ME")
+    return r.sum()[r.count() == r.size()]
 
 
 def monthly_b(daily: pd.DataFrame) -> pd.DataFrame:
@@ -82,14 +86,16 @@ def monthly_b(daily: pd.DataFrame) -> pd.DataFrame:
     return m
 
 
-def write_dat(template: pd.DataFrame, values: np.ndarray, first_row: int, out_file: Path) -> None:
-    """The template with ``values`` (months x watersheds) from ``first_row``, its header rows
-    with 0 decimals and its month rows with 3."""
+def write_dat(template: pd.DataFrame, values: np.ndarray, first_row: int, out_file: Path,
+              n_months: int = WINDOW_MONTHS) -> None:
+    """The template's header rows (0 decimals) and first ``n_months`` month rows (3 decimals)
+    with ``values`` (months x watersheds) from ``first_row``; the other month rows keep the
+    template's values."""
     dat = template.copy()
     dat.iloc[first_row:first_row + len(values), FIRST_COLUMN:FIRST_COLUMN + values.shape[1]] = values
     dat.iloc[:HEADER_ROWS].to_csv(out_file, sep="\t", index=False, header=False, float_format="%.0f")
-    dat.iloc[HEADER_ROWS:first_row + len(values)].to_csv(out_file, sep="\t", index=False, header=False,
-                                                        float_format="%.3f", mode="a")
+    dat.iloc[HEADER_ROWS:HEADER_ROWS + n_months].to_csv(out_file, sep="\t", index=False, header=False,
+                                                       float_format="%.3f", mode="a")
     print(f"  Written: {out_file}")
 
 
@@ -138,10 +144,13 @@ def main():
 
     monthly = pd.concat({str(wsid): monthly_single(watershed_daily(args.product, grid[grid.watershed_id == wsid]))
                          for wsid in ws_ids}, axis=1)
+    n_months = WINDOW_MONTHS
     if args.clip_period:
         monthly = monthly.loc[args.clip_period[0]:args.clip_period[1]]
-    write_dat(template, monthly.to_numpy(), HEADER_ROWS, output_path / cvprecip_file.name)
-    print(f"Rows (months): {monthly.shape[0]}, Watersheds: {monthly.shape[1]}")
+        n_months = len(monthly)
+    write_dat(template, monthly.to_numpy(), HEADER_ROWS, output_path / cvprecip_file.name, n_months)
+    print(f"Rows (months): {n_months}, {monthly.shape[0]} from the weather; "
+          f"Watersheds: {monthly.shape[1]}")
 
 
 if __name__ == "__main__":

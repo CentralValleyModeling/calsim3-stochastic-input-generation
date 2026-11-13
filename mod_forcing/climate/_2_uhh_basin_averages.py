@@ -86,8 +86,9 @@ def calculate_basin_monthly_averages(grid_info_df, product, date_index=None):
     grid info's weight1 column, from the daily weather of each cell (utils.wgen).
 
     A single series (Historical_Unsplit, Product A, LTO) is aligned to ``date_index`` first,
-    so days outside the files' span count as missing. Product B stays on its stamp days and
-    months (utils.wgen_calendar); every cell must list the same days.
+    and its days outside the files' span are left out, so the series ends with the weather
+    (December 2018 for Historical_Unsplit and Product A). Product B stays on its stamp days
+    and months (utils.wgen_calendar); every cell must list the same days.
 
     Returns:
     --------
@@ -133,7 +134,8 @@ def calculate_basin_monthly_averages(grid_info_df, product, date_index=None):
     else:
         daily = pd.DataFrame({'Year': date_index.year, 'Month': date_index.month, 'Day': date_index.day,
                               'precip': weighted_precip_sum.to_numpy() / weight_total,
-                              'tavg': weighted_tavg_sum.to_numpy() / weight_total})
+                              'tavg': weighted_tavg_sum.to_numpy() / weight_total}
+                             ).dropna(subset=['precip'])   # a month sum would count them as 0
     m = month_totals(daily, {'precip': 'sum', 'tavg': 'mean'})
     monthly_df = pd.DataFrame({
         'year':          m['Year'],
