@@ -32,7 +32,7 @@ Usage
 
 Long Windows file paths (e.g. on OneDrive) are handled transparently by the
 shared builder via ``utils.dss_io.open_dss``, which shortens the path that
-HEC-DSS sees via a ``_dss_link`` directory junction.
+HEC-DSS sees via a ``_dss_link_<pid>_<n>`` directory junction.
 """
 
 from __future__ import annotations

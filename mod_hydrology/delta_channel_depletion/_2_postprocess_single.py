@@ -80,11 +80,9 @@ def set_label(product):
 
 # Function to Extract DSS Time Series
 def extract_dss_data(dss_path):
-    # Open via utils.dss_io (auto directory-junction for long paths,
-    # version=7, catalog_flag=True -- identical _DSS_LINK / _PATH_LIMIT=200 as
-    # the removed local helper). The bespoke read loop below is preserved
-    # verbatim (no-trailing-slash pattern, sort by Part C) because it differs
-    # from dss_io.read_monthly_frame -- only the open is consolidated.
+    # Open via utils.dss_io (a directory junction for a long path, version=7,
+    # catalog_flag=True). The read loop below (no-trailing-slash pattern, sort by
+    # Part C) differs from dss_io.read_monthly_frame, so it stays here.
     dss_path = Path(dss_path).resolve()
     print(f"    Reading DSS: {dss_path.name}")
 

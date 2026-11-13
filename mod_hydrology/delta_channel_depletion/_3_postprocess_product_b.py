@@ -104,11 +104,6 @@ def load_inventory():
     return excel_partcs, desired_order
 
 
-# -- Junction helper for long DSS paths ---------------------------------------
-# The Fortran HEC-DSS library inside pydsstools limits path names to 256 chars.
-# The data directory may live on OneDrive with a very long path, so we create a
-# temporary Windows directory junction under the repo root to shorten it.
-
 # -- DSS extraction via pydsstools ---------------------------------------------
 
 def extract_dss_data(dss_path, excel_partcs):

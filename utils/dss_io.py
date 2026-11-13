@@ -36,6 +36,8 @@ contract.
 """
 from __future__ import annotations
 
+import ctypes
+import itertools
 import os
 import subprocess
 from contextlib import contextmanager
@@ -46,15 +48,17 @@ import pandas as pd
 from pydsstools.heclib.dss import HecDss
 
 # -- Windows long-path junction ------------------------------------------------
-# The Fortran HEC-DSS library inside pydsstools limits path names to 256 chars.
-# The data directory lives on OneDrive with a very long path, so for long paths
-# we create a temporary Windows directory junction under the repo root to
-# shorten it.  _DSS_LINK and _PATH_LIMIT are kept identical to the values that
-# were duplicated in the postprocessors and the sv_compile compiler.
+# The Fortran HEC-DSS library inside pydsstools limits path names to 256 chars,
+# and the data directory lives on OneDrive with a very long path, so a long path
+# is opened through a temporary directory junction under the repo root. Every
+# junction has its own name, _dss_link_<pid>_<n>, so runs in parallel and nested
+# opens in one run never re-point each other's link. create_junction removes the
+# junctions of processes that are no longer running (a killed run leaves its own).
 
 _REPO_ROOT = Path(__file__).resolve().parents[1]
-_DSS_LINK = _REPO_ROOT / "_dss_link"
+_LINK_PREFIX = "_dss_link_"
 _PATH_LIMIT = 200  # conservative limit vs Fortran's 256-char CNAME
+_link_numbers = itertools.count(1)
 
 
 def needs_junction(dss_path) -> bool:
@@ -62,26 +66,56 @@ def needs_junction(dss_path) -> bool:
     return len(str(dss_path)) > _PATH_LIMIT
 
 
-def create_junction(target_dir):
-    """Create (or re-create) a directory junction at _DSS_LINK -> target_dir."""
+def _process_running(pid: int) -> bool:
+    """True if process ``pid`` exists (a running process may refuse the query)."""
+    kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+    handle = kernel32.OpenProcess(0x1000, False, pid)  # PROCESS_QUERY_LIMITED_INFORMATION
+    if not handle:
+        return ctypes.get_last_error() == 5             # ERROR_ACCESS_DENIED
+    try:
+        code = ctypes.c_ulong()
+        kernel32.GetExitCodeProcess(handle, ctypes.byref(code))
+        return code.value == 259                        # STILL_ACTIVE
+    finally:
+        kernel32.CloseHandle(handle)
+
+
+def _unlink(link) -> None:
+    """Remove a junction; rmdir leaves the target's contents alone."""
+    subprocess.run(["cmd", "/c", "rmdir", str(link)], capture_output=True)
+
+
+def _remove_orphan_junctions() -> None:
+    """Remove the junctions of processes that are no longer running."""
+    for link in _REPO_ROOT.glob(f"{_LINK_PREFIX}*"):
+        pid = link.name[len(_LINK_PREFIX):].split("_")[0]
+        if pid.isdigit() and int(pid) != os.getpid() and not _process_running(int(pid)):
+            _unlink(link)
+
+
+def create_junction(target_dir) -> Path:
+    """Create a new directory junction under the repo root to ``target_dir`` and return
+    its path; remove it with :func:`remove_junction`."""
     target_str = str(target_dir)
     if target_str.startswith("\\\\?\\"):
         target_str = target_str[4:]  # mklink /J requires a plain path, not \\?\ prefix
-    # Use os.path.lexists so we also catch broken junctions (Path.exists follows
-    # the reparse point and returns False if the target is gone, which would
-    # leak a stale link and break the next mklink).
-    if os.path.lexists(str(_DSS_LINK)):
-        subprocess.run(["cmd", "/c", "rmdir", str(_DSS_LINK)], capture_output=True)
+    _remove_orphan_junctions()
+    link = _REPO_ROOT / f"{_LINK_PREFIX}{os.getpid()}_{next(_link_numbers)}"
+    # A dead process with this pid may have left the name behind, possibly broken:
+    # os.path.lexists sees a broken junction, Path.exists does not.
+    if os.path.lexists(str(link)):
+        _unlink(link)
     subprocess.run(
-        ["cmd", "/c", "mklink", "/J", str(_DSS_LINK), target_str],
+        ["cmd", "/c", "mklink", "/J", str(link), target_str],
         check=True, capture_output=True,
     )
+    return link
 
 
-def remove_junction():
-    """Remove the _DSS_LINK junction (does not affect target directory)."""
-    if os.path.lexists(str(_DSS_LINK)):
-        subprocess.run(["cmd", "/c", "rmdir", str(_DSS_LINK)], capture_output=True)
+def remove_junction(link) -> None:
+    """Remove a junction made by :func:`create_junction` (its target is untouched)."""
+    if os.path.lexists(str(link)):
+        _unlink(link)
 
 
 @contextmanager
@@ -120,8 +154,8 @@ def open_dss(dss_path, *, version=6, catalog_flag=True, use_junction=None,
         use_junction = needs_junction(dss_path)
 
     if use_junction:
-        create_junction(dss_path.parent)
-        work_path = str(_DSS_LINK / dss_path.name)
+        link = create_junction(dss_path.parent)
+        work_path = str(link / dss_path.name)
     else:
         work_path = str(dss_path)
 
@@ -131,7 +165,7 @@ def open_dss(dss_path, *, version=6, catalog_flag=True, use_junction=None,
             yield dss
     finally:
         if use_junction:
-            remove_junction()
+            remove_junction(link)
 
 
 # -- Timestamp / sentinel helpers ---------------------------------------------

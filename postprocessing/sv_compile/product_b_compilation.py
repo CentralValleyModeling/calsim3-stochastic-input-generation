@@ -2095,14 +2095,14 @@ if not CLI_ARGS.skip_dss:
     # than per-iteration) to avoid the mklink/rmdir overhead; that's why we
     # call dss_io.create_junction / remove_junction explicitly here instead
     # of using dss_io.open_dss for each write inside the loop.
-    use_junction = dss_io.needs_junction(COMPILED_DIR / "ProductB_SV_n01.dss")
-    if use_junction:
-        dss_io.create_junction(COMPILED_DIR)
-        atexit.register(dss_io.remove_junction)
+    link = None
+    if dss_io.needs_junction(COMPILED_DIR / "ProductB_SV_n01.dss"):
+        link = dss_io.create_junction(COMPILED_DIR)
+        atexit.register(dss_io.remove_junction, link)
 
     def _get_dss_str(path):
-        if use_junction:
-            return str(dss_io._DSS_LINK / path.name)
+        if link is not None:
+            return str(link / path.name)
         return str(path)
 
     for tag in sorted(chunk_lookups):
@@ -2175,8 +2175,8 @@ if not CLI_ARGS.skip_dss:
         print(f"  {tag}:  {n_paths:>6,} DSS paths written  |  "
               f"{n_svs:>5,} (B,C)  ({time.time()-t_one:.1f}s)")
 
-    if use_junction:
-        dss_io.remove_junction()
+    if link is not None:
+        dss_io.remove_junction(link)
 
     print("-" * 72)
     print(f"  DSS compilation completed in {time.time()-t0_dss:.1f}s")

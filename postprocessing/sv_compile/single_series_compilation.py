@@ -153,33 +153,21 @@ OVERWRITE_START = pd.Timestamp(DELIVERY_WY[0] - 1, 10, 31)
 OVERWRITE_END   = pd.Timestamp(DELIVERY_WY[1],  9, 30)
 WINDOW_MONTHS   = 12 * (DELIVERY_WY[1] - DELIVERY_WY[0] + 1)
 
-# -- Junction helper for long DSS paths ----------------------------------------
-# The Fortran HEC-DSS library inside pydsstools limits path names to 256 chars.
-# The data directory may live on OneDrive with a very long path, so we create a
-# temporary Windows directory junction under the repo root to shorten it.
-# All GENERATED paths in this script are under OUTPUT_DIR, so a single junction
-# covers all long paths.  BASELINE_DSS (under BASE/) is short enough as-is.
+# -- Junction for long DSS paths -----------------------------------------------
+# Every GENERATED DSS path of this script is under OUTPUT_DIR, so one junction to it
+# (utils.dss_io) shortens them all. BASELINE_DSS (under BASE/) is short enough as-is.
 
-_REPO_ROOT = Path(__file__).resolve().parents[2]
-_DSS_LINK = _REPO_ROOT / "_dss_link"
-_PATH_LIMIT = 200  # conservative limit vs Fortran's 256-char CNAME
-
-# The junction primitives now come from utils.dss_io (identical
-# implementation; deduplicated).  dss_io._DSS_LINK resolves to the same
-# <repo_root>/_dss_link path, so _DSS_LINK / _PATH_LIMIT above remain valid
-# for _dss_str and _USE_JUNCTION.
-
-_USE_JUNCTION = len(str(OUTPUT_DSS)) > _PATH_LIMIT
-if _USE_JUNCTION:
+_DSS_LINK = None
+if dss_io.needs_junction(OUTPUT_DSS):
     OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
-    dss_io.create_junction(OUTPUT_DIR)
-    atexit.register(dss_io.remove_junction)
+    _DSS_LINK = dss_io.create_junction(OUTPUT_DIR)
+    atexit.register(dss_io.remove_junction, _DSS_LINK)
 
 
 def _dss_str(path):
     """Return a DSS-safe string path, shortened via junction if active."""
     s = str(path)
-    if not _USE_JUNCTION or len(s) <= _PATH_LIMIT:
+    if _DSS_LINK is None or not dss_io.needs_junction(s):
         return s
     try:
         rel = Path(path).relative_to(OUTPUT_DIR)
