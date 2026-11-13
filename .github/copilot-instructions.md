@@ -159,9 +159,7 @@ The config names the model (`inflow_model`, an adapter in `adapters/`), its fold
 
 | Script | Purpose | Product |
 |--------|---------|---------|
-| `_0_compare_et_cshydro_vic.py` | Compare ET: CalSimHydro vs VIC (analysis only) | -- |
 | `_1_compile_precip.py` | Daily WBA precip from WGEN met files | historical, A & B (`--product`) |
-| `_2_compile_et.py` | Area-weighted VIC ET -> QM to CalSim (parallel) | A & B (`--product A|B`, `--n_workers`) |
 | `_2b_compile_pan_evap.py` | Gerber pan evaporation per WBA from WGEN temperature | historical, A & B (`--product`) |
 | `_3_postprocess_single.py` | Extract & postprocess CalSimHydro/Rebalance/Rice DSS -> delivery CSVs | historical, A (`--product`, `--sources`, `--skip-compare`, `--skip-validate`) |
 | `_4_postprocess_product_b.py` | Extract Product B DSS (10 chunks) -> per-chunk CSVs | B (`--sources`, `--chunks`, `--compare-a`) |

@@ -62,7 +62,7 @@ Tier 1  FORCING (mod_forcing)
 Tier 2  CORE HYDROLOGY (mod_hydrology)
     CalSimHydro:
         python mod_hydrology/calsimhydro/_1_compile_precip.py --product A --clip_period 1920-10-01 2018-09-30
-        python mod_hydrology/calsimhydro/_2_compile_et.py --product A --et_type all --vic_col_index 7 --write_dss
+        ET: steps 10a-14 of mod_forcing/climate/_3_refet_cimis_adj (Product A)
         python mod_hydrology/calsimhydro/_2b_compile_pan_evap.py --product A
         -> [EXTERNAL] CalSimHydro model run
         python mod_hydrology/calsimhydro/_3_postprocess_single.py --product A --sources cshydro rebalance rice
@@ -176,11 +176,10 @@ runs live in `<Model>_<set>` folders (`<set>`: `Historical_Unsplit`, `Product_A`
 1. `python mod_hydrology/calsimhydro/_1_compile_precip.py --product A --clip_period 1920-10-01 2018-09-30`
    - **Inputs:** WGEN met files; WBA grid info
    - **Outputs:** daily WBA precip CSVs under `_1_compile_precip/<set>/`
-2. `python mod_hydrology/calsimhydro/_2_compile_et.py --product A --et_type all --vic_col_index 7 --write_dss --n_workers 8`
-   - **Inputs:** VIC fluxes; WBA grid; CS3 RefETo DSS (QM target)
-   - **Outputs:** monthly QM'd ET CSVs per WBA (WY 1972-2018). Product A only; the
-     CIMIS-adjusted ET of `mod_forcing/climate/_3_refet_cimis_adj` (steps 5-14) covers
-     1921-2018.
+2. ET: steps 10a-14 of `mod_forcing/climate/_3_refet_cimis_adj`, run from that folder
+   - **Inputs:** WGEN Product A weather; CIMIS ETo 2004-2018
+   - **Outputs:** `_2_compile_et/Product_A/CS3_RefETo.dss` (step 11a) and `CS3_ET.dss`
+     (step 14). Product A only.
 3. `python mod_hydrology/calsimhydro/_2b_compile_pan_evap.py --product A`
    - **Inputs:** WGEN temperature
    - **Outputs:** Gerber pan evaporation per WBA

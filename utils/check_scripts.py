@@ -64,7 +64,6 @@ PRODUCT_A_SCRIPTS = [
     "mod_forcing/climate/_1_pp_point_locations.py",
     "mod_forcing/climate/_2_uhh_basin_averages.py",
     "mod_hydrology/calsimhydro/_1_compile_precip.py",
-    "mod_hydrology/calsimhydro/_2_compile_et.py",
     "mod_hydrology/calsimhydro/_2b_compile_pan_evap.py",
     "mod_hydrology/calsimhydro_ee/_1_compile_precip_EE.py",
     "mod_hydrology/delta_channel_depletion/_1_compile_precip_DETAW.py",
@@ -126,7 +125,6 @@ PRODUCT_B_SCRIPTS = [
 # accepted as "known" by the manifest-drift cross-check (rule 5) so they
 # don't trip the on-disk-but-unlisted detector.
 EXEMPT_SCRIPTS = [
-    "mod_hydrology/calsimhydro/_0_compare_et_cshydro_vic.py",       # diagnostic
     "mod_hydrology/rim_inflow/_0_stochastic_inflow_explore.py",     # exploration
     "mod_hydrology/rim_inflow/_0_stochastic_precipitation.py",      # exploration
     "mod_hydrology/small_watersheds/_1b_check_precip_output.py",    # diagnostic
