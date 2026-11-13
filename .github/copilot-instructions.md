@@ -141,7 +141,7 @@ The config names the model (`inflow_model`, an adapter in `adapters/`), its fold
 
 | Script | Purpose | Product |
 |--------|---------|---------|
-| `_1_build_forcing.py` | Build the model's input from BASE where its folder lacks it (VIC: a forcing file per cell with the LTO wind) and check it against BASE (G2) | historical, A, B (`--forcing`, `--cells`, `--check-only`) |
+| `_1_build_forcing.py` | Build the model's input from BASE where its folder lacks it (VIC: a forcing file per cell with the LTO wind) and check it against BASE (G2) | historical, A, B (`--forcing`, `--cells`; `--cells all` builds) |
 | `_2_run_product.py` | Run the model at the pin and write `arc_inflow_monthly.csv` + `run_manifest.json` | historical, A, B (`--forcing`, `--allow-dirty`) |
 | `adapters/sacsma.py` | SAC-SMA dPL-CalSim with its share model; Product B in 10 segments (G1, G6) | delivered in v1.1 |
 | `adapters/vic.py` | VIC 4.2.d under WSL, pinned by the sha256 of its files; arcs routed from GridInfo; xz-compressed flux store reused while model and inputs match (G1: 8 cells rerun byte for byte) | selectable |
