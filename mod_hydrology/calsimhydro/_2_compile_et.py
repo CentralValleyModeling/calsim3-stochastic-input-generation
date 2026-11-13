@@ -46,7 +46,7 @@ from pydsstools.core import TimeSeriesContainer
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 from utils import dss_io
 from utils.paths import get_archive_dir, get_module_generated_dir
-from utils.wgen_calendar import STAMP_DAYS, stamp_month_of_day
+from utils.wgen_calendar import CHUNK_MONTHS, N_CHUNKS, SKIP_MONTHS, STAMP_DAYS, stamp_month_of_day
 
 # Local quantile mapping utility
 from utils.quantile_mapping import qmap_single
@@ -288,16 +288,14 @@ class CompileWBAET:
 		Oct 2021 - Dec 2021: data following this chunk's core.
 		Jan 1920 - Dec 1920: Backfill (duplicate of Jan-Dec 1921).
 		"""
-		months_per_chunk = 1200
-		skip_months = 9
 		pre_core_months = 9
 		suffix_months = 3
 
-		core_start = skip_months + chunk_idx * months_per_chunk
+		core_start = SKIP_MONTHS + chunk_idx * CHUNK_MONTHS
 
 		pre_core = values[core_start - pre_core_months : core_start]
-		core = values[core_start : core_start + months_per_chunk]
-		post_core = values[core_start + months_per_chunk : core_start + months_per_chunk + suffix_months]
+		core = values[core_start : core_start + CHUNK_MONTHS]
+		post_core = values[core_start + CHUNK_MONTHS : core_start + CHUNK_MONTHS + suffix_months]
 
 		# Jan 1921 - Dec 2021 natural data
 		natural = np.concatenate([pre_core, core, post_core])
@@ -314,19 +312,16 @@ class CompileWBAET:
 		Jan 1920 - Dec 1920: backfill (copy of Jan-Dec 1921).
 		Oct 2021 - Dec 2021: from subsequent chunk's data.
 		"""
-		months_per_chunk = 1200
-		skip_months = 9
-		total_chunks = 10
-		total_needed = skip_months + months_per_chunk * total_chunks + 3
+		total_needed = SKIP_MONTHS + CHUNK_MONTHS * N_CHUNKS + 3
 		wba_dir = os.path.join(self.output_path, 'wba')
 		os.makedirs(wba_dir, exist_ok=True)
 		date_template = pd.date_range('1920-01-31', '2021-12-31', freq='ME')
-		print(f"  Product B: {months_per_chunk} core months/chunk, {len(date_template)} output months/chunk, {total_chunks} chunks")
+		print(f"  Product B: {CHUNK_MONTHS} core months/chunk, {len(date_template)} output months/chunk, {N_CHUNKS} chunks")
 		for wba, series in results.items():
 			vals = series.values
 			if len(vals) < total_needed:
 				raise ValueError(f"{wba}: need {total_needed} months, got {len(vals)}")
-			for i in range(total_chunks):
+			for i in range(N_CHUNKS):
 				chunk = self._build_product_b_monthly_chunk(vals, i)
 				df = pd.DataFrame({
 					'y': date_template.year,
@@ -335,19 +330,18 @@ class CompileWBAET:
 				})
 				out_file = os.path.join(wba_dir, f"{wba}_{self.et_type}_n{i+1:02d}.csv")
 				df.to_csv(out_file, header=False, index=False)
-				print(f"    Chunk {i+1:02d}/10: {os.path.basename(out_file)}")
+				print(f"    Chunk {i+1:02d}/{N_CHUNKS}: {os.path.basename(out_file)}")
 
 	def _write_product_b_dss(self, results: Dict[str, pd.Series]) -> None:
 		"""Write 10 per-chunk DSS files for Product B, Jan 1920 - Dec 2021 each."""
-		total_chunks = 10
 		start_dt_str = "31JAN1920 24:00:00"
 		if self.et_type == 'CropET':
 			dss_stem = "CS3_ET"
 		else:
 			dss_stem = "CS3_RefET"
-		for i in range(total_chunks):
+		for i in range(N_CHUNKS):
 			dss_out = os.path.join(self.output_path, f"{dss_stem}_n{i+1:02d}.dss")
-			print(f"  Writing DSS chunk {i+1:02d}/10: {os.path.basename(dss_out)}")
+			print(f"  Writing DSS chunk {i+1:02d}/{N_CHUNKS}: {os.path.basename(dss_out)}")
 			with dss_io.open_dss(dss_out, version=6, catalog_flag=False) as dss:
 				for wba, series in results.items():
 					chunk = self._build_product_b_monthly_chunk(series.values, i)
