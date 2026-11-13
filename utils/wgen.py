@@ -35,7 +35,7 @@ import numpy as np
 import pandas as pd
 
 from utils.paths import REPO_ROOT, WEATHER_SETS, get_base_dir, get_wgen_dir
-from utils.wgen_calendar import require_stamp_days
+from utils.wgen_calendar import require_stamp_calendar
 
 COLUMNS = ["Year", "Month", "Day", "precip", "tmax", "tmin"]
 X10_TABLE = REPO_ROOT / "mod_hydrology" / "rim_inflow" / "reference" / "prcp_x10_artifacts.csv"
@@ -114,7 +114,8 @@ def read_met(product: str, path, usecols=None) -> pd.DataFrame:
     """The daily rows of a file of ``product`` with columns ``COLUMNS`` (or Year, Month, Day
     and those named in ``usecols``). For Historical_Unsplit the cell's ``X10_TABLE`` pairs are
     divided by 10, and the read stops if a raw value there is not the one the table records. A
-    Product B file must hold one row per stamp day, an LTO file one per day of ``LTO_DAYS``."""
+    Product B file must hold the stamp days in order (``require_stamp_calendar``), an LTO file
+    one row per day of ``LTO_DAYS``."""
     path = Path(path)
     prefix = _prefix(product) + "_"
     if not path.name.startswith(prefix) or path.parent.name != met_dir(product).name:
@@ -129,7 +130,7 @@ def read_met(product: str, path, usecols=None) -> pd.DataFrame:
         return w[cols]
     w = pd.read_csv(path, sep=r"\s+", header=None, names=COLUMNS, usecols=cols)
     if product == "B":
-        require_stamp_days(len(w), path)
+        require_stamp_calendar(w[["Year", "Month", "Day"]].to_numpy(), path)
     if product == "historical" and "precip" in cols:
         _correct_x10(w, path, path.name[len(prefix):])
     return w

@@ -97,6 +97,29 @@ def stamp_month_of_day() -> np.ndarray:
     return out
 
 
+@functools.cache
+def stamp_days() -> np.ndarray:
+    """Per row of a Product B file (stamp day), its stamp year, month and day: shape
+    (``STAMP_DAYS``, 3). Read-only."""
+    month = stamp_month_of_day()
+    lengths = np.bincount(month)
+    first = np.repeat(np.cumsum(lengths) - lengths, lengths)
+    out = np.stack([month // 12 + 1, month % 12 + 1, np.arange(len(month)) - first + 1], axis=1)
+    out.setflags(write=False)
+    return out
+
+
+def require_stamp_calendar(ymd: np.ndarray, what) -> None:
+    """Stop unless the (year, month, day) rows of a Product B file are the stamp days in order
+    from 1 January of stamp year 1: the daily consumers cut the chunks by row position."""
+    require_stamp_days(len(ymd), what)
+    off = np.flatnonzero((np.asarray(ymd) != stamp_days()).any(axis=1))
+    if len(off):
+        i = int(off[0])
+        raise ValueError(f"{what}: row {i} is ({', '.join(map(str, ymd[i]))}), but stamp day {i} "
+                         f"is ({', '.join(map(str, stamp_days()[i]))}) (year, month, day)")
+
+
 def chunk_span(chunk: int) -> tuple[tuple[int, int], tuple[int, int]]:
     """The first and last stamp (year, month) of a chunk: ((100(k-1)+1, 10), (100k+1, 9))."""
     if not 1 <= chunk <= N_CHUNKS:
