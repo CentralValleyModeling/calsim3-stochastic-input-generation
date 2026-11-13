@@ -5,6 +5,9 @@ Two subcommands:
   sync     Upload changed local data to Box as module-level zip archives.
            Unchanged files are copied from the existing zip without
            recompressing; only new or modified files are compressed.
+           The GENERATED folder of the config (generated_dir: GENERATED,
+           or a chain's own such as GENERATED_vic) goes to the Box folder
+           of the same name.
            Requires the csstochastic conda env (uses utils.paths).
 
   acquire  Download and unpack zips from Box shared links (data_links.json).
@@ -732,9 +735,20 @@ def acquire(
 # Subcommand entry points
 # ---------------------------------------------------------------------------
 
+def generated_name(generated: Path, data_dir: Path) -> str:
+    """The name of the GENERATED folder sync publishes, which names its Box folder too:
+    ``GENERATED`` for the delivered chain, a chain's own (config ``generated_dir``, e.g.
+    ``GENERATED_vic``) otherwise. The folder must sit in the data folder beside BASE, where
+    acquire unpacks its zips."""
+    if os.path.normcase(str(generated.parent)) != os.path.normcase(str(data_dir)):
+        raise SystemExit(f"{generated} is not a folder of {data_dir}; sync publishes only a "
+                         "GENERATED folder beside BASE")
+    return generated.name
+
+
 def cmd_sync(args) -> None:
     sys.path.insert(0, str(_REPO_ROOT))
-    from utils.paths import get_base_dir, get_generated_dir
+    from utils.paths import get_base_dir, get_data_dir, get_generated_dir
 
     do_base = not args.generated_only
     do_generated = not args.base_only
@@ -772,13 +786,15 @@ def cmd_sync(args) -> None:
         total_skipped += s
 
     if do_generated:
-        print("GENERATED/")
+        generated = get_generated_dir()
+        name = generated_name(generated, get_data_dir())
+        print(f"{name}/")
         u, s = sync_section(
-            get_generated_dir(),
-            args.box_dir / "GENERATED",
-            label="GENERATED",
+            generated,
+            args.box_dir / name,
+            label=name,
             max_depth=args.depth,
-            cache_root=CACHE_ROOT / "GENERATED",
+            cache_root=CACHE_ROOT / name,
             compresslevel=args.compresslevel,
             workers=args.workers,
             force=args.force,
