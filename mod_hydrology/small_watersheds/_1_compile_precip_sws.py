@@ -20,8 +20,8 @@ Outputs
 -------
 Under <generated>/mod_hydrology/small_watersheds/output/_1_compile_precip_sws/ (or
 --output_path):
-- <Historical_Unsplit|Product_A>/CVprecipWY1921_2021.dat (only the months of --clip_period,
-  when given)
+- <Historical_Unsplit|Product_A>/CVprecipWY1921_2021.dat (with --clip_period, only the template
+  rows of its months)
 - Product_B/CVprecipWY1921_2021_n01.dat ... _n10.dat
 
 Dependencies
@@ -79,15 +79,14 @@ def monthly_b(daily: pd.DataFrame) -> pd.DataFrame:
 
 
 def write_dat(template: pd.DataFrame, values: np.ndarray, first_row: int, out_file: Path,
-              n_months: int = WINDOW_MONTHS) -> None:
-    """The template's header rows (0 decimals) and first ``n_months`` month rows (3 decimals)
-    with ``values`` (months x watersheds) from ``first_row``; the other month rows keep the
-    template's values."""
+              written: slice = slice(HEADER_ROWS, HEADER_ROWS + WINDOW_MONTHS)) -> None:
+    """The template's header rows (0 decimals) and its month rows ``written`` (3 decimals, each
+    dated in its first column), with ``values`` (months x watersheds) from ``first_row``; the
+    other month rows keep the template's values."""
     dat = template.copy()
     dat.iloc[first_row:first_row + len(values), FIRST_COLUMN:FIRST_COLUMN + values.shape[1]] = values
     dat.iloc[:HEADER_ROWS].to_csv(out_file, sep="\t", index=False, header=False, float_format="%.0f")
-    dat.iloc[HEADER_ROWS:HEADER_ROWS + n_months].to_csv(out_file, sep="\t", index=False, header=False,
-                                                       float_format="%.3f", mode="a")
+    dat.iloc[written].to_csv(out_file, sep="\t", index=False, header=False, float_format="%.3f", mode="a")
     print(f"  Written: {out_file}")
 
 
@@ -136,12 +135,17 @@ def main():
 
     monthly = pd.concat({str(wsid): monthly_single(watershed_daily(args.product, grid[grid.watershed_id == wsid]))
                          for wsid in ws_ids}, axis=1)
-    n_months = WINDOW_MONTHS
+    first_row, written = HEADER_ROWS, slice(HEADER_ROWS, HEADER_ROWS + WINDOW_MONTHS)
     if args.clip_period:
         monthly = monthly.loc[args.clip_period[0]:args.clip_period[1]]
-        n_months = len(monthly)
-    write_dat(template, monthly.to_numpy(), HEADER_ROWS, output_path / cvprecip_file.name, n_months)
-    print(f"Rows (months): {n_months}, {monthly.shape[0]} from the weather; "
+        if monthly.empty:
+            raise SystemExit(f"--clip_period {args.clip_period[0]} {args.clip_period[1]} holds no "
+                             "month of the weather")
+        # Template row of the first clipped month
+        first_row += (monthly.index[0].to_period("M") - WINDOW[0].to_period("M")).n
+        written = slice(first_row, first_row + len(monthly))
+    write_dat(template, monthly.to_numpy(), first_row, output_path / cvprecip_file.name, written)
+    print(f"Rows (months): {written.stop - written.start}, {monthly.shape[0]} from the weather; "
           f"Watersheds: {monthly.shape[1]}")
 
 
