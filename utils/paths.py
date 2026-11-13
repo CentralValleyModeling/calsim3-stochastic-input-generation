@@ -57,14 +57,22 @@ _DEFAULT_CFG = REPO_ROOT / "config_default.json"
 
 
 def _load_config() -> dict:
-    """Defaults from ``config_default.json``, overridden key by key by the user file."""
+    """Defaults from ``config_default.json``, overridden key by key by the user file. The user
+    file may set only keys the defaults have (and comments, keys starting with ``_``), so a
+    misspelt or retired key stops the run instead of leaving its default in force."""
     with open(_DEFAULT_CFG, "r") as f:
         cfg = json.load(f)
     if "CSSTOCHASTIC_CONFIG" in os.environ and not _USER_CFG.exists():
         raise SystemExit(f"CSSTOCHASTIC_CONFIG names {_USER_CFG}, which does not exist")
     if _USER_CFG.exists():
         with open(_USER_CFG, "r") as f:
-            cfg.update(json.load(f))
+            user = json.load(f)
+        unknown = sorted(k for k in user if k not in cfg and not k.startswith("_"))
+        if unknown:
+            keys = ", ".join(k for k in cfg if not k.startswith("_"))
+            raise SystemExit(f"{_USER_CFG}: unknown key(s) {', '.join(unknown)}; "
+                             f"{_DEFAULT_CFG.name} has {keys}")
+        cfg.update(user)
     return cfg
 
 
