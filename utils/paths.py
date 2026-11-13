@@ -52,7 +52,7 @@ def _long_path(p: Path) -> Path:
 # ---------------------------------------------------------------------------
 # Load user config, falling back to the default
 # ---------------------------------------------------------------------------
-_USER_CFG = Path(os.environ.get("CSSTOCHASTIC_CONFIG", "config.json"))
+_USER_CFG = Path(os.environ.get("CSSTOCHASTIC_CONFIG") or "config.json")    # empty = unset
 if not _USER_CFG.is_absolute():
     _USER_CFG = REPO_ROOT / _USER_CFG       # scripts run from their own folders
 _DEFAULT_CFG = REPO_ROOT / "config_default.json"
@@ -64,7 +64,7 @@ def _load_config() -> dict:
     misspelt or retired key stops the run instead of leaving its default in force."""
     with open(_DEFAULT_CFG, "r") as f:
         cfg = json.load(f)
-    if "CSSTOCHASTIC_CONFIG" in os.environ and not _USER_CFG.exists():
+    if os.environ.get("CSSTOCHASTIC_CONFIG") and not _USER_CFG.exists():
         raise SystemExit(f"CSSTOCHASTIC_CONFIG names {_USER_CFG}, which does not exist")
     if _USER_CFG.exists():
         with open(_USER_CFG, "r") as f:
