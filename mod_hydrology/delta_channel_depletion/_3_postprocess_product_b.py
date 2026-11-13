@@ -7,8 +7,8 @@ Extracts monthly time series from the 10 chunked Product B DSS files
   2. Per-chunk summary CSVs with descriptive statistics by SV
   3. (--compare-a) Comparison CSV: Product A vs Product B at the PartC level
 
-Each chunk covers 100 water years (1,200 months) using canonical dates
-Oct 1921 - Sep 2021 (WY 1922-2021).
+Each chunk CSV holds 100 water years (1,200 months) labelled Oct 1921 - Sep
+2021 (WY 1922-2021); the run's spin-up months before them are left out.
 
 DCD DSS outputs are in CFS (PER-AVER); values are converted to TAF for
 consistency with CalSim baseline expectations.
@@ -44,7 +44,7 @@ import matplotlib.pyplot as plt
 # Add repo root to path for utils imports
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 from utils import dss_io
-from utils.wgen_calendar import LABEL_WY, N_CHUNKS
+from utils.wgen_calendar import LABEL_WY, N_CHUNKS, in_label_months
 from utils.paths import WEATHER_SETS, get_module_generated_dir, get_inventory_dir
 
 
@@ -246,8 +246,8 @@ def process_chunk(chunk_num, excel_partcs):
         print(f"    Date range: {df.index.min().strftime('%Y-%m')} - "
               f"{df.index.max().strftime('%Y-%m')}")
 
-    # Convert to long format (includes CFS -> TAF conversion)
-    df_long = to_long_csv(df)
+    # Convert to long format (includes CFS -> TAF conversion), the label months only
+    df_long = in_label_months(to_long_csv(df), chunk_tag)
     if df_long.empty:
         print(f"    WARNING: No valid values in chunk {chunk_tag}")
         return False

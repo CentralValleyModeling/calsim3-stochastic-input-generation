@@ -17,7 +17,8 @@ A labelled table carries ``chunk`` (0 for a single series: Historical_Unsplit, P
 ``monthly`` builds one from the daily rows of ``utils.wgen.read_met``. A module that works on
 the file's own months first (a quantile map fit over stamp months) takes ``month_totals`` and
 then ``label``. ``write_chunk_csvs`` writes Product B's chunk files, and
-``require_label_months`` checks a chunk file read back. ``wy_months`` lists the months of a span
+``require_label_months`` checks a chunk file read back, and ``in_label_months`` cuts an
+external model's run of a chunk to its label months. ``wy_months`` lists the months of a span
 of water years (``LABEL_MONTHS`` is WY1922-2021's). The daily consumers take ``chunk_days`` or
 ``daily_chunk_1920_2021`` and date their rows with ``LABEL_DAYS`` or ``DAYS_1920_2021``.
 
@@ -147,6 +148,17 @@ def require_label_months(year, month, what) -> None:
     if ym.shape != LABEL_MONTHS.shape or not (ym == LABEL_MONTHS.to_numpy()).all():
         raise ValueError(f"{what}: {len(ym)} rows, not the {CHUNK_MONTHS} label months "
                          "Oct 1921 - Sep 2021 in order")
+
+
+def in_label_months(df: pd.DataFrame, what: str) -> pd.DataFrame:
+    """The rows of a chunk table (Part B, Part C, Year, Month, ...) in the 1,200
+    ``LABEL_MONTHS``: an external model's run of a chunk also holds the months before them
+    (its spin-up). Stops unless every series holds every label month, in order."""
+    ym = df["Year"].to_numpy(dtype=np.int64) * 12 + df["Month"].to_numpy(dtype=np.int64) - 1
+    out = df[(ym >= _LABEL_START) & (ym < _LABEL_START + CHUNK_MONTHS)].reset_index(drop=True)
+    for key, g in out.groupby(["Part B", "Part C"], sort=False):
+        require_label_months(g["Year"], g["Month"], f"{what} {key}")
+    return out
 
 
 def label_months(product: str, year, month) -> pd.DataFrame:
