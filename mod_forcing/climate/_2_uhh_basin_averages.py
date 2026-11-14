@@ -10,9 +10,11 @@ Inputs
 - reference/uhh_locations.csv (location, grid_info_file)
 - reference/GridInfo/<grid_info_file>: basin cells and their areas inside the basin
 - daily weather of the --product set (utils.wgen.weighted_daily): WGEN Historical_Unsplit,
-  Product_A/1 or Product_B/1, or <base>/Historical_Climate_LTO/1_Historical
-- reference/calsim_climate_sv.xlsx: VPD<XX>_UHH, the QM target (fit over Oct 1921 - Sep 1971;
-  Product B: the first 1,200 months by position). A location whose fit fails gets no VPD.
+  Product_A/1 or Product_B/1, or <base>/Historical_Climate_LTO/1_Historical; and WGEN
+  Historical_Unsplit over WY1922-2018 for the VPD fit
+- reference/calsim_climate_sv.xlsx: VPD<XX>_UHH, the QM target. Each location's map is fit per
+  calendar month on Historical_Unsplit basin Tavg against CalSim VPD over WY1922-2018
+  (utils.paths.DELIVERY_WY) and applied to every set. A location whose fit fails gets no VPD.
 - --compare-historical-productB: <base>/CalSim3/__calsim_sv_default__.dss (PPT_*_UHH) and the
   Product A and B precipitation outputs below
 
@@ -61,9 +63,9 @@ from matplotlib.patches import Patch
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 from utils import dss_io
 from utils.csv_io import write_delivery_csv
-from utils.paths import DELIVERY, WEATHER_SETS, delivery_dir, get_base_dir, get_module_generated_dir
+from utils.paths import DELIVERY, DELIVERY_WY, WEATHER_SETS, delivery_dir, get_base_dir, get_module_generated_dir
 from utils.wgen import SETS, dates, met_path, set_name, weighted_daily
-from utils.wgen_calendar import (CHUNK_MONTHS, N_CHUNKS, label as calendar_label, month_totals,
+from utils.wgen_calendar import (N_CHUNKS, label as calendar_label, month_totals,
                                  water_year, write_chunk_csvs)
 from utils.quantile_mapping import qmap_single
 
@@ -210,88 +212,52 @@ def read_target_vpd_data(excel_file, base_shorthand):
     return result[['year', 'month', 'value']]
 
 
-def apply_vpd_quantile_mapping(temp_monthly, target_vpd, source_type):
+# VPD map of every set: Historical_Unsplit basin Tavg against CalSim VPD over the delivery water
+# years, so a set's temperature difference from Historical_Unsplit carries into its VPD
+VPD_FIT_WY = DELIVERY_WY
+VPD_FIT_DAYS = pd.date_range(f"{VPD_FIT_WY[0] - 1}-10-01", f"{VPD_FIT_WY[1]}-09-30", freq="D")
+
+
+def apply_vpd_quantile_mapping(temp_monthly, fit_temp, target_vpd):
     """
-    Apply quantile mapping to generate VPD timeseries using temperature as basis.
-    
+    VPD (kPa) of each month of ``temp_monthly`` by quantile mapping of basin temperature.
+
+    The map is fit per calendar month on ``fit_temp`` (Historical_Unsplit) against
+    ``target_vpd`` (CalSim VPD) over the months of VPD_FIT_WY, and stops unless both cover every
+    one of them. Only the calendar month matters, so Product B stamp months map like any other.
+
     Parameters:
     -----------
     temp_monthly : pd.DataFrame
-        Monthly temperature data with columns: year, month, tavg_f
+        The set's monthly temperature: year, month, tavg_f
+    fit_temp : pd.DataFrame
+        Historical_Unsplit monthly temperature of the same basin: year, month, tavg_f
     target_vpd : pd.DataFrame
-        Target historical VPD data with columns: year, month, value (kPa)
-    source_type : str
-        The weather set: 'historical', 'A', 'B' or 'LTO'
-        
+        CalSim VPD: year, month, value (kPa)
+
     Returns:
     --------
     pd.DataFrame with columns: year, month, vpd_kpa
     """
-    # Prepare temperature data as basis simulation (full time series)
-    temp_basis_sim = temp_monthly[['year', 'month', 'tavg_f']].copy()
-    temp_basis_sim = temp_basis_sim.rename(columns={'tavg_f': 'value'})
+    fit = fit_temp[['year', 'month', 'tavg_f']].merge(
+        target_vpd.dropna(subset=['value']), on=['year', 'month'], how='inner')
+    wy = water_year(fit['year'], fit['month'])
+    fit = fit[(wy >= VPD_FIT_WY[0]) & (wy <= VPD_FIT_WY[1])]
+    n_fit = 12 * (VPD_FIT_WY[1] - VPD_FIT_WY[0] + 1)
+    if len(fit) != n_fit:
+        raise ValueError(f"{len(fit)} months have both Historical_Unsplit Tavg and CalSim VPD; "
+                         f"the fit over WY{VPD_FIT_WY[0]}-{VPD_FIT_WY[1]} needs all {n_fit}")
+    print(f"    VPD fit: Historical_Unsplit Tavg vs CalSim VPD, WY{VPD_FIT_WY[0]}-{VPD_FIT_WY[1]} "
+          f"({n_fit} months)")
+    print(f"    Simulation period: {len(temp_monthly)} months")
 
-    # Remove any NaN values from target VPD
-    target_vpd = target_vpd.dropna(subset=['value'])
-
-    if source_type == 'B':
-        # Product B has stamp year labels (1-1008) that don't overlap with
-        # historical VPD years (1921-2018), so year-based filtering/merging won't work.
-        # qmap_single builds independent per-month (1-12) distributions for basis
-        # and target, so only the month labels need to be correct -- years are
-        # irrelevant.  Product B months are the stamp months (utils.wgen_calendar),
-        # so we use them directly (no label overwriting).
-        # Use up to one chunk's length (100 WY), truncated to whichever series is shorter.
-        n_calib = min(len(temp_basis_sim), len(target_vpd), CHUNK_MONTHS)
-        basis_hist_temp = temp_basis_sim.iloc[:n_calib].copy().reset_index(drop=True)
-        target_hist_vpd = target_vpd.iloc[:n_calib].copy().reset_index(drop=True)
-    else:
-        # Product_A / Historical: filter to calibration window then inner-merge
-        calib_start = (1921, 10)
-        calib_end   = (1971, 9)
-        basis_hist_temp = temp_basis_sim[
-            ((temp_basis_sim['year'] == calib_start[0]) & (temp_basis_sim['month'] >= calib_start[1])) |
-            ((temp_basis_sim['year'] > calib_start[0]) & (temp_basis_sim['year'] < calib_end[0])) |
-            ((temp_basis_sim['year'] == calib_end[0]) & (temp_basis_sim['month'] <= calib_end[1]))
-        ].copy()
-        target_hist_vpd = target_vpd[
-            ((target_vpd['year'] == calib_start[0]) & (target_vpd['month'] >= calib_start[1])) |
-            ((target_vpd['year'] > calib_start[0]) & (target_vpd['year'] < calib_end[0])) |
-            ((target_vpd['year'] == calib_end[0]) & (target_vpd['month'] <= calib_end[1]))
-        ].copy()
-        # Inner-merge to align on matching year-month pairs
-        calib_merged = basis_hist_temp[['year', 'month', 'value']].merge(
-            target_hist_vpd[['year', 'month', 'value']],
-            on=['year', 'month'], how='inner', suffixes=('_temp', '_vpd')
-        )
-        basis_hist_temp = calib_merged[['year', 'month', 'value_temp']].copy().rename(columns={'value_temp': 'value'})
-        target_hist_vpd = calib_merged[['year', 'month', 'value_vpd']].copy().rename(columns={'value_vpd': 'value'})
-    
-    # Final verification
-    if len(basis_hist_temp) != len(target_hist_vpd):
-        raise ValueError(f"After alignment: Temperature has {len(basis_hist_temp)} months, VPD has {len(target_hist_vpd)} months")
-    
-    if len(basis_hist_temp) < 12:
-        raise ValueError(f"Insufficient calibration data: only {len(basis_hist_temp)} months available (need at least 12)")
-    
-    if source_type == 'B':
-        print(f"    Calibration period: {len(basis_hist_temp)} months (positional alignment with historical VPD)")
-    else:
-        print(f"    Calibration period: {len(basis_hist_temp)} months ({calib_start} to {calib_end})")
-    print(f"    Simulation period: {len(temp_basis_sim)} months")
-    
-    # Apply quantile mapping
-    # Note: allow_negative=False to ensure VPD is non-negative
     vpd_mapped = qmap_single(
-        basis_sim=temp_basis_sim,
-        basis_hist=basis_hist_temp,
-        target=target_hist_vpd,
-        allow_negative=False
+        basis_sim=temp_monthly[['year', 'month', 'tavg_f']].rename(columns={'tavg_f': 'value'}),
+        basis_hist=fit[['year', 'month', 'tavg_f']].rename(columns={'tavg_f': 'value'}),
+        target=fit[['year', 'month', 'value']],
+        allow_negative=False,   # VPD is non-negative
     )
-    
-    # Rename output column
     vpd_mapped = vpd_mapped.rename(columns={'quantile_mapped_value': 'vpd_kpa'})
-    
     return vpd_mapped[['year', 'month', 'vpd_kpa']]
 
 
@@ -362,16 +328,20 @@ def process_location(shorthand, grid_info_file, grid_info_folder, product, outpu
         date_index=date_index,
     )
     
-    # Apply VPD quantile mapping using temperature as basis
+    # VPD from the set's temperature through the Historical_Unsplit map
     print("  Applying VPD quantile mapping...")
     try:
         target_vpd = read_target_vpd_data(excel_file, base_shorthand)
         print(f"    Target VPD data: {len(target_vpd)} months")
-        
+        if product == 'historical':
+            fit_temp = monthly_data
+        else:
+            fit_temp = calculate_basin_monthly_averages(grid_info_df, 'historical', date_index=VPD_FIT_DAYS)
+
         vpd_data = apply_vpd_quantile_mapping(
             temp_monthly=monthly_data[['year', 'month', 'tavg_f']],
+            fit_temp=fit_temp,
             target_vpd=target_vpd,
-            source_type=product
         )
         # Merge VPD into monthly_data
         monthly_data = monthly_data.merge(vpd_data, on=['year', 'month'], how='left')
@@ -498,12 +468,11 @@ def read_reference_data(excel_file, location_name, variable_type):
     # Remove NaNs
     result = result.dropna(subset=['date', 'value'])
     
-    # For VPD only, filter to Oct-1971 through Sept-2018 (WY1972-2018)
+    # VPD over the water years of its fit
     if variable_type == 'vpd':
         wy = water_year(result['year'], result['month'])
-        mask = (wy >= 1972) & (wy <= 2018)
-        result = result[mask]
-    
+        result = result[(wy >= VPD_FIT_WY[0]) & (wy <= VPD_FIT_WY[1])]
+
     return result[['year', 'month', 'value']]
 
 
@@ -536,12 +505,11 @@ def read_output_data(output_file, variable_type):
     result['value'] = pd.to_numeric(result['value'], errors='coerce')
     result = result.dropna(subset=['value'])
     
-    # For VPD only, filter to Oct-1971 through Sept-2018 (WY1972-2018)
+    # VPD over the water years of its fit
     if variable_type == 'vpd':
         wy = water_year(result['year'], result['month'])
-        mask = (wy >= 1972) & (wy <= 2018)
-        result = result[mask]
-    
+        result = result[(wy >= VPD_FIT_WY[0]) & (wy <= VPD_FIT_WY[1])]
+
     return result
 
 
