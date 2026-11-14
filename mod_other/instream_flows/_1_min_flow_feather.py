@@ -412,17 +412,13 @@ def run_validation():
     })
     df_val_wide = df_val_wide.merge(cs3_df, on=['Year', 'Month'], how='left')
 
-    if os.path.exists(PATH_XLSX):
-        ss_vals = _load_spreadsheet_values()
-        ss_df = pd.DataFrame({
-            'Year':  ss_vals.index.year,
-            'Month': ss_vals.index.month,
-            'Value_Spreadsheet': ss_vals.values,
-        })
-        df_val_wide = df_val_wide.merge(ss_df, on=['Year', 'Month'], how='left')
-    else:
-        print("  (Spreadsheet not found - Value_Spreadsheet will be NaN)")
-        df_val_wide['Value_Spreadsheet'] = pd.NA
+    ss_vals = _load_spreadsheet_values()
+    ss_df = pd.DataFrame({
+        'Year':  ss_vals.index.year,
+        'Month': ss_vals.index.month,
+        'Value_Spreadsheet': ss_vals.values,
+    })
+    df_val_wide = df_val_wide.merge(ss_df, on=['Year', 'Month'], how='left')
 
     df_val_wide = df_val_wide[
         ['Part B', 'Part C', 'Year', 'Month',

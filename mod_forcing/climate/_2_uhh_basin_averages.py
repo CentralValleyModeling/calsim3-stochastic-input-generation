@@ -890,15 +890,15 @@ def run_validate_outputs(scenario):
     print(f"Annual comparison plots saved to: {validation_folder}")
 
 
-#: Per variable: the monthly column, its file stem, the location-name key of the summary and the
-#: Part C of the delivery CSVs and of Product B's chunks.
+#: Per variable: the monthly column, its file stem, the location-name key of the summary and its
+#: Part C.
 VARIABLES = [
     {'col': 'precip_inches', 'stem': '_uhh_precip',      'name_key': 'ppt_location_name',
-     'part_c': 'PRECIP',      'part_c_b': 'PRECIP'},
+     'part_c': 'PRECIP'},
     {'col': 'tavg_f',        'stem': '_uhh_temperature', 'name_key': 'temp_location_name',
-     'part_c': 'Temperature', 'part_c_b': 'TEMPERATURE'},
+     'part_c': 'TEMPERATURE'},
     {'col': 'vpd_kpa',       'stem': '_uhh_vpd',         'name_key': 'vpd_location_name',
-     'part_c': 'VPD',         'part_c_b': 'VPD'},
+     'part_c': 'VPD'},
 ]
 
 
@@ -935,7 +935,7 @@ def write_product_b_chunks(summaries: list, output_folder):
     _uhh_vpd_productB_*."""
     print("\nWriting Product B chunk files...")
     for var in VARIABLES:
-        df = _sv_rows(summaries, var, var['part_c_b'])
+        df = _sv_rows(summaries, var, var['part_c'])
         if df is None:
             print(f"  Skipping {var['stem']}_productB - no valid locations")
             continue
@@ -985,10 +985,9 @@ def _historical_wy_totals_from_dss(ppt_part_b: str, start_wy: int = 1922, end_wy
     b_target = ppt_part_b.strip().upper()
     c_target = "PRECIP"
 
-    # Direct open (no junction, catalog_flag=True) matches this function's
-    # historical HecDss.Open call.  The bespoke single-pair match, ValueError,
-    # and full_idx are kept verbatim -- dss_io.read_monthly_series's notna()
-    # gate would change the "paths exist but all-NaN" edge case.
+    # Direct open (no junction, catalog_flag=True). The read stays local: it stops when no path
+    # matches the pair and keeps a pair whose values are all missing, where
+    # dss_io.read_monthly_series leaves such a pair out.
     with dss_io.open_dss(str(dss_file), version=6, catalog_flag=True,
                          use_junction=False) as dss:
         paths = dss.getPathnameList("/*/*/*/*/1MON/*")

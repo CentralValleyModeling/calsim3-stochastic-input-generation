@@ -152,8 +152,8 @@ def read_qmap_pairs(pair_csv: str | Path) -> pd.DataFrame:
     if dup_targets.any():
         dups = sorted(df.loc[dup_targets, "target_part_b"].astype(str).unique().tolist())
         raise ValueError(
-            "target_part_b values must be unique because outputs are named "
-            f"<target_part_b>_qmap_<ts>.csv. Duplicates: {dups}"
+            "target_part_b values must be unique because each names its outputs "
+            f"(<target_part_b>_qmap_validation.csv and its delivery CSV). Duplicates: {dups}"
         )
 
     swap_mask = (

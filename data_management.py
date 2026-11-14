@@ -898,9 +898,9 @@ def main() -> None:
     # -- sync -----------------------------------------------------------------
     p_sync = sub.add_parser(
         "sync",
-        help="Upload changed local data to Box as module-level zip archives.",
-        description="Zip and upload data/BASE and data/GENERATED to Box. "
-                    "Only modules whose source files changed are re-zipped.",
+        help="Zip changed local data into the Box Drive folder (--box-dir) as module-level archives.",
+        description="Zip data/BASE and the GENERATED folder into module-level archives in the Box "
+                    "Drive folder --box-dir. Only modules whose source files changed are re-zipped.",
     )
     p_sync.add_argument("--force", action="store_true",
                         help="Re-zip all modules regardless of mtime")

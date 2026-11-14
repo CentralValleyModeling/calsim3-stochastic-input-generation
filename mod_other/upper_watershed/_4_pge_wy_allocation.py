@@ -76,7 +76,6 @@ RIM_INFLOW_PRODUCT_B_DIR = get_rim_inflow_outputs("B")["dir"]
 
 # Output directories
 _GEN_DIR = get_module_generated_dir("mod_other/upper_watershed")
-OUTPUT_ROOT = _GEN_DIR / "output" / "_4_pge_wy_allocation"
 OUTPUT_B_DIR = _GEN_DIR / "output" / "_product_b_final"
 
 
@@ -248,7 +247,7 @@ def run_single(config: dict, product: str) -> Path:
 # Product B
 # ------------------------------------------------------------------------------
 def read_folsm_product_b(chunk: int) -> pd.DataFrame:
-    """Read FOLSM_INFLOW for a Product B chunk from _10_RimInflow output.
+    """Read FOLSM_INFLOW of a Product B chunk (rim-inflow file FOLSM_INFLOW_qmo_nXX.csv).
 
     Parameters
     ----------

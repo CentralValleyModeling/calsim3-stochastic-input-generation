@@ -219,12 +219,8 @@ def read_calsim_monthly_pairs(
     if not requested:
         return {}
 
-    # Direct open (no junction; catalog_flag=True) + the shared faithful read
-    # loop in utils.dss_io. dss_io.read_monthly_series is a byte-equivalent
-    # copy of the prior inline loop: same "/*/*/*/*/1MON/*" catalog query,
-    # same case-insensitive (B, C) bucketing, same (D-part, path) sort,
-    # same -900 sentinel and end-of-month index shift, same master.update
-    # stitch onto a fixed month-end index.
+    # Direct open (no junction; catalog_flag=True); dss_io.read_monthly_series reads the
+    # requested (B, C) pairs onto a fixed month-end index.
     with dss_io.open_dss(str(dssfile), version=6, catalog_flag=True,
                          use_junction=False) as dss:
         return dss_io.read_monthly_series(

@@ -393,7 +393,7 @@ def create_temperature_range_boxplot(
     # Load validation results for region mapping
     val_file = _gen / 'output' / '_1_excel_to_python_validation' / 'validation_results.csv'
     if not val_file.exists():
-        print("\nWarning: Validation results not found. Run 1_run_validation.py first.")
+        print("\nWarning: Validation results not found. Run _1_excel_to_python_validation.py first.")
         return
 
     val_df = pd.read_csv(val_file)
@@ -555,7 +555,7 @@ def create_climate_boxplots(
 
     val_file = _gen / 'output' / '_1_excel_to_python_validation' / 'validation_results.csv'
     if not val_file.exists():
-        print("\nWarning: Validation results not found. Run 1_run_validation.py first.")
+        print("\nWarning: Validation results not found. Run _1_excel_to_python_validation.py first.")
         return
 
     val_df = pd.read_csv(val_file)
@@ -568,8 +568,8 @@ def create_climate_boxplots(
     # Data structure: {variable: {source: {region: [mean_values]}}}
     regions = ['Sacramento Valley', 'San Joaquin Valley', 'Other']
     variables = {
-        'tmin_c':    {'label': 'Avg Monthly Tmin (\u00b0C)',  'has_original': True, 'wgen': 'tmin'},
-        'tmax_c':    {'label': 'Avg Monthly Tmax (\u00b0C)',  'has_original': True, 'wgen': 'tmax'},
+        'tmin_c':    {'label': 'Avg Monthly Tmin (deg C)',  'has_original': True, 'wgen': 'tmin'},
+        'tmax_c':    {'label': 'Avg Monthly Tmax (deg C)',  'has_original': True, 'wgen': 'tmax'},
     }
     climate_data = {}
     for var in variables:
@@ -676,7 +676,7 @@ def create_climate_boxplots(
 
     # Shared title
     fig.suptitle(
-        'Climate Variable Comparison by Region (Oct 1921 \u2013 Sep 2018)',
+        'Climate Variable Comparison by Region (Oct 1921 - Sep 2018)',
         fontsize=7, fontweight='bold', y=1.02
     )
 
@@ -713,7 +713,7 @@ def create_annual_boxplot(
     # Load validation results
     val_file = _gen / 'output' / '_1_excel_to_python_validation' / 'validation_results.csv'
     if not val_file.exists():
-        print("\nWarning: Validation results not found. Run 1_run_validation.py first.")
+        print("\nWarning: Validation results not found. Run _1_excel_to_python_validation.py first.")
         return
     
     val_df = pd.read_csv(val_file)

@@ -67,7 +67,7 @@ DSS_READ_END = "2021-09-30"
 # Output prefix for filenames.
 OUTPUT_PREFIX = "tulare_gw_terms"
 
-# The term spec CSV now controls the WYT basin for each term.
+# The term spec CSV sets the WYT basin of each term.
 # Required columns in wyt_avg_terms.csv:
 #   - term_part_b
 #   - term_part_c

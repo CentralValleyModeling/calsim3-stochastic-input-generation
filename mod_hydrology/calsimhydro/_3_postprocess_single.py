@@ -149,18 +149,13 @@ def load_inventory(inv_filter):
     return excel_partcs, desired_order
 
 
-# -- DSS extraction via pydsstools ---------------------------------------------
-# Long-path directory-junction handling, the catalog read loop, and the
-# start-of-period -> end-of-month shift now live in utils/dss_io (shared with
-# the qmap engine and the sv_compile compiler).
+# -- DSS extraction (utils.dss_io) ---------------------------------------------
 
 def extract_dss_data(dss_path, excel_partcs):
     """Extract monthly time series from a DSS file, filtered to inventory parts.
 
-    Opens via ``utils.dss_io.open_dss`` (auto directory-junction for paths
-    over the Fortran 256-char limit) and reads with ``read_monthly_frame``.
-    Opened with ``catalog_flag=False`` to match this script's historical
-    ``HecDss.Open(dss_path, version=6)`` call.
+    Opens through ``utils.dss_io.open_dss`` (a directory junction for a path over the
+    Fortran 256-character limit, catalog_flag=False) and reads with ``read_monthly_frame``.
     """
     dss_path = Path(dss_path).resolve()
     print(f"    Reading DSS: {dss_path.name}")
@@ -302,8 +297,7 @@ def run_comparison(source_key, src, product):
 
 def to_validation_csv(df, start_wy, end_wy):
     """Convert wide DataFrame to validation format (Part B, Part C, Year,
-    Month, Value).  Delegates to ``utils.csv_io.to_validation_df`` (faithful
-    copy; this function was its seed)."""
+    Month, Value) through ``utils.csv_io.to_validation_df``."""
     return csv_io.to_validation_df(df, start_wy, end_wy)
 
 

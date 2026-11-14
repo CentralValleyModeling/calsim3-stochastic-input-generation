@@ -116,11 +116,9 @@ def load_inventory():
 def extract_dss_data(dss_path, excel_partcs):
     """Extract monthly time series from a DSS file, filtered to inventory parts.
 
-    Opens via utils.dss_io (Windows long-path junction lifecycle), then
-    delegates to the local _read_dss loop, which is kept bespoke because
-    SWS's pattern ``/*/*/*/*/1MON/*`` (no trailing slash) and sort key
-    ``parts[2]`` (C-part within group) differ from the calsimhydro variant
-    that dss_io.read_monthly_frame faithfully copied.
+    Opens through utils.dss_io.open_dss (long-path junction) and reads with the local _read_dss,
+    whose catalog pattern ``/*/*/*/*/1MON/*`` (no trailing slash) and sort key ``parts[2]``
+    (Part C within a group) differ from dss_io.read_monthly_frame.
     """
     dss_path = Path(dss_path).resolve()
     print(f"    Reading DSS: {dss_path.name}")

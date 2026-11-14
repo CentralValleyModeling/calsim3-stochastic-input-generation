@@ -277,7 +277,7 @@ def read_monthly_series(dss, requested, dss_read_start, dss_read_end):
 # -- Reader variant B: calsimhydro postprocessor (wide DataFrame) -------------
 
 def read_monthly_frame(dss, excel_partcs):
-    """Faithful copy of ``_3_postprocess_single._read_dss``'s read loop.
+    """Monthly series of an open DSS as a wide DataFrame (one column per inventory SV).
 
     Parameters
     ----------

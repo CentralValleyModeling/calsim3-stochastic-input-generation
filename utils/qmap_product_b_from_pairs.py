@@ -220,8 +220,8 @@ def read_qmap_pairs(pair_csv: str | Path) -> pd.DataFrame:
     if dup_targets.any():
         dups = sorted(df.loc[dup_targets, "target_part_b"].astype(str).unique().tolist())
         raise ValueError(
-            "target_part_b values must be unique because outputs are named "
-            f"<target_part_b>_qmap_<ts>.csv. Duplicates: {dups}"
+            "target_part_b values must be unique because each names its chunk files "
+            f"(<target_part_b>_<output_tag>_nXX.csv). Duplicates: {dups}"
         )
 
     # If both bounds are present but reversed, swap them.

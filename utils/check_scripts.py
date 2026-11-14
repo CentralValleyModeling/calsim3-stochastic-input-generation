@@ -53,8 +53,8 @@ from pathlib import Path
 REPO = Path(__file__).resolve().parents[1]
 
 # Canonical Product A pipeline (Product_A_Validation_Manifest.md
-# section A "End-to-end ordering"). Numbered pipeline scripts only -- shared
-# utils/ library modules are not CLI scripts and are exempt from rules 2-3.
+# section A "End-to-end ordering"). Numbered pipeline scripts only; utils/ library modules are
+# not CLI scripts and are not listed.
 PRODUCT_A_SCRIPTS = [
     "mod_reservoir/evaporation/_0_extract_reservoir_database.py",
     "mod_other/miscellaneous/_0_extract_others.py",
@@ -121,9 +121,8 @@ PRODUCT_B_SCRIPTS = [
 
 
 # Diagnostic / exploration / validation scripts tracked in the repo but NOT
-# part of either pipeline. Exempt from the convention checks (rules 1-4) and
-# accepted as "known" by the manifest-drift cross-check (rule 5) so they
-# don't trip the on-disk-but-unlisted detector.
+# part of either pipeline. Not checked against the rules; listed so that the manifest-drift
+# check knows them.
 EXEMPT_SCRIPTS = [
     "mod_hydrology/rim_inflow/_0_stochastic_inflow_explore.py",     # exploration
     "mod_hydrology/rim_inflow/_0_stochastic_precipitation.py",      # exploration
