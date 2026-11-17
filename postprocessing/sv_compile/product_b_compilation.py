@@ -15,8 +15,8 @@ compares each chunk with the baseline.
    does not expect; SVs flagged Missing = T or Used in DCR = F are skipped.
 3. Fills each Constant/Rept SV that no module provides with the baseline's last complete water
    year, repeated over the 1,200 label months.
-4. Merges each chunk's rows within the label months; of two rows for one SV and month, the
-   later module's in ``MODULE_CONFIG_B`` order is kept. Reports an SV without 1,200 months.
+4. Merges each chunk's rows within the label months. Stops when an SV has two rows for one
+   month (in one module or from two modules). Reports an SV without 1,200 months.
    Writes ProductB_SV_<chunk>.csv, then (unless ``--skip-dss``) ProductB_SV_<chunk>.dss: a copy
    of the baseline with the chunk's values written into the baseline records of its SVs.
 5. Writes the coverage and inventory diagnostics.
@@ -87,7 +87,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 from utils import dss_io
 from utils.wgen_calendar import CHUNK_MONTHS, LABEL_MONTHS, LABEL_WY, N_CHUNKS
 from utils.paths import (get_base_dir, get_generated_dir, get_module_generated_dir, get_inventory_dir,
-                         get_rim_inflow_outputs)
+                         get_rim_inflow_outputs, require_pinned_run)
 
 warnings.filterwarnings("ignore", message="Mean of empty slice")
 warnings.filterwarnings("ignore", message="All-NaN slice encountered")
@@ -1836,6 +1836,12 @@ if (missing_modules or incomplete_modules) and not CLI_ARGS.allow_missing:
 if not module_files:
     sys.exit("ERROR: No module CSVs found. Nothing to compile.")
 
+# The rim inflows come from the configured model at its pin, on inputs G2 passed
+# (utils.paths.require_pinned_run): a run of another model or version stops the compile.
+if "rim_inflow" in module_files:
+    _run = require_pinned_run(get_rim_inflow_outputs("B")["dir"])
+    print(f"Rim inflows: {_run['inflow_model']} at {_run['model_pin']}\n")
+
 # Collect all (Part B, Part C) provided by modules across all chunks
 all_module_keys = set()
 for svs in module_svs.values():
@@ -1983,12 +1989,12 @@ for chunk_idx in ACTIVE_CHUNKS:
     if tag in all_chunk_data:
         for label, dfs in all_chunk_data[tag].items():
             for df in dfs:
-                frames.append(df)
+                frames.append(df.assign(_module=label))
             modules_in_chunk.append(label)
 
     # Constant/Rept rows (same for every chunk)
     for pk, df_cr in const_rept_frames.items():
-        frames.append(df_cr)
+        frames.append(df_cr.assign(_module="Constant/Rept"))
 
     if not frames:
         print(f"  {tag}: WARNING -- no data, skipping")
@@ -2000,10 +2006,13 @@ for chunk_idx in ACTIVE_CHUNKS:
     ym = compiled["Year"] * 100 + compiled["Month"]
     compiled = compiled[(ym >= PB_FIRST_YM) & (ym <= PB_LAST_YM)].copy()
 
-    # De-duplicate: keep last occurrence for each (Part B, Part C, Year, Month)
-    compiled = compiled.drop_duplicates(
-        subset=["Part B", "Part C", "Year", "Month"], keep="last"
-    )
+    # Two rows for one SV and month would leave the chunk with whichever came last
+    dup = compiled[compiled.duplicated(["Part B", "Part C", "Year", "Month"], keep=False)]
+    if not dup.empty:
+        mods = dup.groupby(["Part B", "Part C"])["_module"].unique().head(5)
+        sys.exit(f"ERROR: {tag}: {dup.groupby(['Part B', 'Part C']).ngroups} SV(s) have more than one "
+                 "row for a month, e.g. " + "; ".join(f"{b}/{c} from {sorted(ms)}" for (b, c), ms in mods.items()))
+    compiled = compiled.drop(columns="_module")
 
     # Sort
     compiled = compiled.sort_values(

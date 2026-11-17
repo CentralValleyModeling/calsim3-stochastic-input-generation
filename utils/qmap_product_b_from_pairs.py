@@ -33,7 +33,7 @@ Outputs
 
 Dependencies
 ------------
-utils.qmap_fit, utils.quantile_mapping, utils.wgen_calendar; pydsstools
+utils.dss_io, utils.qmap_fit, utils.quantile_mapping, utils.wgen_calendar; pydsstools
 
 Usage
 -----
@@ -50,8 +50,8 @@ from pathlib import Path
 
 import numpy as np
 import pandas as pd
-from pydsstools.heclib.dss import HecDss
 
+from utils import dss_io
 from utils.qmap_fit import (
     FIT_END, FIT_START, predictor_label, predictor_parts, read_fit_column,
     read_historical_predictors, sum_parts, training_basis,
@@ -265,44 +265,8 @@ def read_calsim_monthly_pairs(
     if not requested:
         return {}
 
-    full_idx = _date_range_me(dss_read_start, dss_read_end)
-    out: dict[tuple[str, str], pd.Series] = {}
-
-    with HecDss.Open(str(dssfile), version=6, catalog_flag=True) as dss:
-        paths = dss.getPathnameList("/*/*/*/*/1MON/*")
-        bucket: dict[tuple[str, str], list[str]] = {}
-
-        for path in paths:
-            parts = path.strip("/").split("/")
-            if len(parts) != 6:
-                continue
-            b_part = parts[1].strip().upper()
-            c_part = parts[2].strip().upper()
-            key = (b_part, c_part)
-            if key in requested:
-                bucket.setdefault(key, []).append(path)
-
-        for key in sorted(requested):
-            if key not in bucket:
-                continue
-
-            master = pd.Series(index=full_idx, dtype=float)
-
-            # Sort primarily by D-part, then full path for stability.
-            for path in sorted(bucket[key], key=lambda x: (x.strip("/").split("/")[3], x)):
-                ts = dss.read_ts(path, trim_missing=True)
-                vals = np.asarray(ts.values, dtype=float)
-                vals = np.where(vals <= -900, np.nan, vals)
-
-                # DSS stores period-end timestamps (e.g. Feb for Jan data).
-                # Shift back by one month so the index reflects the actual data month.
-                idx = (pd.to_datetime(ts.pytimes).to_period("M") - 1).to_timestamp("M")
-                master.update(pd.Series(vals, index=idx))
-
-            if master.notna().any():
-                out[key] = master
-
-    return out
+    with dss_io.open_dss(dssfile) as dss:
+        return dss_io.read_monthly_series(dss, requested, dss_read_start, dss_read_end)
 
 
 # -----------------------------------------------------------------------------

@@ -30,7 +30,7 @@ Outputs
 
 Dependencies
 ------------
-utils.paths; pydsstools, seaborn, matplotlib
+utils.paths, utils.dss_io; pydsstools, seaborn, matplotlib
 
 Usage
 -----
@@ -48,10 +48,10 @@ import seaborn as sns
 from pathlib import Path
 from matplotlib.patches import Rectangle
 from matplotlib.lines import Line2D
-from pydsstools.heclib.dss import HecDss
 
 # Add repo root to path for utils imports
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
+from utils import dss_io
 from utils.paths import get_base_dir, get_module_generated_dir, get_rim_inflow_outputs
 
 # %% style
@@ -79,7 +79,7 @@ CS3_DSS     = str(get_base_dir() / "CalSim3" / "__calsim_sv_default__.dss")
 CALSIM_KEY  = CS3_PATH.split('/')[0]                # e.g., 'UNIMP_OROV'
 HIST_CSV    = str(get_rim_inflow_outputs("A")["ts"])
 STOCH_DIR   = str(get_rim_inflow_outputs("B")["dir"])
-_FIG_DIR = str(_gen / "output" / "_0_stochastic_inflow_explore")
+_FIG_DIR = _gen / "output" / "_0_stochastic_inflow_explore"
 os.makedirs(_FIG_DIR, exist_ok=True)
 
 # ============================================================
@@ -117,7 +117,7 @@ def _ecdf(series):
 # ============================================================
 
 # CS3 baseline (L2020A)
-with HecDss.Open(CS3_DSS) as fid:
+with dss_io.open_dss(CS3_DSS) as fid:
     _ts = fid.read_ts(f"/CALSIM/{CS3_PATH}//1MON/L2020A/")
 cs3 = pd.DataFrame(
     {LOCATION: _ts.values},
@@ -164,7 +164,7 @@ ax.set(xlabel='Year', ylabel='30-Year Rolling Mean Flow',
 ax.legend(handles=_legend_handles(cs3=True), bbox_to_anchor=(1.05, 1), loc='upper left')
 _grid(ax)
 plt.tight_layout()
-plt.savefig(f'{_FIG_DIR}/{LOCATION}_rolling30yr.svg')
+plt.savefig(_FIG_DIR / f'{LOCATION}_rolling30yr.svg')
 plt.show()
 
 # ============================================================
@@ -191,7 +191,7 @@ axes[-1].set_xlabel('Year')
 axes[-1].xaxis.set_major_locator(mdates.YearLocator(10))
 axes[-1].xaxis.set_major_formatter(mdates.DateFormatter('%Y'))
 plt.tight_layout()
-plt.savefig(f'{_FIG_DIR}/{LOCATION}_rolling_means.svg')
+plt.savefig(_FIG_DIR / f'{LOCATION}_rolling_means.svg')
 plt.show()
 
 # ============================================================
@@ -222,7 +222,7 @@ ax.set(ylabel='Mean Annual Flow (TAF)', title=f'{LOCATION}')
 ax.set_ylim(bottom=0)
 _grid(ax, axis='y')
 plt.tight_layout()
-plt.savefig(f'{_FIG_DIR}/{LOCATION}_mean_annual_bar.svg')
+plt.savefig(_FIG_DIR / f'{LOCATION}_mean_annual_bar.svg')
 
 # ============================================================
 # %% plot 3 — drought severity scatter (duration vs % of average)
@@ -349,7 +349,7 @@ ax.set_xlim(1, x_max)
 ax.spines[['top', 'right']].set_visible(False)
 ax.legend(loc='upper right')
 plt.tight_layout()
-plt.savefig(f'{_FIG_DIR}/{LOCATION}_drought_scatter_{"shared" if SHARED_MEAN else "separate"}.svg')
+plt.savefig(_FIG_DIR / f'{LOCATION}_drought_scatter_{"shared" if SHARED_MEAN else "separate"}.svg')
 plt.show()
 
 

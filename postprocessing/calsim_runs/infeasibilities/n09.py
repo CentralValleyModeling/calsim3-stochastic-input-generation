@@ -49,7 +49,7 @@ Outputs
 
 Dependencies
 ------------
-utils.paths; numpy, pandas, matplotlib, pydsstools
+utils.dss_io, utils.paths; numpy, pandas, matplotlib, pydsstools
 
 Usage
 -----
@@ -64,9 +64,9 @@ import pandas as pd
 import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
-from pydsstools.heclib.dss import HecDss
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[3]))
+from utils import dss_io
 from utils.paths import get_base_dir, get_generated_dir
 
 COMPILED = (get_generated_dir() / "postprocessing" / "sv_compile"
@@ -121,7 +121,7 @@ ALL_CHECK_VARS = sorted(set(SJR_SYSTEM_VARS))
 def load_calsim_hist(wanted_vars):
     """Read from CalSim default DSS."""
     full_idx = pd.date_range("1921-01-31", "2021-12-31", freq="ME")
-    with HecDss.Open(str(DSS_PATH), version=6, catalog_flag=True) as fid:
+    with dss_io.open_dss(DSS_PATH) as fid:
         paths = fid.getPathnameList("/*/*/*/*/1MON/*")
         buckets = {}
         for p in paths:
@@ -403,7 +403,7 @@ N_AFTER = 6    # months after
 
 def read_dv_ts(dss_path, part_b, start_year=1921, end_year=2022):
     """Read a monthly time series from a DSS file."""
-    with HecDss.Open(str(dss_path), version=6) as fid:
+    with dss_io.open_dss(dss_path, catalog_flag=False) as fid:
         cat = fid.getPathnameList(f"/*/{part_b}/*/*/*/*/", sort=1)
         if not cat:
             return None, None
@@ -663,7 +663,7 @@ BALANCE_DVS = ['S_MLRTN', 'E_MLRTN', 'C_MLRTN', 'C_MLRTNM', 'C_MLRTNA',
 def read_dv_months(dss_path, part_bs, target_year, target_months):
     """Read specific DVs for given months from a DV file (one open)."""
     results = {}  # {(part_b, month): value}
-    with HecDss.Open(str(dss_path), version=6) as fid:
+    with dss_io.open_dss(dss_path, catalog_flag=False) as fid:
         for pb in part_bs:
             cat = fid.getPathnameList(f"/*/{pb}/*/*/*/*/", sort=1)
             if not cat:

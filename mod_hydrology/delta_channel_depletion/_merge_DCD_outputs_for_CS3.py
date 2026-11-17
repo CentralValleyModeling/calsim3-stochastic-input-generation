@@ -19,7 +19,7 @@ Outputs
 
 Dependencies
 ------------
-pydsstools; does not import utils.paths
+utils.dss_io; pydsstools. Does not import utils.paths.
 
 Usage
 -----
@@ -30,12 +30,14 @@ Author: mbastani, 10/2/2025
 
 
 #%%# ====================== 1) Imports & Config ======================
-import os
 import argparse
+import sys
 import numpy as np
 from pathlib import Path
-from pydsstools.heclib.dss import HecDss
 from pydsstools.core import TimeSeriesContainer as TSC
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
+from utils import dss_io
 
 parser = argparse.ArgumentParser(
     description="Merge DCD_island_month_C3 and DCD_Sep2018_Lch5_mon_C3 into CS3sv_DCD_PRISM_Dtrnd.dss."
@@ -78,36 +80,27 @@ def write_ts(fout, p, ts):
     tsc.type = getattr(ts, "type", "")
     fout.put_ts(tsc)
 
-def open_v6(path):
-    if os.path.exists(path): os.remove(path)  # ensure fresh create as v6
-    try:    return HecDss.Open(path, version=6)
-    except TypeError:
-        try:    return HecDss.Open(path, v6=True)
-        except TypeError:
-            os.environ["HEC_DSS_VERSION"] = "6"
-            return HecDss.Open(path)
-
 #%%# ========================= 3) Merge Execution =========================
-f0, f1 = HecDss.Open(SRC[0]), HecDss.Open(SRC[1])
-chosen = {p:0 for p in all_paths(f0)}       # take all from first
-for p in all_paths(f1): chosen[p] = 1       # overwrite with second when duplicated
+# version=None: a new DST is created as DSS 7, the version of the DCD outputs CalSim reads
+with (dss_io.open_dss(SRC[0], version=None) as f0, dss_io.open_dss(SRC[1], version=None) as f1,
+      dss_io.open_dss(DST, version=None) as fout):
+    chosen = {p:0 for p in all_paths(f0)}       # take all from first
+    for p in all_paths(f1): chosen[p] = 1       # overwrite with second when duplicated
 
-fout = HecDss.Open(DST)
-failed_paths = []
-for p, idx in chosen.items():
-    src_primary = (f0, f1)[idx]
-    src_secondary = (f1, f0)[idx]
-    try:
-        ts = read_ts_obj(src_primary, p)
-        write_ts(fout, p, ts)
-    except Exception:
+    failed_paths = []
+    for p, idx in chosen.items():
+        src_primary = (f0, f1)[idx]
+        src_secondary = (f1, f0)[idx]
         try:
-            ts = read_ts_obj(src_secondary, p)
+            ts = read_ts_obj(src_primary, p)
             write_ts(fout, p, ts)
         except Exception:
-            failed_paths.append(p)
+            try:
+                ts = read_ts_obj(src_secondary, p)
+                write_ts(fout, p, ts)
+            except Exception:
+                failed_paths.append(p)
 
-f0.close(); f1.close(); fout.close()
 print("Merged into", DST)
 if failed_paths:
     print(f"Skipped {len(failed_paths)} path(s) due to read/write errors")

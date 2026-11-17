@@ -7,9 +7,9 @@ summary statistics by Part C, boxplots).
 
 Inputs
 ------
-- <generated>/mod_hydrology/delta_channel_depletion/DeltaChannelDepletion_Runs/
-  DCD_Calsim3_PlanningStudy_<1921-2018|Historical_Unsplit|Product_A>/DCD/Output/CALSIM3/
-  CS3sv_DCD_PRISM_Dtrnd.dss
+- <generated>/mod_hydrology/delta_channel_depletion/DeltaChannelDepletion_Runs/<run>/DCD/Output/
+  CALSIM3/CS3sv_DCD_PRISM_Dtrnd.dss of the runs DCD_Calsim3_PlanningStudy_1921-2018 and
+  DCD_<Historical_Unsplit|Product_A>_1921-2018
 - inventory/_MASTER_INVENTORY_FOR_STOCHASTIC_INPUT_GENERATION_.xlsx, sheet MASTER: the Delta
   Channel Depletion SVs of DCD_island_month.dss
 
@@ -79,7 +79,7 @@ _DSS_IN_RUN = Path("DCD") / "Output" / "CALSIM3" / "CS3sv_DCD_PRISM_Dtrnd.dss"
 def dss_paths(product):
     """The CalSim PlanningStudy run, then the set's run."""
     return [str(_dcd_runs / "DCD_Calsim3_PlanningStudy_1921-2018" / _DSS_IN_RUN),
-            str(_dcd_runs / f"DCD_Calsim3_PlanningStudy_{WEATHER_SETS[product]['name']}" / _DSS_IN_RUN)]
+            str(_dcd_runs / f"DCD_{WEATHER_SETS[product]['name']}_1921-2018" / _DSS_IN_RUN)]
 
 
 def set_label(product):
@@ -280,47 +280,10 @@ def main():
             plt.legend(loc='upper right')
         plt.tight_layout()
 
-        # Optional save
         plt.savefig(os.path.join(OUTPUT_DIR, f"Boxplot_{partc}_with_mean.png"), dpi=300)
+        plt.close()
 
 
 if __name__ == "__main__":
     main()
 
-
-################################################################################################################
-######################## The following lines show box plot with outlier data #######################
-
-# # --- Prepare Data ---
-# # Melt the data to long format
-# plot_df = merged_df[['PartC', 'Historical_1921', 'ProductA']].copy()
-# plot_df_melted = plot_df.melt(id_vars='PartC',
-#                               value_vars=['Historical_1921', 'ProductA'],
-#                               var_name='Scenario', value_name='Value')
-# # Drop NaNs
-# plot_df_melted = plot_df_melted.dropna()
-
-# # Get unique PartC values
-# unique_partcs = plot_df_melted['PartC'].unique()
-
-# # --- Plot Loop ---
-# for partc in unique_partcs:
-#     partc_df = plot_df_melted[plot_df_melted['PartC'] == partc]
-
-#     plt.figure(figsize=(6, 6))
-#     sns.boxplot(x='Scenario', y='Value', data=partc_df,
-#                 width=0.6, showfliers=True,  # showfliers = True to show outliers
-#                 boxprops=dict(facecolor='skyblue', edgecolor='black'),
-#                 medianprops=dict(color='red'),
-#                 whiskerprops=dict(color='black'),
-#                 capprops=dict(color='black'))
-
-#     plt.title(f"Boxplot for PartC: {partc}", fontsize=14)
-#     plt.xlabel("Scenario")
-#     plt.ylabel("Value")
-#     plt.tight_layout()
-
-#     # Optional: Save each plot
-#     plt.savefig(os.path.join(OUTPUT_DIR, f"Boxplot_{partc}.png"), dpi=300)
-
-#     plt.show()  # Opens each plot in a new window

@@ -138,9 +138,8 @@ def open_dss(dss_path, *, version=6, catalog_flag=True, use_junction=None,
         must pass ``catalog_flag=False`` to preserve their exact prior call.
     use_junction : bool or None
         ``None`` (default) decides automatically via :func:`needs_junction`.
-        Pass ``False`` to force a direct open (preserves the qmap engine's
-        historical behavior of opening the ``\\?\``-prefixed path directly),
-        or ``True`` to force a junction.
+        Pass ``False`` to open the path directly, or ``True`` to force a
+        junction.
     **open_kwargs
         Any additional keyword arguments are forwarded verbatim to
         ``HecDss.Open`` (e.g. ``window=(start, end)`` to pre-restrict a read
@@ -222,7 +221,12 @@ def list_monthly_paths(dss, pattern="/*/*/*/*/1MON/*"):
 # -- Reader variant A: qmap engine (dict of month-end Series) -----------------
 
 def read_monthly_series(dss, requested, dss_read_start, dss_read_end):
-    """Faithful copy of ``read_calsim_monthly_pairs``'s read loop.
+    """Monthly series of the requested (Part B, Part C) keys, matched upper-cased.
+
+    Every ``1MON`` record of a key is read in D-part, then pathname order onto one month-end
+    index, a later record overwriting the months it holds; values <= -900 become NaN. Callers:
+    ``utils.qmap_product_b_from_pairs.read_calsim_monthly_pairs``, ``utils.qmap_single_from_pairs``,
+    ``utils.wyt_monthlyavg_framework`` and the rim-inflow builder.
 
     Parameters
     ----------
