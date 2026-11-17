@@ -201,7 +201,7 @@ HS_AVG_CSV = "HS_monthly_avg_mmperday.csv"
 HS_AVG_F1_PERIOD_CSV = "HS_monthly_avg_mmperday_{start}_{end}.csv"
 F1_SOURCE_TXT = "F1_source.txt"
 # step 6: the monthly CIMIS means, one file per year and one over all years
-CIMIS_ANNUAL_CSV = "CIMIS_MonthlyAvg_ETo_mmperday_ProductA_grid_{year}.csv"
+CIMIS_ANNUAL_CSV = "CIMIS_MonthlyAvg_ETo_mmperday_grid_{year}.csv"
 CIMIS_OVERALL_CSV = "CIMIS_MonthlyAvg_ETo_mmperday_grid_{start}_{end}.csv"
 # step 8 / step 11: polygon averages and series
 AVERAGED_CSV = "Spatial_Average_ETo_F1corrected_monthly_averaged_per_{group}{chunk}.csv"
