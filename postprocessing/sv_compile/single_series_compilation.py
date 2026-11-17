@@ -124,8 +124,8 @@ _parser.add_argument(
 )
 _parser.add_argument(
     "--summary-tables", action="store_true", default=False,
-    help="Generate per-category summary Excel workbook from "
-         "modification_statistics.csv.  Standalone mode - exits after writing.",
+    help="Write summary_tables.csv (R2, NSE and annual means by category) from "
+         "modification_statistics.csv and exit.",
 )
 CLI_ARGS = _parser.parse_args()
 PRODUCT = CLI_ARGS.product
@@ -577,7 +577,7 @@ def generate_per_variable_plots(stats_csv: Path, cached_series: dict = None):
         ax_sc.set_xlabel(f"Baseline ({units})" if units else "Baseline")
         ax_sc.set_ylabel(f"{SET_LABEL} ({units})" if units else SET_LABEL)
 
-        r2_str  = f"R\u00b2 = {r2_val:.3f}"  if np.isfinite(r2_val)  else "R\u00b2 = n/a"
+        r2_str  = f"$R^2$ = {r2_val:.3f}"  if np.isfinite(r2_val)  else "$R^2$ = n/a"
         nse_str = f"NSE = {nse_val:.3f}" if np.isfinite(nse_val) else "NSE = n/a"
         ax_sc.text(0.05, 0.95, f"{r2_str}\n{nse_str}",
                    transform=ax_sc.transAxes, va="top", ha="left",
@@ -636,7 +636,7 @@ def generate_per_variable_plots(stats_csv: Path, cached_series: dict = None):
 
         r2_val  = _r2(b_mavg, m_mavg)
         nse_val = _nse(b_mavg, m_mavg)
-        r2_str  = f"R\u00b2 = {r2_val:.3f}"  if np.isfinite(r2_val)  else "R\u00b2 = n/a"
+        r2_str  = f"$R^2$ = {r2_val:.3f}"  if np.isfinite(r2_val)  else "$R^2$ = n/a"
         nse_str = f"NSE = {nse_val:.3f}" if np.isfinite(nse_val) else "NSE = n/a"
         ax_sc.text(0.05, 0.95, f"{r2_str}\n{nse_str}",
                    transform=ax_sc.transAxes, va="top", ha="left",
@@ -1206,7 +1206,7 @@ def generate_stats_report(stats_csv: Path, cached_series: dict = None):
             ax.plot(ref, ref, "k-", lw=0.8, alpha=0.5, zorder=1, label="1:1")
             # +/-10 % deviation lines
             ax.plot(ref, ref * 1.10, color="#d62728", ls="--", lw=0.7,
-                    alpha=0.6, zorder=1, label="\u00b110%")
+                    alpha=0.6, zorder=1, label=r"$\pm$10%")
             ax.plot(ref, ref * 0.90, color="#d62728", ls="--", lw=0.7,
                     alpha=0.6, zorder=1)
 

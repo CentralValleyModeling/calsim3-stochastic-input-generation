@@ -195,7 +195,7 @@ def _date_range_me(start, end=None, **kwargs) -> pd.DatetimeIndex:
 # -- Filesystem helper --------------------------------------------------------
 
 def safe_makedirs(path):
-    """Create directories, stripping the ``\\?\`` long-path prefix first.
+    r"""Create directories, stripping the ``\\?\`` long-path prefix first.
 
     On Python 3.8 + Windows, ``os.makedirs`` cannot resolve the root of a
     ``\\?\X:\`` path, causing infinite recursion.  Stripping the prefix
@@ -277,7 +277,7 @@ def read_monthly_series(dss, requested, dss_read_start, dss_read_end):
 # -- Reader variant B: calsimhydro postprocessor (wide DataFrame) -------------
 
 def read_monthly_frame(dss, excel_partcs):
-    """Faithful copy of ``_3_postprocess_single._read_dss``'s read loop.
+    """Monthly series of an open DSS as a wide DataFrame (one column per inventory SV).
 
     Parameters
     ----------

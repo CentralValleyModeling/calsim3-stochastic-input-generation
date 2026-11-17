@@ -176,7 +176,8 @@ def parse_arguments():
     parser.add_argument('--compare', action='store_true',
                         help='Compare monthly averages between pre-generated Product A and Product B outputs')
     parser.add_argument('--grid_info', type=str, default=None,
-                        help='Path to grid info file (default: reference/CS3_8RI_OROVI_GridInfo.txt)')
+                        help='Path to grid info file (default: '
+                             'mod_forcing/climate/reference/GridInfo/CS3_8RI_OROVI_GridInfo.txt)')
     args = parser.parse_args()
     if not args.product and not args.compare:
         parser.error("use --product and/or --compare")

@@ -10,7 +10,7 @@ Inputs
 - <base>/WGEN/Historical_Unsplit/data_<lat>_<lon>, x10 days corrected (utils.wgen.read_met)
 - <base>/Historical_Climate_LTO/1_Historical/data_<lat>_<lon> (utils.wgen.read_met)
 - SAC-SMA checkout (``inflow_repo``; stops unless ``inflow_model`` is sacsma):
-  data/hru/hruinfo_11obs.csv, hruinfo_9unimp.csv (basin cells and area_weight; a cell shared
+  data/inputs/domains/<11obs|9unimp>/hruinfo.csv (basin cells and area_weight; a cell shared
   by nested basins counts in each)
 
 Outputs
@@ -99,7 +99,7 @@ def main():
 
     rows = []
     for dom in ["11obs", "9unimp"]:
-        h = pd.read_csv(os.path.join(SACSMA_REPO, "data", "hru", f"hruinfo_{dom}.csv"))
+        h = pd.read_csv(os.path.join(SACSMA_REPO, "data", "inputs", "domains", dom, "hruinfo.csv"))
         for basin, gall in h.groupby("basin"):
             g = gall.drop_duplicates(["lat", "lon"])
             w = g["area_weight"].to_numpy(float)
@@ -130,15 +130,15 @@ def main():
         # north -> south: ascending latitude puts south at the bottom, north at the top (barh)
         sub = res[res.domain == dom].sort_values("lat").reset_index(drop=True)
         y = np.arange(len(sub))
-        ax.barh(y + 0.25, sub["P1_diff_pct"], height=0.25, color="#c1666b", label="1915–49")
+        ax.barh(y + 0.25, sub["P1_diff_pct"], height=0.25, color="#c1666b", label="1915-49")
         ax.barh(y, sub["full_diff_pct"], height=0.25, color="#4d4d4d", label="full")
-        ax.barh(y - 0.25, sub["P2_diff_pct"], height=0.25, color="#48a9a6", label="1950–2018")
+        ax.barh(y - 0.25, sub["P2_diff_pct"], height=0.25, color="#48a9a6", label="1950-2018")
         ax.axvline(0, color="k", lw=0.6)
         ax.set_yticks(y)
         ax.set_yticklabels([f"{b} ({l})" if l != b else b for b, l in zip(sub["basin"], sub["label"])],
                            fontsize=7)
         ax.set_title(dom, fontsize=10)
-        ax.set_xlabel("unsplit − split precip (% of split)", fontsize=8)
+        ax.set_xlabel("unsplit - split precip (% of split)", fontsize=8)
         ax.tick_params(axis="x", labelsize=7)
         ax.grid(axis="x", lw=0.3, alpha=0.5)
     axes[0].legend(fontsize=7, loc="lower right", framealpha=0.9)

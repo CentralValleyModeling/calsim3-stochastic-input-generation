@@ -797,8 +797,9 @@ def main():
     mode = ap.add_mutually_exclusive_group(required=True)
     mode.add_argument("--product", choices=['B'],
                       help='Generate Product B stochastic chunk CSVs (one set of 10 chunks '
-                           'per closure term). Product A closure terms are auto-filled by '
-                           'the final compiler from the CalSim baseline (Constant/Rept).')
+                           'per closure term). No module delivers closure terms for '
+                           'Historical_Unsplit or Product A; their compiled DSS keep the '
+                           'CalSim 3 baseline values.')
     mode.add_argument("--diagnostics", action='store_true',
                       help='Non-product diagnostic mode: writes weighted vs 4-yr-block stitched '
                            'closure timeseries, per-block correlations, coverage boxplots, etc. '

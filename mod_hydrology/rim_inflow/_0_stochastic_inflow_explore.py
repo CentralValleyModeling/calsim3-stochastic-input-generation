@@ -148,7 +148,7 @@ wgen_annual = wgen.groupby('year').sum().drop(columns='month')
 syn_cols = sorted([c for c in wgen_annual.columns if c.startswith(f'{LOCATION}_')])
 
 # ============================================================
-# %% plot 1 — single 30-year rolling mean panel
+# %% plot 1 - single 30-year rolling mean panel
 # ============================================================
 
 fig, ax = plt.subplots(figsize=(6.5, 4))
@@ -161,7 +161,7 @@ for col in syn_cols:
             _rolling(wgen_annual[col], 30),
             color=COLORS['synth'], alpha=0.6, linewidth=1, zorder=0)
 ax.set(xlabel='Year', ylabel='30-Year Rolling Mean Flow',
-       title=f'{LOCATION} — 30-Year Rolling Mean')
+       title=f'{LOCATION} - 30-Year Rolling Mean')
 ax.legend(handles=_legend_handles(cs3=True), bbox_to_anchor=(1.05, 1), loc='upper left')
 _grid(ax)
 plt.tight_layout()
@@ -169,7 +169,7 @@ plt.savefig(_FIG_DIR / f'{LOCATION}_rolling30yr.svg')
 plt.show()
 
 # ============================================================
-# %% plot 2 — 4-row rolling means (flows, shared x-axis)
+# %% plot 2 - 4-row rolling means (flows, shared x-axis)
 # ============================================================
 
 cs3_dates = pd.date_range('1920-10-01', periods=len(cs3_annual), freq='YS-OCT')
@@ -184,7 +184,7 @@ for i, w in enumerate([2, 5, 20]):
         ax.plot(syn_dates, _rolling(wgen_annual[col], w), color=COLORS['synth'], linewidth=0.9, zorder=0)
     ax.plot(wgen_hist_annual.index, _rolling(wgen_hist_annual[LOCATION], w), color=COLORS['hist'], linewidth=1.4)
     ax.plot(cs3_dates,              _rolling(cs3_annual[LOCATION], w),       color=COLORS['cs3'],  linewidth=1.4)
-    ax.set(ylabel=f'{w}-Yr Rolling\nMean Flow (TAF)', title=f'{LOCATION} — {w}-Year Rolling Mean')
+    ax.set(ylabel=f'{w}-Yr Rolling\nMean Flow (TAF)', title=f'{LOCATION} - {w}-Year Rolling Mean')
     _grid(ax)
 
 axes[0].legend(handles=_legend_handles(cs3=True), bbox_to_anchor=(1.01, 1), loc='upper left')
@@ -196,7 +196,7 @@ plt.savefig(_FIG_DIR / f'{LOCATION}_rolling_means.svg')
 plt.show()
 
 # ============================================================
-# %% plot 2b — mean-annual flow bar chart
+# %% plot 2b - mean-annual flow bar chart
 # ============================================================
 
 _syn_means  = [wgen_annual[c].mean() for c in syn_cols]
@@ -226,19 +226,19 @@ plt.tight_layout()
 plt.savefig(_FIG_DIR / f'{LOCATION}_mean_annual_bar.svg')
 
 # ============================================================
-# %% plot 3 — drought severity scatter (duration vs % of average)
+# %% plot 3 - drought severity scatter (duration vs % of average)
 # ============================================================
 
 MAX_DUR     = 15
 YEAR_ONE    = 1921   # water year where trace index = 1
-SHARED_MEAN = True  # True  → use CS3 mean for all series
-             #         False → CS3 uses its own mean; Product A/B use Product B grand mean
+SHARED_MEAN = True  # True  -> use CS3 mean for all series
+             #         False -> CS3 uses its own mean; Product A/B use Product B grand mean
 
 
 def _find_droughts(series, mean):
     """Find all complete, non-overlapping consecutive below-mean runs.
 
-    A drought of duration w is counted exactly once at that length —
+    A drought of duration w is counted exactly once at that length -
     a 2-year below-average run that is part of a 3-year below-average run
     is only recorded as duration 3. Single-year dips are ignored.
 
@@ -290,7 +290,7 @@ for ci, col in enumerate(syn_cols):
     for dur, pct, s_yr, e_yr in _find_droughts(wgen_annual[col], prod_b_mean):
         yr_s = s_yr - YEAR_ONE + 1
         yr_e = e_yr - YEAR_ONE + 1
-        syn_droughts.append((dur, pct, f"n{tn:02d} ({yr_s}–{yr_e})"))
+        syn_droughts.append((dur, pct, f"n{tn:02d} ({yr_s}-{yr_e})"))
 
 # ------- dynamic x-axis limit -------
 all_durs = (
@@ -334,7 +334,7 @@ for dur, (pct, lbl) in _worst.items():
 _cs3_worst: dict = {}
 for dur, pct, s_yr, e_yr in cs3_droughts:
     if dur not in _cs3_worst or pct < _cs3_worst[dur][0]:
-        _cs3_worst[dur] = (pct, f"{s_yr}–{e_yr}")
+        _cs3_worst[dur] = (pct, f"{s_yr}-{e_yr}")
 for dur, (pct, lbl) in _cs3_worst.items():
     ax.annotate(lbl, xy=(dur, pct), xytext=(-6, 10),
                 textcoords='offset points', fontsize=7, ha='left', va='bottom',
@@ -342,10 +342,10 @@ for dur, (pct, lbl) in _cs3_worst.items():
 
 if SHARED_MEAN:
     ax.set(xlabel='Duration (years)', ylabel='Percent of average (%)',
-        title=f'{LOCATION} — Drought Severity by Duration\n (Shared mean: {cs3_mean:.1f} TAF)')
+        title=f'{LOCATION} - Drought Severity by Duration\n (Shared mean: {cs3_mean:.1f} TAF)')
 else:
     ax.set(xlabel='Duration (years)', ylabel='Percent of average (%)',
-        title=f'{LOCATION} — Drought Severity by Duration\n (CS3 mean: {cs3_mean:.1f} TAF; Product A/B mean: {prod_b_mean:.1f} TAF)')
+        title=f'{LOCATION} - Drought Severity by Duration\n (CS3 mean: {cs3_mean:.1f} TAF; Product A/B mean: {prod_b_mean:.1f} TAF)')
 ax.set_xlim(1, x_max)
 ax.spines[['top', 'right']].set_visible(False)
 ax.legend(loc='upper right')

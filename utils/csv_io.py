@@ -103,7 +103,7 @@ def load_sv_series(csv_path, part_b, part_c) -> pd.Series:
     return pd.Series(sub["Value"].values.astype(float), index=dates).sort_index()
 
 
-# -- Wide -> validation format (faithful copy of to_validation_csv) -----------
+# -- Wide -> validation format ------------------------------------------------
 
 def to_validation_df(df, start_wy, end_wy) -> pd.DataFrame:
     """Convert a wide (Date index x ``"B/C"`` columns) DataFrame to the
@@ -112,7 +112,6 @@ def to_validation_df(df, start_wy, end_wy) -> pd.DataFrame:
     Filters to the water-year window [Oct 1 of ``start_wy``-1,
     Sep 30 of ``end_wy``], splits the ``"B/C"`` column label, sorts, and
     returns an empty 5-column frame when nothing falls in the window.
-    Faithful copy of ``_3_postprocess_single.to_validation_csv``.
     """
     start_date = pd.Timestamp(start_wy - 1, 10, 1)
     end_date = pd.Timestamp(end_wy, 9, 30)

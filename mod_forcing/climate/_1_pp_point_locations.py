@@ -153,8 +153,8 @@ def parse_arguments():
     parser.add_argument(
         '--locations',
         type=str,
-        default='input/pp_point_locations.csv',
-        help='CSV file with point locations (default: input/pp_point_locations.csv)'
+        default='reference/pp_point_locations.csv',
+        help='CSV file with point locations (default: reference/pp_point_locations.csv)'
     )
     return parser.parse_args()
 

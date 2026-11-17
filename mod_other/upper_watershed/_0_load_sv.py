@@ -7,9 +7,9 @@ inventory.
 
 Inputs
 ------
-- Modules/<module>/CALSIM/DSS/<module>_SV.dss beside the script (not in the repo)
+- <base>/CalSim3/UpperWatershedModules/<module>/CALSIM/DSS/<module>_SV.dss
 - inventory/_MASTER_INVENTORY_FOR_STOCHASTIC_INPUT_GENERATION_.xlsx, sheet MASTER: Part B
-  (column C) and Part C (column D) of the rows whose Input_Category is not
+  (column C) and Part C (column D) of the rows whose Input_Category is
   "Upper Watershed Modules"
 
 Outputs
@@ -37,13 +37,13 @@ from pathlib import Path
 # Add repo root to path for utils imports
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 from utils import dss_io
-from utils.paths import get_inventory_dir, get_module_generated_dir
+from utils.paths import get_base_dir, get_inventory_dir, get_module_generated_dir
 
 
 def main():
     # --- Configuration ---
     _GEN_DIR = get_module_generated_dir("mod_other/upper_watershed")
-    modules_dir = Path(__file__).parent / "Modules"
+    modules_dir = get_base_dir() / "CalSim3" / "UpperWatershedModules"
     excel_path = get_inventory_dir() / "_MASTER_INVENTORY_FOR_STOCHASTIC_INPUT_GENERATION_.xlsx"
     sheet_name = "MASTER"
     output_dir = _GEN_DIR / "output" / "_0_load_sv"
@@ -209,7 +209,7 @@ def main():
         print(f"  Column {i}: {col}")
 
     # Filter master inventory to only include Upper Watershed Modules
-    df_master_filtered = df_master.loc[df_master["Input_Category"]!='Upper Watershed Modules'].copy()
+    df_master_filtered = df_master.loc[df_master["Input_Category"] == 'Upper Watershed Modules'].copy()
 
     print("\n\nAttempting to match DSS paths with Master Inventory...")
     print("Using columns C (Part B) and D (Part C) from Master Inventory...")

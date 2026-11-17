@@ -324,7 +324,7 @@ def create_cdf_plots(summary_df: pd.DataFrame, output_dir: str):
 
 # %%
 # Main execution
-if __name__ == "__main__" or True:  # Allow running in interactive mode
+if __name__ == "__main__":
     
     # Load data
     print("="*80)

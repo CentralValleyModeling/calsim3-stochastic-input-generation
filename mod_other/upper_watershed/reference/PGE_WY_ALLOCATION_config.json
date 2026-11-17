@@ -1,5 +1,5 @@
 {
-  "description": "PGE_WY_ALLOCATION_SV reconstruction config. Threshold logic on annual unimpaired Folsom flow (Oct-Sep WY sum, TAF). Allocation ratio applies May through April. Product A uses historical Unimp_Fols; Product B uses FOLSM_INFLOW from QMap. Same thresholds apply to both.",
+  "description": "PGE_WY_ALLOCATION_SV reconstruction config. Threshold logic on annual unimpaired Folsom flow (Oct-Sep WY sum, TAF). Allocation ratio applies May through April. Every set uses the rim-inflow SV FOLSM_INFLOW, with the same thresholds.",
   "thresholds": [
     {"annual_flow_taf_le": 488.24, "ratio": 0.4},
     {"annual_flow_taf_le": 800.72, "ratio": 0.6},

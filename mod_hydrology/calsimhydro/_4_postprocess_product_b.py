@@ -139,10 +139,8 @@ def load_inventory(inv_filter):
 def extract_dss_data(dss_path, excel_partcs):
     """Extract monthly time series from a DSS file, filtered to inventory parts.
 
-    Opens via utils.dss_io (Windows long-path junction + catalog_flag=False
-    to match this postprocessor's historical HecDss.Open(..., version=6)
-    call), then delegates to dss_io.read_monthly_frame which is a faithful
-    copy of this postprocessor's prior _read_dss loop.
+    Opens through utils.dss_io.open_dss (long-path junction, catalog_flag=False) and reads with
+    dss_io.read_monthly_frame.
     """
     dss_path = Path(dss_path).resolve()
     print(f"    Reading DSS: {dss_path.name}")

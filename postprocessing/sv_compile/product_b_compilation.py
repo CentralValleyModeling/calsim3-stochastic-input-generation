@@ -970,7 +970,7 @@ def _generate_comparison_figures(cmp_df, fig_dir, ref_label, active_tags,
             _save_category_boxplot(
                 stats, box_labels, plot_categories_used,
                 "weighted_annual_pctdiff_by_category_clipped.png",
-                _base_title + "  [y: \u221240 to +40%]",
+                _base_title + "  [y: -40 to +40%]",
                 ylim=(-40, 40), showfliers=False,
             )
 
@@ -1006,7 +1006,7 @@ def _generate_comparison_figures(cmp_df, fig_dir, ref_label, active_tags,
             _save_category_boxplot(
                 unweighted_stats, unweighted_labels, unweighted_cats_used,
                 "unweighted_annual_pctdiff_by_category_clipped.png",
-                _uw_title + "  [y: \u221240 to +40%]",
+                _uw_title + "  [y: -40 to +40%]",
                 ylim=(-40, 40), showfliers=False,
             )
             _save_category_boxplot(
