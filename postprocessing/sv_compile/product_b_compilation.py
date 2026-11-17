@@ -42,7 +42,7 @@ Outputs
 In <generated>/postprocessing/sv_compile/product_b_compilation/:
 
 - _product_b_compiled_sv/ProductB_SV_n01.csv ... _n10.csv and .dss
-- compiled_input_files/<module>/*.csv: copies of the source CSVs
+- compiled_input_files/<module>/*.csv: copies of this compile's source CSVs
 - sv_coverage_by_chunk.csv: chunks and months of every SV, and its source module
 - inventory_expected_modified.csv, inventory_expected_missing.csv, inventory_constant_rept.csv,
   inventory_skipped_missing.csv, inventory_skipped_not_in_dcr.csv, inventory_unexpected.csv
@@ -67,6 +67,7 @@ Usage
     python postprocessing/sv_compile/product_b_compilation.py --allow-missing
     python postprocessing/sv_compile/product_b_compilation.py --summary-figures
 
+A compile clears compiled_input_files/ and figures/ before it writes them.
 ``--summary-figures`` redraws the figures (without monthly_climatology/) from the comparison
 CSV and chunk CSVs of an earlier run and skips the compile.
 """
@@ -87,7 +88,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 from utils import dss_io
 from utils.wgen_calendar import CHUNK_MONTHS, LABEL_MONTHS, LABEL_WY, N_CHUNKS, water_year
 from utils.paths import (get_base_dir, get_generated_dir, get_module_generated_dir, get_inventory_dir,
-                         get_rim_inflow_outputs, require_pinned_run)
+                         get_rim_inflow_outputs, remove_tree, require_pinned_run)
 
 warnings.filterwarnings("ignore", message="Mean of empty slice")
 warnings.filterwarnings("ignore", message="All-NaN slice encountered")
@@ -1201,7 +1202,8 @@ def _generate_comparison_figures(cmp_df, fig_dir, ref_label, active_tags,
         ]
 
         out_dir = fig_dir / "summary_term_exceedance"
-        out_dir.mkdir(exist_ok=True)
+        remove_tree(out_dir)
+        out_dir.mkdir()
 
         _n_ch = len(active_tags)
         _clrs = [plt.cm.tab10(i % 10) for i in range(_n_ch)]
@@ -1553,7 +1555,8 @@ def _generate_comparison_figures(cmp_df, fig_dir, ref_label, active_tags,
 
     # -- Per-category chunk spread (one figure per category) --
     spread_dir = fig_dir / "chunk_spread_by_category"
-    spread_dir.mkdir(exist_ok=True)
+    remove_tree(spread_dir)
+    spread_dir.mkdir()
 
     for cat in cats_present:
         cat_df = annual_df[annual_df["Input_Category"] == cat]
@@ -1638,7 +1641,8 @@ def _generate_comparison_figures(cmp_df, fig_dir, ref_label, active_tags,
     # -- Monthly climatology (per SV, per category) --
     if not skip_climatology:
         scatter_dir = fig_dir / "monthly_climatology"
-        scatter_dir.mkdir(exist_ok=True)
+        remove_tree(scatter_dir)
+        scatter_dir.mkdir()
 
         for cat in cats_present:
             cat_cmp = cmp_df[cmp_df["Input_Category"] == cat]
@@ -1852,7 +1856,8 @@ print(f"  Total unique (Part B, Part C) from modules: {len(all_module_keys):,}")
 # -- Copy source CSVs into compiled_input_files/<module>/ --
 print()
 print("  Copying source CSVs into compiled_input_files/ ...")
-COMPILED_CSV.mkdir(parents=True, exist_ok=True)
+remove_tree(COMPILED_CSV)
+COMPILED_CSV.mkdir(parents=True)
 for label, src_paths in module_src_paths.items():
     dest_dir = COMPILED_CSV / label
     dest_dir.mkdir(parents=True, exist_ok=True)
@@ -2363,7 +2368,8 @@ if not CLI_ARGS.skip_comparison:
     print(f"  Extracted units for {len(units_map):,} SVs")
 
     fig_root = OUTPUT_DIR / "figures"
-    fig_root.mkdir(exist_ok=True)
+    remove_tree(fig_root)
+    fig_root.mkdir()
 
     # -- CalSim baseline comparison (full 1921-2021) --
     print()

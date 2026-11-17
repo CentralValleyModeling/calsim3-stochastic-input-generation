@@ -39,7 +39,7 @@ In <generated>/postprocessing/sv_compile/<historical_unsplit|product_a>_validati
 historicalUnsplit or productA:
 
 - <HistoricalUnsplit|ProductA>_Historical_Validation_SV.dss: the compiled DSS
-- compiled_input_files/<module>/*.csv: copies of the source CSVs
+- compiled_input_files/<module>/*.csv: copies of this compile's source CSVs
 - <module>__<tag>.dss, _constant_rept__<tag>.dss: the layers
 - paths_modified.csv, paths_unchanged.csv, paths_not_in_baseline.csv, paths_partial_window.csv
   (SVs that cover part of the window; the baseline fills the rest)
@@ -71,7 +71,9 @@ Usage
 paths_modified.csv of an earlier compile (with ``--stats-report`` also the report and
 figures); ``--stats-report`` alone redraws the report and figures from
 modification_statistics.csv; ``--summary-tables`` writes summary_tables.csv from it. Each
-skips the compile. ``--no-term-plots`` leaves out the per-SV figures.
+skips the compile. ``--no-term-plots`` leaves out the per-SV figures. A compile clears
+compiled_input_files/, and drawing a figure set clears its folders (annual_scatter/,
+all-terms*/) first.
 """
 
 import os
@@ -90,7 +92,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 from utils import dss_io
 from utils.paths import (DELIVERY, DELIVERY_WY, WEATHER_SETS, delivery_dirs, get_base_dir,
                          get_module_generated_dir, get_inventory_dir, get_rim_inflow_outputs,
-                         require_pinned_run)
+                         remove_tree, require_pinned_run)
 from utils.wgen_calendar import water_year
 
 # Suppress noisy warnings from empty slices (e.g. all-NaN columns in stats)
@@ -462,7 +464,8 @@ def generate_per_variable_plots(stats_csv: Path, cached_series: dict = None):
     for d in (dir_monthly, dir_annual, dir_mavg,
               dir_monthly_rept, dir_annual_rept, dir_mavg_rept,
               dir_monthly_const, dir_annual_const, dir_mavg_const):
-        d.mkdir(parents=True, exist_ok=True)
+        remove_tree(d)
+        d.mkdir(parents=True)
 
     # -- R2 / NSE / Category lookup from the stats CSV --------------------
     stats_df = pd.read_csv(stats_csv)
@@ -1173,7 +1176,8 @@ def generate_stats_report(stats_csv: Path, cached_series: dict = None):
     # -- Figs 6+: Scatter - |Annual Avg Baseline| vs Avg Annual % Change -
     #    One plot per category + one "All" plot.  Constant/Rept excluded.
     _scatter_dir = fig_dir / "annual_scatter"
-    _scatter_dir.mkdir(exist_ok=True)
+    remove_tree(_scatter_dir)
+    _scatter_dir.mkdir()
 
     _has_cols = ("Base-Ann-Avg" in df_plots.columns and
                  "Mod-Ann-Avg" in df_plots.columns)
@@ -1773,7 +1777,8 @@ while True:
             sys.exit("\nAborted.")
 
 OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
-COMPILED_CSV.mkdir(parents=True, exist_ok=True)
+remove_tree(COMPILED_CSV)
+COMPILED_CSV.mkdir(parents=True)
 
 # -- Locate source CSVs per module --------------------------------------------
 available_modules = OrderedDict()   # label -> list[Path] of data CSVs
