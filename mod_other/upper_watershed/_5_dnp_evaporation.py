@@ -16,7 +16,7 @@ Inputs
   hypsographic_polynomial_coeffs.csv (--product)
 - S_PEDRO_SV of _1_wyt_monthlyavg.py, in <generated>/mod_other/upper_watershed/output/:
   <delivery folder>/S_PEDRO_SV_<tag>_1922_2018.csv, or
-  _product_b_final/S_PEDRO_SV_product_b_n01.csv ... _n10.csv
+  _product_b_final/S_PEDRO_SV_productB_n01.csv ... _n10.csv
 - ER_PEDRO rows of mod_reservoir/evaporation/_2_run_reservoir_evap.py, in
   <generated>/mod_reservoir/evaporation/output/_2_run_reservoir_evap/:
   <delivery folder>/_reservoir_evaporation_<tag>_1922_2018.csv, or
@@ -254,7 +254,7 @@ def _load_storage_ref(product: str) -> pd.DataFrame:
 
 def _load_storage_chunks_b() -> list:
     """
-    Load the S_PEDRO_SV Product B chunk CSVs S_PEDRO_SV_product_b_n01.csv ... _n10.csv
+    Load the S_PEDRO_SV Product B chunk CSVs S_PEDRO_SV_productB_n01.csv ... _n10.csv
     from _product_b_final/.
 
     Returns a list of (label, df) pairs, one per chunk (n01-n10). Each df has
@@ -263,7 +263,7 @@ def _load_storage_chunks_b() -> list:
     chunks = []
     for k in range(1, N_CHUNKS + 1):
         label = f"n{k:02d}"
-        f = CSV_B_DIR / f"S_PEDRO_SV_product_b_{label}.csv"
+        f = CSV_B_DIR / f"S_PEDRO_SV_productB_{label}.csv"
         if not f.exists():
             raise FileNotFoundError(f"No S_PEDRO_SV Product B chunk file {f.name} in:\n  {CSV_B_DIR}")
         df = pd.read_csv(f)

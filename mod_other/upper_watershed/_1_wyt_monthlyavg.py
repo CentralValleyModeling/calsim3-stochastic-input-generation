@@ -25,7 +25,7 @@ Under <generated>/mod_other/upper_watershed/output/:
   <Part B>_monthly_error.png: the set vs the baseline, WY1922-2018
 - _historical_unsplit_validation/<Part B>_historicalUnsplit_1922_2018.csv,
   _product_a_validation/<Part B>_productA_1922_2018.csv
-- _product_b_final/<Part B>_product_b_n01.csv ... _n10.csv (--product B)
+- _product_b_final/<Part B>_productB_n01.csv ... _n10.csv (--product B)
 
 Delivery and chunk CSVs: Part B, Part C, Year, Month, Value.
 
@@ -92,7 +92,7 @@ def _write_targets(product_key: str, prefix: str, targets) -> None:
 
     if product_key == "B":
         for part_b, grp in product_b_target_table(targets).groupby("Part B"):
-            for out in write_chunk_csvs(grp, PRODUCT_B_DIR, f"{part_b}_product_b"):
+            for out in write_chunk_csvs(grp, PRODUCT_B_DIR, f"{part_b}_productB"):
                 print(f"  - {out}")
 
     else:

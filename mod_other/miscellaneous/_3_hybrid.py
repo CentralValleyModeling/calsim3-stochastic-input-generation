@@ -30,7 +30,7 @@ Under <generated>/mod_other/miscellaneous/output/:
 - _3_hybrid/figures/<historical_unsplit|product_a>/<Part B>.png and <Part B>_monthly_error.png
 - _historical_unsplit_validation/<Part B>_historicalUnsplit_1922_2018.csv,
   _product_a_validation/<Part B>_productA_1922_2018.csv
-- _product_b_final/<Part B>_product_b_n01.csv ... _n10.csv (--product B)
+- _product_b_final/<Part B>_productB_n01.csv ... _n10.csv (--product B)
 
 Delivery and chunk CSVs: Part B, Part C, Year, Month, Value.
 
@@ -172,7 +172,7 @@ def run_wyt(product: str, prefix: str, wyt_terms_df: pd.DataFrame,
 
     Naming convention for the per-term WYT intermediate file:
       historical, A: ``utils.csv_io.delivery_name(<part_b>, product)``
-      B: ``<part_b>_product_b_<tag>.csv`` (tag = n01 .. n10 per stochastic chunk)
+      B: ``<part_b>_productB_<tag>.csv`` (tag = n01 .. n10 per stochastic chunk)
     """
     wyt_csv = base_dir / "_wyt_terms_tmp.csv"
     base_dir.mkdir(parents=True, exist_ok=True)
@@ -213,7 +213,7 @@ def run_wyt(product: str, prefix: str, wyt_terms_df: pd.DataFrame,
     else:  # targets {"product_b_nXX": frame}
         sv = product_b_target_table(targets)
         for part_b, grp in sv.groupby("Part B"):
-            for out in write_chunk_csvs(grp, wyt_intermediate_dir, f"{part_b}_product_b"):
+            for out in write_chunk_csvs(grp, wyt_intermediate_dir, f"{part_b}_productB"):
                 print(f"  - {out}")
 
     wyt_csv.unlink(missing_ok=True)
@@ -262,7 +262,7 @@ def run_qmap_b(qmap_pairs_df: pd.DataFrame, base_dir: Path,
     )
 
     # Reformat per-chunk detail CSVs into SV-format intermediates
-    total = write_product_b_sv(base_dir, qmap_intermediate_dir, qmap_csv, "product_b",
+    total = write_product_b_sv(base_dir, qmap_intermediate_dir, qmap_csv, "productB",
                                remove_details=True)
 
     qmap_csv.unlink(missing_ok=True)
@@ -335,13 +335,13 @@ def run_final_hybrid_b(wyt_intermediate_dir: Path, qmap_intermediate_dir: Path,
         part_c = str(term["term_part_c"]).strip()
         frames = []
         for chunk, ts in enumerate(PRODUCT_B_CHUNKS, 1):
-            wyt_path = wyt_intermediate_dir / f"{part_b}_product_b_{ts}.csv"
+            wyt_path = wyt_intermediate_dir / f"{part_b}_productB_{ts}.csv"
             if not wyt_path.exists():
                 raise FileNotFoundError(
                     f"Missing WYT file for {part_b} {ts}: {wyt_path}"
                 )
 
-            qmap_path = qmap_intermediate_dir / f"{part_b}_product_b_{ts}.csv"
+            qmap_path = qmap_intermediate_dir / f"{part_b}_productB_{ts}.csv"
             if not qmap_path.exists():
                 raise FileNotFoundError(
                     f"Missing QMap file for {part_b} {ts}: {qmap_path}"
@@ -371,7 +371,7 @@ def run_final_hybrid_b(wyt_intermediate_dir: Path, qmap_intermediate_dir: Path,
                 "Value": (merged["Value_wyt"] + merged["Value_qmap"]) / 2.0,
             }))
         total += len(write_chunk_csvs(pd.concat(frames, ignore_index=True), final_dir,
-                                      f"{part_b}_product_b"))
+                                      f"{part_b}_productB"))
 
     print(f"  Final hybrid: {total} file(s) written to {final_dir}")
 
