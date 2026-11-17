@@ -77,9 +77,11 @@ def read_qmap_pairs(pair_csv: str | Path) -> pd.DataFrame:
 
     Optional columns (created with defaults if missing):
       lower_bound, upper_bound, allow_negative (True/False, default False)
+
+    Rows with every cell blank, as a spreadsheet can leave below the table, are dropped.
     """
     pair_csv = Path(pair_csv)
-    df = csv_io.read_sv_csv(pair_csv)
+    df = csv_io.read_sv_csv(pair_csv).dropna(how="all")
 
     missing = [c for c in _REQUIRED_COLS if c not in df.columns]
     if missing:

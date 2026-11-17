@@ -74,14 +74,15 @@ from utils.paths import (DELIVERY, WEATHER_SETS, delivery_dir, get_base_dir, get
 from utils.wyt_monthlyavg_framework import (
     compute_wyt_pattern,
     compute_product_targets,
+    product_b_target_table,
     plot_actual_vs_recon_validation,
+    target_sv,
 )
 from utils.qmap_single_from_pairs import run_single_qmap_from_pairs
 from utils.qmap_product_b_from_pairs import (
     PRODUCT_B_CHUNKS,
     run_product_b_qmap_from_pairs,
-    read_qmap_pairs,
-    build_output_filename,
+    write_product_b_sv,
 )
 from utils.wgen_calendar import write_chunk_csvs
 
@@ -109,10 +110,17 @@ SIM_IN_DIR_B = get_rim_inflow_outputs("B")["dir"]
 
 
 # -- Helpers -----------------------------------------------------------
+def read_terms(path: Path) -> pd.DataFrame:
+    """The hybrid_terms CSV with lower-case column names, without the rows whose every cell is
+    blank (a spreadsheet can leave them below the table)."""
+    df = pd.read_csv(path).dropna(how="all")
+    df.columns = [str(c).strip().lower() for c in df.columns]
+    return df
+
+
 def prepare_hybrid_input_files(input_csv: Path) -> tuple[pd.DataFrame, pd.DataFrame]:
     """Split hybrid_terms CSV into WYT and QMap DataFrames."""
-    df = pd.read_csv(input_csv)
-    df.columns = [str(c).strip().lower() for c in df.columns]
+    df = read_terms(input_csv)
 
     required = ["term_part_b", "term_part_c", "basin_wyt",
                 "predictor_part_b", "predictor_part_c", "fit"]
@@ -143,17 +151,6 @@ def prepare_hybrid_input_files(input_csv: Path) -> tuple[pd.DataFrame, pd.DataFr
     )
 
     return wyt_df, qmap_df
-
-
-def _to_sv_format(df: pd.DataFrame) -> pd.DataFrame:
-    """Convert framework long-format target to Part B, Part C, Year, Month, Value."""
-    return pd.DataFrame({
-        "Part B": df["part_b"],
-        "Part C": df["part_c"],
-        "Year": df["date"].dt.year,
-        "Month": df["date"].dt.month,
-        "Value": df["wyt_monthly_avg"],
-    })
 
 
 def _load_final_single_as_long(final_dir: Path, product: str) -> pd.DataFrame:
@@ -223,11 +220,10 @@ def run_wyt(product: str, prefix: str, wyt_terms_df: pd.DataFrame,
     wyt_intermediate_dir.mkdir(parents=True, exist_ok=True)
     if product != "B":
         for name, df in targets.items():
-            for part_b, grp in _to_sv_format(df).groupby("Part B"):
+            for part_b, grp in target_sv(df).groupby("Part B"):
                 print(f"  - {write_delivery_csv(grp, wyt_intermediate_dir, part_b, product)}")
     else:  # targets {"product_b_nXX": frame}
-        sv = pd.concat([_to_sv_format(df).assign(chunk=int(name[-2:])) for name, df in targets.items()],
-                       ignore_index=True)
+        sv = product_b_target_table(targets)
         for part_b, grp in sv.groupby("Part B"):
             for out in write_chunk_csvs(grp, wyt_intermediate_dir, f"{part_b}_product_b"):
                 print(f"  - {out}")
@@ -278,30 +274,8 @@ def run_qmap_b(qmap_pairs_df: pd.DataFrame, base_dir: Path,
     )
 
     # Reformat per-chunk detail CSVs into SV-format intermediates
-    df_pairs = read_qmap_pairs(qmap_csv)
-
-    total = 0
-    for _, row in df_pairs.iterrows():
-        target_b = row["target_part_b"]
-        target_c = row["target_part_c"]
-        frames = []
-        for chunk, ts in enumerate(PRODUCT_B_CHUNKS, 1):
-            src_path = base_dir / build_output_filename(target_b, ts, output_tag="qmap")
-            if not src_path.exists():
-                raise FileNotFoundError(f"{src_path}: the quantile map wrote no {ts} output "
-                                        f"for {target_b}")
-            df = pd.read_csv(src_path)
-            src_path.unlink()
-            frames.append(pd.DataFrame({
-                "chunk": chunk,
-                "Part B": target_b,
-                "Part C": target_c,
-                "Year": df["year"].astype(int),
-                "Month": df["month"].astype(int),
-                "Value": df["target_qm_sim"],
-            }))
-        total += len(write_chunk_csvs(pd.concat(frames, ignore_index=True), qmap_intermediate_dir,
-                                      f"{target_b}_product_b"))
+    total = write_product_b_sv(base_dir, qmap_intermediate_dir, qmap_csv, "product_b",
+                               remove_details=True)
 
     qmap_csv.unlink(missing_ok=True)
     print(f"  QMap intermediates: {total} file(s)")
@@ -316,9 +290,8 @@ def run_final_hybrid_single(product: str, wyt_intermediate_dir: Path,
     """Average WYT and QMap results and write the final delivery CSVs of a single series."""
     final_dir.mkdir(parents=True, exist_ok=True)
 
-    terms_df = pd.read_csv(HYBRID_TERMS_CSV)
-    terms_df.columns = [str(c).strip().lower() for c in terms_df.columns]
-    terms = terms_df[["term_part_b", "term_part_c"]].drop_duplicates()
+    terms_df = read_terms(HYBRID_TERMS_CSV)
+    terms =terms_df[["term_part_b", "term_part_c"]].drop_duplicates()
 
     total = 0
     for _, term in terms.iterrows():
@@ -365,9 +338,8 @@ def run_final_hybrid_single(product: str, wyt_intermediate_dir: Path,
 def run_final_hybrid_b(wyt_intermediate_dir: Path, qmap_intermediate_dir: Path,
                        final_dir: Path) -> None:
     """Average WYT and QMap results per chunk and write final Product B CSVs."""
-    terms_df = pd.read_csv(HYBRID_TERMS_CSV)
-    terms_df.columns = [str(c).strip().lower() for c in terms_df.columns]
-    terms = terms_df[["term_part_b", "term_part_c"]].drop_duplicates()
+    terms_df = read_terms(HYBRID_TERMS_CSV)
+    terms =terms_df[["term_part_b", "term_part_c"]].drop_duplicates()
 
     total = 0
     for _, term in terms.iterrows():
