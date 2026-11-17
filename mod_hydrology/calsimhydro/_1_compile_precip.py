@@ -7,7 +7,8 @@ inputs (CSV, optional DSS) for Product A (1921-2018) or Product B (chunked).
 
 Inputs
 ------
-- WBA grid-info file (grid weights per WBA)
+- WBA grid-info file (grid weights per WBA). No WBA 91 polygon is available, so WBA_91 lists
+  WBA_90's cells as a stand-in and gets WBA 90's precipitation.
 - WGEN met files (Product_A / Product_B)
 
 Outputs

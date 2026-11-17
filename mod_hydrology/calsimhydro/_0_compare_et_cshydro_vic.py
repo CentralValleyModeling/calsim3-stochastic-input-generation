@@ -36,7 +36,7 @@ def year_to_wy(date):
 select_wba = 'WBA 02'
 _script_dir = Path(__file__).resolve().parent
 cshydro_dir = str(_script_dir / "reference")
-cshydro_file = "CS3_RefETo.dss" # "CS3_PanEvapGerber.dss" "CS3_ET.dss" "CS3_RefETo.dss"
+cshydro_file = "CS3_RefETo.dss" # "CS3_ET.dss" "CS3_RefETo.dss"
 gridinfo_dir = str(_script_dir / "reference")
 startDate_dss = "31OCT1920 00:00:00"
 endDate_dss = "30SEP2021 24:00:00"
@@ -67,28 +67,16 @@ if cshydro_file=='CS3_ET.dss':
     cshydro_wba = 'WBA 02'.replace(' ', '') + '_AL_ET'
 elif cshydro_file == 'CS3_RefETo.dss':
     cshydro_wba = select_wba
-elif cshydro_file == 'CS3_PanEvapGerber.dss':
-    cshydro_wba = 'WBA02'
-
-# %% adjust VIC et column if pan evap (idx minus 1)
-if cshydro_file == 'CS3_PanEvapGerber.dss':
-    vic_et_col -= 1
 
 # %% plot titles
 if cshydro_file =='CS3_ET.dss':
     ref_et_label = 'Crop ET (AL)'
 elif cshydro_file == 'CS3_RefETo.dss':
     ref_et_label = 'Reference ET (ETo)'
-elif cshydro_file == 'CS3_PanEvapGerber.dss':
-    ref_et_label = 'Pan Evaporation (Gerber)'
 
 # %% read in WBA grid information
-if cshydro_file == 'CS3_PanEvapGerber.dss':
-    wba_grid_file = os.path.join(gridinfo_dir, "VIC_grids_for_CIMIS_Stations.csv")
-    wba_grid_info = pd.read_csv(wba_grid_file, sep=',', header=0, names=['CIMIS', 'lat', 'lon', 'pct_area'])
-else:
-    wba_grid_file = os.path.join(gridinfo_dir, "WBA_Grid_Info_20230112_RowBased_rev02.txt")
-    wba_grid_info = pd.read_csv(wba_grid_file, sep='\t', header=None, names=['WBA', 'lat', 'lon', 'pct_area', 'X', 'Y'])
+wba_grid_file = os.path.join(gridinfo_dir, "WBA_Grid_Info_20230112_RowBased_rev02.txt")
+wba_grid_info = pd.read_csv(wba_grid_file, sep='\t', header=None, names=['WBA', 'lat', 'lon', 'pct_area', 'X', 'Y'])
 
 # %% --- read DSS monthly ET
 cshydro_refeto_file = os.path.join(cshydro_dir, cshydro_file)
@@ -98,16 +86,11 @@ if cshydro_file == 'CS3_ET.dss':
     ts = fid.read_ts(f"/IWFM/{cshydro_wba}/RATE_INCH//1MON/EVAPOTRANSPIRATION/",window=(startDate_dss,endDate_dss))
 elif cshydro_file == 'CS3_RefETo.dss':
     ts = fid.read_ts(f"/CALSIM/{cshydro_wba}/REF-ET//1MON/REFETO/",window=(startDate_dss,endDate_dss))
-elif cshydro_file == 'CS3_PanEvapGerber.dss':
-    ts = fid.read_ts(f"/CALSIM/{cshydro_wba}/PAN-EVAP//1MON/PAN-EVAP/",window=(startDate_dss,endDate_dss))
 cshydro_et.insert(1, "CS3", value=ts.values)
 cshydro_et = cshydro_et.set_index('date')
 
 # %% load vic et et
-if not cshydro_file == 'CS3_PanEvapGerber.dss':
-    wba_info = wba_grid_info[wba_grid_info['WBA'] == select_wba.replace(' ', '_')]
-else:
-    wba_info = wba_grid_info[wba_grid_info['CIMIS'] == 'Gerber']
+wba_info = wba_grid_info[wba_grid_info['WBA'] == select_wba.replace(' ', '_')]
 pct_area_total = 0
 vic_et = pd.Series(data=0,index=pd.date_range(start=vic_start_date, end=vic_end_date, freq='D'))
 for lat, lon, pct_area in wba_info[['lat', 'lon', 'pct_area']].values:
@@ -143,7 +126,7 @@ gs = GridSpec(1, 2, width_ratios=[3, 1], figure=fig)
 ax0 = fig.add_subplot(gs[0])
 ax1 = fig.add_subplot(gs[1])
 colors = ['grey','indianred']
-ylim = (35, 65) if cshydro_file != 'CS3_PanEvapGerber.dss' else (45, 80)
+ylim = (35, 65)
 # Left panel: 10-year rolling mean annual ET by model
 window = 5
 for i, model in enumerate(['CS3', 'VIC']):

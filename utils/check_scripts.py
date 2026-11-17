@@ -65,6 +65,7 @@ PRODUCT_A_SCRIPTS = [
     "mod_forcing/climate/_2_uhh_basin_averages.py",
     "mod_hydrology/calsimhydro/_1_compile_precip.py",
     "mod_hydrology/calsimhydro/_2_compile_et.py",
+    "mod_hydrology/calsimhydro/_2b_compile_pan_evap.py",
     "mod_hydrology/calsimhydro_ee/_1_compile_precip_EE.py",
     "mod_hydrology/delta_channel_depletion/_1_compile_precip_DETAW.py",
     "mod_hydrology/small_watersheds/_1_compile_precip_sws.py",
