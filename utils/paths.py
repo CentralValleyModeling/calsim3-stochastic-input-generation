@@ -4,8 +4,8 @@ Centralized path resolver for data directories.
 Reads the data root from ``config.json`` (user-local, git-ignored) at the repo
 root, falling back to ``config_default.json`` (tracked) when the user file is
 absent.  The environment variable ``CSSTOCHASTIC_CONFIG`` names another user
-file in place of ``config.json``, e.g. the config of a chain built on another
-rim-inflow model.  All module scripts should import helpers from this module
+file in place of ``config.json`` (a relative name from the repo root), e.g. the
+config of a chain built on another rim-inflow model.  All module scripts should import helpers from this module
 instead of hard-coding ``../../data/`` relative paths.
 
 Quick start
@@ -52,19 +52,29 @@ def _long_path(p: Path) -> Path:
 # ---------------------------------------------------------------------------
 # Load user config, falling back to the default
 # ---------------------------------------------------------------------------
-_USER_CFG = Path(os.environ.get("CSSTOCHASTIC_CONFIG", REPO_ROOT / "config.json"))
+_USER_CFG = Path(os.environ.get("CSSTOCHASTIC_CONFIG") or "config.json")    # empty = unset
+if not _USER_CFG.is_absolute():
+    _USER_CFG = REPO_ROOT / _USER_CFG       # scripts run from their own folders
 _DEFAULT_CFG = REPO_ROOT / "config_default.json"
 
 
 def _load_config() -> dict:
-    """Defaults from ``config_default.json``, overridden key by key by the user file."""
+    """Defaults from ``config_default.json``, overridden key by key by the user file. The user
+    file may set only keys the defaults have (and comments, keys starting with ``_``), so a
+    misspelt or retired key stops the run instead of leaving its default in force."""
     with open(_DEFAULT_CFG, "r") as f:
         cfg = json.load(f)
-    if "CSSTOCHASTIC_CONFIG" in os.environ and not _USER_CFG.exists():
+    if os.environ.get("CSSTOCHASTIC_CONFIG") and not _USER_CFG.exists():
         raise SystemExit(f"CSSTOCHASTIC_CONFIG names {_USER_CFG}, which does not exist")
     if _USER_CFG.exists():
         with open(_USER_CFG, "r") as f:
-            cfg.update(json.load(f))
+            user = json.load(f)
+        unknown = sorted(k for k in user if k not in cfg and not k.startswith("_"))
+        if unknown:
+            keys = ", ".join(k for k in cfg if not k.startswith("_"))
+            raise SystemExit(f"{_USER_CFG}: unknown key(s) {', '.join(unknown)}; "
+                             f"{_DEFAULT_CFG.name} has {keys}")
+        cfg.update(user)
     return cfg
 
 
@@ -72,7 +82,8 @@ _CFG = _load_config()
 
 # Resolve data_dir relative to the repo root (or use absolute if given)
 _raw = Path(_CFG["data_dir"])
-DATA_DIR: Path = _long_path(_raw if _raw.is_absolute() else (REPO_ROOT / _raw).resolve())
+_DATA_ROOT = _raw if _raw.is_absolute() else (REPO_ROOT / _raw).resolve()
+DATA_DIR: Path = _long_path(_DATA_ROOT)
 
 
 # ---------------------------------------------------------------------------
@@ -92,8 +103,10 @@ def get_base_dir() -> Path:
 def get_generated_dir() -> Path:
     """Return ``<data_dir>/<generated_dir>`` (``GENERATED`` by default; an absolute
     ``generated_dir`` stands alone): all module input/output. The SAC-SMA chain uses
-    ``GENERATED``; a chain on another rim-inflow model keeps its own folder."""
-    return _long_path(DATA_DIR / _CFG["generated_dir"])
+    ``GENERATED``; a chain on another rim-inflow model keeps its own folder. The path is
+    normalized before the long-path prefix, which Windows reads literally, so a ``..`` in it
+    works."""
+    return _long_path(Path(os.path.normpath(_DATA_ROOT / _CFG["generated_dir"])))
 
 
 def get_module_generated_dir(module: str) -> Path:
@@ -190,6 +203,19 @@ def get_arc_inflows(forcing: str) -> Path:
 #: Beside ``arc_inflow_monthly.csv``, and copied into each rim-inflow SV folder: the manifest
 #: of the rim-inflow model run the files come from (model, version, forcing, hashes, gates).
 INFLOW_PROVENANCE = "run_manifest.json"
+
+
+def require_chain_model(forcing: str) -> None:
+    """Stop if this GENERATED folder holds a rim-inflow run of ``forcing`` (a key of
+    ``WEATHER_SETS``) by another model than ``inflow_model``: each model's chain keeps its own
+    GENERATED folder (``generated_dir``), so neither its run nor its G2 record is replaced."""
+    path = get_arc_inflows(forcing).parent / INFLOW_PROVENANCE
+    if path.exists():
+        other = json.loads(path.read_text()).get("inflow_model")
+        if other != get_inflow_model():
+            raise SystemExit(f"{path.parent} holds a run of {other}; the chain of "
+                             f"{get_inflow_model()} goes in its own GENERATED folder "
+                             "(config: generated_dir)")
 
 
 def require_pinned_run(folder: Path) -> dict:

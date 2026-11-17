@@ -12,6 +12,12 @@
 
     "_GENERATED_forcing": "---- GENERATED: mod_forcing ----",
     "GENERATED/mod_forcing/climate": "https://cadwr.box.com/s/f4x373r92taqrzsrd8ejkcpwuxh1gqay",
+    "GENERATED/mod_forcing/inflows/output/_1_build_forcing/Historical_Unsplit": "",
+    "GENERATED/mod_forcing/inflows/output/_1_build_forcing/Product_A/1": "",
+    "GENERATED/mod_forcing/inflows/output/_1_build_forcing/Product_B/1": "",
+    "GENERATED/mod_forcing/inflows/output/_2_run_product/Historical_Unsplit": "",
+    "GENERATED/mod_forcing/inflows/output/_2_run_product/Product_A/1": "",
+    "GENERATED/mod_forcing/inflows/output/_2_run_product/Product_B/1": "",
 
     "_GENERATED_hydrology": "---- GENERATED: mod_hydrology ----",
     "GENERATED/mod_hydrology/calsimhydro": "https://cadwr.box.com/s/j55b5qhw4tqsjnn7hyem9ivpw7fn30k2",
@@ -36,6 +42,17 @@
     "_GENERATED_postprocessing": "---- GENERATED: postprocessing ----",
     "GENERATED/postprocessing/sv_compile": "https://cadwr.box.com/s/zvle7kga717iulglb0sexve2xgc1hbsj",
     "GENERATED/postprocessing/calsim_runs": "https://cadwr.box.com/s/wad3zvrbm9ay1jlqei5q52pcau5wrdli",
+
+    "_GENERATED_vic": "---- GENERATED_vic: the VIC chain (config generated_dir GENERATED_vic) ----",
+    "GENERATED_vic/mod_forcing/inflows/output/_1_build_forcing/Historical_Unsplit": "",
+    "GENERATED_vic/mod_forcing/inflows/output/_1_build_forcing/Product_A/1": "",
+    "GENERATED_vic/mod_forcing/inflows/output/_1_build_forcing/Product_B/1": "",
+    "GENERATED_vic/mod_forcing/inflows/output/_2_run_product/Historical_Unsplit": "",
+    "GENERATED_vic/mod_forcing/inflows/output/_2_run_product/Product_A/1": "",
+    "GENERATED_vic/mod_forcing/inflows/output/_2_run_product/Product_B/1": "",
+    "GENERATED_vic/mod_forcing/inflows/vic_fluxes/Historical_Unsplit": "",
+    "GENERATED_vic/mod_forcing/inflows/vic_fluxes/Product_A/1": "",
+    "GENERATED_vic/mod_forcing/inflows/vic_fluxes/Product_B/1": "",
 
     "_GENERATED_v1.0": "---- GENERATED_v1.0: the v1.0 outputs, read-only ----",
     "GENERATED_v1.0/mod_forcing/vic/input/Product_A": "https://cadwr.box.com/s/6ygv26qn0cqw95dp75b7h73x6nhuwndr",

@@ -38,17 +38,15 @@ Approach:
 
 import sys
 import shutil
-import subprocess
-import atexit
 import time
 import numpy as np
 import pandas as pd
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[3]))
+from utils import dss_io
 from utils.paths import get_base_dir, get_module_generated_dir
 
-from pydsstools.heclib.dss import HecDss
 from pydsstools.core import TimeSeriesContainer
 
 # -- Paths -----------------------------------------------------------------
@@ -64,32 +62,6 @@ DSS_PATTERN = "/*/*/*/*/1MON/*"
 
 # Cutoff: restore baseline values for months <= October 1921
 CUTOFF = pd.Timestamp(1921, 10, 31)
-
-# -- Junction helper (long OneDrive paths) ---------------------------------
-_REPO_ROOT  = Path(__file__).resolve().parents[3]
-_DSS_LINK   = _REPO_ROOT / "_dss_link"
-_PATH_LIMIT = 200
-
-
-def _create_junction(target_dir):
-    if _DSS_LINK.exists():
-        subprocess.run(["cmd", "/c", "rmdir", str(_DSS_LINK)], capture_output=True)
-    subprocess.run(
-        ["cmd", "/c", "mklink", "/J", str(_DSS_LINK), str(target_dir)],
-        check=True, capture_output=True,
-    )
-
-
-def _remove_junction():
-    if _DSS_LINK.exists():
-        subprocess.run(["cmd", "/c", "rmdir", str(_DSS_LINK)], capture_output=True)
-
-
-def _get_dss_str(path, use_junction):
-    if use_junction:
-        return str(_DSS_LINK / path.name)
-    return str(path)
-
 
 def dss_eom(ts_pytimes):
     """Convert pydsstools start-of-period dates to end-of-month timestamps."""
@@ -133,35 +105,10 @@ def main():
     print("  Done.")
     print()
 
-    # Set up junction if paths are too long
-    use_junction = len(str(N10_FIXED)) > _PATH_LIMIT
-    if use_junction:
-        _create_junction(COMPILED_DIR)
-        atexit.register(_remove_junction)
-
-    baseline_str = str(BASELINE_DSS)
-    if len(baseline_str) > _PATH_LIMIT:
-        # Use a junction for the baseline directory too
-        _base_link = _REPO_ROOT / "_dss_link_base"
-        if _base_link.exists():
-            subprocess.run(["cmd", "/c", "rmdir", str(_base_link)], capture_output=True)
-        subprocess.run(
-            ["cmd", "/c", "mklink", "/J", str(_base_link), str(BASELINE_DSS.parent)],
-            check=True, capture_output=True,
-        )
-        baseline_str = str(_base_link / BASELINE_DSS.name)
-
-        def _remove_base_junction():
-            if _base_link.exists():
-                subprocess.run(["cmd", "/c", "rmdir", str(_base_link)], capture_output=True)
-        atexit.register(_remove_base_junction)
-
-    fixed_str = _get_dss_str(N10_FIXED, use_junction)
-
     # Step 2: Find all 01JAN1920 decade paths in baseline (these contain Oct 1921)
     print("Step 2: Scanning baseline for 1920-decade paths ...")
     paths_1920 = []
-    with HecDss.Open(baseline_str, version=6) as dss_base:
+    with dss_io.open_dss(BASELINE_DSS) as dss_base:
         all_paths = dss_base.getPathnameList(DSS_PATTERN)
         for p in all_paths:
             parts = p.strip("/").split("/")
@@ -176,8 +123,8 @@ def main():
     n_restored = 0
     n_values_restored = 0
 
-    with HecDss.Open(baseline_str, version=6) as dss_base, \
-         HecDss.Open(fixed_str, version=6) as dss_out:
+    with dss_io.open_dss(BASELINE_DSS) as dss_base, \
+         dss_io.open_dss(N10_FIXED) as dss_out:
 
         for i, pathname in enumerate(sorted(paths_1920)):
             # Read baseline decade block
@@ -221,9 +168,6 @@ def main():
 
             if (i + 1) % 100 == 0:
                 print(f"  Processed {i+1}/{len(paths_1920)} paths ...")
-
-    if use_junction:
-        _remove_junction()
 
     print()
     print("=" * 60)

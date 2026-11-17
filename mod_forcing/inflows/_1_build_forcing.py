@@ -6,7 +6,8 @@ in BASE: SAC-SMA reads a NetCDF store of the 4,410 grid cells it uses, VIC a tex
 with the wind added. This script checks that the model's input for a forcing holds the BASE
 weather it stands for (gate G2), on a sample of cells or on all of them. Where the model's
 folder does not hold that input (the adapter's ``BUILT``: for SAC-SMA, Product B; for VIC,
-every forcing), the script first writes it from BASE. The model's adapter
+every forcing), a check of all cells first writes it from BASE, and a sample checks the input
+written before. The model's adapter
 (adapters/<inflow_model>.py) writes and compares the files; this script supplies the BASE side
 and keeps the record.
 
@@ -33,14 +34,15 @@ Outputs
                            its sha256, which _2_run_product.py records in its manifest too)
 
 _2_run_product.py runs the model only if this file shows a pass on every input. A sample of
-cells is a quick check: it prints its table and leaves the file as it was.
+cells is a quick check: it prints its table and leaves the file as it was, or removes it when
+the sample fails, so no gate reads the earlier pass. The script stops when this GENERATED
+folder holds another model's run (``utils.paths.require_chain_model``).
 
 Usage
 -----
     python mod_forcing/inflows/_1_build_forcing.py --forcing A --cells all
     python mod_forcing/inflows/_1_build_forcing.py --forcing historical --cells all
     python mod_forcing/inflows/_1_build_forcing.py --forcing B --cells all       # builds, then checks
-    python mod_forcing/inflows/_1_build_forcing.py --forcing B --cells all --check-only
     python mod_forcing/inflows/_1_build_forcing.py --forcing A          # quick: 200 cells, not recorded
 """
 
@@ -54,7 +56,7 @@ import pandas as pd
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 from mod_forcing.inflows.adapters import label, load
 from utils.paths import (WEATHER_SETS, get_base_dir, get_inflow_model, get_inflow_repo,
-                         get_module_generated_dir, sha256_file)
+                         get_module_generated_dir, require_chain_model, sha256_file)
 
 _gen = get_module_generated_dir("mod_forcing/inflows")
 
@@ -79,13 +81,13 @@ def main():
                     f"rim-inflow model ({model.LABEL}) against BASE (G2).")
     ap.add_argument("--forcing", choices=list(model.FORCINGS), required=True)
     ap.add_argument("--cells", default="200",
-                    help="number of cells to sample (seeded), or 'all' (default 200)")
-    ap.add_argument("--check-only", action="store_true",
-                    help="check inputs built earlier instead of writing them again")
+                    help="number of cells to sample (seeded), or 'all', which also builds the "
+                         "inputs the adapter builds (default 200)")
     args = ap.parse_args()
     n_cells = None if args.cells == "all" else int(args.cells)
     if n_cells is not None and n_cells < 1:
         raise SystemExit("--cells must be at least 1, or 'all'")
+    require_chain_model(args.forcing)
 
     repo = get_inflow_repo()
     base_sub, prefix = BASE_WEATHER[args.forcing]
@@ -94,14 +96,15 @@ def main():
     out_dir = _gen / "output" / "_1_build_forcing" / WEATHER_SETS[args.forcing]["wgen"]
     out_dir.mkdir(parents=True, exist_ok=True)
     print(f"BASE:  {base_dir}")
-    if args.forcing in model.BUILT and not args.check_only:
+    if args.forcing in model.BUILT and n_cells is None:
         print(f"Writing the {model.LABEL} input from BASE into {out_dir}")
         model.build_inputs(repo, args.forcing, read_base, out_dir,
                            (Path("BASE") / base_sub).as_posix())
     files = model.inputs(repo, args.forcing, out_dir)
     missing = [f for f in files if not f.exists()]
     if missing:
-        raise SystemExit(f"missing inputs {[f.name for f in missing]}; run without --check-only")
+        raise SystemExit(f"missing inputs {[f.name for f in missing]}; run with --cells all to "
+                         "build them")
     print("Input: " + "\n       ".join(str(f) for f in files))
     out = model.check_inputs(repo, args.forcing, files, read_base, n_cells)
     if n_cells is None:
@@ -117,10 +120,14 @@ def main():
                                           outside_tol=("outside_tol", "sum"),
                                           x10_pairs=("x10_pairs", "sum"),
                                           passed=("pass", "all")).to_string())
+    record = out_dir / "forcing_identity.csv"
     if n_cells is None:
-        out.to_csv(out_dir / "forcing_identity.csv", index=False)
-        print(f"Wrote {out_dir / 'forcing_identity.csv'}")
+        out.to_csv(record, index=False)
+        print(f"Wrote {record}")
     if not out["pass"].all():
+        if n_cells is not None and record.exists():
+            record.unlink()
+            print(f"Removed {record}: the pass it recorded no longer holds")
         raise SystemExit("G2 FAIL: the input differs from BASE")
     print("G2 PASS" if n_cells is None else f"G2 PASS on {n_cells} sampled cells (not recorded)")
 

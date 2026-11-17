@@ -84,11 +84,9 @@ def dss_paths(product):
 
 # Function to Extract DSS Time Series
 def extract_dss_data(dss_path):
-    # Open via utils.dss_io (auto directory-junction for long paths,
-    # catalog_flag=True -- identical _DSS_LINK path / _PATH_LIMIT=200 as the
-    # removed local helper). The bespoke read loop below is preserved verbatim
-    # (no-trailing-slash pattern, sort by Part C index 2) because it differs
-    # from dss_io.read_monthly_frame -- only the open is consolidated.
+    # Open via utils.dss_io (a directory junction for a long path, catalog_flag=True).
+    # The read loop below (no-trailing-slash pattern, sort by Part C index 2)
+    # differs from dss_io.read_monthly_frame, so it stays here.
     dss_path = Path(dss_path).resolve()
     data_dict = {}
     with dss_io.open_dss(dss_path, version=6, catalog_flag=True) as dss:

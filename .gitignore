@@ -5,7 +5,7 @@
 
 # ── Data root  ────────────────────────────────────────────────────────────────
 data/
-_dss_link/
+/_dss_link_*
 
 # ── Box sync change-detection cache (local manifests) ─────────────────────────
 .sync_cache/

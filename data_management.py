@@ -5,6 +5,9 @@ Two subcommands:
   sync     Upload changed local data to Box as module-level zip archives.
            Unchanged files are copied from the existing zip without
            recompressing; only new or modified files are compressed.
+           The GENERATED folder of the config (generated_dir: GENERATED,
+           or a chain's own such as GENERATED_vic) goes to the Box folder
+           of the same name.
            Requires the csstochastic conda env (uses utils.paths).
 
   acquire  Download and unpack zips from Box shared links (data_links.json).
@@ -68,6 +71,13 @@ BASE_LOOSE_FILES = [
 ]
 LOOSE_FILES_KEY = "BASE/_loose_files"  # data_links.json key + Box zip stem
 
+# Per-subtree depth of the GENERATED zips (relative to the GENERATED folder, forward slashes);
+# elsewhere --depth applies. Each forcing folder of mod_forcing/inflows
+# (output/<step>/<forcing>) zips on its own, so the model inputs _1_build_forcing builds
+# (SAC-SMA's Product B stores, 6.4 GB; VIC's forcing files, up to 32 GB a forcing) upload
+# only when they change.
+GENERATED_DEPTH_OVERRIDES = {"mod_forcing/inflows": 6}
+
 IGNORE_DIR_NAMES = {"__pycache__", ".ipynb_checkpoints"}
 IGNORE_FILE_NAMES = {"Thumbs.db", ".DS_Store"}
 IGNORE_SUFFIXES = {".pyc"}
@@ -102,21 +112,31 @@ def should_skip_file(rel_path: Path) -> bool:
     return False
 
 
-def discover_targets(root: Path, max_depth: int = 2) -> list:
-    """Discover directories to zip under root, recursing up to max_depth levels."""
+def discover_targets(root: Path, max_depth: int = 2, depth_overrides: dict | None = None) -> list:
+    """Discover directories to zip under root, recursing up to max_depth levels. Below a
+    directory named in depth_overrides (relative to root, forward slashes), its depth applies.
+    A directory split into zips of its subdirectories leaves its own files out, so they are
+    reported."""
+    depth_overrides = depth_overrides or {}
 
-    def _recurse(directory: Path, depth: int) -> list:
+    def _recurse(directory: Path, depth: int, limit: int) -> list:
+        limit = depth_overrides.get(directory.relative_to(root).as_posix(), limit)
         subdirs = [
             d for d in sorted(directory.iterdir())
             if d.is_dir() and not is_ignored_dir(d.name)
         ]
 
-        if not subdirs or depth >= max_depth:
+        if not subdirs or depth >= limit:
             return [directory]
 
+        loose = [p.name for p in directory.iterdir()
+                 if p.is_file() and not should_skip_file(Path(p.name))]
+        if loose:
+            print(f"  WARNING: not synced, files beside the zipped folders of "
+                  f"{directory.relative_to(root)}: {', '.join(sorted(loose))}")
         result = []
         for d in subdirs:
-            result.extend(_recurse(d, depth + 1))
+            result.extend(_recurse(d, depth + 1, limit))
         return result
 
     if not root.exists():
@@ -126,7 +146,7 @@ def discover_targets(root: Path, max_depth: int = 2) -> list:
     for d1 in sorted(root.iterdir()):
         if not d1.is_dir() or is_ignored_dir(d1.name):
             continue
-        result.extend(_recurse(d1, 1))
+        result.extend(_recurse(d1, 1, max_depth))
     return result
 
 
@@ -390,6 +410,7 @@ def sync_section(
     label: str,
     explicit_targets: list | None = None,
     max_depth: int = 2,
+    depth_overrides: dict | None = None,
     cache_root: Path | None = None,
     compresslevel: int = DEFAULT_COMPRESSLEVEL,
     workers: int | None = None,
@@ -412,7 +433,7 @@ def sync_section(
             else:
                 print(f"  [{label}] WARNING: configured target not found: {t}")
     else:
-        source_dirs = discover_targets(source_root, max_depth)
+        source_dirs = discover_targets(source_root, max_depth, depth_overrides)
 
     if not source_dirs:
         print(f"  [{label}] No targets found under {source_root}")
@@ -732,9 +753,20 @@ def acquire(
 # Subcommand entry points
 # ---------------------------------------------------------------------------
 
+def generated_name(generated: Path, data_dir: Path) -> str:
+    """The name of the GENERATED folder sync publishes, which names its Box folder too:
+    ``GENERATED`` for the delivered chain, a chain's own (config ``generated_dir``, e.g.
+    ``GENERATED_vic``) otherwise. The folder must sit in the data folder beside BASE, where
+    acquire unpacks its zips."""
+    if os.path.normcase(str(generated.parent)) != os.path.normcase(str(data_dir)):
+        raise SystemExit(f"{generated} is not a folder of {data_dir}; sync publishes only a "
+                         "GENERATED folder beside BASE")
+    return generated.name
+
+
 def cmd_sync(args) -> None:
     sys.path.insert(0, str(_REPO_ROOT))
-    from utils.paths import get_base_dir, get_generated_dir
+    from utils.paths import get_base_dir, get_data_dir, get_generated_dir
 
     do_base = not args.generated_only
     do_generated = not args.base_only
@@ -772,13 +804,16 @@ def cmd_sync(args) -> None:
         total_skipped += s
 
     if do_generated:
-        print("GENERATED/")
+        generated = get_generated_dir()
+        name = generated_name(generated, get_data_dir())
+        print(f"{name}/")
         u, s = sync_section(
-            get_generated_dir(),
-            args.box_dir / "GENERATED",
-            label="GENERATED",
+            generated,
+            args.box_dir / name,
+            label=name,
             max_depth=args.depth,
-            cache_root=CACHE_ROOT / "GENERATED",
+            depth_overrides=GENERATED_DEPTH_OVERRIDES,
+            cache_root=CACHE_ROOT / name,
             compresslevel=args.compresslevel,
             workers=args.workers,
             force=args.force,
