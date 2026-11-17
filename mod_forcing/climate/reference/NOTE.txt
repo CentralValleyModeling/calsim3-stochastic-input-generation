@@ -1,0 +1,15 @@
+Step 0 input data provenance
+============================
+
+These boundary GeoJSONs (EPSG:4326) were originally copied from the local
+CalSim View data folder:
+...\calsim-view-main\data\network\
+
+Files used by this step (ID field in parentheses):
+- CS3_WBAs.geojson (WBA_ID)
+- C2vsim_subregions.geojson (Subregion_)
+- SmallWatersheds.geojson (SW_ID, unique integer per polygon)
+
+The files were later renamed/edited, so their hashes no longer match the
+CalSim View originals. The local calsim-view-main folder has no Git metadata,
+so its upstream repository URL could not be verified.

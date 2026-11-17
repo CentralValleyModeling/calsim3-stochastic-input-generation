@@ -147,8 +147,8 @@ def get_module_generated_dir(module: str) -> Path:
 def get_archive_dir() -> Path:
     """Return ``<data_dir>/<archive_dir>``: the read-only v1.0 GENERATED tree.
 
-    Holds the VIC-based release (git tag ``v1.0``).  Read it, never write to it:
-    the VIC fluxes for ET (until the new ET method) and comparisons against v1.0.
+    Holds the VIC-based release (git tag ``v1.0``), read for comparisons against v1.0
+    (rim_inflow/_2_skill_evaluation.py). Never write to it.
     """
     return DATA_DIR / _CFG["archive_dir"]
 

@@ -53,7 +53,8 @@ Tier 1  FORCING (mod_forcing)
 Tier 2  CORE HYDROLOGY (mod_hydrology)
     CalSimHydro:
         python mod_hydrology/calsimhydro/_1_compile_precip.py --product B
-        python mod_hydrology/calsimhydro/_2_compile_et.py --product B --et_type all --vic_col_index 7 --write_dss
+        ET: no Product B producer yet (steps 10a-14 of mod_forcing/climate/_3_refet_cimis_adj write Product A)
+        python mod_hydrology/calsimhydro/_2b_compile_pan_evap.py --product B
         -> [EXTERNAL] CalSimHydro model run (10 chunks)
         python mod_hydrology/calsimhydro/_4_postprocess_product_b.py
     CalSimHydroEE:
@@ -188,16 +189,18 @@ chunk CSVs under `_product_b_final/`.
 1. `python mod_hydrology/calsimhydro/_1_compile_precip.py --product B`
    - **Inputs:** WGEN met files; WBA grid info
    - **Outputs:** daily WBA precip CSVs per chunk
-2. `python mod_hydrology/calsimhydro/_2_compile_et.py --product B --et_type all --vic_col_index 7 --write_dss --n_workers 8`
-   - **Inputs:** VIC fluxes; WBA grid; CS3 RefETo DSS (QM target)
-   - **Outputs:** monthly QM'd ET CSVs per WBA per chunk
-3. **[EXTERNAL] CalSimHydro model run (10 chunks)** -- manual; consumes
-   the precip + ET above.
+2. ET: no Product B producer in the repo yet. Steps 10a-14 of
+   `mod_forcing/climate/_3_refet_cimis_adj` write Product A only.
+3. `python mod_hydrology/calsimhydro/_2b_compile_pan_evap.py --product B`
+   - **Inputs:** WGEN temperature of Historical_Unsplit (the QM fit) and Product B
+   - **Outputs:** `_2_compile_et/Product_B/CS3_PanEvap_n01.dss` ... `_n10.dss`
+4. **[EXTERNAL] CalSimHydro model run (10 chunks)** -- manual; consumes
+   the precip, ET and pan evaporation above.
    - **Outputs:** `CalSimHydro_Runs/CalSimHydro_Product_B/
      CS3L2015V0Hydro_SV_n{01..10}.DSS`, `RiceOutput_n{01..10}.DSS`,
      `CalSimHydro_Rebalance_Runs/Rebalance_Product_B/
      HydroRebalanceSJRdemands_n{01..10}.DSS`
-4. `python mod_hydrology/calsimhydro/_4_postprocess_product_b.py`
+5. `python mod_hydrology/calsimhydro/_4_postprocess_product_b.py`
    - Optional: `--sources cshydro rebalance rice`, `--chunks 1 2 3`,
      `--compare-a`, `--plot`
    - **Inputs:** external CalSimHydro Product B scenario DSS; master

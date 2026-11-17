@@ -18,8 +18,8 @@ Inputs
 
 Outputs
 -------
-Under <generated>/mod_hydrology/calsimhydro/output/_2_compile_et/, beside the ET of
-_2_compile_et.py:
+Under <generated>/mod_hydrology/calsimhydro/output/_2_compile_et/, beside the RefET and CropET
+of mod_forcing/climate/_3_refet_cimis_adj (steps 11a and 14):
 - <Historical_Unsplit|Product_A>/PanEvap_QMAP_results.csv (date, hs_eto_in, pan_evap_in,
   cs3_pan_evap_in) and CS3_PanEvap.dss, WY1921-2018
 - Product_B/PanEvap_QMAP_results.csv by stamp month, and CS3_PanEvap_n01.dss ... _n10.dss,
@@ -184,7 +184,7 @@ def main():
     out_folder = WEATHER_SETS[args.product]["name"]
     cs3_pan = read_cs3_pan()
 
-    # Beside the CalSimHydro RefET and CropET of _2_compile_et.py
+    # Beside the CalSimHydro RefET and CropET of the CIMIS steps 11a and 14
     out_dir = get_module_generated_dir("mod_hydrology/calsimhydro") / "output" / "_2_compile_et" / out_folder
     out_dir.mkdir(parents=True, exist_ok=True)
     if args.product == "B":

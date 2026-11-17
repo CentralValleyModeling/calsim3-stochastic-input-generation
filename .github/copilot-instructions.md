@@ -24,7 +24,7 @@ root/
 ├── mod_forcing/              Rim-inflow model runs and climate extractions
 │   ├── inflows/              Run the configured rim-inflow model (SAC-SMA or VIC) and write its arc flows
 │   └── climate/              Point precip, basin-avg climate (T, PPT, VPD); GridInfo basin weights;
-│                             CIMIS-adjusted RefET and CropET (_3_refet_cimis_adj)
+│                             CIMIS adjusted reference ETo and crop ET (_3_refet_f1_factors, _4_refet_product_et)
 │
 ├── mod_hydrology/            Sacramento Valley, East Side, rim inflow, Delta, WYTs
 │   ├── calsimhydro/          Sac Valley: compile precip and pan evaporation, postprocess the single series & Product B
@@ -165,7 +165,9 @@ The config names the model (`inflow_model`, an adapter in `adapters/`), its fold
 |--------|---------|---------|
 | `_1_pp_point_locations.py` | Monthly precip for PP point locations from WGEN | historical, A, B, LTO (`--product`) |
 | `_2_uhh_basin_averages.py` | Basin-average precip/temp/VPD for UHH locations (VPD quantile-mapped from temperature, fit on Historical_Unsplit) | historical, A, B, LTO (`--product`, `--start_date`, `--end_date`, `--validate-outputs`, `--compare-historical-productB`) |
-| `_3_refet_cimis_adj/step5_*.py` ... `step14_final_cs3_et_dss.py` | Hargreaves-Samani ETo with the CIMIS adjustment (F1); steps 10a-14 write the CalSimHydro `CS3_RefETo.dss` (11a) and `CS3_ET.dss` (14, PyCUP) to `calsimhydro/output/_2_compile_et/Product_A/` | A (steps 10a-14) |
+| `_3_refet_f1_factors.py` | Reference ETo correction factors on the historical weather: grid cell weights of every WBA, subregion and small watershed (step 0), Hargreaves-Samani ETo per cell (5), Spatial CIMIS monthly means at the cells (6), F1 = CIMIS mean / H-S mean per cell and month over 2004-2018 (7), polygon averages over those years (8); outputs under `output/_3_refet_cimis_adj/step0..step8/` | historical, run once (`--step`, `--plots`) |
+| `_4_refet_product_et.py` | Per weather set: H-S ETo with the step 7 F1 table (10), polygon averages and `CS3_RefETo.dss` (11), daily ETo by the CUP+ workbook spline (12), daily WBA precipitation, CalSimHydro _1's series (13), PyCUP crop ET and `CS3_ET.dss` with the legacy CropET terms (14); outputs under `output/_3_refet_cimis_adj/<set>/step10..step14/` and `calsimhydro/output/_2_compile_et/<set>/`; Product B as 10 chunks (`_n01`..`_n10`) | historical, A, B (`--product`, `--step`, `--chunks`, `--workers`, `--plots`) |
+| `refet_cimis_adj.py` | Library of the two programs above (not a script): one implementation of each piece of the method, sections named after the user manual | |
 | `reference/build_8RI_SRBB_gridinfo.py` | Build-time only (needs geopandas): merges Shasta + 7 rim tributary GridInfo components and rasterizes the CT_BENDBRIDGE valley floor (WBA 02/03) from `BASE/CalSim3/calsim3.gpkg` into `CS3_8RI_SRBB_GridInfo.txt`, and writes the valley floor alone as `CS3_I_SRBB_VAL_GridInfo.txt` | n/a |
 | `reference/build_no_gooselake_gridinfo.py` | Build-time only (needs geopandas): `--target {I_SHSTA,SRBB,all}` drops the ~1000 sq mi Goose Lake over-extension outside the authoritative SHSTA / CT_BENDBRIDGE drainage, writing `CS3_I_SHSTA_no_gooselake_GridInfo.txt` and `CS3_8RI_SRBB_no_gooselake_GridInfo.txt` | n/a |
 
@@ -173,9 +175,7 @@ The config names the model (`inflow_model`, an adapter in `adapters/`), its fold
 
 | Script | Purpose | Product |
 |--------|---------|---------|
-| `_0_compare_et_cshydro_vic.py` | Compare ET: CalSimHydro vs VIC (analysis only) | -- |
 | `_1_compile_precip.py` | Daily WBA precip from WGEN met files | historical, A & B (`--product`) |
-| `_2_compile_et.py` | Area-weighted VIC ET -> QM to CalSim (parallel) | A & B (`--product A|B`, `--n_workers`) |
 | `_2b_compile_pan_evap.py` | Gerber pan evaporation per WBA from WGEN temperature | historical, A & B (`--product`) |
 | `_3_postprocess_single.py` | Extract & postprocess CalSimHydro/Rebalance/Rice DSS -> delivery CSVs | historical, A (`--product`, `--sources`, `--skip-compare`, `--skip-validate`) |
 | `_4_postprocess_product_b.py` | Extract Product B DSS (10 chunks) -> per-chunk CSVs | B (`--sources`, `--chunks`, `--compare-a`) |
