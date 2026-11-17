@@ -1,25 +1,34 @@
 """
 Postprocess DCD (Delta Channel Depletion) DSS Outputs
 =====================================================
-Extracts time series from DCD DSS output files (the CalSim PlanningStudy run and
-the run of a single weather series, Historical_Unsplit or Product A), merges
-them into comparison CSVs, computes summary statistics, generates boxplots, and
-writes the set's delivery CSV for CalSim compilation.
+Monthly SVs of the external DCD run of Historical_Unsplit or Product A as a delivery CSV (CFS
+converted to TAF per month), and a comparison with the CalSim PlanningStudy run (merged CSV,
+summary statistics by Part C, boxplots).
 
-Inputs:
-    - DeltaChannelDepletion_Runs/DCD_Calsim3_PlanningStudy_1921-2018
-    - DeltaChannelDepletion_Runs/DCD_Calsim3_PlanningStudy_<Historical_Unsplit|Product_A>
+Inputs
+------
+- <generated>/mod_hydrology/delta_channel_depletion/DeltaChannelDepletion_Runs/
+  DCD_Calsim3_PlanningStudy_<1921-2018|Historical_Unsplit|Product_A>/DCD/Output/CALSIM3/
+  CS3sv_DCD_PRISM_Dtrnd.dss
+- inventory/_MASTER_INVENTORY_FOR_STOCHASTIC_INPUT_GENERATION_.xlsx, sheet MASTER: the Delta
+  Channel Depletion SVs of DCD_island_month.dss
 
-Usage:
+Outputs
+-------
+Under <generated>/mod_hydrology/delta_channel_depletion/output/_2_postprocess_single/:
+- <Historical_Unsplit|Product_A>/DeltaChannelDepletion_DSS.csv,
+  DeltaChannelDepletion_summary_statistics_by_PartC.csv, Boxplot_<PartC>_with_mean.png
+- _historical_unsplit_validation/ or _product_a_validation/:
+  _dcd_<historicalUnsplit|productA>_<first WY>_<last WY>.csv, within utils.paths.DELIVERY_WY
+
+Dependencies
+------------
+utils.paths, utils.dss_io, utils.csv_io; pydsstools, seaborn, matplotlib
+
+Usage
+-----
     python mod_hydrology/delta_channel_depletion/_2_postprocess_single.py --product historical
     python mod_hydrology/delta_channel_depletion/_2_postprocess_single.py --product A
-
-Output (<set> is Historical_Unsplit or Product_A):
-    - output/_2_postprocess_single/<set>/DeltaChannelDepletion_DSS.csv
-    - output/_2_postprocess_single/<set>/DeltaChannelDepletion_summary_statistics_by_PartC.csv
-    - output/_2_postprocess_single/<set>/Boxplot_{PartC}_with_mean.png
-    - output/_2_postprocess_single/<_historical_unsplit_validation|_product_a_validation>/
-      _dcd_<historicalUnsplit|productA>_1922_2018.csv
 """
 
 import argparse

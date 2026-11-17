@@ -1,77 +1,29 @@
 """
-Shared 2-panel plotter: monthly time series + non-exceedance CDF
-================================================================
-Canonical validation figure used across the repo: left panel is the monthly
-time series for N series, right panel is the empirical non-exceedance CDF for
-the same N series. An optional R2 / NSE / PBIAS annotation box can be rendered
-on the time-series panel -- either from caller-supplied strings, or
-auto-computed against a designated baseline series.
+Validation Figures and Fit Metrics
+==================================
+The repo's validation figure (monthly time series left, empirical non-exceedance CDF right), a
+water-year-ordered monthly box plot, and the R2 / NSE / PBIAS metrics behind their annotations.
 
-Designed to replace ~5 near-duplicate plot blocks across the Product A /
-historical validation scripts (``qmap_single_from_pairs._plot_timeseries_cdf``,
-``mod_reservoir/storage_curves/_4_oroville_level5._plot_set_vs_calsim``,
-``postprocessing/calsim_runs/_productA_postproc`` 2-panel block, etc.) so the
-canonical figure style lives in one place.
+- ``plot_ts_cdf(series, title, unit="TAF", out_path=None, metric_lines=None,
+  compute_metrics_from=None, subtitle=None, tick_interval_years=None, ...)``: each ``Series`` on
+  both panels. Annotation box: ``metric_lines`` drawn as given; otherwise, with
+  ``compute_metrics_from=i``, the metrics of every other series against ``series[i]`` (aligned on
+  dates when the lengths differ; each line prefixed by its series label when there are several);
+  with neither, no box. Subtitle: ``None`` gives ``(WY first-last)`` over all series, ``""`` none,
+  any other string as given. Year ticks every 1, 5 or 10 years by the span, unless given.
+- ``plot_monthly_box(detail, value_col, ylabel, title, out_path=None, month_col="month",
+  show_zero_line=True, ...)``: box plot of ``value_col`` by month, ordered Oct-Sep, with a
+  dashed line at zero.
+- ``Series(label, dates, values, color=None, linewidth=0.9, alpha=0.65)``; ``default_palette()``:
+  seaborn's colorblind palette with #EB5738 as its second colour, the default colours.
+- ``r2``, ``nse``, ``pbias`` (``100 * sum(sim - obs) / sum(obs)``), each over
+  ``paired_finite(obs, sim)``, the pairs where both values are finite, and NaN when undefined;
+  ``format_metric_line`` writes ``R2=...  NSE=...  PBIAS=...%`` with N/A for a non-finite value.
 
-Annotation-box behavior
------------------------
-- Nothing supplied            -> no box drawn (exploratory / single-series).
-- ``metric_lines=[...]``       -> caller's strings rendered verbatim.
-- ``compute_metrics_from=i``   -> auto-compute R2 / NSE / PBIAS for every other
-  series vs ``series[i]``. Pairwise-finite masking drops NaN/inf pairs. With one
-  comparison series the line has no label prefix; with multiple, each line is
-  prefixed by the series' ``label``.
-
-If both ``metric_lines`` and ``compute_metrics_from`` are supplied,
-``metric_lines`` wins (manual override).
-
-Subtitle behavior
------------------
-- ``subtitle=None`` (default)  -> auto-generate ``(WY YYYY-YYYY)`` spanning all
-  series (water year = calendar year + 1 if month >= 10).
-- ``subtitle="..."``           -> render the caller's string verbatim.
-- ``subtitle=""``              -> no subtitle at all.
-
-Output formats
---------------
-``out_path`` suffix drives the writer. Raster suffixes (.png, .jpg, ...) honor
-``dpi`` (default 300, publication grade). Vector suffixes (.pdf, .svg, .eps,
-.ps) ignore ``dpi`` since line art is resolution-independent. TrueType font
-embedding (``fonttype = 42``) is enabled module-wide so PDF/PS outputs are not
-rejected by journals that ban Type-3 fonts.
-
-When ``out_path is None`` the live ``matplotlib.figure.Figure`` is returned
-(handy for tests or multi-page PDFs); otherwise the figure is saved with
-``bbox_inches='tight'`` and a white facecolor, then closed.
-
-Public API
-----------
-- ``plot_ts_cdf(series, title, ...)``         -- main entry point.
-- ``Series(label, dates, values, color=None, linewidth=0.9, alpha=0.65)``
-                                              -- per-series dataclass; ``color``
-                                                 falls back to ``default_palette``.
-- ``default_palette()``                       -- colorblind palette with
-                                                 Vermillion+1 as the 2nd colour.
-- ``plot_monthly_box(detail, value_col, ylabel, title, out_path, ...)``
-                                              -- WY-ordered (Oct-Sep) monthly
-                                                 box plot for residuals,
-                                                 ratios, errors, etc.
-- ``format_metric_line(r2_val, nse_val, pbias_val, label="")``
-                                              -- format one
-                                                 ``R2=...  NSE=...  PBIAS=...%``
-                                                 string with N/A guards for NaN/inf.
-- ``r2(obs, sim)`` / ``nse(obs, sim)`` / ``pbias(obs, sim)``
-                                              -- public NaN-safe metrics shared
-                                                 with non-plot callers.
-- ``paired_finite(obs, sim)``                 -- masking convention used by all
-                                                 three metrics.
-
-Defaults
---------
-``figsize = (6.5, 3.25)``  -- single-column journal width
-``width_ratios = (1.6, 1.0)``  -- TS panel wider than CDF
-``dpi = 300``  -- raster resolution
-``tick_interval_years``  -- auto-selected from the date span: 1 / 5 / 10 years
+Both figures use one seaborn whitegrid theme at 6.5 x 3.25 in. With ``out_path`` a figure is
+saved (``bbox_inches="tight"``, white background; 300 dpi for a raster suffix, no dpi for .pdf,
+.svg, .eps, .ps) and closed; without it the Figure is returned. Importing the module sets
+matplotlib's PDF and PS font type to 42 (TrueType).
 
 Dependencies
 ------------
@@ -79,45 +31,9 @@ numpy, matplotlib, seaborn
 
 Usage
 -----
-::
-
-    from utils.validation_plots import Series, plot_ts_cdf, format_metric_line
-
-    # 1) Historical vs Product A, auto-computed metrics
-    plot_ts_cdf(
-        series=[
-            Series("Historical", dates, hist_vals),
-            Series("Product A",  dates, prod_vals),
-        ],
-        title="C_OROVL (TAF)",
-        compute_metrics_from=0,
-        out_path="figs/c_orovl.png",
-    )
-
-    # 2) Multi-scenario, auto-labels each metric row
-    plot_ts_cdf(
-        series=[
-            Series("Historical", dates, hist),
-            Series("Product A",  dates, prod_a),
-            Series("Product B",  dates, prod_b),
-        ],
-        title="Delta Outflow (TAF)",
-        compute_metrics_from=0,
-        out_path="figs/delta_outflow.pdf",   # vector output
-    )
-
-    # 3) Manual override with custom metrics + period subtitle
-    plot_ts_cdf(
-        series=[Series("Historical", dates, hist), Series("Product A", dates, prod)],
-        title="Shasta Storage (TAF)",
-        metric_lines=[format_metric_line(r2_ann, nse_ann, pbias_ann, label="Annual")],
-        subtitle="(WY 1972-2021)",
-        out_path="figs/shasta.png",
-    )
-
-    # 4) Exploratory: just show the series, no metrics
-    plot_ts_cdf(series=[...], title="Stochastic exploration",
-                out_path="figs/explore.png")
+    from utils.validation_plots import Series, plot_ts_cdf
+    plot_ts_cdf([Series("Historical", dates, hist), Series("Product A", dates, prod)],
+                title="C_OROVL (TAF)", compute_metrics_from=0, out_path="figs/c_orovl.png")
 """
 
 from __future__ import annotations

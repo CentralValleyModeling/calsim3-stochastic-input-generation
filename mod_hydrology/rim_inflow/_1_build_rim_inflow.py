@@ -34,11 +34,13 @@ Products
 
 Inputs
 ------
-- the model's arc flows (utils.paths.get_arc_inflows), only from a run of the configured
-  model at the pinned commit (its run_manifest.json; utils.paths.require_pinned_run)
+- the model's arc flows, <generated>/mod_forcing/inflows/output/_2_run_product/<set>/
+  arc_inflow_monthly.csv (utils.paths.get_arc_inflows), only from a run of the configured
+  model at the pin ``inflow_pin`` (its run_manifest.json; utils.paths.require_pinned_run)
 - reference/CalSim3_inflow_mapping.csv
-- CalSim3 baseline DSS: CalSim3/__calsim_sv_default__.dss (qmap fits)
-- master inventory: the rim-inflow SVs and their Part C
+- <base>/CalSim3/__calsim_sv_default__.dss: CalSim3 series for the qmap fits
+- inventory/_MASTER_INVENTORY_FOR_STOCHASTIC_INPUT_GENERATION_.xlsx, sheet MASTER: the
+  rim-inflow SVs and their Part C, which must match the mapping
 
 Outputs
 -------
@@ -56,6 +58,11 @@ Outputs
                                    Year, Month, Value over WY1922-2018, for the SV compiler)
   - run_manifest.json              the manifest of the model run the SVs come from, copied
                                    from the arc flows; the absorb fits check it (utils.qmap_fit)
+
+Dependencies
+------------
+utils.paths, utils.dss_io, utils.qmap_fit, utils.quantile_mapping, utils.wgen_calendar;
+pydsstools
 
 Usage
 -----

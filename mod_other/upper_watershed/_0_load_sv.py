@@ -1,8 +1,28 @@
 """
 Load Upper-Watershed SV Variables and Match to Master Inventory
 ===============================================================
-Load all *_SV and *_init DSS variables from upper-watershed modules and match
-them against the Master Inventory Spreadsheet on DSS parts C+D concatenation.
+Lists every record of the upper-watershed module SV DSS files with its mean value and its
+constant and 12-month-repeating flags, and flags whether its Part B + Part C is in the master
+inventory.
+
+Inputs
+------
+- Modules/<module>/CALSIM/DSS/<module>_SV.dss beside the script (not in the repo)
+- inventory/_MASTER_INVENTORY_FOR_STOCHASTIC_INPUT_GENERATION_.xlsx, sheet MASTER: Part B
+  (column C) and Part C (column D) of the rows whose Input_Category is not
+  "Upper Watershed Modules"
+
+Outputs
+-------
+Under <generated>/mod_other/upper_watershed/output/_0_load_sv/:
+- all_dss_paths_detailed.csv: one row per DSS path
+- all_dss_paths.csv: one row per Part B, Part C and module
+- matched_dss_to_inventory.csv: all_dss_paths.csv with Matched_In_Inventory, or
+  summary_statistics.txt when the inventory sheet has fewer than four columns
+
+Dependencies
+------------
+utils.paths, utils.dss_io; pydsstools, openpyxl
 
 Usage
 -----

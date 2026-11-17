@@ -1,26 +1,48 @@
+"""
+Product B Quantile Mapping from qmap_pairs.csv
+==============================================
+Maps the rim-inflow model's Product B predictor of each chunk onto each target of a
+``qmap_pairs.csv`` file; the drivers of mod_other and mod_reservoir pass their own pairs file.
+Historical_Unsplit and Product A go through ``utils.qmap_single_from_pairs``.
+
+``run_product_b_qmap_from_pairs`` reads the CalSim3 targets, fits each pair on WY1950-2018 by its
+``fit`` (``utils.qmap_fit``: the CalSim3 predictor for pass, the model's historical-unsplit
+predictor for absorb), applies the map (``utils.quantile_mapping.qmap_single``) to the pooled
+1,200 label months of all 10 chunks, clips to the pair's ``lower_bound`` and ``upper_bound``, and
+writes one detail CSV per pair and chunk. A ``+`` predictor is summed on both sides. It stops
+before writing when the basis files do not cover exactly n01-n10, when a pair has no training
+basis or target, or when a pair fails; negative values are set to 0 (the ``allow_negative``
+column of the single-series driver does not apply). ``write_product_b_sv`` turns the detail CSVs
+into SV-format chunk files (``utils.wgen_calendar.write_chunk_csvs``).
+
+Inputs
+------
+- ``pair_csv``: target_part_b, target_part_c, predictor_part_b, predictor_part_c, fit; optional
+  lower_bound, upper_bound (``read_qmap_pairs``)
+- ``dss_file``: the CalSim3 baseline DSS, read Jan 1915 to Dec 2021 by default
+- ``sim_in_dir``: ``<predictor>_qmo_n01.csv`` ... ``_n10.csv`` with column ``qmap_postAdj`` over the
+  label months (``utils.paths.get_rim_inflow_outputs("B")["dir"]``)
+- absorb fits: the historical rim-inflow run (``utils.qmap_fit.read_historical_predictors``)
+
+Outputs
+-------
+- ``<out_dir>/<target_part_b>_<output_tag>_n01.csv`` ... ``_n10.csv``: target_historical_train,
+  basis_historical_train, fit, year, month, basis_qm_sim, target_qm_sim
+- ``write_product_b_sv``: ``<out_dir>/<target_part_b>_<suffix>_n01.csv`` ... ``_n10.csv`` (Part B,
+  Part C, Year, Month, Value)
+
+Dependencies
+------------
+utils.qmap_fit, utils.quantile_mapping, utils.wgen_calendar; pydsstools
+
+Usage
+-----
+    from utils.qmap_product_b_from_pairs import run_product_b_qmap_from_pairs, write_product_b_sv
+    run_product_b_qmap_from_pairs(pair_csv=pair_csv, dss_file=dss_file,
+                                  sim_in_dir=get_rim_inflow_outputs("B")["dir"], out_dir=detail_dir)
+    write_product_b_sv(detail_dir, gen / "output" / "_product_b_final", pair_csv, "productB")
+"""
 from __future__ import annotations
-
-"""
-Reusable utilities for Product-B quantile mapping driven by qmap_pairs.csv for non-rimflow/non-ET terms.
-
-This module is designed so multiple workflows can reuse the same logic while
-supplying different qmap_pairs.csv files from different directories.
-
-Core assumptions
-----------------
-- The target is read from a CalSim DSS file using the B-part and C-part
-  specified in qmap_pairs.csv. The training basis follows the pair's ``fit``
-  (``utils.qmap_fit``): the CalSim DSS predictor (pass) or the rim-inflow
-  model's historical-unsplit predictor (absorb). Every fit uses WY1950-2018.
-- A predictor_part_b of the form ``I_A+I_B`` is the sum of those series, on
-  the training side and the simulation side.
-- Simulation basis files are monthly Product-B CSVs stored as:
-      <predictor_part_b>_qmo_<timeseries>.csv
-- Simulation value column is ``qmap_postAdj``.
-- Output files are written as:
-      <target_part_b>_qmap_<timeseries>.csv
-  and ``write_product_b_sv`` reformats them into SV-format chunk CSVs.
-"""
 
 import re
 import time

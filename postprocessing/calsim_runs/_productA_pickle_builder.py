@@ -1,38 +1,35 @@
 """
 Product A Validation Run Pickle Cache Builder
 =============================================
-Two-scenario wrapper around the shared CalView-style DSS pickle builder
-(``utils.dss_pickle_builder``) that pairs the historical baseline DV DSS
-with the single Product A DV DSS produced by an external CalSim 3 run.
-Used as input to ``_productA_postproc.py`` (or ``_historical_modified_postproc.py``).
+Two-scenario wrapper around the CalView-style DSS pickle builder
+(``utils.dss_pickle_builder``) that pairs the historical DV DSS with the Product A
+DV DSS of an external CalSim 3 run; ``_productA_postproc.py`` reads the cache.
+Without ``--product-a-dss`` it takes the one file under ``--product-a-root`` (glob
+``--glob``, default ``**/*.dss``) whose name contains ProductA, Product_A or
+Product A, or any DSS file when none does; several candidates stop the run.
 
 Inputs
 ------
-- Historical baseline DV DSS:
-  ``BASE/CalSim3/Studies/9.3.1_danube_hist/DSS/output/
-  DCR2023_DV_9.3.1_Danube_Hist_v1.7.dss``
-- Product A DV DSS (auto-discovered under ``--product-a-root`` by default):
-  ``GENERATED/postprocessing/calsim_runs/product_a/dv_out/
-  DCR2023_DV_9.3.1_Danube_Hist_v1.7_ProductA.dss``
-- Metric definitions: ``reference/metrics.csv``
+- Historical DV DSS (``--baseline-dss``, scenario ``--baseline-name``, default Historical):
+  <base>/CalSim3/Studies/9.3.1_danube_hist/DSS/output/DCR2023_DV_9.3.1_Danube_Hist_v1.7.dss
+- Product A DV DSS (scenario ``--product-a-name``, default Product A), found under
+  <generated>/postprocessing/calsim_runs/product_a/dv_out/, e.g.
+  DCR2023_DV_9.3.1_Danube_Hist_v1.7_ProductA.dss
+- Metric definitions (``--metrics-csv``): postprocessing/calsim_runs/reference/metrics.csv
 
 Outputs
 -------
-- ``GENERATED/postprocessing/calsim_runs/product_a/pickle_files/``
-  (values.pkl, diffs.pkl, units.pkl, fields.pkl, meta.json)
+- <generated>/postprocessing/calsim_runs/product_a/pickle_files/ (``--out-dir``):
+  values.pkl, diffs.pkl, units.pkl, fields.pkl, meta.json
 
 Dependencies
 ------------
-- utils.dss_pickle_builder, utils.paths
-- pandas, numpy, pydsstools
+utils.dss_pickle_builder, utils.paths; pandas, numpy, pydsstools
 
 Usage
 -----
     python postprocessing/calsim_runs/_productA_pickle_builder.py
-
-Or pass an explicit Product A DSS instead of auto-discovery:
-
-    python postprocessing/calsim_runs/_productA_pickle_builder.py --product-a-dss <PATH>
+    python postprocessing/calsim_runs/_productA_pickle_builder.py --product-a-dss <DV DSS>
 """
 
 from __future__ import annotations

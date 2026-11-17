@@ -1,66 +1,55 @@
 """
-_5_dnp_evaporation.py
-======================
-Hypsographic curve calibration and evaporation generation for Don Pedro Reservoir.
+Don Pedro Reservoir Evaporation (E_PEDRO_SV)
+============================================
+Don Pedro evaporation E_PEDRO_SV/EVAPORATION (cfs) from storage S_PEDRO_SV (TAF) and evaporation
+rate ER_PEDRO (in/month) through a degree-2 storage-area polynomial A(S) (acres).
 
-Two run modes
--------------
-  calibrate  Reverse-engineer the storage-area polynomial from historical
-             CalSim data (S_PEDRO_SV, ER_PEDRO_SV, E_PEDRO_SV). Writes
-             polynomial coefficients + diagnostics.
+--calibrate fits A(S) to the surface area back-calculated from CalSim3 storage, evaporation rate
+and evaporation: A = E x seconds in the month / (ER / 12 x 43,560). --product computes
+E = ER / 12 x A(S) x 43,560 / seconds in the month for a weather set.
 
-  --product historical, A
-             Generate the set's E_PEDRO_SV using the calibrated polynomial,
-             the set's S_PEDRO_SV storage, and ER from
-             mod_reservoir/evaporation output.
+Inputs
+------
+- reference/s_pedro_sv_historical.csv, er_pedro_sv_historical.csv, e_pedro_sv_historical.csv:
+  CalSim3 S_PEDRO_SV, ER_PEDRO_SV and E_PEDRO_SV (--calibrate; historical lines of the figures)
+- <generated>/mod_other/upper_watershed/output/_5_dnp_evaporation/calibrate/
+  hypsographic_polynomial_coeffs.csv (--product)
+- S_PEDRO_SV of _1_wyt_monthlyavg.py, in <generated>/mod_other/upper_watershed/output/:
+  <delivery folder>/S_PEDRO_SV_<tag>_1922_2018.csv, or
+  _product_b_final/S_PEDRO_SV_product_b_n01.csv ... _n10.csv
+- ER_PEDRO rows of mod_reservoir/evaporation/_2_run_reservoir_evap.py, in
+  <generated>/mod_reservoir/evaporation/output/_2_run_reservoir_evap/:
+  <delivery folder>/_reservoir_evaporation_<tag>_1922_2018.csv, or
+  _product_b_final/reservoir_evaporation_productB_n01.csv ... _n10.csv
 
-  --product B
-             Same for each Product B chunk.
+<delivery folder> and <tag>: _historical_unsplit_validation and historicalUnsplit, or
+_product_a_validation and productA (utils.paths.DELIVERY).
 
-Reference inputs (./reference/)
---------------------------------
-  s_pedro_sv_historical.csv
-  er_pedro_sv_historical.csv
-  e_pedro_sv_historical.csv
+Outputs
+-------
+Under <generated>/mod_other/upper_watershed/output/:
+- _5_dnp_evaporation/calibrate/: hypsographic_polynomial_coeffs.csv, surface_area_historical.csv,
+  hypsographic_curve.csv, hypsographic_curve.png, time_series_storage_area.png
+- _historical_unsplit_validation/_e_pedro_sv_evaporation_historicalUnsplit_1922_2018.csv,
+  _product_a_validation/_e_pedro_sv_evaporation_productA_1922_2018.csv
+- _5_dnp_evaporation/<Historical_Unsplit|Product_A>/: <slug>_evaporation_timeseries.png and
+  <slug>_monthly_pattern.png, <slug> being historical_unsplit or product_a
+- _product_b_final/_e_pedro_sv_evaporation_productB_n01.csv ... _n10.csv
+- _5_dnp_evaporation/Product_B/product_b_monthly_pattern.png: the chunks, with Product A when its
+  delivery CSV exists
 
-External inputs
----------------
-  mod_reservoir/evaporation output (ER_PEDRO):
-    _2_run_reservoir_evap/<delivery folder>/_reservoir_evaporation_<tag>_1922_2018.csv
-      (filter Part B == 'ER_PEDRO'; folder and tag from utils.paths.DELIVERY, the span
-      is utils.paths.DELIVERY_WY)
-    _2_run_reservoir_evap/_product_b_final/reservoir_evaporation_productB_n*.csv
-      (filter Part B == 'ER_PEDRO')
-  mod_other/upper_watershed GENERATED output (storage, from _1_wyt_monthlyavg.py):
-    <delivery folder>/S_PEDRO_SV_<tag>_1922_2018.csv
-    _product_b_final/S_PEDRO_SV_product_b_n*.csv
+Delivery and chunk CSVs: Part B, Part C, Year, Month, Value.
 
-Outputs  (data/GENERATED/mod_other/upper_watershed/output/)
--------------------------------------------------------------------------------
-  _5_dnp_evaporation/calibrate/
-    hypsographic_polynomial_coeffs.csv
-    surface_area_historical.csv
-    hypsographic_curve.csv
-    hypsographic_curve.png
-    time_series_storage_area.png
-  _5_dnp_evaporation/<Historical_Unsplit|Product_A>/
-    <historical_unsplit|product_a>_evaporation_timeseries.png
-    <historical_unsplit|product_a>_monthly_pattern.png
-  _5_dnp_evaporation/Product_B/
-    product_b_monthly_pattern.png
-  _historical_unsplit_validation/
-    _e_pedro_sv_evaporation_historicalUnsplit_1922_2018.csv
-  _product_a_validation/
-    _e_pedro_sv_evaporation_productA_1922_2018.csv
-  _product_b_final/
-    _e_pedro_sv_evaporation_productB_<start>_<end>.csv
+Dependencies
+------------
+utils.paths, utils.csv_io, utils.wgen_calendar; scipy, matplotlib
 
 Usage
 -----
-  python mod_other/upper_watershed/_5_dnp_evaporation.py --calibrate
-  python mod_other/upper_watershed/_5_dnp_evaporation.py --product historical
-  python mod_other/upper_watershed/_5_dnp_evaporation.py --product A
-  python mod_other/upper_watershed/_5_dnp_evaporation.py --product B
+    python mod_other/upper_watershed/_5_dnp_evaporation.py --calibrate
+    python mod_other/upper_watershed/_5_dnp_evaporation.py --product historical
+    python mod_other/upper_watershed/_5_dnp_evaporation.py --product A
+    python mod_other/upper_watershed/_5_dnp_evaporation.py --product B
 """
 
 from __future__ import annotations

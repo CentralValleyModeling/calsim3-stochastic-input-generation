@@ -1,20 +1,27 @@
 """
 VIC 4.2.d
 =========
-Adapter of VIC 4.2.d with the CalSim LTO parameters (``inflow_model`` ``vic``), the model of
-v1.0's rim inflows: each arc is the area-weighted RUNOFF + BASEFLOW of its GridInfo cells, as
-v1.0 routed it.
+Adapter of VIC 4.2.d with the CalSim LTO parameters (``inflow_model`` ``vic``): each arc is the
+area-weighted RUNOFF + BASEFLOW of its GridInfo cells (mod_forcing/climate/reference/GridInfo;
+I_SHSTA without the Goose Lake cells), plus the valley node I_SRBB_VAL, in TAF per month.
 
-- Model folder (``inflow_repo``): v1.0's ``VIC_Support_4.2.d`` in the archive, read only. Not a
+- Model folder (``inflow_repo``): ``VIC_Support_4.2.d`` in the v1.0 archive, read only. Not a
   git repository, so ``inflow_pin`` is the sha256 of its files (``FILES``).
 - Environment (``inflow_env``): the WSL distribution vicNl runs in, on its own file system.
-- Forcing: one text file per cell (prcp, tmax, tmin, wind), built from BASE with the LTO wind;
-  the historical x10 spikes are divided by 10. Product B runs in one pass and its flux rows are
-  read by position, one per stamp day.
-- Flux store: the daily fluxes stay in <generated>/mod_forcing/inflows/vic_fluxes/, one xz file
-  per cell (``fluxes_<cell>.xz``, about a sixth of VIC's text), and are reused while the model
-  version and inputs match. G1 reruns 8 cells and requires them to repeat the store byte for
-  byte.
+- Forcing: one text file per cell VIC runs (prcp, tmax, tmin, wind), built from BASE with the
+  LTO wind of the same day (historical, A) or of the day WGEN resampled (B,
+  <base>/WGEN/resampled.dates_Product_B_1000yr.csv); the historical x10 spikes
+  (mod_hydrology/rim_inflow/reference/prcp_x10_artifacts.csv) divided by 10. Product B runs in
+  one pass and its flux rows are read by position, one per stamp day.
+- Flux store: the daily fluxes stay in <generated>/mod_forcing/inflows/vic_fluxes/<forcing>/,
+  one xz file per cell (``fluxes_<cell>.xz``, about a sixth of VIC's text), and are reused
+  while the model version and inputs match. G1 reruns 8 seeded cells and requires them to
+  repeat the store byte for byte.
+- Run folder: g1.json and arc_monthly.csv (arc, year, month, taf, kind).
+
+Dependencies
+------------
+mod_forcing.inflows.adapters, utils.paths, utils.wgen_calendar; WSL with vicNl
 """
 
 import hashlib

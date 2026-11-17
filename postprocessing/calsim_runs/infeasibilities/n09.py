@@ -1,39 +1,59 @@
-"""Diagnose n09 SJR cycle 14 infeasibility at April 1962.
+"""
+Chunk n09 Infeasibility Diagnostics, April 1962
+===============================================
+Prints the SVs behind Product B chunk n09's WRIMS failure at April 1962, cycle 14
+(sjrbase, "Linear relaxation not feasible"; cycle 15, sjrbase_gw1, also infeasible),
+against the other chunks and the CalSim 3 historical SVs, and plots Millerton
+storage around each run's minimum-April storage. Diagnostic; not part of the pipeline.
 
-Error summary (from WRIMS log screenshots)
--------------------------------------------
-n09 -- 1962_04_c14 Solve_c__ infeasible (Linear relaxation not feasible)
-       1962_04_c15 also infeasible (sjrbase_gw1)
+Constraints named by the WRIMS infeasibility analysis:
 
-After applying Fix 4 (relaxed meetSJRR under low storage), April 1962 was
-resolved but a new failure appeared at June 1933, Cycle 14 (sjrbase).
-Analysis with HiGHS solver showed this was LP UNBOUNDEDNESS (not infeasibility)
-caused by D_SJR205_SJR201 having cost=-500K and no effective upper bound when
-Fix 4's lowStorage case (lhs>rhs penalty 0) fires. See Fix 5 in
-wresl_modifications/SJR_Rest_Req_Cycle1.wresl and the analysis log at
-docs/source/calsim-run/n09_jun1933_unboundedness_analysis.md.
+  1. meetsjrr (SJR_Rest_Req_Cycle1.wresl:50): D_SJR205_SJR201 = REST_RCH_NP
+  2. continuity16/17/MLRTN (Connectivity-table.wresl:1-3): Millerton mass balance
+  3. evap_mlrtn (constraints-Reservoirs.wresl:41): E_MLRTN; the log shows -0.189
+  4. setpossgXX_sjrYYY_7 (constraints-Seepage_SJREast.wresl:561-573): SG54-SG63 >= 0, all
+     violated
+  5. continuitysjrXXX (constraints-Connectivity.wresl:240-252): SJR reaches, nodes 205-265
+  6. setpostivect_gravellyford (arcs-Inflows.wresl:196): CT_GRAVELLYFORD = 38.65
+  7. set_sr_64_sjr214/227 (constraints-Runoff.wresl:128-129): WBA64 surface runoff
+  8. setr_64_pa1/sjr235 (constraints-Returns.wresl:344-345): WBA64 return flows
 
-Infeasibility analysis identified constraints:
-  1. meetsjrr (SJR_Rest_Req_Cycle1.wresl:50):
-     D_SJR205_SJR201 = REST_RCH_NP  (SJR Restoration requirement)
-  2. continuity16/17/MLRTN (Connectivity-table.wresl:1-3):
-     Millerton Lake mass balance
-  3. evap_mlrtn (constraints-Reservoirs.wresl:41):
-     E_MLRTN evaporation constraint; log shows e_mlrtn ~ -0.189 (negative!)
-  4. setpossgXX_sjrYYY_7 (constraints-Seepage_SJREast.wresl:561-573):
-     SG54-SG63 seepage >= 0 constraints all violated (< 0)
-  5. continuitysjrXXX (constraints-Connectivity.wresl:240-252):
-     SJR reach mass balance at nodes 205-265
-  6. setpostivect_gravellyford (arcs-Inflows.wresl:196):
-     CT_GRAVELLYFORD = 38.65 (closure term at Gravelly Ford)
-  7. set_sr_64_sjr214/227 (constraints-Runoff.wresl:128-129):
-     WBA64 surface runoff allocation
-  8. setr_64_pa1/sjr235 (constraints-Returns.wresl:344-345):
-     WBA64 return flows
+Hypothesis: REST_RCH_NP forces a Millerton release that the SJR East seepage and
+connectivity cannot carry under n09's hydrology. The guards on meetsjrr (Fixes 4 and 5,
+including the June 1933 unboundedness of D_SJR205_SJR201) are in
+wresl_modifications/SJR_Rest_Req_Cycle1.wresl and docs/source/calsim-run/sjr_infeasibility_report.md.
 
-Hypothesis: SJR restoration flow requirement (REST_RCH_NP) forces a minimum
-release from Millerton that is incompatible with the SJR East seepage/connectivity
-system under n09's stochastic hydrology at April 1962.
+Sections printed: (1) n09 rim inflows over WY1962; (2) April 1962 rim inflows of every
+chunk and the historical SVs; (3) the constraint SVs at April 1962 in every chunk;
+(4) n09 against n02 for the SJR-related SVs; (5) n09 key SVs over WY1962; (6) n09's April
+1962 percentile among all chunks' Aprils; (7) n09 against historical April 1962;
+(8) each run's minimum-April S_MLRTN (n01-n09, historical), its March-May mass balance
+and the April DV balance of n09, n07, n02 and historical.
+
+Inputs
+------
+- <generated>/postprocessing/sv_compile/product_b_compilation/compiled_input_files/rim_inflow/
+  <SV>_qmo_n01.csv ... _n10.csv
+- <generated>/postprocessing/sv_compile/product_b_compilation/_product_b_compiled_sv/
+  ProductB_SV_n01.csv ... _n10.csv
+- <base>/CalSim3/__calsim_sv_default__.dss
+- <generated>/postprocessing/calsim_runs/product_b/dv_out/
+  DCR2023_DV_9.3.1_Danube_Hist_v1.7_ProductB_n01.dss ... _n09.dss; for n09,
+  product_b/DCR2023_DV_9.3.1_Danube_Hist_v1.7_ProductB_n09_crash.dss when present
+- <base>/CalSim3/Studies/9.3.1_danube_hist/DSS/output/DCR2023_DV_9.3.1_Danube_Hist_v1.7.dss
+
+Outputs
+-------
+- Tables on stdout
+- postprocessing/calsim_runs/infeasibilities/fig3_n09_mlrtn_min_april_comparison.png
+
+Dependencies
+------------
+utils.paths; numpy, pandas, matplotlib, pydsstools
+
+Usage
+-----
+    python postprocessing/calsim_runs/infeasibilities/n09.py
 """
 # %% Imports and paths
 import sys

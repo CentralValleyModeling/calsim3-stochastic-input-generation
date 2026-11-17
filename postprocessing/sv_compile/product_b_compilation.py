@@ -1,62 +1,74 @@
 """
-Compile Product B (1000-year stochastic) SV CSVs and DSS
-========================================================
-Consolidates every module's per-chunk ``_product_b_final/*.csv`` into ten
-unified ``ProductB_SV_n{01..10}.csv`` files and writes the corresponding
-``ProductB_SV_n{01..10}.dss`` files by overlaying chunk values onto the
-CalSim baseline DSS template. Auto-fills inventory Constant/Rept SVs from
-the baseline 12-month pattern and runs a CalSim baseline diagnostic
-comparison.
+Product B SV Compiler
+=====================
+Compiles every module's Product B chunk CSVs into one SV CSV and one SV DSS per chunk, each
+labelled Oct 1921 to Sep 2021 (``utils.wgen_calendar.LABEL_MONTHS``): the CalSim 3 baseline
+with every provided SV replaced. Cross-checks the result against the master inventory and
+compares each chunk with the baseline.
+
+1. Reads the chunk CSVs (``*_n01.csv`` ... ``*_n10.csv``) of each module folder of
+   ``MODULE_CONFIG_B`` and copies them to compiled_input_files/<module>/. Stops when a module,
+   or one of the chunks compiled, has no CSVs, unless ``--allow-missing``; stops when no module
+   has CSVs, and when the rim inflows' run is not the configured model at its pin
+   (``utils.paths.require_pinned_run``).
+2. Cross-references the inventory (sheet MASTER): expected SVs provided or missing, and SVs it
+   does not expect; SVs flagged Missing = T or Used in DCR = F are skipped.
+3. Fills each Constant/Rept SV that no module provides with the baseline's last complete water
+   year, repeated over the 1,200 label months.
+4. Merges each chunk's rows within the label months; of two rows for one SV and month, the
+   later module's in ``MODULE_CONFIG_B`` order is kept. Reports an SV without 1,200 months.
+   Writes ProductB_SV_<chunk>.csv, then (unless ``--skip-dss``) ProductB_SV_<chunk>.dss: a copy
+   of the baseline with the chunk's values written into the baseline records of its SVs.
+5. Writes the coverage and inventory diagnostics.
+6. Unless ``--skip-comparison``, compares the monthly means of every SV per chunk with the
+   baseline's over WY1922-2021 and draws the figures.
+
+A run waits until the inventory workbook is closed in Excel.
 
 Inputs
 ------
-- Each module's GENERATED ``_product_b_final/*.csv`` (per the MODULE_CONFIG_B
-  scan order below: calsimhydro, calsimhydro_ee, evaporation, rim_inflow,
-  delta_channel_depletion, small_watersheds, storage_curves, instream_flows,
-  tulare_gw_terms, climate, miscellaneous, upper_watershed, closure_terms,
-  day_volume_fractions).
-- ``BASE/CalSim3/__calsim_sv_default__.dss`` (baseline template, Constant/Rept
-  12-month repeat source, units extractor).
-- ``inventory/_MASTER_INVENTORY_FOR_STOCHASTIC_INPUT_GENERATION_.xlsx``.
+- Chunk CSVs (Part B, Part C, Year, Month, Value) in <generated>/<module output>/_product_b_final/
+  of calsimhydro, calsimhydro_ee, evaporation, delta_channel_depletion, small_watersheds,
+  storage_curves, instream_flows, tulare_gw_terms, climate, miscellaneous, upper_watershed,
+  closure_terms and day_volume_fractions; the rim inflows' <SV>_qmo_n01.csv ... _n10.csv
+  (CalSim, Matched_inflow, Year, Month, qmap_postAdj; Part C from the inventory) in
+  <generated>/mod_hydrology/rim_inflow/output/_1_build_rim_inflow/Product_B/1/, beside the
+  run_manifest.json of their run
+- <base>/CalSim3/__calsim_sv_default__.dss
+- inventory/_MASTER_INVENTORY_FOR_STOCHASTIC_INPUT_GENERATION_.xlsx
 
-Outputs (all written to ``product_b_compilation/``)
----------------------------------------------------
-- ``compiled_input_files/<module>/*.csv`` -- local copies of source CSVs
-- ``_product_b_compiled_sv/ProductB_SV_n{01..10}.csv`` (+ matching .dss)
-- ``inventory_*`` cross-reference CSVs (expected/missing/constant_rept/
-  skipped_missing/skipped_not_in_dcr/unexpected)
-- ``sv_coverage_by_chunk.csv``
-- ``product_b_vs_calsim_base_comparison.csv``
-- ``compilation_summary.txt``
-- ``figures/`` PNGs
-  (weighted/unweighted annual %diff per category, exceedance rank shift,
-  monthly climatology, per-category chunk spread)
+Outputs
+-------
+In <generated>/postprocessing/sv_compile/product_b_compilation/:
+
+- _product_b_compiled_sv/ProductB_SV_n01.csv ... _n10.csv and .dss
+- compiled_input_files/<module>/*.csv: copies of the source CSVs
+- sv_coverage_by_chunk.csv: chunks and months of every SV, and its source module
+- inventory_expected_modified.csv, inventory_expected_missing.csv, inventory_constant_rept.csv,
+  inventory_skipped_missing.csv, inventory_skipped_not_in_dcr.csv, inventory_unexpected.csv
+- product_b_vs_calsim_base_comparison.csv: per SV and month of the year, the baseline mean,
+  each chunk's mean, their median and its percent difference from the baseline
+- compilation_summary.txt
+- figures/: weighted_annual_pctdiff_by_category.png and .csv,
+  unweighted_annual_pctdiff_by_category.png, wy_exceedance_rank_shift_concept.png,
+  wy_exceedance_distribution_metrics.csv, wy_exceedance_distribution_summary.csv,
+  summary_term_exceedance/, chunk_spread_by_category/<category>.png,
+  monthly_climatology/<category>/<B>__<C>.png
 
 Dependencies
 ------------
-- ``utils.dss_io`` (open_dss, create_junction, remove_junction)
-- ``utils.paths``
-- pydsstools, numpy, pandas, matplotlib
+utils.dss_io, utils.paths, utils.wgen_calendar; numpy, pandas, matplotlib, openpyxl, pydsstools
 
 Usage
 -----
     python postprocessing/sv_compile/product_b_compilation.py
     python postprocessing/sv_compile/product_b_compilation.py --chunks 1 2 3
-    python postprocessing/sv_compile/product_b_compilation.py --skip-comparison
-    python postprocessing/sv_compile/product_b_compilation.py --skip-dss
+    python postprocessing/sv_compile/product_b_compilation.py --skip-dss --skip-comparison
+    python postprocessing/sv_compile/product_b_compilation.py --allow-missing
     python postprocessing/sv_compile/product_b_compilation.py --summary-figures
 
-CLI flags
----------
-- ``--skip-comparison`` Skip the CalSim baseline comparison step.
-- ``--skip-dss``        Skip DSS file generation (CSV only).
-- ``--chunks N [N ...]`` Process only specific chunks (default: all 10).
-- ``--summary-figures`` Regenerate figures from a previous comparison CSV.
-
-Note: this script runs procedurally at module load (no ``main()`` wrapper).
-Wrapping the ~2700-line body in a function is deferred to avoid a
-high-risk scoping reshuffle on a script with no tests; the file is never
-imported elsewhere (only run as ``python <path>``).
+``--summary-figures`` redraws the figures (without monthly_climatology/) from the comparison
+CSV and chunk CSVs of an earlier run and skips the compile.
 """
 
 import sys

@@ -1,41 +1,45 @@
 """
 Postprocess CalSimHydro Product B (1000-year stochastic) DSS Outputs
 ====================================================================
-Extracts monthly time series from the 10 chunked Product B DSS files
-(CS3L2015V0Hydro_SV, RiceOutput, HydroRebalanceSJRdemands) and produces:
-  1. Per-chunk CSVs in Part B / Part C / Year / Month / Value format
-  2. Per-chunk summary CSVs with descriptive statistics by SV
-  3. (--compare-a) Comparison CSV: Product A vs Product B at the Part B/C level
-  4. (--plot) Line plots comparing Product B vs Product A
+Monthly SVs of the external CalSimHydro and Rebalance runs of the 10 Product B chunks (sources
+cshydro, rice, rebalance) as chunk CSVs with per-SV summaries, and monthly statistics of each
+chunk against Product A (--compare-a, --plot).
 
-Each chunk CSV holds 100 water years (1,200 months) labelled Oct 1921 - Sep
-2021 (WY 1922-2021); the run's spin-up months before them are left out.
+Each chunk CSV holds the 1,200 label months Oct 1921 - Sep 2021 (WY1922-2021,
+utils.wgen_calendar.in_label_months); the run's spin-up months before them are left out.
 
 Inputs
 ------
-- CalSimHydro_Runs/CalSimHydro_Product_B/CS3L2015V0Hydro_SV_n{01..10}.DSS
-- CalSimHydro_Runs/CalSimHydro_Product_B/RiceOutput_n{01..10}.DSS
-- CalSimHydro_Rebalance_Runs/Rebalance_Product_B/HydroRebalanceSJRdemands_n{01..10}.DSS
-- _MASTER_INVENTORY_FOR_STOCHASTIC_INPUT_GENERATION_.xlsx
+Under <generated>/mod_hydrology/calsimhydro/:
+- CalSimHydro_Runs/CalSimHydro_Product_B/CS3L2015V0Hydro_SV_n01.DSS ... _n10.DSS (cshydro)
+  and RiceOutput_n01.DSS ... _n10.DSS (rice)
+- CalSimHydro_Rebalance_Runs/Rebalance_Product_B/HydroRebalanceSJRdemands_n01.DSS ... _n10.DSS
+  (rebalance)
+- --compare-a: output/_3_postprocess_single/Product_A/<source>/ merged CSV of
+  _3_postprocess_single.py
+- inventory/_MASTER_INVENTORY_FOR_STOCHASTIC_INPUT_GENERATION_.xlsx, sheet MASTER
 
 Outputs
 -------
-- output/_4_postprocess_product_b/_product_b_final/_cshydro_sv_productB_n{01..10}.csv
-- output/_4_postprocess_product_b/_product_b_final/_cshydro_rice_productB_n{01..10}.csv
-- output/_4_postprocess_product_b/_product_b_final/_cshydro_rebalance_productB_n{01..10}.csv
-- output/_4_postprocess_product_b/_cshydro_sv_productB_n{01..10}_summary.csv
-- output/_4_postprocess_product_b/_cshydro_rice_productB_n{01..10}_summary.csv
-- output/_4_postprocess_product_b/_cshydro_rebalance_productB_n{01..10}_summary.csv
-- output/_4_postprocess_product_b/_cshydro_*_productB_vs_productA.csv  (--compare-a)
-- output/_4_postprocess_product_b/_plots_product_b_vs_a/*/*.png  (--plot)
+Under <generated>/mod_hydrology/calsimhydro/output/_4_postprocess_product_b/:
+- _product_b_final/_cshydro_<sv|rice|rebalance>_productB_n01.csv ... _n10.csv (Part B,
+  Part C, Year, Month, Value)
+- _cshydro_<sv|rice|rebalance>_productB_n01_summary.csv ... _n10_summary.csv
+- --compare-a (no extraction): _cshydro_<source>_productB_vs_productA.csv (per Part B/C, stat
+  and month) and _cshydro_<source>_productB_vs_productA_partC_agg.csv (summed over Part B)
+- --plot (no extraction; needs --compare-a output): _plots_product_b_vs_a/<stat>/*.png and
+  _plots_product_b_vs_a_partC_agg/<stat>/*.png
+
+Dependencies
+------------
+utils.paths, utils.dss_io, utils.wgen_calendar; pydsstools, matplotlib
 
 Usage
 -----
-    python _4_postprocess_product_b.py                     # all sources, all chunks
-    python _4_postprocess_product_b.py --sources cshydro   # single source
-    python _4_postprocess_product_b.py --chunks 1 2 3      # specific chunks only
-    python _4_postprocess_product_b.py --compare-a         # compare B vs A only
-    python _4_postprocess_product_b.py --plot              # plot B vs A comparison
+    python mod_hydrology/calsimhydro/_4_postprocess_product_b.py
+    python mod_hydrology/calsimhydro/_4_postprocess_product_b.py --sources cshydro --chunks 1 2 3
+    python mod_hydrology/calsimhydro/_4_postprocess_product_b.py --compare-a
+    python mod_hydrology/calsimhydro/_4_postprocess_product_b.py --plot
 """
 
 import sys

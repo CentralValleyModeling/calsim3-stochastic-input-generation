@@ -1,37 +1,41 @@
 """
 Miscellaneous Terms - WYT Monthly-Average Reconstruction
 ========================================================
-Runner that defines the miscellaneous term specs, calls the shared WYT
-monthly-average framework, and writes the Product A / Product B outputs.
+Each term of reference/wyt_avg_terms.csv as its CalSim3 baseline mean by water year type
+(W/AN/BN/D/C) and month, applied to the Sacramento or San Joaquin year types of the weather set
+(utils.wyt_monthlyavg_framework). Every run also writes the pattern and its check on the CalSim3
+year types.
 
-It also builds the rim-inflow SV I_JBP006 (James Bypass inflow) as a San
-Joaquin year-type average: the year types come from the rim inflows, so
-mod_hydrology/rim_inflow cannot build it itself.
+The terms include the rim-inflow SV I_JBP006 (James Bypass inflow): the San Joaquin year types it
+needs come from the rim inflows, so mod_hydrology/rim_inflow cannot build it.
 
 Inputs
 ------
-- CalSim baseline DSS (historical term series)
-- reference/wyt_avg_terms.csv (term specs + WYT basin per term)
-- water_year_types WYT indices of the weather set (Historical_Unsplit, Product A or Product B)
+- reference/wyt_avg_terms.csv: term_part_b, term_part_c, basin_wyt (sac or sj)
+- <base>/CalSim3/__calsim_sv_default__.dss: the terms, Oct 1921 - Sep 2021
+- mod_hydrology/water_year_types/reference/_Historical_SacWYT.csv, _Historical_SJWYT.csv
+- <generated>/mod_hydrology/water_year_types/output/_1_calc_WYTs/<set name>/: _SacWYT.csv and
+  _SJWYT.csv, or _SacWYT_n01.csv ... _n10.csv and _SJWYT_n01.csv ... _n10.csv for Product_B
 
 Outputs
 -------
-- <generated>/output/_1_wyt_monthlyavg/monthly_avg_historical/
-    pattern CSV and actual-vs-reconstructed CSV
-- <generated>/output/_1_wyt_monthlyavg/figures/historical/
-    TS+CDF and monthly error box per term (historical method check)
-- <generated>/output/_1_wyt_monthlyavg/figures/<historical_unsplit|product_a>/
-    TS+CDF and monthly error box per term (--product historical, A)
-- <generated>/output/<_historical_unsplit_validation|_product_a_validation>/
-    final delivery SV CSVs (--product historical, A)
-- <generated>/output/_product_b_final/
-    final Product B per-chunk SV CSVs (--product B)
+Under <generated>/mod_other/miscellaneous/output/:
+- _1_wyt_monthlyavg/monthly_avg_historical/miscellaneous_pattern_by_WYT_month.csv and
+  miscellaneous_actual_vs_reconstructed.csv
+- _1_wyt_monthlyavg/figures/historical/<Part B>.png and <Part B>_monthly_error.png: baseline vs
+  the reconstruction on the CalSim3 year types, WY1972-2018
+- _1_wyt_monthlyavg/figures/<historical_unsplit|product_a>/<Part B>.png and
+  <Part B>_monthly_error.png: the set vs the baseline, WY1922-2018
+- _historical_unsplit_validation/<Part B>_historicalUnsplit_1922_2018.csv,
+  _product_a_validation/<Part B>_productA_1922_2018.csv
+- _product_b_final/<Part B>_product_b_n01.csv ... _n10.csv (--product B)
+
+Delivery and chunk CSVs: Part B, Part C, Year, Month, Value.
 
 Dependencies
 ------------
-- utils/wyt_monthlyavg_framework.py  (WYT reconstruction engine)
-- utils/validation_plots.py          (TS+CDF and monthly box helpers; transitive)
-- utils/paths.py                     (data-dir resolution)
+utils.paths, utils.csv_io, utils.wgen_calendar, utils.wyt_monthlyavg_framework (utils.dss_io,
+utils.validation_plots); pydsstools
 
 Usage
 -----

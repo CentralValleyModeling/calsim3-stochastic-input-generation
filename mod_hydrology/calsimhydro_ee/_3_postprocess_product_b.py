@@ -1,34 +1,40 @@
 """
 Postprocess CalSimHydroEE Product B (1000-year stochastic) DSS Outputs
 ======================================================================
-Extracts monthly time series from the 10 chunked Product B DSS files
-(CalSimHydroEE_DP_EA) and produces:
-  1. Per-chunk CSVs in Part B / Part C / Year / Month / Value format
-  2. Per-chunk summary CSVs with descriptive statistics by SV
-  3. (--compare-a) Comparison CSV: Product A vs Product B at the Part B/C level
-  4. (--plot) Line plots comparing Product B vs Product A
+Monthly SVs of the external CalSimHydroEE runs of the 10 Product B chunks as chunk CSVs with
+per-SV summaries, and monthly statistics of each chunk against Product A (--compare-a, --plot).
 
-Each chunk CSV holds 100 water years (1,200 months) labelled Oct 1921 - Sep
-2021 (WY 1922-2021); the run's spin-up months before them are left out.
+Each chunk CSV holds the 1,200 label months Oct 1921 - Sep 2021 (WY1922-2021,
+utils.wgen_calendar.in_label_months); the run's spin-up months before them are left out.
 
 Inputs
 ------
-- CalSimHydroEE_Runs/CalSimHydroEE_Product_B/CalSimHydroEE_DP_EA_n{01..10}.DSS
-- _MASTER_INVENTORY_FOR_STOCHASTIC_INPUT_GENERATION_.xlsx
+Under <generated>/mod_hydrology/calsimhydro_ee/:
+- CalSimHydroEE_Runs/CalSimHydroEE_Product_B/CalSimHydroEE_DP_EA_n01.DSS ... _n10.DSS
+- --compare-a: output/_2_postprocess_single/Product_A/calsimHydroEE_DSS.csv
+- inventory/_MASTER_INVENTORY_FOR_STOCHASTIC_INPUT_GENERATION_.xlsx, sheet MASTER
 
 Outputs
 -------
-- output/_3_postprocess_product_b/_product_b_final/_cshydroEE_productB_n{01..10}.csv
-- output/_3_postprocess_product_b/_cshydroEE_productB_n{01..10}_summary.csv
-- output/_3_postprocess_product_b/_cshydroEE_productB_vs_productA.csv  (--compare-a)
-- output/_3_postprocess_product_b/_plots_product_b_vs_a/*/*.png  (--plot)
+Under <generated>/mod_hydrology/calsimhydro_ee/output/_3_postprocess_product_b/:
+- _product_b_final/_cshydroEE_productB_n01.csv ... _n10.csv (Part B, Part C, Year, Month,
+  Value)
+- _cshydroEE_productB_n01_summary.csv ... _n10_summary.csv
+- --compare-a (no extraction): _cshydroEE_productB_vs_productA.csv and
+  _cshydroEE_productB_vs_productA_partC_agg.csv (summed over Part B)
+- --plot (no extraction; needs --compare-a output): _plots_product_b_vs_a/<stat>/*.png and
+  _plots_product_b_vs_a_partC_agg/<stat>/*.png
+
+Dependencies
+------------
+utils.paths, utils.dss_io, utils.wgen_calendar; pydsstools, matplotlib
 
 Usage
 -----
-    python _3_postprocess_product_b.py                    # all chunks
-    python _3_postprocess_product_b.py --chunks 1 2 3     # specific chunks only
-    python _3_postprocess_product_b.py --compare-a        # compare B vs A only
-    python _3_postprocess_product_b.py --plot             # plot B vs A comparison
+    python mod_hydrology/calsimhydro_ee/_3_postprocess_product_b.py
+    python mod_hydrology/calsimhydro_ee/_3_postprocess_product_b.py --chunks 1 2 3
+    python mod_hydrology/calsimhydro_ee/_3_postprocess_product_b.py --compare-a
+    python mod_hydrology/calsimhydro_ee/_3_postprocess_product_b.py --plot
 """
 
 import sys

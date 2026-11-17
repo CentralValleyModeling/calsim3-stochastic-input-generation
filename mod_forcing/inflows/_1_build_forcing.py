@@ -1,49 +1,49 @@
 """
 Build and Check the Rim-Inflow Model's Forcing Against BASE
 ===========================================================
-A rim-inflow model may read the WGEN weather in a form of its own rather than the text files
-in BASE: SAC-SMA reads a NetCDF store of the 4,410 grid cells it uses, VIC a text file per cell
-with the wind added. This script checks that the model's input for a forcing holds the BASE
-weather it stands for (gate G2), on a sample of cells or on all of them. Where the model's
-folder does not hold that input (the adapter's ``BUILT``: for SAC-SMA, Product B; for VIC,
-every forcing), a check of all cells first writes it from BASE, and a sample checks the input
-written before. The model's adapter
-(adapters/<inflow_model>.py) writes and compares the files; this script supplies the BASE side
-and keeps the record.
+Gate G2: compares the rim-inflow model's input for one forcing with the BASE WGEN weather, on a
+seeded sample of cells or on all of them. ``--cells all`` first writes from BASE the inputs the
+adapter builds (``BUILT``: SAC-SMA, Product B; VIC, every forcing).
 
 Forcings
 --------
-- historical : BASE/WGEN/Historical_Unsplit/data_<lat>_<lon>
-- A          : BASE/WGEN/Product_A/1/meteo_<lat>_<lon>
-- B          : BASE/WGEN/Product_B/1/meteo_<lat>_<lon> (stamp years 1-1008; utils.wgen_calendar)
+- historical : <base>/WGEN/Historical_Unsplit/data_<lat>_<lon>
+- A          : <base>/WGEN/Product_A/1/meteo_<lat>_<lon>
+- B          : <base>/WGEN/Product_B/1/meteo_<lat>_<lon> (stamp years 1-1008; utils.wgen_calendar)
 
 Inputs
 ------
-- the model's input for the forcing (adapter ``inputs``), in the checkout ``inflow_repo`` or,
-  when built here, in the output folder below
-- the BASE WGEN text files above (year month day prcp tmax tmin)
+- model's input for the forcing (adapter ``inputs``): in the checkout ``inflow_repo``, or for a
+  forcing in ``BUILT`` in the output folder below (SAC-SMA: NetCDF stores of its 4,410 cells;
+  VIC: one text file per cell with the LTO wind)
+- BASE WGEN text files above, read raw (year month day prcp tmax tmin)
+- adapter's own references (adapters/<inflow_model>.py), e.g. the x10 spike table for
+  historical and, for VIC, the LTO wind under <base>/Historical_Climate_LTO/1_Historical/
 
 Outputs
 -------
 - <generated>/mod_forcing/inflows/output/_1_build_forcing/<Historical_Unsplit|Product_A/1|Product_B/1>/
-  - the inputs built here (SAC-SMA, Product B: wgen_product_b_seg01.nc ... _seg10.nc,
-    0.6-0.75 GB each, 6.8 GB in all; VIC: meteo_<lat>_<lon> for 4,097 cells, 4 GB for
-    historical or A and 32 GB for B)
-  - forcing_identity.csv  (``--cells all`` only; per input file and variable: cells checked,
-                           the adapter's measures of the difference, pass; the input's name and
-                           its sha256, which _2_run_product.py records in its manifest too)
+  - inputs built here (``--cells all``, forcings in ``BUILT``): SAC-SMA Product B
+    wgen_product_b_seg01.nc ... _seg10.nc (0.6-0.75 GB each, 6.8 GB in all); VIC
+    meteo_<lat>_<lon> for 4,097 cells (4 GB for historical or A, 32 GB for B) and
+    forcing_source.json
+  - forcing_identity.csv (``--cells all`` only): per input file and variable, cells checked,
+    the adapter's difference measures, pass, the input's name and its sha256.
+    _2_run_product.py runs the model only on a pass of every input at these hashes.
 
-_2_run_product.py runs the model only if this file shows a pass on every input. A sample of
-cells is a quick check: it prints its table and leaves the file as it was, or removes it when
-the sample fails, so no gate reads the earlier pass. The script stops when this GENERATED
-folder holds another model's run (``utils.paths.require_chain_model``).
+A sample prints its table and writes nothing; a failed sample deletes forcing_identity.csv.
+Stops when this GENERATED folder holds another model's run (``utils.paths.require_chain_model``).
+
+Dependencies
+------------
+mod_forcing.inflows.adapters, utils.paths; pandas
 
 Usage
 -----
-    python mod_forcing/inflows/_1_build_forcing.py --forcing A --cells all
     python mod_forcing/inflows/_1_build_forcing.py --forcing historical --cells all
-    python mod_forcing/inflows/_1_build_forcing.py --forcing B --cells all       # builds, then checks
-    python mod_forcing/inflows/_1_build_forcing.py --forcing A          # quick: 200 cells, not recorded
+    python mod_forcing/inflows/_1_build_forcing.py --forcing A --cells all
+    python mod_forcing/inflows/_1_build_forcing.py --forcing B --cells all   # builds, then checks
+    python mod_forcing/inflows/_1_build_forcing.py --forcing A               # 200 cells, no record
 """
 
 import argparse

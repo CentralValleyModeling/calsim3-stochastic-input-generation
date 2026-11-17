@@ -2,66 +2,51 @@
 """
 Compute Oroville Rule-Curve Level 5 Storage
 ===========================================
-Computes Oroville rule-curve Level 5 storage from the wetness index for
-Historical_Unsplit, Product A or Product B.
+Oroville rule-curve Level 5 storage S_OROVLLEVEL5/STORAGE-LEVEL (TAF, end of month) from a daily
+wetness index of basin precipitation, for Historical_Unsplit, Product A or Product B.
 
-Usage:
+Method
+------
+- Wetness index x_t = 0.97 x_(t-1) + p_t (p in inches), x = 3.5 on the day before the record
+  (Oct 1915 for a single series, the first day of each Product B chunk).
+- Flood reservation: linear in x between (3.5, 368.2 TAF) and (11.0, 737.3 TAF), constant outside.
+- Smax = 3425.2 TAF, Smin(x_t) = Smax - reservation(x_t). Daily target: Sep 15 - Oct 14 ramps
+  from Smax to Smin(x_t); Oct 15 - Mar 30 holds Smin(x_t); Mar 31 - Sep 14 is
+  min(Smax, Smin(x_t) + 10 TAF/day x days since Mar 31).
+- Monthly value: the target of the month's last day.
+
+Inputs
+------
+- <generated>/mod_reservoir/storage_curves/output/_3_oroville_daily_precip/:
+  Oroville_Daily_Precip_<Historical_Unsplit|Product_A>.csv, or
+  oroville_daily_precip_productB_n01.csv ... _n10.csv (_3_oroville_daily_precip.py)
+- <base>/CalSim3/__calsim_sv_default__.dss: S_OROVLLEVEL5/STORAGE-LEVEL for the comparison
+  (Historical_Unsplit, Product A)
+
+Outputs
+-------
+Under <generated>/mod_reservoir/storage_curves/output/, <set> being Historical_Unsplit or
+Product_A:
+- _historical_unsplit_validation/S_OROVLLEVEL5_historicalUnsplit_1922_2018.csv,
+  _product_a_validation/S_OROVLLEVEL5_productA_1922_2018.csv
+- _4_oroville_level5/<set>/oroville_level5.xlsx: sheets daily, monthly, compare_level5
+- _4_oroville_level5/<set>/figures/S_OROVLLEVEL5_timeseries.png (TS+CDF, R2, NSE and PBIAS vs
+  CalSim 3 from WY1922), S_OROVLLEVEL5_monthly_error.png, S_OROVLLEVEL5_monthly_pct_error.png
+- _product_b_final/S_OROVLLEVEL5_productB_n01.csv ... _n10.csv (--product B)
+
+Delivery and chunk CSVs: Part B, Part C, Year, Month, Value.
+
+Dependencies
+------------
+utils.paths, utils.csv_io, utils.dss_io, utils.validation_plots, utils.wgen, utils.wgen_calendar;
+pydsstools, openpyxl
+
+Usage
+-----
     python mod_reservoir/storage_curves/_4_oroville_level5.py --product historical
     python mod_reservoir/storage_curves/_4_oroville_level5.py --product A
     python mod_reservoir/storage_curves/_4_oroville_level5.py --product B
     python mod_reservoir/storage_curves/_4_oroville_level5.py --product B --chunks 1 2 3
-
-Inputs:
-  Historical_Unsplit, Product A (<set>: Historical_Unsplit or Product_A):
-    <GENERATED>/mod_reservoir/storage_curves/output/_3_oroville_daily_precip/
-      Oroville_Daily_Precip_<set>.csv  (year, month, day, precip_inches)
-  Product B:
-    <GENERATED>/mod_reservoir/storage_curves/output/_3_oroville_daily_precip/
-      oroville_daily_precip_productB_n01.csv ... n10.csv  (year, month, day, precip_inches)
-  CalSim 3 comparison (Historical_Unsplit, Product A):
-    <BASE>/CalSim3/__calsim_sv_default__.dss
-      Part B: S_OROVLLEVEL5, Part C: STORAGE-LEVEL (monthly end-of-month series)
-
-Outputs:
-  Historical_Unsplit, Product A:
-    _historical_unsplit_validation/S_OROVLLEVEL5_historicalUnsplit_<WY1>_<WY2>.csv,
-    _product_a_validation/S_OROVLLEVEL5_productA_<WY1>_<WY2>.csv
-      columns: Part B, Part C, Year, Month, Value
-    _4_oroville_level5/<set>/oroville_level5.xlsx
-      sheets: daily, monthly, compare_level5
-    _4_oroville_level5/<set>/figures/S_OROVLLEVEL5_timeseries.png
-      The set vs CalSim 3: monthly time series + non-exceedance CDF
-      with R2 / NSE / PBIAS over WY 1922 - <wy_max> (utils.paths.DELIVERY_WY).
-    _4_oroville_level5/<set>/figures/S_OROVLLEVEL5_monthly_error.png
-      WY-ordered (Oct-Sep) monthly box plot of error (set - CalSim 3, TAF).
-    _4_oroville_level5/<set>/figures/S_OROVLLEVEL5_monthly_pct_error.png
-      WY-ordered (Oct-Sep) monthly box plot of percent error.
-  Product B:
-    _product_b_final/S_OROVLLEVEL5_productB_n01.csv ... n10.csv
-      columns: Part B, Part C, Year, Month, Value
-
-Wetness index:
-  x_t = 0.97 * x_{t-1} + p_t
-  where x_init_prevday is x on the day BEFORE the first record.
-  So, first day uses: x[0] = 0.97 * x_init_prevday + precip[0]
-
-Storage rule curve (Eq. interpretation with fixed dates):
-  Let Smax = summer_pool_taf (constant)
-  Let Smin(x_t) = Smax - reservation_TAF(x_t)
-
-  For each day t (using season-year boundaries Sep15/Oct15/Mar31):
-    - Sep15 <= t < Oct15: ramp from Smax down to Smin(x_t)
-    - Oct15 <= t < Mar31: Smin(x_t)
-    - Mar31 <= t < Sep15: min(Smax, Smin(x_t) + b*(t - Mar31))
-
-Wetness-to-reservation method:
-  Endpoints-only interpolation:
-    compute reservation using ONLY endpoints:
-      (3.5, 368.2) and (11.0, 737.3)
-    i.e., linearly interpolate for wetness in (3.5, 11) and clamp outside.
-
-Dependencies:
-  _3_oroville_daily_precip.py (produces the daily precip input CSVs)
 """
 
 from __future__ import annotations

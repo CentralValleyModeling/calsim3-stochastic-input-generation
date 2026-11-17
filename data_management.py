@@ -1,27 +1,46 @@
-"""CalSim 3 stochastic data management.
+"""
+Data Sync and Acquire
+=====================
+Moves the data folders between this machine and Box as zip archives.
 
-Two subcommands:
+- sync: zips BASE and the configured GENERATED folder into the Box Drive folder ``--box-dir``.
+  BASE gives one zip per folder of ``BASE_TARGETS`` plus ``BASE/_loose_files.zip`` for
+  ``BASE_LOOSE_FILES``; GENERATED gives one zip per folder ``--depth`` levels down (each forcing
+  folder of mod_forcing/inflows on its own) and goes to the Box folder of its own name
+  (``generated_dir``: GENERATED, or a chain's own such as GENERATED_vic), which must sit beside
+  BASE. A zip is rebuilt only when a source file is newer than the zip or its file set differs
+  from the manifest of the last sync; unchanged members are copied from the old zip without
+  recompressing. Left out: folders whose name contains "archive", __pycache__,
+  .ipynb_checkpoints, Thumbs.db, .DS_Store and .pyc files.
+- acquire: downloads the zips that ``data_links.json`` names through the Box API and unpacks them
+  under ``--data-dir``; an entry whose folder already holds files is skipped unless ``--force``.
 
-  sync     Upload changed local data to Box as module-level zip archives.
-           Unchanged files are copied from the existing zip without
-           recompressing; only new or modified files are compressed.
-           The GENERATED folder of the config (generated_dir: GENERATED,
-           or a chain's own such as GENERATED_vic) goes to the Box folder
-           of the same name.
-           Requires the csstochastic conda env (uses utils.paths).
+Inputs
+------
+- sync: <base>/ and <generated>/ (utils.paths); .sync_cache/ (manifests of the last sync)
+- acquire: data_links.json (key to Box shared link); a Box token (``--token`` or ``BOX_TOKEN``)
 
-  acquire  Download and unpack zips from Box shared links (data_links.json).
-           No extra dependencies -- stdlib only.
+Outputs
+-------
+- sync: <box-dir>/BASE/<target>.zip, <box-dir>/BASE/_loose_files.zip,
+  <box-dir>/<GENERATED folder>/<folder>.zip; .sync_cache/<section>/*.json
+- acquire: <data-dir>/<key>/ (``BASE/_loose_files`` unpacks into <data-dir>/BASE/)
 
-Usage:
-    python data_management.py sync [--force] [--dry-run] [--base-only]
-                                   [--generated-only] [--box-dir PATH]
-                                   [--depth {1,2}] [--compresslevel {0-9}]
-                                   [--workers N]
+Dependencies
+------------
+Standard library; utils.paths for sync and for the default ``--data-dir`` (``data_dir``)
 
-    python data_management.py acquire [--data-dir PATH] [--force] [--dry-run]
-                                      [--base-only] [--generated-only]
-                                      [KEY ...]
+Usage
+-----
+    python data_management.py sync
+    python data_management.py sync --dry-run
+    python data_management.py sync --base-only --force
+    python data_management.py sync --generated-only --depth 1 --compresslevel 1 --workers 4
+    python data_management.py sync --box-dir <Box Drive folder>
+    python data_management.py acquire --token <Box token>
+    python data_management.py acquire --dry-run --base-only
+    python data_management.py acquire --generated-only --data-dir <data folder>
+    python data_management.py acquire --force BASE/CalSim3 BASE/PRISM
 """
 
 import os

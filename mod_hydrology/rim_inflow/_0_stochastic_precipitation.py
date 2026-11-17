@@ -1,34 +1,40 @@
 """
 Stochastic Precipitation Exploration Plots
 ==========================================
-Interactive exploration of area-weighted precipitation for a single basin across Product A and
-Product B (``utils.wgen``). Each Product B chunk is one 100-year trace on the label water years
-WY1922-2021 (``utils.wgen_calendar``), drawn over Product A's water years.
+Area-weighted precipitation (inches) of one basin in Product A and Product B: rolling means and
+distributions of water-year totals, and January daily values. Each Product B chunk is one
+100-year trace on the label water years WY1922-2021 (utils.wgen_calendar). Exploration.
 
 Plots
 -----
-1. Multi-window rolling mean water-year precipitation (2, 5, 20 yr)
-2. Rolling water-year precipitation KDEs (1, 2, 5, 10 yr)
-3. January daily precipitation ECDF
+1. 2-, 5- and 20-year rolling means of water-year precipitation
+2. KDEs of 1-, 2-, 5- and 10-year rolling water-year precipitation
+3. ECDF of January daily precipitation above 0.1 in
 
 Configuration
 -------------
-Set LOCATION at the top to switch basins (e.g. CS3_8RI_OROVI, CS3_I_SHSTA).
-Grid info is read from mod_forcing/climate/reference/GridInfo/; a cell's weight is the
-fraction of it inside the basin (f2 / f1).
+LOCATION at the top (e.g. CS3_8RI_OROVI, CS3_I_SHSTA) names the basin's GridInfo file; a
+cell's weight is its fraction inside the basin (f2 / f1).
 
 Inputs
 ------
-- The daily weather of Product A and Product B (``utils.wgen.read_met``)
-- Grid info:             mod_forcing/climate/reference/GridInfo/<LOCATION>_GridInfo.txt
+- mod_forcing/climate/reference/GridInfo/<LOCATION>_GridInfo.txt
+- daily weather of Product A and Product B (utils.wgen.weighted_daily)
 
 Outputs
 -------
-- SVG figures and precipitation CSVs in _0_stochastic_precipitation/
+<generated>/mod_hydrology/rim_inflow/output/_0_stochastic_precipitation/:
+- <LOCATION>_precip_rolling_means.svg, <LOCATION>_precip_rolling_kdes.svg,
+  <LOCATION>_jan_daily_precip_ecdf.svg
+- <LOCATION>_precip_<hist|stoch>_<daily|monthly|annual>.csv (hist: Product A; stoch: Product B)
+
+Dependencies
+------------
+utils.paths, utils.wgen, utils.wgen_calendar; seaborn, matplotlib
 
 Usage
 -----
-    cd mod_hydrology/rim_inflow && python _0_stochastic_precipitation.py
+    python mod_hydrology/rim_inflow/_0_stochastic_precipitation.py
 """
 
 # %% imports

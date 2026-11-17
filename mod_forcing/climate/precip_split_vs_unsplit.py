@@ -1,25 +1,34 @@
-"""Quantify Livneh **Unsplit vs Split** total precipitation per 11obs & 9unimp basin,
-full period and two sub-periods, and write the comparison artifacts.
+"""
+Livneh Unsplit vs Split Precipitation by Basin
+==============================================
+Mean annual precipitation (mm/yr) of Historical_Unsplit and Historical_Climate_LTO (split) per
+basin of SAC-SMA's 11obs and 9unimp domains and per cell, over 1915-2018, 1915-1949 and
+1950-2018, with the unsplit difference as percent of split.
 
-Lives in the calsim3-stochastic-input-generation repo at ``mod_forcing/climate/``.
-Repo data (BASE inputs, GENERATED outputs) is resolved through ``utils.paths`` per
-the repo convention, so it follows ``config.json`` wherever the data dir lives.
+Inputs
+------
+- <base>/WGEN/Historical_Unsplit/data_<lat>_<lon>, x10 days corrected (utils.wgen.read_met)
+- <base>/Historical_Climate_LTO/1_Historical/data_<lat>_<lon> (utils.wgen.read_met)
+- SAC-SMA checkout (env SACSMA_REPO, default C:/Users/warnold_la/Local/repos/SAC-SMA):
+  data/hru/hruinfo_11obs.csv, hruinfo_9unimp.csv (basin cells and area_weight; a cell shared
+  by nested basins counts in each)
 
-Inputs (resolved via ``utils.paths.get_base_dir``):
-  BASE/Historical_Climate_LTO/1_Historical/data_<lat>_<lon>   SPLIT:   prcp tmax tmin wind (no dates)
-  BASE/WGEN/Historical_Unsplit/data_<lat>_<lon>           UNSPLIT: yr mo dy prcp tmax tmin
-Both are read through ``utils.wgen.read_met``, which corrects the unsplit files' x10
-precipitation days.
+Outputs
+-------
+<generated>/mod_forcing/climate/output/precip_split_vs_unsplit/:
+- livneh_precip_split_vs_unsplit.csv: per basin, split and unsplit mm/yr and diff % per period
+- livneh_precip_split_vs_unsplit.png: diff % by basin and period, one panel per domain
+- livneh_precip_split_vs_unsplit_bycell.csv: per cell, split, unsplit, diff mm/yr and diff %
+- livneh_precip_split_vs_unsplit_map_pct.png, _map_mag.png: per-cell diff % and mm/yr maps
 
-Basin cell sets + area_weight come from the **SAC-SMA repo** (``SACSMA_REPO`` below):
-``data/hru/hruinfo_<domain>.csv`` (per-basin dedup; cells may be shared across nested
-basins, e.g. BND nests SHA).  Outputs go to this repo's GENERATED tree
-(via ``utils.paths.get_module_generated_dir``):
-  GENERATED/mod_forcing/climate/output/precip_split_vs_unsplit/livneh_precip_split_vs_unsplit.csv
-  GENERATED/mod_forcing/climate/output/precip_split_vs_unsplit/livneh_precip_split_vs_unsplit.png
-  GENERATED/.../precip_split_vs_unsplit/livneh_precip_split_vs_unsplit_bycell.csv   per-cell split/unsplit, diff% & mm/yr, for full/pre-1950/post-1950
-  GENERATED/.../precip_split_vs_unsplit/livneh_precip_split_vs_unsplit_map_pct.png  per-cell diff% maps (full, pre-1950, post-1950)
-  GENERATED/.../precip_split_vs_unsplit/livneh_precip_split_vs_unsplit_map_mag.png  per-cell magnitude (mm/yr) maps (full, pre-1950, post-1950)
+Dependencies
+------------
+utils.paths, utils.wgen; matplotlib
+
+Usage
+-----
+    python mod_forcing/climate/precip_split_vs_unsplit.py
+    SACSMA_REPO=<SAC-SMA checkout> python mod_forcing/climate/precip_split_vs_unsplit.py
 """
 import os
 import re

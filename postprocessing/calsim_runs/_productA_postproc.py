@@ -1,35 +1,35 @@
 """
 Product A Validation Run Postprocessing
 =======================================
-Consumes the shared CalView-style pickle cache (values.pkl / diffs.pkl /
-units.pkl / fields.pkl) built by ``_productA_pickle_builder.py`` and
-produces annual WY summary tables + per-metric two-panel figures
-(monthly time series + non-exceedance CDF, with R2 / NSE / PBIAS
-annotations vs the baseline). Default periods: full validation
-WY 1972-2018 and drought WY 1987-1992. Also reused by
-``_historical_modified_postproc.py`` via ``run_post_processing_package``.
+Reads the pickle cache of ``_productA_pickle_builder.py`` and writes, per period, a
+table of mean water-year values of each metric against the baseline and a figure per
+metric (monthly time series and non-exceedance CDF with R2 / NSE / PBIAS against the
+baseline). A Storage metric's water-year value is its end-of-September value, any
+other metric's the sum of its months. Default periods: Full_Validation_WY1972_2018
+and Drought_WY1987_1992. ``_historical_modified_postproc.py`` runs the same
+``run_post_processing_package`` with its own periods.
 
 Inputs
 ------
-- Pickle cache: ``GENERATED/postprocessing/calsim_runs/product_a/
-  pickle_files/`` (values.pkl, diffs.pkl, units.pkl, fields.pkl)
+- <generated>/postprocessing/calsim_runs/product_a/pickle_files/ (``--pickle-dir``):
+  values.pkl, diffs.pkl, units.pkl, fields.pkl; baseline scenario ``--baseline-name``
+  (also ``--benchmark-name``, default Historical)
 
 Outputs
 -------
-- ``GENERATED/postprocessing/calsim_runs/product_a/output/``
-  - ``annual_WY_summary.xlsx`` (one sheet per period)
-  - ``figures/<period>/<metric>.png`` (2-panel: monthly TS + non-exceedance CDF)
+- <generated>/postprocessing/calsim_runs/product_a/output/ (``--out-dir``)
+  - annual_WY_summary.xlsx: one sheet per period; baseline and scenario mean, difference
+    and percent difference per metric
+  - figures/<period>/<metric>.png
 
 Dependencies
 ------------
-- utils.paths
-- utils.validation_plots
-- pandas, numpy, openpyxl
+utils.paths, utils.validation_plots; pandas, numpy, openpyxl
 
 Usage
 -----
     python postprocessing/calsim_runs/_productA_postproc.py
-    python postprocessing/calsim_runs/_productA_postproc.py --baseline-name Historical
+    python postprocessing/calsim_runs/_productA_postproc.py --pickle-dir <cache> --out-dir <folder>
 """
 
 from __future__ import annotations

@@ -1,28 +1,52 @@
-"""Diagnose n03/n07 SJR cycle 14 infeasibility: extreme low-flow failure at Jul 1922.
+"""
+Chunks n03 and n07 Low-Flow Infeasibility Diagnostics, July 1922
+================================================================
+Compares the SJR SVs of the chunks that fail with those that pass, prints the inputs of
+Product B chunks n03 and n07 around their WRIMS failure at July 1922, cycle 14 (sjrbase,
+"Linear relaxation not feasible"), against the CalSim 3 historical SVs, and plots the
+Mokelumne and Pardee inflows of WY1922-1923. Diagnostic; not part of the pipeline.
 
+Constraints in the WRIMS error log:
 
-Error summary (from error_screenshots/)
-----------------------------------------
-n03 -- 1922_07_c14 Solve_c__ infeasible (Linear relaxation not feasible)
-  Two constraint groups:
-  1. Mokelumne allocation (mok ws.wresl):
-     - :232  setannalloc60n_na5adjusteddv = -4.8116
-     - :235  set_d_mok050_60n_na5 < -8.6777  (negative delivery upper bound)
-     - :236  set_d_mok039_60n_na5 < -0.6675
-     - :237  set_d_mok033_60n_na5 < -4.0051
-  2. Bear Creek / Deadman Creek seepage (constraints-seepage sjreast init.wresl):
-     - :128-131  setnegsg105_bck040_15 .. setnegsg108_bck024_15  (surplus_set*)
-     - :166-171  setnegsg93_ded044_13 .. setnegsg98_ded019_13   (surplus_set*)
-     Also: merced ops.wresl:611  setd_bck006_esc004_wr_2
-       d_bck006_esc004_wr - sg105..sg111_bck*_15 < 0
+- n03, Mokelumne allocation (mok ws.wresl): :232 setannalloc60n_na5adjusteddv = -4.8116;
+  negative delivery bounds :235 set_d_mok050_60n_na5 < -8.6777, :236 set_d_mok039_60n_na5
+  < -0.6675, :237 set_d_mok033_60n_na5 < -4.0051.
+- n03, Bear Creek and Deadman Creek seepage (constraints-seepage sjreast init.wresl):
+  :128-131 setnegsg105_bck040_15 .. setnegsg108_bck024_15 and :166-171
+  setnegsg93_ded044_13 .. setnegsg98_ded019_13 (surplus_set*); merced ops.wresl:611
+  setd_bck006_esc004_wr_2, d_bck006_esc004_wr - sg105..sg111_bck*_15 < 0.
+- n07, Mokelumne allocation only: :232 = -4.9599, :235 < -8.8135, :236 < -0.6780,
+  :237 < -4.0678.
 
-n07 -- 1922_07_c14 Solve_c__ infeasible (Linear relaxation not feasible)
-  Mokelumne allocation only (mok ws.wresl):
-     - :232  setannalloc60n_na5adjusteddv = -4.9599
-     - :235  set_d_mok050_60n_na5 < -8.8135
-     - :236  set_d_mok039_60n_na5 < -0.6780
-     - :237  set_d_mok033_60n_na5 < -4.0678
-  (No seepage group -- only the Mokelumne constraints fire for n07.)
+Sections printed: (1) failing chunks (n01, n03-n07) against passing chunks (n02, n08-n10)
+over all months of the SJR-related SVs, the SVs of the error constraints and the annual
+inflow statistics per chunk; (2) n03 and n07 against n02 and n08 at July 1922; (3) the
+Mokelumne SVs of n03, n07 and n02 from October 1921 to July 1922; (4) every chunk at July
+1922, and n03 against n02;
+(5) the WY1922 totals of n03 and n07 and their percentiles; (6) May-July drought severity
+against the historical record; (6b) the percentiles of the report's tables, from n03 and
+n07 values written into the script; (7) the figure.
+
+Inputs
+------
+- <generated>/postprocessing/sv_compile/product_b_compilation/_product_b_compiled_sv/
+  ProductB_SV_n01.csv ... _n10.csv
+- <generated>/postprocessing/sv_compile/product_b_compilation/compiled_input_files/rim_inflow/
+  <SV>_qmo_n01.csv ... _n10.csv
+- <base>/CalSim3/__calsim_sv_default__.dss
+
+Outputs
+-------
+- Tables on stdout
+- postprocessing/calsim_runs/infeasibilities/fig1_mok_parde_traces_wy1922.png
+
+Dependencies
+------------
+utils.paths; numpy, pandas, matplotlib, pydsstools
+
+Usage
+-----
+    python postprocessing/calsim_runs/infeasibilities/n3_n7.py
 """
 # %% Imports and paths
 import sys

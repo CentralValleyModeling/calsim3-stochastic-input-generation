@@ -2,7 +2,7 @@
 SAC-SMA dPL-CalSim
 ==================
 Adapter of the rim-inflow model SAC-SMA (``inflow_model`` ``sacsma``): its dPL-CalSim model
-(run ``8_calsim`` at the current pin) with its share model, which divides each multi-arc
+(run ``8_calsim`` at the pin) with its share model, which divides each multi-arc
 system's flow among its arcs. It runs through the product command of SAC-SMA's CLI, in the
 conda environment ``inflow_env`` with ``inflow_repo`` first on PYTHONPATH:
 
@@ -54,7 +54,12 @@ Output. ``rim_inflow_monthly.csv`` (arc, month, taf, dpl_taf, kind) holds the 19
 ``taf`` is the product flow, ``kind`` share, single-arc system or non-anchor.
 ``tier2/tier2_monthly.csv`` holds the Sacramento valley node I_SRBB_VAL (UNIMP_SRBB is the sum
 of its 8 arcs and this node), and ``tier2/tier2_run_info.json`` names the checkpoint and
-extension cells the run used.
+extension cells the run used. A Product B run also writes segments/segNN/, joined/ and
+g6_handoff.json into the run folder.
+
+Dependencies
+------------
+mod_forcing.inflows.adapters, utils.paths, utils.wgen_calendar; netCDF4; conda (``inflow_env``)
 """
 
 import json

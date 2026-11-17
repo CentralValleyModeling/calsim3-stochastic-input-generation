@@ -1,3 +1,34 @@
+"""
+Compare CalSimHydro Reference ET with VIC ET
+============================================
+Monthly reference ET (in/month) of one WBA (``select_wba``, WBA 02): CalSimHydro against the
+area-weighted VIC short-grass ET of Product A, and VIC quantile-mapped onto CalSimHydro (fit
+WY1921-1971, applied WY1972-2018). Analysis only.
+
+Inputs
+------
+- reference/CS3_RefETo.dss (/CALSIM/<WBA>/REF-ET//1MON/REFETO/), or CS3_ET.dss
+  (``cshydro_file``)
+- reference/WBA_Grid_Info_20230112_RowBased_rev02.txt: WBA cells and area fractions
+- <archive>/mod_forcing/vic/output/fluxes/Product_A/1/fluxes_<lat>_<lon> (column 7)
+
+Outputs
+-------
+<generated>/mod_hydrology/calsimhydro/output/_0_compare_et_cshydro_vic/:
+- Rolling_Annual_ET_Comparison_<WBA>.svg, Average_Monthly_ET_Comparison_<WBA>.svg,
+  April_ET_Scatter_<WBA>.svg
+- Rolling_Annual_ET_Comparison_QMap_<WBA>.svg, Average_Monthly_ET_Comparison_QMap_<WBA>.svg,
+  ECDF_Annual_ET_Comparison_QMap_<WBA>.svg
+- <WBA>_ET_QMap.csv: monthly CS3, VIC and quantile_mapped_value
+
+Dependencies
+------------
+utils.paths, utils.quantile_mapping; pydsstools, seaborn, statsmodels, matplotlib
+
+Usage
+-----
+    python mod_hydrology/calsimhydro/_0_compare_et_cshydro_vic.py
+"""
 # %% imports
 import os
 import sys

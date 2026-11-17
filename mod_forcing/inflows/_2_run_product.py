@@ -1,31 +1,26 @@
 """
 Run the Rim-Inflow Model
 ========================
-Runs the rim-inflow model on one forcing, checks it, and writes its monthly arc flows as the
-one table the rim-inflow SVs are built from.
-
-The model is the one the config names (``inflow_model``): SAC-SMA's dPL-CalSim with its share
-model (adapters/sacsma.py), which v1.1 delivers, or VIC 4.2.d (adapters/vic.py). It lives in
-its own folder (``inflow_repo``), pinned to one version (``inflow_pin``: for SAC-SMA a commit
-of its git repository), and runs there as an external command in its own environment
-(``inflow_env``). Its adapter runs it, checks the environment and the result, and reads the
-flows. The run writes into a temporary folder, deleted after it. A GENERATED folder holds the
-chain of one model (config ``generated_dir``), so the script will not replace another model's
-run.
+Runs the rim-inflow model on one forcing, checks the run, and writes its monthly arc flows, the
+table the rim-inflow SVs are built from. The model is ``inflow_model`` (adapters/sacsma.py:
+SAC-SMA dPL-CalSim with its share model; adapters/vic.py: VIC 4.2.d), run as an external command
+in its folder ``inflow_repo`` and environment ``inflow_env``, into a temporary folder.
 
 Forcings
 --------
-- historical : WGEN NonDetrend-Unsplit (SAC-SMA's training forcing): the reference for skill
-               and for the absorb fits of the second stage
-- A          : WGEN Product A scenario 1
-- B          : WGEN Product B scenario 1, 1,008 stamp years, delivered as 10 chunks of 100 water
-               years (utils.wgen_calendar); SAC-SMA runs it in segments (adapters/sacsma.py)
+- historical : Historical_Unsplit (SAC-SMA's training forcing): the reference for skill and
+               for the absorb fits of the second stage
+- A          : Product A, WGEN scenario 1
+- B          : Product B, WGEN scenario 1, 1,008 stamp years, delivered as 10 chunks of 100
+               water years (utils.wgen_calendar); SAC-SMA runs it in segments (adapters/sacsma.py)
 
 Checks
 ------
-- The model's version (adapter ``version``) must be the pin, with no modified files, and the
-  environment must run the model from that folder; ``--allow-dirty`` runs anyway and the
-  manifest records the state.
+- The model's version (adapter ``version``) must be the pin ``inflow_pin`` (SAC-SMA: a commit
+  of its checkout; VIC: the sha256 of its files), with no modified files, and the environment
+  must run the model from that folder; ``--allow-dirty`` runs anyway and the manifest records
+  the state.
+- Stops when this GENERATED folder holds another model's run (``utils.paths.require_chain_model``).
 - Gate G2, before the run: forcing_identity.csv of _1_build_forcing.py must show a pass on
   every cell of every input file, for each file's current sha256.
 - The adapter's gates, after the run: G1 (the series repeats the one the model tracks at the
@@ -35,9 +30,9 @@ Checks
 
 Inputs
 ------
-- the model checkout and the files the run used
-- <generated>/mod_forcing/inflows/output/_1_build_forcing/<forcing>/: forcing_identity.csv,
-  and the inputs written there (Product B)
+- model checkout ``inflow_repo`` and the files the run used
+- <generated>/mod_forcing/inflows/output/_1_build_forcing/<Historical_Unsplit|Product_A/1|Product_B/1>/:
+  forcing_identity.csv, and the inputs written there (forcings in the adapter's ``BUILT``)
 
 Outputs
 -------
@@ -54,11 +49,16 @@ Outputs
                             rim-inflow builder reads only flows whose manifest names the
                             configured model and pin (utils.paths.require_pinned_run).
 
+Dependencies
+------------
+mod_forcing.inflows.adapters, utils.paths, utils.wgen_calendar; pandas
+
 Usage
 -----
     python mod_forcing/inflows/_2_run_product.py --forcing historical
     python mod_forcing/inflows/_2_run_product.py --forcing A
     python mod_forcing/inflows/_2_run_product.py --forcing B
+    python mod_forcing/inflows/_2_run_product.py --forcing A --allow-dirty   # off the pin, recorded
 """
 
 import argparse

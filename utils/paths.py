@@ -1,21 +1,44 @@
 """
-Centralized path resolver for data directories.
+Data Paths and Configuration
+============================
+Resolves every data location of the pipeline from the configuration, and names the weather sets,
+the delivery folders and the rim-inflow model run. Scripts import their paths from here instead
+of hard-coding ``../../data/``. Importing the module runs ``utils.env_check.require_env``.
 
-Reads the data root from ``config.json`` (user-local, git-ignored) at the repo
-root, falling back to ``config_default.json`` (tracked) when the user file is
-absent.  The environment variable ``CSSTOCHASTIC_CONFIG`` names another user
-file in place of ``config.json`` (a relative name from the repo root), e.g. the
-config of a chain built on another rim-inflow model.  All module scripts should import helpers from this module
-instead of hard-coding ``../../data/`` relative paths.
+The configuration is ``config_default.json`` (tracked), overridden key by key by the user file:
+``config.json`` at the repo root (git-ignored), or the file the environment variable
+``CSSTOCHASTIC_CONFIG`` names (absolute or relative to the repo root), e.g. the config of a chain
+built on another rim-inflow model. A user key that the defaults lack (keys starting with ``_``
+are comments), or a ``CSSTOCHASTIC_CONFIG`` file that does not exist, stops the import. Keys:
+``data_dir``, ``generated_dir``, ``archive_dir``, ``inflow_model``, ``inflow_repo``,
+``inflow_env``, ``inflow_pin``. On Windows the data paths carry the long-path prefix.
 
-Quick start
------------
-::
+- Folders: ``get_data_dir``, ``get_base_dir`` (``<data_dir>/BASE``), ``get_generated_dir``
+  (``<data_dir>/<generated_dir>``), ``get_module_generated_dir``, ``get_archive_dir`` (the
+  read-only v1.0 tree), ``get_wgen_dir``, ``get_inventory_dir``.
+- Weather sets and delivery: ``WEATHER_SETS`` (keys historical, A, B), ``DELIVERY_WY``,
+  ``DELIVERY`` (folder and file tag of the delivery CSVs of historical and A), ``delivery_dir``,
+  ``DELIVERY_ROOTS`` and ``delivery_dirs`` (every module's delivery folder, in the compiler's
+  order).
+- Rim-inflow model: ``get_inflow_model``, ``get_inflow_repo``, ``get_inflow_env``,
+  ``get_inflow_pin``, ``get_arc_inflows``, ``get_rim_inflow_outputs``, ``INFLOW_PROVENANCE``.
+  ``require_chain_model`` stops when this GENERATED folder holds a run of another model;
+  ``require_pinned_run`` stops unless a run comes from the configured model at its pin, with no
+  modified files, past every gate, on the inputs G2 last checked.
+- ``sha256_file``; ``remove_tree`` (deletes a folder, clearing the read-only flag OneDrive sets).
 
+Inputs
+------
+- config_default.json, and config.json or the file ``CSSTOCHASTIC_CONFIG`` names
+- ``require_chain_model``, ``require_pinned_run``: the ``run_manifest.json`` beside a rim-inflow
+  run's outputs; ``require_pinned_run`` also
+  ``<generated>/mod_forcing/inflows/output/_1_build_forcing/<wgen folder>/forcing_identity.csv``
+
+Usage
+-----
     from utils.paths import get_base_dir, get_module_generated_dir, get_wgen_dir
-
-    wgen_dir = get_wgen_dir("A")          # BASE/WGEN/Product_A/1
-    output   = get_module_generated_dir("mod_hydrology/calsimhydro") / "output"
+    wgen_dir = get_wgen_dir("A")          # <base>/WGEN/Product_A/1
+    output = get_module_generated_dir("mod_hydrology/calsimhydro") / "output"
 """
 
 import csv

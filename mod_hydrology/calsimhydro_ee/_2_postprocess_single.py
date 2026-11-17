@@ -1,32 +1,35 @@
 """
 Postprocess CalSimHydroEE Run Outputs
 =====================================
-Extracts monthly time series from CalSimHydroEE output DSS files across multiple
-scenarios, merges them into a single long-format CSV, computes summary statistics
-(monthly/quarterly/annual mean and median by PartC), and generates per-PartC boxplots.
+Monthly SVs of the external CalSimHydroEE run of Historical_Unsplit or Product A as a delivery
+CSV, and a comparison with three other runs: merged long CSV, monthly/quarterly/annual mean and
+median by Part C, and boxplots per Part C.
 
-Scenarios compared
-------------------
-- Historical            (CalSimHydroEE_Historical_1972-2018)
-- VIC_Precip            (CalSimHydroEE_VICPrecip_1972-2018)
-- QM_ET                 (CalSimHydroEE_QMET_1972-2018)
-- the weather set       (CalSimHydroEE_Historical_Unsplit or CalSimHydroEE_Product_A)
+Runs compared
+-------------
+- Historical  : CalSimHydroEE_Historical_1972-2018
+- VIC_Precip  : CalSimHydroEE_VICPrecip_1972-2018
+- QM_ET       : CalSimHydroEE_QMET_1972-2018
+- the set     : CalSimHydroEE_Historical_Unsplit or CalSimHydroEE_Product_A
 
 Inputs
 ------
-- CalSimHydroEE_Runs/<scenario>/CalSimHydroEE_DP_EA.dss
-- _MASTER_INVENTORY_FOR_STOCHASTIC_INPUT_GENERATION_.xlsx
+- <generated>/mod_hydrology/calsimhydro_ee/CalSimHydroEE_Runs/<run>/CalSimHydroEE_DP_EA.dss
+- inventory/_MASTER_INVENTORY_FOR_STOCHASTIC_INPUT_GENERATION_.xlsx, sheet MASTER: the
+  CalSimHydroEE SVs of IDCOutputEE.dss
 
 Outputs
 -------
-<set> is Historical_Unsplit or Product_A:
+Under <generated>/mod_hydrology/calsimhydro_ee/output/_2_postprocess_single/:
+- <Historical_Unsplit|Product_A>/calsimHydroEE_DSS.csv,
+  calsimHydroEE_summary_statistics_by_PartC.csv, Boxplot_<PartC>_with_mean.png
+- _historical_unsplit_validation/ or _product_a_validation/:
+  _cshydroEE_<historicalUnsplit|productA>_<first WY>_<last WY>.csv, the run's water years
+  within utils.paths.DELIVERY_WY
 
-- output/_2_postprocess_single/<set>/calsimHydroEE_DSS.csv
-- output/_2_postprocess_single/<set>/calsimHydroEE_summary_statistics_by_PartC.csv
-- output/_2_postprocess_single/<set>/Boxplot_<PartC>_with_mean.png
-- output/_2_postprocess_single/<_historical_unsplit_validation|_product_a_validation>/
-  _cshydroEE_<historicalUnsplit|productA>_<first WY>_<last WY>.csv (the run's water years
-  within utils.paths.DELIVERY_WY)
+Dependencies
+------------
+utils.paths, utils.dss_io, utils.csv_io; pydsstools, seaborn, matplotlib
 
 Usage
 -----

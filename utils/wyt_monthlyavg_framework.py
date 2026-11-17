@@ -1,26 +1,46 @@
-"""wyt_monthlyavg_framework.py
+"""
+WYT Monthly-Average Reconstruction
+==================================
+Reconstructs CalSim3 terms from water-year types: a term's pattern is its historical mean by
+water-year type (W, AN, BN, D, C) of its basin (Sacramento or San Joaquin) and month, and a
+weather set's target takes, in each month, the pattern value of that year's type in the set.
 
-WYT × monthly-average reconstruction framework.
+- ``compute_wyt_pattern(wyt_input_dir, term_specs_csv, historical_dssfile)``: reads the terms
+  from the CalSim3 DSS (Oct 1921 to Sep 2021 by default) and returns ``pattern_df`` (WYT, month as
+  Jan..Dec in Oct-Sep order, one column per term), ``hist_cmp_df`` (date, the historical WYT,
+  ``<term>_actual`` and ``<term>_reconstructed``), the numeric pattern and the term specs. The WYT
+  column of ``hist_cmp_df`` is ``WYT`` when every term uses one basin, otherwise ``Sac_WYT`` and
+  ``SJ_WYT``.
+- ``compute_product_targets(product, wyt_target_dir, pat_wide, term_specs)``: the targets of a
+  weather set over the water years of its WYT tables, as long tables (date, basin_wyt, WYT,
+  part_b, part_c, wyt_monthly_avg) keyed by the product for a single series and
+  ``product_b_n01`` ... ``product_b_n10`` for Product B.
+- ``target_sv``, ``product_b_target_table``: a target in SV format; the Product B targets as one
+  table with ``chunk``, for ``utils.wgen_calendar.write_chunk_csvs``.
+- ``plot_wyt_hist_validation``, ``plot_actual_vs_recon_validation``: per term, a time-series and
+  CDF figure and a monthly error box plot (``utils.validation_plots``).
 
-Historical series are loaded via DSS + term spec mode:
-  - a CSV containing term_part_b / term_part_c / basin_wyt rows
-  - a historical DSS file from which the monthly series are extracted
+A term is labelled by its Part B, or ``<Part B>__<Part C>`` when its Part B repeats in the specs.
 
-Returned outputs (what the runner writes)
-----------------------------------------
-pattern_df  -> <prefix>_pattern_by_WYT_month.csv
-    WIDE format: columns are terms, rows are (WYT, month)
-    Month is a string abbreviation (Jan, Feb, Mar, ...).
+Inputs
+------
+- Term spec CSV: term_part_b, term_part_c, basin_wyt (sac or sj)
+- The CalSim3 DSS of the historical terms
+- WYT tables (water_year, wyt_label): ``<wyt_input_dir>/_Historical_<Sac|SJ>WYT.csv``; targets
+  ``<wyt_target_dir>/_<Sac|SJ>WYT.csv`` (Historical_Unsplit, Product A) or
+  ``_<Sac|SJ>WYT_n01.csv`` ... ``_n10.csv`` (Product B)
 
-hist_cmp_df -> <prefix>_actual_vs_reconstructed.csv
-    WIDE format: actual & reconstructed values are side-by-side.
-    If all terms use the same WYT basin, the historical WYT column is named
-    'WYT' for backward compatibility. If multiple basins are used, one WYT
-    column is included per basin (for example, SJ_WYT and Sac_WYT).
+Outputs
+-------
+- The plot functions: ``<figures_dir>/<part_b>.png``, ``<figures_dir>/<part_b>_monthly_error.png``
 
-targets dict -> each target output CSV (Product A or Product B)
-    LONG format:
-        date, basin_wyt, WYT, part_b, part_c, wyt_monthly_avg
+Usage
+-----
+    from utils.wyt_monthlyavg_framework import compute_wyt_pattern, compute_product_targets
+    pattern_df, hist_cmp_df, pat_wide, specs = compute_wyt_pattern(
+        wyt_input_dir=hist_wyt_dir, term_specs_csv=terms_csv, historical_dssfile=dss_file)
+    targets = compute_product_targets(product="A", wyt_target_dir=wyt_dir,
+                                      pat_wide=pat_wide, term_specs=specs)
 """
 
 from __future__ import annotations

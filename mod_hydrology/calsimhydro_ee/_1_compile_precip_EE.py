@@ -1,23 +1,27 @@
 """
 Compile WBA Precipitation for CalSimHydroEE
 ============================================
-Simple-average daily precipitation (mm -> in) across the grid cells of each Water Balance Area
-(WBA) from the daily weather of one set (``utils.wgen``), written for CalSimHydroEE. Cells of
-the coordinate list with no weather file (water cells of Suisun Bay and the Delta, 13 of them)
-are left out of their WBA's average.
+Simple-average daily precipitation (in/day) over the grid cells of each Water Balance Area (WBA)
+from the daily weather of the --product set, written for CalSimHydroEE. Cells of the coordinate
+list with no weather file (water cells of Suisun Bay and the Delta) are left out of the average.
 
 Inputs
 ------
-- reference/CalSimHydroEE_WBA_Coordinate_List.csv (WBA, Lat, Long, gridID)
-- The daily weather of the set (``utils.wgen.read_met``)
+- reference/CalSimHydroEE_WBA_Coordinate_List.csv (or --coord_file): WBA, Lat, Long, gridID
+- daily weather of the set (utils.wgen.weighted_daily)
 
 Outputs
 -------
-- output/_1_compile_precip_EE/<set>/pcp/<WBA>_pcp.csv and CS3_DailyPrecipitation_EE.dss,
-  <set> being Historical_Unsplit or Product_A
-- output/_1_compile_precip_EE/Product_B/pcp/<WBA>_pcp_n01.csv ... n10.csv and
-  CS3_DailyPrecipitation_EE_n01.dss ... n10.dss, each 1 Jan 1920 - 31 Dec 2021
-  (``utils.wgen_calendar.daily_chunk_1920_2021``)
+Under <generated>/mod_hydrology/calsimhydro_ee/output/_1_compile_precip_EE/ (or --output_path):
+- <Historical_Unsplit|Product_A>/pcp/<WBA>_pcp.csv (date, value; every day) and
+  CS3_DailyPrecipitation_EE.dss (/IWFM/E<WBA>/PRECIP//1DAY/PRECIPITATION/, over --clip_period)
+- Product_B/pcp/<WBA>_pcp_n01.csv ... _n10.csv and CS3_DailyPrecipitation_EE_n01.dss ... _n10.dss,
+  each 1 Jan 1920 - 31 Dec 2021 (utils.wgen_calendar.daily_chunk_1920_2021)
+- --no_dss: the CSVs only
+
+Dependencies
+------------
+utils.paths, utils.wgen, utils.wgen_calendar, utils.dss_io; pydsstools
 
 Usage
 -----

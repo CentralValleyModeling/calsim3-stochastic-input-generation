@@ -1,19 +1,46 @@
 """
 SJR Restoration Flow Requirements
-==================================
-Reconstruct monthly REST_REQ_NP and REST_REQ_P from UNIMP_SJ unimpaired
-flow data, for historical comparison, Historical_Unsplit, Product A, and
-Product B.
+=================================
+Monthly San Joaquin River Restoration flow requirements REST_REQ_NP (non-pulse) and REST_REQ_P
+(pulse), Part C RELEASE-HYDROGRAPH (TAF), from unimpaired San Joaquin flow UNIMP_SJ.
+
+Method
+------
+- Restoration year RY runs Mar(RY) - Feb(RY+1). Its annual release follows the UNIMP_SJ total of
+  water year RY: two flat steps below 670 TAF, linear from 670 to 2500 TAF, flat from 2500 TAF.
+- The annual release interpolates between the alpha profiles (cfs in 12 periods) of
+  ALPHA_PROFILES, which give the monthly volumes.
+- REST_REQ_P is the April pulse, the Apr 16-30 rate over 16 days; REST_REQ_NP is the rest of
+  April and every other month.
+- Months whose restoration year has no complete water year of UNIMP_SJ take the CalSim3 baseline
+  values (Oct 1921 - Feb 1922 of each Product B chunk).
+
+Inputs
+------
+- <base>/CalSim3/__calsim_sv_default__.dss: UNIMP_SJ/FLOW-UNIMPAIRED (validation input) and
+  REST_REQ_NP, REST_REQ_P/RELEASE-HYDROGRAPH (validation actuals, month fill, figures)
+- Historical_Unsplit, Product A: UNIMP_SJ rows of the set's calsim_qmap_validation_TS.csv
+  (utils.paths.get_rim_inflow_outputs), the whole model run
+- Product B: UNIMP_SJ_qmo_n01.csv ... _n10.csv (qmap_postAdj; utils.paths.get_rim_inflow_outputs)
+
+Outputs
+-------
+Under <generated>/mod_other/instream_flows/output/:
+- _2_sjr_rest_req/actual_vs_reconstructed.csv (--product validation): baseline and reconstructed
+  REST_REQ_P and REST_REQ_NP from Oct 1921
+- _historical_unsplit_validation/, _product_a_validation/: _SJRRPreqPulse_<tag>_1922_2018.csv
+  and _SJRRPreqNonPulse_<tag>_1922_2018.csv, <tag> being historicalUnsplit or productA
+- figures/<historical_unsplit|product_a>/REST_REQ_NP.png, REST_REQ_P.png (April values): TS+CDF
+  vs the baseline, WY1922-2018
+- _product_b_final/_SJRRPreqPulse_productB_qmo_n01.csv ... _n10.csv and
+  _SJRRPreqNonPulse_productB_qmo_n01.csv ... _n10.csv
+
+Delivery and chunk CSVs: Part B, Part C, Year, Month, Value.
 
 Dependencies
 ------------
-- mod_hydrology/rim_inflow/_1_build_rim_inflow.py, files found through
-  utils.paths.get_rim_inflow_outputs:
-    Historical_Unsplit and Product A UNIMP_SJ are read from the set's
-    ``calsim_qmap_validation_TS.csv``, the whole model run (filtered by
-    CalSim == UNIMP_SJ), and written over ``utils.paths.DELIVERY_WY`` to the
-    set's delivery folder (utils.paths.delivery_dir).
-    Product B UNIMP_SJ is read from per-chunk CSVs ``UNIMP_SJ_qmo_n*.csv``.
+utils.paths, utils.csv_io, utils.dss_io, utils.validation_plots, utils.wgen_calendar;
+pydsstools, matplotlib
 
 Usage
 -----

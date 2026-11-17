@@ -1,31 +1,46 @@
 """
-dss_pickle_builder.py
+CalView-Style DSS Pickle Cache
+==============================
+Reads metrics from the DV DSS files of several CalSim 3 runs (scenarios) and writes them as a
+CalView-style pickle cache, the input of the ``postprocessing/calsim_runs`` postprocessors.
 
-Shared CalView-style "cache" builder for DSS time series used by both
-Product A and Product B post-processing.
+A metric is a row of a metrics CSV: Group, Metric, Key and ``Calsim Part B Construction``, a sum
+or difference of Part B names (``A + B - C``; a leading ``=`` and typographic minus signs are
+accepted), evaluated without ``eval``. Each Part B is read over all D parts with the A, C, E and
+F parts of its first catalog entry (catalog sorted by Part B, then D part), its timestamps
+shifted by ``shift_index_days`` (-1: DSS period ends to the data month); months where any Part B
+of the scenario is missing are dropped. With ``force_taf`` (default) every series is converted to
+TAF per month: CFS by the days of the month, AF / 1000, TAF and KAF as read.
 
-Artifacts created in an output directory:
-- values.pkl : pandas DataFrame with stacked monthly data for all scenarios
-- diffs.pkl  : pandas DataFrame of (scenario - baseline) for each metric column
-- units.pkl  : dict mapping metric_key -> units string (builder can force everything to "TAF")
-- fields.pkl : dict mapping metric_key -> human-friendly label
-- meta.json  : provenance (scenario paths, metric definitions, DSS pathnames selected, etc.)
+- ``Scenario(name, dss_path)``, ``load_metric_specs_from_csv``, ``build_pickles``,
+  ``build_pickles_from_metrics_csv``; ``single_scenario_pull`` reads one DSS file through
+  ``utils.dss_io.open_dss``.
 
-Key features:
-- Reads DSS using pydsstools (HEC-DSS).
-- Supports "Construction" formulas such as:
-      A + B - C
-  using a safe AST evaluator.
-- Forces all metrics to monthly TAF by default:
-    * CFS -> TAF/month using days_in_month
-    * AF  -> TAF
-    * TAF/KAF -> TAF
-- Loads metric definitions from a shared metrics.csv.
+Inputs
+------
+- The metrics CSV (columns matched case-insensitively; every row needs a Key)
+- One DV DSS file per scenario
 
-Compared with the earlier single-purpose version, this shared builder:
-- lives in utils/dss_pickle_builder.py
-- computes diffs by aligning on the monthly time columns instead of row order
-- is intended to be imported by both product_a and product_b run scripts
+Outputs
+-------
+- ``<out_dir>/values.pkl``: one row per scenario and month (Date, Scenario, OctSeptYear,
+  MarFebYear, Year, Month, JanDecYear), one column per metric Key
+- ``<out_dir>/diffs.pkl``: scenario minus baseline, aligned on the time columns
+- ``<out_dir>/units.pkl``, ``fields.pkl``: Key to units (TAF) and to ``"<Group>: <Metric>"``
+- ``<out_dir>/meta.json``: scenarios, metric definitions, units and pathnames read
+
+Dependencies
+------------
+utils.dss_io; numpy, pandas, pydsstools
+
+Usage
+-----
+    python -m utils.dss_pickle_builder --metrics-csv <metrics.csv> --baseline Historical --out-dir <folder> --scenario Historical <baseline.dss> --scenario "Product A" <run.dss>
+
+    from utils.dss_pickle_builder import Scenario, build_pickles_from_metrics_csv
+    build_pickles_from_metrics_csv([Scenario("Historical", base), Scenario("Product A", run)],
+                                   baseline_name="Historical", out_dir=out,
+                                   metrics_csv_path=metrics_csv)
 """
 
 from __future__ import annotations

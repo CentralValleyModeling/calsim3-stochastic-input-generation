@@ -2,26 +2,31 @@
 Compile Monthly Area-Weighted Precipitation for Small Watersheds
 ================================================================
 Area-weighted monthly precipitation (inches/month) per small watershed from the daily weather of
-one set (``utils.wgen``), written into the CVprecip .dat template.
+the --product set, written into the CVprecip .dat template.
 
 The output holds the template's WY1921-2021 (``WINDOW``). Historical_Unsplit and Product A fill
-its months from October 1920 to the last month their weather covers (December 2018), and the
-months after it keep the template's values. Each Product B chunk fills WY1922-2021 with the
-chunk's label months (``utils.wgen_calendar``) and keeps the template's WY1921 as
-initialization.
+its months from October 1920 to the last month their weather covers completely (December 2018);
+the months after it keep the template's values. Each Product B chunk fills WY1922-2021 with the
+chunk's label months (utils.wgen_calendar) and keeps the template's WY1921 as initialization.
 
 Inputs
 ------
-- reference/SmallWatersheds_Grid_Info_20200915_RowBased.txt (watershed_id, Lat, Lon, pct_area,
-  f1, f2; weight f2 / f1)
-- reference/CVprecipWY1921_2021.dat (template)
-- The daily weather of the set (``utils.wgen.read_met``)
+- reference/SmallWatersheds_Grid_Info_20200915_RowBased.txt (or --grid_info_file):
+  watershed_id, Lat, Lon, pct_area, f1, f2; weight f2 / f1
+- reference/CVprecipWY1921_2021.dat (or --CVprecip_file): the template
+- daily weather of the set (utils.wgen.weighted_daily)
 
 Outputs
 -------
-- output/_1_compile_precip_sws/<set>/CVprecipWY1921_2021.dat, <set> being Historical_Unsplit or
-  Product_A (the months of --clip_period only, when given)
-- output/_1_compile_precip_sws/Product_B/CVprecipWY1921_2021_n01.dat ... n10.dat
+Under <generated>/mod_hydrology/small_watersheds/output/_1_compile_precip_sws/ (or
+--output_path):
+- <Historical_Unsplit|Product_A>/CVprecipWY1921_2021.dat (only the months of --clip_period,
+  when given)
+- Product_B/CVprecipWY1921_2021_n01.dat ... _n10.dat
+
+Dependencies
+------------
+utils.paths, utils.wgen, utils.wgen_calendar
 
 Usage
 -----

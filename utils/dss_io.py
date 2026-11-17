@@ -1,38 +1,40 @@
 """
-Shared HEC-DSS I/O helpers
-==========================
-Centralizes the DSS-access boilerplate that was copy-pasted across the
-pipeline: the Windows long-path directory-junction lifecycle, the
-``HecDss.Open(..., catalog_flag=True)`` coupling, the start-of-period to
-end-of-month timestamp shift, the ``<= -900`` missing-value sentinel, and the
-``\\?\`` long-path-aware ``makedirs``.
+HEC-DSS Access Helpers
+======================
+The pipeline's route to DSS files: ``open_dss`` and two monthly readers that turn a DSS catalog
+into pandas series.
 
-pydsstools version coupling
----------------------------
-This module passes ``catalog_flag=True`` to ``HecDss.Open`` and uses
-``getPathnameList``.  Both require **pydsstools < 3** (pinned in
-``environment.yml``): pydsstools 3.0 made ``HecDss.Open`` reject
-``catalog_flag`` and removed ``getPathnameList``.  Keep the pin; do not
-"upgrade" this module to the 3.x API without migrating every call site.
+- ``open_dss(dss_path, version=6, catalog_flag=True, use_junction=None, **open_kwargs)``:
+  context manager over ``HecDss.Open``. A path longer than 200 characters (``needs_junction``;
+  the HEC-DSS Fortran library takes 256) opens through a directory junction
+  ``_dss_link_<pid>_<n>`` under the repo root, removed on exit; ``create_junction`` also removes
+  the junctions of processes no longer running. ``create_junction`` and ``remove_junction``
+  serve callers that keep one junction over many opens.
+- ``read_monthly_series(dss, requested, dss_read_start, dss_read_end)``: a dict of month-end
+  Series keyed by upper-cased (Part B, Part C), each on a fixed month-end index over the read
+  window; catalog ``/*/*/*/*/1MON/*``, records in D-part then path order; only keys with a value.
+  ``utils.qmap_single_from_pairs``, ``utils.wyt_monthlyavg_framework`` and the rim-inflow
+  builder read through it.
+- ``read_monthly_frame(dss, excel_partcs)``: a wide frame, one column per ``"B/C"`` key (Part C
+  case kept) of ``excel_partcs``, or of every monthly record when none matches; catalog
+  ``/*/*/*/*/1MON/*/``, records in D-part order. The CalSimHydro and CalSimHydroEE
+  postprocessors read through it.
+- ``eom_index`` (pydsstools start-of-period times to month ends), ``apply_sentinel`` (values
+  <= -900 to NaN), ``list_monthly_paths``, ``safe_makedirs`` (``os.makedirs`` with the Windows long-path
+  prefix stripped).
 
-Behavior-preservation note
---------------------------
-``read_monthly_series`` and ``read_monthly_frame`` are *faithful copies* of two
-pre-existing, deliberately different read loops:
+The two readers differ in key form, catalog pattern and record order, and each caller depends on
+its own form, so they stay separate.
 
-- ``read_monthly_series`` reproduces
-  ``utils/qmap_single_from_pairs.read_calsim_monthly_pairs`` exactly
-  (tuple ``(B_upper, C_upper)`` keys, pattern ``/*/*/*/*/1MON/*``, master
-  series reindexed onto a fixed month-end range, sort by D-part then path).
-- ``read_monthly_frame`` reproduces
-  ``mod_hydrology/calsimhydro/_3_postprocess_single._read_dss`` exactly
-  (string ``"B/C"`` keys with C-part case preserved, pattern
-  ``/*/*/*/*/1MON/*/`` with trailing slash, inventory filter with all-paths
-  fallback, sort by D-part only, wide DataFrame output).
+``catalog_flag`` and ``getPathnameList`` exist only in pydsstools 2.x; ``environment.yml`` pins
+``pydsstools<3``.
 
-They are intentionally NOT unified -- the differences are semantic and there
-are no tests to catch a regression.  Each caller keeps its exact prior
-contract.
+Usage
+-----
+    from utils import dss_io
+    with dss_io.open_dss(dss_path) as dss:
+        series = dss_io.read_monthly_series(dss, {("I_SHSTA", "FLOW-INFLOW")},
+                                            "1921-10-31", "2021-09-30")
 """
 from __future__ import annotations
 

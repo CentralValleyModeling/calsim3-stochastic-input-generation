@@ -20,7 +20,7 @@ list: each spike found so far is such a day.
 
 Usage
 -----
-    from utils.wgen import met_path, read_met
+    from utils.wgen import dates, met_path, read_met, weighted_daily
     w = read_met("historical", met_path("historical", 38.15625, -120.71875))
     w.columns    # Year, Month, Day, precip, tmax, tmin
     dates(w)     # DatetimeIndex 1915-01-01 ... 2018-12-31

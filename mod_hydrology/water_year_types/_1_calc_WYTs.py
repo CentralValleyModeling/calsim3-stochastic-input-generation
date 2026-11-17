@@ -1,35 +1,36 @@
 """
 Calculate Water Year Types (WYTs)
 =================================
-Sacramento 40-30-30 Index and San Joaquin 60-20-20 Index calculations based
-on rim-inflow aggregations with recursive index formulas, over every water year
-of the rim inflows: the historical unsplit weather and Product A (WY1916-2018)
-and Product B (ten 100-year chunks).
+Sacramento Valley 40-30-30 and San Joaquin Valley 60-20-20 indices and year types from the
+four-river unimpaired rim inflows, over every water year of the rim-inflow SVs:
+Historical_Unsplit and Product A (WY1916-2018) and each Product B chunk (WY1922-2021).
+
+The recursion starts from the CDEC index of the year before the first (reference/cdec_wyt.txt
+values: WY1915 for the single series, WY1921 for every Product B chunk).
 
 Inputs
 ------
-- Rim-inflow SVs (utils.paths.get_rim_inflow_outputs): historical and Product A
-  calsim_qmap_validation_TS.csv, Product B <CalSim>_qmo_nXX.csv
+- rim-inflow SVs (utils.paths.get_rim_inflow_outputs, or --input): Historical_Unsplit and
+  Product A calsim_qmap_validation_TS.csv; Product B
+  UNIMP_<SRBB|OROV|YUBA|FOLS|ST|TU|ME|SJ>_qmo_n01.csv ... _n10.csv
 
 Outputs
 -------
-- <generated>/output/_1_calc_WYTs/Historical_Unsplit/  (_SacWYT.csv, _SJWYT.csv)
-- <generated>/output/_1_calc_WYTs/Product_A/           (_SacWYT.csv, _SJWYT.csv)
-- <generated>/output/_1_calc_WYTs/Product_B/           (_SacWYT_nXX.csv, _SJWYT_nXX.csv)
+Under <generated>/mod_hydrology/water_year_types/output/_1_calc_WYTs/ (or --output), each
+file water_year, index, wyt, wyt_label:
+- <Historical_Unsplit|Product_A>/_SacWYT.csv, _SJWYT.csv
+- Product_B/_SacWYT_n01.csv ... _n10.csv, _SJWYT_n01.csv ... _n10.csv
 
 Dependencies
 ------------
-- utils/paths.py  (data-dir resolution)
+utils.paths, utils.wgen_calendar
 
 Usage
 -----
     python mod_hydrology/water_year_types/_1_calc_WYTs.py --product historical
     python mod_hydrology/water_year_types/_1_calc_WYTs.py --product A
     python mod_hydrology/water_year_types/_1_calc_WYTs.py --product B
-
-# Override the input (the TS file, or Product B's folder) and the output folder:
-    python mod_hydrology/water_year_types/_1_calc_WYTs.py --product A \
-        --input path/to/calsim_qmap_validation_TS.csv --output path/to/output
+    python mod_hydrology/water_year_types/_1_calc_WYTs.py --product A --input <TS csv> --output <folder>
 """
 
 import argparse

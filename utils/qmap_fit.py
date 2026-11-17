@@ -17,6 +17,27 @@ Every fit uses WY1950-2018 (``FIT_WY``). Each pair names its fit in a ``fit`` co
 A predictor may be a sum of rim-inflow SVs, written ``I_DER001+I_DER004+I_SCOTF+I_SFD003``. It
 is summed on both sides: the CalSim3 series for a pass fit, the model's series for an absorb
 fit and for the series the map is applied to.
+
+- ``FITS``, ``FIT_WY``, ``FIT_START``, ``FIT_END``: the fit kinds and window.
+- ``read_fit_column``: the ``fit`` column of a pairs CSV, lower-cased; stops on a missing column
+  or a value other than pass or absorb.
+- ``predictor_parts``, ``predictor_label``, ``sum_parts``: the SVs of a ``+`` predictor, its
+  console label, and the sum of their series on common months.
+- ``read_historical_predictors``: the model's historical-unsplit series of the given SVs, read
+  only from a run at the configured pin (``utils.paths.require_pinned_run``).
+- ``training_basis``: the predictor series a pair is fitted on, by its fit.
+
+Inputs
+------
+- ``read_historical_predictors``: ``calsim_qmap_validation_TS.csv`` and ``run_manifest.json`` of
+  the historical rim-inflow SVs (``utils.paths.get_rim_inflow_outputs("historical")``)
+
+Usage
+-----
+    from utils.qmap_fit import predictor_parts, read_historical_predictors, training_basis
+    parts = predictor_parts(row["predictor_part_b"])
+    historical = read_historical_predictors(parts) if row["fit"] == "absorb" else {}
+    basis = training_basis(row["fit"], parts, row["predictor_part_c"], calsim3, historical)
 """
 from __future__ import annotations
 

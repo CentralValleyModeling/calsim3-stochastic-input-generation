@@ -1,26 +1,30 @@
 """
 Extract Monthly Precipitation for PP Point Locations
 ====================================================
-Extracts monthly precipitation time series for all PP point locations specified in
-reference/pp_point_locations.csv from the nearest weather grid cell, aggregating daily ->
-monthly (utils.wgen, utils.wgen_calendar).
-
-Historical_Unsplit, Product A, LTO: one CSV per location; the first two also write a delivery
-CSV. Product B: 10 long-format chunk CSVs (100 WY each, Oct 1921 - Sep 2021).
+Monthly precipitation (inches) at each PP point location of reference/pp_point_locations.csv,
+summed from the daily weather of the nearest grid cell (utils.wgen.nearest_cell).
 
 Inputs
 ------
-- reference/pp_point_locations.csv
-- BASE/WGEN/<Historical_Unsplit | Product_A/1 | Product_B/1>, or BASE/Historical_Climate_LTO
-  (utils.wgen)
+- reference/pp_point_locations.csv (location, latitude, longitude)
+- daily weather of the --product set (utils.wgen.read_met): WGEN Historical_Unsplit,
+  Product_A/1 or Product_B/1, or <base>/Historical_Climate_LTO/1_Historical
 
 Outputs
 -------
-- output/_1_pp_point_locations/<Historical_Unsplit|Product_A|LTO>/<location>_monthly_precip.csv
-- output/_historical_unsplit_validation/_pp_precip_historicalUnsplit_1922_2018.csv
-- output/_product_a_validation/_pp_precip_productA_1922_2018.csv
-- output/_product_b_final/_pp_precip_productB_n01.csv ... n10.csv
-- output/_1_pp_point_locations/<set>/_summary.csv
+Under <generated>/mod_forcing/climate/output/:
+- _1_pp_point_locations/<Historical_Unsplit|Product_A|LTO>/<location>_monthly_precip.csv
+  (year, month, precip_inches, date)
+- _1_pp_point_locations/<set name>/_summary.csv (nearest cell, distance, mean monthly precip)
+- _historical_unsplit_validation/_pp_precip_historicalUnsplit_1922_2018.csv
+- _product_a_validation/_pp_precip_productA_1922_2018.csv
+- Product B: _product_b_final/_pp_precip_productB_n01.csv ... _n10.csv, labelled WY1922-2021
+
+Delivery and chunk files are SV format, Part B the location, Part C PRECIP.
+
+Dependencies
+------------
+utils.paths, utils.csv_io, utils.wgen, utils.wgen_calendar
 
 Usage
 -----

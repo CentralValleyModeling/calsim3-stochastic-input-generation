@@ -1,35 +1,33 @@
 """
 Compile Gerber Pan Evaporation for CalSimHydro
 ==============================================
-Computes Hargreaves-Samani reference ET at the eight Gerber grid cells from
-WGEN temperature and quantile-maps it onto the CalSim 3 Gerber pan
-evaporation record, writing the WBA 02 pan evaporation: WY 1921-2018 for
-Historical_Unsplit and Product A, January 1920 to December 2021 for each
-Product B chunk.
+Monthly Hargreaves-Samani reference ET (inches) at the eight Gerber cells from WGEN temperature,
+quantile-mapped onto the CalSim 3 Gerber pan evaporation record: CalSimHydro's WBA 02 pan
+evaporation.
 
-The quantile map is fit on Historical_Unsplit weather against the CS3 record
-over WY 1921-2018 and applied to the weather of the chosen product, so the
-temperature changes in Product A's and Product B's weather carry into their pan
-evaporation. Product B is mapped over all its stamp months and then cut into
-chunks (utils.wgen_calendar.monthly_chunk_1920_2021).
+The quantile map is fit on Historical_Unsplit against the CS3 record over WY1921-2018 and
+applied to the --product weather, so the temperature of Products A and B carries into their
+pan evaporation. Product B is mapped over all its stamp months, then cut into chunks.
 
 Inputs
 ------
-- reference/WBA_Grid_Info.txt  (the Gerber cells)
-- The daily weather (utils.wgen.read_met): Historical_Unsplit, and the --product set
-- reference/CS3_PanEvapGerber.dss  (quantile-mapping target)
+- reference/WBA_Grid_Info.txt: the Gerber cells and pct_area weights
+- daily tmax and tmin (utils.wgen.read_met) of Historical_Unsplit and of the --product set
+- reference/CS3_PanEvapGerber.dss: /CALSIM/WBA02/PAN-EVAP//1MON/PAN-EVAP/, WY1921-2018, the
+  QM target
 
 Outputs
 -------
-- <generated>/output/_2_compile_et/Historical_Unsplit/  (PanEvap_QMAP_results.csv, CS3_PanEvap.dss)
-- <generated>/output/_2_compile_et/Product_A/            (with --product A)
-- <generated>/output/_2_compile_et/Product_B/            (with --product B: PanEvap_QMAP_results.csv
-                                                          by stamp month, CS3_PanEvap_n01.dss ... _n10.dss)
+Under <generated>/mod_hydrology/calsimhydro/output/_2_compile_et/, beside the ET of
+_2_compile_et.py:
+- <Historical_Unsplit|Product_A>/PanEvap_QMAP_results.csv (date, hs_eto_in, pan_evap_in,
+  cs3_pan_evap_in) and CS3_PanEvap.dss, WY1921-2018
+- Product_B/PanEvap_QMAP_results.csv by stamp month, and CS3_PanEvap_n01.dss ... _n10.dss,
+  each Jan 1920 - Dec 2021 (utils.wgen_calendar.monthly_chunk_1920_2021)
 
 Dependencies
 ------------
-- utils/dss_io.py, utils/quantile_mapping.py, utils/wgen.py
-- utils/paths.py  (data-dir resolution)
+utils.paths, utils.dss_io, utils.quantile_mapping, utils.wgen, utils.wgen_calendar; pydsstools
 
 Usage
 -----

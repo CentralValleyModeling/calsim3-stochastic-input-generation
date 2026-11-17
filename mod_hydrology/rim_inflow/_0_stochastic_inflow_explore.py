@@ -1,33 +1,40 @@
 """
 Stochastic Inflow Exploration Plots
 ====================================
-Interactive exploration of a single rim inflow location across CS3 baseline,
-Product A (historical) and Product B (stochastic) outputs.
+Annual flow (TAF) of one rim inflow in the CS3 baseline, Product A and the 10 Product B chunks:
+rolling means, mean annual flow and drought severity. Exploration, run cell by cell or whole.
 
 Plots
 -----
-1. 30-year rolling mean flow comparison
-2. Multi-window rolling means (2, 5, 20 yr)
-3. Mean-annual flow bar chart with Product B range
-4. Drought severity scatter (duration vs % of average)
+1. 30-year rolling mean
+2. 2-, 5- and 20-year rolling means
+3. Mean annual flow, with the range of the Product B chunks
+4. Drought severity scatter (duration against percent of average)
 
 Configuration
 -------------
-Set LOCATION and CS3_PATH at the top to switch inflow locations.
+LOCATION (figure label) and CS3_PATH (Part B/C of the CS3 record; Part B also names the
+rim-inflow SV) at the top; SHARED_MEAN for plot 4.
 
 Inputs
 ------
-- CalSim baseline DSS:  CalSim3/__calsim_sv_default__.dss
-- Rim-inflow SVs (utils.paths.get_rim_inflow_outputs): Product A
-  calsim_qmap_validation_TS.csv, Product B <CalSim>_qmo_n*.csv
+- <base>/CalSim3/__calsim_sv_default__.dss: /CALSIM/<CS3_PATH>//1MON/L2020A/
+- rim-inflow SVs (utils.paths.get_rim_inflow_outputs): Product A calsim_qmap_validation_TS.csv,
+  Product B <CalSim>_qmo_n01.csv ... _n10.csv
 
 Outputs
 -------
-- SVG figures in _0_stochastic_inflow_explore/
+<generated>/mod_hydrology/rim_inflow/output/_0_stochastic_inflow_explore/:
+<LOCATION>_rolling30yr.svg, <LOCATION>_rolling_means.svg, <LOCATION>_mean_annual_bar.svg,
+<LOCATION>_drought_scatter_<shared|separate>.svg
+
+Dependencies
+------------
+utils.paths; pydsstools, seaborn, matplotlib
 
 Usage
 -----
-    cd mod_hydrology/rim_inflow && python _0_stochastic_inflow_explore.py
+    python mod_hydrology/rim_inflow/_0_stochastic_inflow_explore.py
 """
 
 # %% imports

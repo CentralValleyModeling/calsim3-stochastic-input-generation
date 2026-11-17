@@ -1,42 +1,42 @@
 """
-_4_pge_wy_allocation.py
-========================
-Reconstructs PGE_WY_ALLOCATION_SV using threshold logic on annual unimpaired
-Folsom flow, replicating the Excel spreadsheet methodology.
+PGE Water-Year Allocation Ratio (PGE_WY_ALLOCATION_SV)
+======================================================
+PGE_WY_ALLOCATION_SV/RATIO from the water-year total of the rim-inflow SV FOLSM_INFLOW (TAF), by
+the threshold table of PGE_WY_ALLOCATION_SV-Reconstruction.xlsx. The ratio of water year WY
+applies from May of calendar year WY through April of WY+1.
 
-Methodology (from PGE_WY_ALLOCATION_SV-Reconstruction.xlsx):
-  1. Sum monthly unimpaired Folsom inflow by water year (Oct-Sep).
-  2. Apply threshold table to annual sum => discrete allocation ratio.
-  3. Spread ratio to months: the allocation determined for a given water year
-     applies from May of that CY through April of the next CY.
+Thresholds (reference/PGE_WY_ALLOCATION_config.json):
 
-Thresholds (annual unimpaired Folsom flow, TAF):
-  <= 488.24  -> 0.4
-  <= 800.72  -> 0.6
-  <= 957.08  -> 0.8
-  <= 1146.02 -> 0.9
-  >  1146.02 -> 1.0
+    annual flow (TAF)   ratio
+    <= 488.24           0.4
+    <= 800.72           0.6
+    <= 957.08           0.8
+    <= 1146.02          0.9
+    > 1146.02           1.0
 
-Products:
-  - Historical_Unsplit and Product A (WY 1922-2018): use FOLSM_INFLOW from the
-    set's rim-inflow output (calsim_qmap_validation_TS.csv).
-  - Product B (1000-yr stochastic, 10 chunks): Uses synthetic FOLSM_INFLOW
-    from the Product B rim-inflow output with the same thresholds applied directly.
+Oct 1921 - Apr 1922 take the WY1921 ratio: from the model run for Historical_Unsplit and
+Product A, the chunk's WY1922 ratio for each Product B chunk.
 
-Input files (in ./reference/):
-  - PGE_WY_ALLOCATION_config.json            : Thresholds & configuration
+Inputs
+------
+- reference/PGE_WY_ALLOCATION_config.json: thresholds, default ratio, allocation start month
+- Historical_Unsplit, Product A: FOLSM_INFLOW rows of the set's calsim_qmap_validation_TS.csv
+  (utils.paths.get_rim_inflow_outputs)
+- Product B: FOLSM_INFLOW_qmo_n01.csv ... _n10.csv (qmap_postAdj;
+  utils.paths.get_rim_inflow_outputs)
 
-External dependencies (utils.paths.get_rim_inflow_outputs):
-  - calsim_qmap_validation_TS.csv  (FOLSM_INFLOW of Historical_Unsplit or Product A)
-  - FOLSM_INFLOW_qmo_n01.csv ... n10.csv  (Product B inflows)
+Outputs
+-------
+Under <generated>/mod_other/upper_watershed/output/:
+- _historical_unsplit_validation/_pge_wy_allocation_historicalUnsplit_1922_2018.csv
+- _product_a_validation/_pge_wy_allocation_productA_1922_2018.csv
+- _product_b_final/_pge_wy_allocation_productB_n01.csv ... _n10.csv
 
-Output:
-  - output/_historical_unsplit_validation/
-       _pge_wy_allocation_historicalUnsplit_1922_2018.csv
-  - output/_product_a_validation/
-       _pge_wy_allocation_productA_1922_2018.csv
-  - output/_product_b_final/
-       _pge_wy_allocation_productB_n01.csv  ...  _pge_wy_allocation_productB_n10.csv
+Delivery and chunk CSVs: Part B, Part C, Year, Month, Value.
+
+Dependencies
+------------
+utils.paths, utils.csv_io, utils.wgen_calendar
 
 Usage
 -----

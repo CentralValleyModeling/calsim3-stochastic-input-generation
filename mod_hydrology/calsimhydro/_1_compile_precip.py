@@ -1,23 +1,28 @@
 """
 Compile Daily WBA Precipitation for CalSimHydro
 ===============================================
-Area-weighted daily precipitation per Water Balance Area (WBA) from the daily weather of one
-set (``utils.wgen``), written as CalSimHydro's precipitation inputs.
+Area-weighted daily precipitation (in/day) per Water Balance Area (WBA) from the daily weather
+of the --product set, written as CalSimHydro's precipitation inputs.
 
 Inputs
 ------
-- reference/WBA_Grid_Info.txt: the cells of each WBA and their weights. No WBA 91 polygon is
-  available, so WBA_91 lists WBA_90's cells as a stand-in and gets WBA 90's precipitation.
-- The daily weather of the set (``utils.wgen.read_met``)
+- reference/WBA_Grid_Info.txt (or --grid_info_file): the cells of each WBA and their weights
+  (f2 / f1). No WBA 91 polygon exists, so WBA_91 lists WBA_90's cells as a stand-in and gets
+  WBA 90's precipitation.
+- daily weather of the set (utils.wgen.weighted_daily)
 
 Outputs
 -------
-- <generated>/output/_1_compile_precip/<set>/pcp/<WBA>_pcp.csv (every day of the weather files)
-  and CS3_DailyPrecipitation.dss (over --clip_period), <set> being Historical_Unsplit or
-  Product_A
-- <generated>/output/_1_compile_precip/Product_B/pcp/<WBA>_pcp_n01.csv ... n10.csv and
-  CS3_DailyPrecipitation_n01.dss ... n10.dss, each 1 Jan 1920 - 31 Dec 2021
-  (``utils.wgen_calendar.daily_chunk_1920_2021``)
+Under <generated>/mod_hydrology/calsimhydro/output/_1_compile_precip/ (or --output_path):
+- <Historical_Unsplit|Product_A>/pcp/<WBA>_pcp.csv (date, value; every day of the weather
+  files) and CS3_DailyPrecipitation.dss (/IWFM/<WBA>/PRECIP//1DAY/PRECIPITATION/, over
+  --clip_period)
+- Product_B/pcp/<WBA>_pcp_n01.csv ... _n10.csv and CS3_DailyPrecipitation_n01.dss ... _n10.dss,
+  each 1 Jan 1920 - 31 Dec 2021 (utils.wgen_calendar.daily_chunk_1920_2021)
+
+Dependencies
+------------
+utils.paths, utils.wgen, utils.wgen_calendar, utils.dss_io; pydsstools
 
 Usage
 -----

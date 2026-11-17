@@ -1,38 +1,39 @@
 """
 Postprocess CalSimHydro DSS Outputs of a Single Weather Series
 ==============================================================
-Extracts, merges, and compares scenario time series from CalSimHydro DSS
-files (CS3L2015V0Hydro_SV, RiceOutput, HydroRebalanceSJRdemands). Produces
-merged-scenario CSVs + summary statistics + boxplots (comparison mode) and
-Part B / Part C / Year / Month / Value delivery CSVs of the set
-(Historical_Unsplit or Product A).
+Monthly SVs of the external CalSimHydro and Rebalance runs of Historical_Unsplit or Product A
+(sources cshydro, rice, rebalance) as delivery CSVs, and a comparison of each source's run with
+the Historical, VICPrecip and QMET 1972-2018 runs (merged CSV, summary statistics, boxplots).
 
 Inputs
 ------
-- [EXTERNAL] CalSimHydro and Rebalance run DSS (per the SOURCES dict): the
-  Historical, VICPrecip and QMET 1972-2018 comparison runs and the set's runs
-  CalSimHydro_<set> and Rebalance_<set> (<set>: Historical_Unsplit, Product_A)
-- Master inventory xlsx
+Under <generated>/mod_hydrology/calsimhydro/, per run <Historical_1972-2018|VICPrecip_1972-2018|
+QMET_1972-2018|Historical_Unsplit|Product_A>:
+- CalSimHydro_Runs/CalSimHydro_<run>/CS3L2015V0Hydro_SV.dss (cshydro) and RiceOutput.dss (rice)
+- CalSimHydro_Rebalance_Runs/Rebalance_<run>/DSS/HydroRebalanceSJRdemands.dss (rebalance)
+- inventory/_MASTER_INVENTORY_FOR_STOCHASTIC_INPUT_GENERATION_.xlsx, sheet MASTER: the
+  CalSimHydro SVs of each DSS
 
 Outputs
 -------
-- output/_3_postprocess_single/<set>/<source>/  (merged + summary CSVs, boxplots)
-- output/_3_postprocess_single/<_historical_unsplit_validation|_product_a_validation>/
-  (_cshydro_<sv|rebalance|rice>_<historicalUnsplit|productA>_<first WY>_<last WY>.csv, the
-  run's water years within utils.paths.DELIVERY_WY)
+Under <generated>/mod_hydrology/calsimhydro/output/_3_postprocess_single/:
+- <Historical_Unsplit|Product_A>/<source>/: merged CSV of the four runs, summary statistics
+  by Part C, Boxplot_<PartC>_with_mean.png (skipped with --skip-compare)
+- _historical_unsplit_validation/ or _product_a_validation/:
+  _cshydro_<sv|rice|rebalance>_<historicalUnsplit|productA>_<first WY>_<last WY>.csv, the
+  run's water years within utils.paths.DELIVERY_WY (skipped with --skip-validate)
 
 Dependencies
 ------------
-- utils/dss_io.py, utils/csv_io.py  (DSS read + validation conversion)
-- utils/paths.py                    (data-dir resolution)
+utils.paths, utils.dss_io, utils.csv_io; pydsstools, seaborn, matplotlib
 
 Usage
 -----
-    python _3_postprocess_single.py --product A                     # run everything
-    python _3_postprocess_single.py --product historical            # Historical_Unsplit
-    python _3_postprocess_single.py --product A --sources cshydro   # single source
-    python _3_postprocess_single.py --product A --skip-compare      # validation only
-    python _3_postprocess_single.py --product A --skip-validate     # comparison only
+    python mod_hydrology/calsimhydro/_3_postprocess_single.py --product historical
+    python mod_hydrology/calsimhydro/_3_postprocess_single.py --product A
+    python mod_hydrology/calsimhydro/_3_postprocess_single.py --product A --sources cshydro
+    python mod_hydrology/calsimhydro/_3_postprocess_single.py --product A --skip-compare    # delivery only
+    python mod_hydrology/calsimhydro/_3_postprocess_single.py --product A --skip-validate   # comparison only
 """
 
 import os

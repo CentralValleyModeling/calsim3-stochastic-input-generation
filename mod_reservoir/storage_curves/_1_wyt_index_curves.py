@@ -2,45 +2,47 @@
 """
 Reservoir Storage-Level Index Curve Generator
 =============================================
+Monthly storage-level index curves (TAF) of a weather set from schedule tables: a repeating
+12-month schedule, or a value by the water year type (W/AN/BN/D/C) of the Sacramento or San
+Joaquin index, mapped by water year or calendar year per series (--yr-type-map overrides).
 
-Generates reservoir storage-level index curves for a weather set
-(Historical_Unsplit, Product A, Product B) using schedule tables from reference
-CSVs and water year type series.
+Every run also rebuilds the curves on the CalSim 3 year types and compares them with the CalSim 3
+baseline. A month without a year type among the first three of a series takes the baseline value;
+any other gap stops the run.
 
-Two types of series are supported:
-  - **Monthly repeating** (from reservoir_schedule_monthly.csv): same 12 values
-    repeated every year regardless of water year type.
-  - **WYT-driven** (from reservoir_schedule_wyt.csv): value depends on the
-    water year type (W/AN/BN/D/C) for each year, with per-series basin_wyt
-    assignment (Sac or SJ).
+Inputs
+------
+- reference/reservoir_schedule_monthly.csv: partb, partc, month_wy, target_storage_taf, pattern
+- reference/reservoir_schedule_wyt.csv: partb, partc, year_type, target_storage_taf,
+  year_type_basis, basin_wyt
+- <base>/CalSim3/__calsim_sv_default__.dss: baseline series of each schedule SV
+- mod_hydrology/water_year_types/reference/_Historical_SacWYT.csv, _Historical_SJWYT.csv
+- <generated>/mod_hydrology/water_year_types/output/_1_calc_WYTs/<set name>/: _SacWYT.csv and
+  _SJWYT.csv, or _SacWYT_n01.csv ... _n10.csv and _SJWYT_n01.csv ... _n10.csv for Product_B
 
-Dependencies:
-  - mod_hydrology/water_year_types/_1_calc_WYTs.py  (WYT CSVs of the set)
-  - BASE/CalSim3/__calsim_sv_default__.dss           (historical validation + first-month gap fill)
+Outputs
+-------
+Under <generated>/mod_reservoir/storage_curves/output/:
+- _1_wyt_index_curves/storage_curves_actual_vs_reconstructed.csv and
+  _1_wyt_index_curves/figures/historical/<Part B>.png (TS+CDF, WY1972-2018): baseline check
+- _historical_unsplit_validation/storage_curves_historicalUnsplit_1922_2018.csv,
+  _product_a_validation/storage_curves_productA_1922_2018.csv
+- _1_wyt_index_curves/figures/<historical_unsplit|product_a>/<Part B>.png: the set vs the
+  baseline, WY1922-2018
+- _product_b_final/<Part B>_productB_n01.csv ... _n10.csv (--product B)
 
-Inputs:
-  - reference/reservoir_schedule_monthly.csv  (partb, partc, month_wy, target_storage_taf, pattern)
-  - reference/reservoir_schedule_wyt.csv      (partb, partc, year_type, target_storage_taf, year_type_basis, basin_wyt)
-  - mod_hydrology/water_year_types/reference/  (_Historical_SacWYT.csv, _Historical_SJWYT.csv)
-  - GENERATED/mod_hydrology/water_year_types/output/_1_calc_WYTs/<Historical_Unsplit|Product_A>/
-    (_SacWYT.csv, _SJWYT.csv)
-  - GENERATED/mod_hydrology/water_year_types/output/_1_calc_WYTs/Product_B/  (_SacWYT_{ens}.csv, _SJWYT_{ens}.csv)
+Delivery and chunk CSVs: Part B, Part C, Year, Month, Value.
 
-Outputs are written under:
-  <generated>/output/_1_wyt_index_curves/          (historical validation CSV + figures/historical/ per-series TS+CDF with R2/NSE/PBIAS)
-  <generated>/output/_1_wyt_index_curves/figures/<historical_unsplit|product_a>/
-      (the set vs historical actuals per-series TS+CDF, --product historical, A)
-  <generated>/output/<_historical_unsplit_validation|_product_a_validation>/
-      (storage_curves_<historicalUnsplit|productA>_1922_2018.csv)
-  <generated>/output/_product_b_final/              (Product B)
-
-Output CSV format: Part B, Part C, Year, Month, Value
+Dependencies
+------------
+utils.paths, utils.csv_io, utils.dss_io, utils.validation_plots, utils.wgen_calendar; pydsstools
 
 Usage
 -----
     python mod_reservoir/storage_curves/_1_wyt_index_curves.py --product historical
     python mod_reservoir/storage_curves/_1_wyt_index_curves.py --product A
     python mod_reservoir/storage_curves/_1_wyt_index_curves.py --product B
+    python mod_reservoir/storage_curves/_1_wyt_index_curves.py --product A --yr-type-map wy
 """
 # -- IMPORTS ---------------------------------------------------------------
 import argparse
