@@ -53,7 +53,7 @@ Outputs
 Dependencies
 ------------
 mod_hydrology.rim_inflow._1_build_rim_inflow (CalSim3 and inventory readers), utils.paths,
-utils.validation_plots; pydsstools
+utils.validation_plots, utils.wgen_calendar; pydsstools
 
 Usage
 -----
@@ -71,6 +71,7 @@ from mod_hydrology.rim_inflow._1_build_rim_inflow import read_calsim3, read_inve
 from utils.paths import (get_archive_dir, get_arc_inflows, get_inflow_model,
                          get_module_generated_dir, get_rim_inflow_outputs)
 from utils.validation_plots import nse, pbias, r2
+from utils.wgen_calendar import water_year
 
 _SCRIPT_DIR = Path(__file__).resolve().parent
 _gen = get_module_generated_dir("mod_hydrology/rim_inflow")
@@ -113,7 +114,7 @@ def kge(obs, sim) -> float:
 
 
 def water_years(index: pd.DatetimeIndex) -> np.ndarray:
-    return index.year + (index.month >= 10).astype(int)
+    return water_year(index.year, index.month)
 
 
 def wide_arcs(forcing: str) -> pd.DataFrame:

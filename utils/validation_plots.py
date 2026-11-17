@@ -27,7 +27,7 @@ matplotlib's PDF and PS font type to 42 (TrueType).
 
 Dependencies
 ------------
-numpy, matplotlib, seaborn
+utils.wgen_calendar; numpy, matplotlib, seaborn
 
 Usage
 -----
@@ -47,6 +47,8 @@ import matplotlib.dates as mdates
 import matplotlib.pyplot as plt
 import numpy as np
 import seaborn as sns
+
+from utils.wgen_calendar import water_year
 
 # Embed TrueType fonts in PDF/PS so reviewers see exactly what we render
 mpl.rcParams["pdf.fonttype"] = 42
@@ -415,7 +417,7 @@ def _wy_range_subtitle(series_list: list[Series]) -> str | None:
             return None
         years = d.astype("datetime64[Y]").astype(int) + 1970
         months = d.astype("datetime64[M]").astype(int) % 12 + 1
-        wy = years + (months >= 10).astype(int)
+        wy = water_year(years, months)
         return f"(WY {int(wy.min())}-{int(wy.max())})"
     except Exception:
         return None

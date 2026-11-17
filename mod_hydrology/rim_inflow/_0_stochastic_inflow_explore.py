@@ -30,7 +30,7 @@ Outputs
 
 Dependencies
 ------------
-utils.paths, utils.dss_io; pydsstools, seaborn, matplotlib
+utils.paths, utils.dss_io, utils.wgen_calendar; pydsstools, seaborn, matplotlib
 
 Usage
 -----
@@ -53,6 +53,7 @@ from matplotlib.lines import Line2D
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 from utils import dss_io
 from utils.paths import get_base_dir, get_module_generated_dir, get_rim_inflow_outputs
+from utils.wgen_calendar import water_year
 
 # %% style
 sns.set_style("ticks")
@@ -141,7 +142,7 @@ for i, f in enumerate(_files):
     df = pd.read_csv(f)[['Year', 'Month', 'qmap_postAdj']].copy()
     _chunks.append(df.rename(columns={'qmap_postAdj': f'{LOCATION}_{i+1:02d}'}).set_index(['Year', 'Month']))
 wgen = pd.concat(_chunks, axis=1).reset_index().rename(columns={'Year': 'year', 'Month': 'month'})
-wgen['year'] = np.where(wgen['month'] >= 10, wgen['year'] + 1, wgen['year']).astype(int)
+wgen['year'] = water_year(wgen['year'], wgen['month'])
 wgen = wgen.loc[(wgen['year'] >= 1921) & (wgen['year'] <= 2021)]
 wgen_annual = wgen.groupby('year').sum().drop(columns='month')
 syn_cols = sorted([c for c in wgen_annual.columns if c.startswith(f'{LOCATION}_')])

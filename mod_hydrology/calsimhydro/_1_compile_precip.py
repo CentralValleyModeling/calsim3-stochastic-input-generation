@@ -7,7 +7,7 @@ of the --product set, written as CalSimHydro's precipitation inputs.
 Inputs
 ------
 - reference/WBA_Grid_Info.txt (or --grid_info_file): the cells of each WBA and their weights
-  (f2 / f1). No WBA 91 polygon exists, so WBA_91 lists WBA_90's cells as a stand-in and gets
+  (f2, the area inside the WBA). No WBA 91 polygon exists, so WBA_91 lists WBA_90's cells as a stand-in and gets
   WBA 90's precipitation.
 - daily weather of the set (utils.wgen.weighted_daily)
 
@@ -49,8 +49,9 @@ DSS_PART = "/IWFM/{wba}/PRECIP//1DAY/PRECIPITATION"
 
 
 def cell_weight(row) -> float:
-    """The weight of a cell in its WBA: f2 / f1, or pct_area when f1 is 0."""
-    return row.f2 / row.f1 if row.f1 != 0 else row.pct_area
+    """The weight of a cell in its WBA: its area inside the WBA (f2), or pct_area for the
+    Gerber cells, which carry no areas (f1 = 0)."""
+    return row.f2 if row.f1 != 0 else row.pct_area
 
 
 def wba_daily_precip(product: str, cells: pd.DataFrame) -> pd.Series:

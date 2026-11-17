@@ -31,6 +31,7 @@ from pathlib import Path
 import pandas as pd
 
 from utils.paths import DELIVERY, DELIVERY_WY
+from utils.wgen_calendar import water_year
 
 # Canonical column order for the standard SV / validation CSV format.
 SV_COLUMNS = ["Part B", "Part C", "Year", "Month", "Value"]
@@ -64,8 +65,8 @@ def write_delivery_csv(df: pd.DataFrame, folder, stem: str, product: str) -> Pat
     (:func:`delivery_name`), and remove the folder's other spans of the same stem and tag: the
     compiler reads every CSV in a folder, so two spans of one series would give it two values
     for a month. Returns the path written."""
-    wy = df["Year"].astype(int) + (df["Month"].astype(int) >= 10)
-    keep = wy.between(*DELIVERY_WY)
+    wy = water_year(df["Year"].astype(int), df["Month"].astype(int))
+    keep = (wy >= DELIVERY_WY[0]) & (wy <= DELIVERY_WY[1])
     if not keep.any():
         raise ValueError(f"{stem}: no rows in WY{DELIVERY_WY[0]}-{DELIVERY_WY[1]}")
     folder = Path(folder)

@@ -51,7 +51,7 @@ Outputs
 
 Dependencies
 ------------
-utils.dss_io, utils.paths; numpy, pandas, pydsstools
+utils.dss_io, utils.paths, utils.wgen_calendar; numpy, pandas, pydsstools
 
 Usage
 -----
@@ -67,6 +67,7 @@ import pandas as pd
 sys.path.insert(0, str(Path(__file__).resolve().parents[3]))
 from utils import dss_io
 from utils.paths import get_base_dir, get_generated_dir
+from utils.wgen_calendar import water_year
 RIM_DIR = (get_generated_dir() / "postprocessing" / "sv_compile"
            / "product_b_compilation" / "compiled_input_files" / "rim_inflow")
 DSS_PATH = get_base_dir() / "CalSim3" / "__calsim_sv_default__.dss"
@@ -163,8 +164,7 @@ for chunk_id, fail_year, fail_month in FAILURES:
     for var in SJR_INFLOW_VARS:
         try:
             df = pd.read_csv(RIM_DIR / f"{var}_qmo_{tag}.csv")
-            mask = ((df['Year'] == fail_year - 1) & (df['Month'] >= 10)) | \
-                   ((df['Year'] == fail_year) & (df['Month'] <= 9))
+            mask = water_year(df['Year'], df['Month']) == fail_year
             sub = df[mask]
             print(f"\n{var}:")
             for _, r in sub.iterrows():
@@ -178,8 +178,7 @@ for chunk_id, fail_year, fail_month in FAILURES:
     print(f"SECTION 2: CALSIM HISTORICAL BASELINE -- WY{fail_year}")
     print("=" * 80)
 
-    mask = ((hist['Year'] == fail_year - 1) & (hist['Month'] >= 10)) | \
-           ((hist['Year'] == fail_year) & (hist['Month'] <= 9))
+    mask = water_year(hist['Year'], hist['Month']) == fail_year
     sub_hist = hist[mask]
 
     for var in avail_vars:
@@ -277,9 +276,7 @@ for chunk_id, fail_year, fail_month in FAILURES:
     for var in ['I_MLRTN', 'I_MLRTN_IMP', 'I_MCLRE', 'I_PEDRO', 'I_MOK079']:
         try:
             df = pd.read_csv(RIM_DIR / f"{var}_qmo_{tag}.csv")
-            mask = ((df['Year'] == fail_year - 2) & (df['Month'] >= 10)) | \
-                   (df['Year'] == fail_year - 1) | \
-                   ((df['Year'] == fail_year) & (df['Month'] <= 9))
+            mask = np.isin(water_year(df['Year'], df['Month']), (fail_year - 1, fail_year))
             sub = df[mask]
             print(f"\n{var}:")
             for _, r in sub.iterrows():

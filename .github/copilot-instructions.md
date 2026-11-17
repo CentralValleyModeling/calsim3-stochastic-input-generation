@@ -97,7 +97,7 @@ from utils.paths import get_base_dir, get_module_generated_dir
 
 **CSV formats**: Standard SV: `Part B, Part C, Year, Month, Value`. Product B long: `date, WY, month, WYT, term, value`. WYT framework: `WaterYear, Month, value`.
 
-**Water year**: `df['WY'] = df['date'].dt.year + (df['date'].dt.month >= 10).astype(int)`
+**Water year**: `utils.wgen_calendar.water_year(year, month)`; October to December count toward the next year.
 
 **DSS I/O**: open every DSS file through `utils/dss_io.py` (`open_dss`,
 `read_monthly_series`, `read_monthly_frame`) instead of importing `HecDss`

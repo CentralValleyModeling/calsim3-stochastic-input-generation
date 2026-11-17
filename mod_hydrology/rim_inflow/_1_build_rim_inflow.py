@@ -85,7 +85,7 @@ from utils.paths import (INFLOW_PROVENANCE, DELIVERY, DELIVERY_WY, get_arc_inflo
                          require_pinned_run)
 from utils.qmap_fit import FIT_WY
 from utils.quantile_mapping import qmap_single
-from utils.wgen_calendar import LABEL_WY
+from utils.wgen_calendar import LABEL_WY, water_year
 
 _SCRIPT_DIR = Path(__file__).resolve().parent
 MAPPING_CSV = _SCRIPT_DIR / "reference" / "CalSim3_inflow_mapping.csv"
@@ -288,8 +288,8 @@ def main():
     print(fits[["CalSim", "Source", "cs3_ratio", "product_ratio"]].to_string(index=False))
 
     if args.product in DELIVERY:
-        wy_row = ts["Year"] + (ts["Month"] >= 10)
-        c = ts[wy_row.between(*DELIVERY_WY)]
+        wy_row = water_year(ts["Year"], ts["Month"])
+        c = ts[(wy_row >= DELIVERY_WY[0]) & (wy_row <= DELIVERY_WY[1])]
         sv = pd.DataFrame({"Part B": c["CalSim"], "Part C": c["CalSim"].map(part_c),
                            "Year": c["Year"], "Month": c["Month"], "Value": c["qmap_postAdj"]})
         paths["sv_dir"].mkdir(parents=True)

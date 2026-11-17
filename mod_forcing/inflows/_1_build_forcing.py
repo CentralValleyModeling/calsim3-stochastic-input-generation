@@ -55,18 +55,10 @@ import pandas as pd
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 from mod_forcing.inflows.adapters import label, load
-from utils.paths import (WEATHER_SETS, get_base_dir, get_inflow_model, get_inflow_repo,
-                         get_module_generated_dir, require_chain_model, sha256_file)
+from utils.paths import (WEATHER_SETS, get_inflow_model, get_inflow_repo, get_module_generated_dir,
+                         get_wgen_dir, require_chain_model, sha256_file)
 
 _gen = get_module_generated_dir("mod_forcing/inflows")
-
-# forcing -> (BASE folder of the WGEN text files, file prefix)
-BASE_WEATHER = {
-    "historical": (Path("WGEN") / "Historical_Unsplit", "data_"),
-    "A": (Path("WGEN") / "Product_A" / "1", "meteo_"),
-    "B": (Path("WGEN") / "Product_B" / "1", "meteo_"),
-}
-
 
 def read_cell(base_dir: Path, prefix: str, cell: str) -> pd.DataFrame:
     """One WGEN text file: year month day prcp tmax tmin."""
@@ -90,16 +82,15 @@ def main():
     require_chain_model(args.forcing)
 
     repo = get_inflow_repo()
-    base_sub, prefix = BASE_WEATHER[args.forcing]
-    base_dir = get_base_dir() / base_sub
-    read_base = functools.partial(read_cell, base_dir, prefix)
+    base_dir = get_wgen_dir(args.forcing)
+    read_base = functools.partial(read_cell, base_dir, WEATHER_SETS[args.forcing]["prefix"] + "_")
     out_dir = _gen / "output" / "_1_build_forcing" / WEATHER_SETS[args.forcing]["wgen"]
     out_dir.mkdir(parents=True, exist_ok=True)
     print(f"BASE:  {base_dir}")
     if args.forcing in model.BUILT and n_cells is None:
         print(f"Writing the {model.LABEL} input from BASE into {out_dir}")
         model.build_inputs(repo, args.forcing, read_base, out_dir,
-                           (Path("BASE") / base_sub).as_posix())
+                           (Path("BASE") / "WGEN" / WEATHER_SETS[args.forcing]["wgen"]).as_posix())
     files = model.inputs(repo, args.forcing, out_dir)
     missing = [f for f in files if not f.exists()]
     if missing:

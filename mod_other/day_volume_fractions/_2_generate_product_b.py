@@ -124,7 +124,7 @@ def build_vf_by_wy(df_vf: pd.DataFrame, min_wy: int = DONOR_WY_MIN) -> dict:
     """
     df = df_vf.copy()
     df.index = pd.to_datetime(df.index)
-    df["WY"] = df.index.year + (df.index.month >= 10).astype(int)
+    df["WY"] = water_year(df.index.year, df.index.month)
     df["Month"] = df.index.month
 
     lookup = {}
@@ -169,7 +169,7 @@ def build_historical_annual_index(dss_path: Path, ref_csv: Path) -> pd.Series:
 
     df = pd.DataFrame(dss_monthly).sort_index()
     df.index = pd.to_datetime(df.index)
-    df["WY"] = df.index.year + (df.index.month >= 10).astype(int)
+    df["WY"] = water_year(df.index.year, df.index.month)
 
     annual = df.groupby("WY")[list(dss_monthly.keys())].sum().sum(axis=1)
     annual.name = "flow_index"

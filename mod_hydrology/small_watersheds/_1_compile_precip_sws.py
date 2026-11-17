@@ -12,7 +12,7 @@ chunk's label months (utils.wgen_calendar) and keeps the template's WY1921 as in
 Inputs
 ------
 - reference/SmallWatersheds_Grid_Info_20200915_RowBased.txt (or --grid_info_file):
-  watershed_id, Lat, Lon, pct_area, f1, f2; weight f2 / f1
+  watershed_id, Lat, Lon, pct_area, f1, f2; weight f2, the area inside the watershed
 - reference/CVprecipWY1921_2021.dat (or --CVprecip_file): the template
 - daily weather of the set (utils.wgen.weighted_daily)
 
@@ -59,7 +59,7 @@ FIRST_COLUMN = 1393    # template column of the first watershed
 def watershed_daily(product: str, cells: pd.DataFrame) -> pd.DataFrame:
     """Area-weighted daily precipitation (mm) of one watershed: Year, Month, Day, precip on the
     rows of the weather files."""
-    return weighted_daily(product, [(met_path(product, row.Lat, row.Lon), row.f2 / row.f1)
+    return weighted_daily(product, [(met_path(product, row.Lat, row.Lon), row.f2)
                                     for row in cells.itertuples(index=False)], ["precip"])
 
 

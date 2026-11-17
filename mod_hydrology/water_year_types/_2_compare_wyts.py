@@ -44,7 +44,8 @@ import matplotlib.pyplot as plt
 matplotlib.rcParams['font.size'] = 8
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
-from utils.paths import DELIVERY_WY, get_module_generated_dir
+from utils.paths import DELIVERY_WY, WEATHER_SETS, get_module_generated_dir
+from utils.wgen_calendar import N_CHUNKS
 
 _SCRIPT_DIR = Path(__file__).resolve().parent
 _wyt_gen = get_module_generated_dir("mod_hydrology/water_year_types")
@@ -52,9 +53,8 @@ _wyt_gen = get_module_generated_dir("mod_hydrology/water_year_types")
 # Directories
 INPUT_DIR = _SCRIPT_DIR / 'reference'
 OUTPUT_DIR = _wyt_gen / 'output' / '_2_compare_WYTs'
-PRODUCT_A_DIR = _wyt_gen / 'output' / '_1_calc_WYTs' / 'Product_A'
-PRODUCT_B_DIR = _wyt_gen / 'output' / '_1_calc_WYTs' / 'Product_B'
-N_CHUNKS = 10
+PRODUCT_A_DIR = _wyt_gen / 'output' / '_1_calc_WYTs' / WEATHER_SETS['A']['name']
+PRODUCT_B_DIR = _wyt_gen / 'output' / '_1_calc_WYTs' / WEATHER_SETS['B']['name']
 
 # WYT Thresholds (MAF)
 SAC_THRESH = {'c': 5.4, 'd': 6.5, 'bn': 7.8, 'an': 9.2}
