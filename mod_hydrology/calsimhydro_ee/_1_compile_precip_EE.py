@@ -39,7 +39,7 @@ from pydsstools.core import TimeSeriesContainer
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 from utils import dss_io
 from utils.paths import WEATHER_SETS, get_module_generated_dir
-from utils.wgen import dates, met_path, read_met
+from utils.wgen import dates, met_path, weighted_daily
 from utils.wgen_calendar import DAYS_1920_2021, N_CHUNKS, daily_chunk_1920_2021
 
 MM_TO_IN = 0.0393701
@@ -49,26 +49,18 @@ DSS_PART = "/IWFM/E{wba}/PRECIP//1DAY/PRECIPITATION"
 def wba_daily_precip(product: str, cells: pd.DataFrame) -> pd.Series:
     """Simple-average daily precipitation (in/day) over a WBA's cells that have a weather file,
     indexed by date (by stamp day for Product B)."""
-    series, first, missing = [], None, []
-    for row in cells.drop_duplicates(subset=['gridID']).itertuples(index=False):
-        path = met_path(product, row.Lat, row.Long)
-        if not path.exists():
-            missing.append(path.name)
-            continue
-        met = read_met(product, path, usecols=['precip'])
-        if first is None:
-            first = met
-        elif not np.array_equal(met[['Year', 'Month', 'Day']].to_numpy(),
-                                first[['Year', 'Month', 'Day']].to_numpy()):
-            raise ValueError(f"{path}: its days differ from the other cells of the WBA")
-        series.append(met['precip'])
-    if not series:
+    paths = [met_path(product, row.Lat, row.Long)
+             for row in cells.drop_duplicates(subset=['gridID']).itertuples(index=False)]
+    found = [p for p in paths if p.exists()]
+    missing = [p.name for p in paths if not p.exists()]
+    if not found:
         raise ValueError(f"No cell of the WBA has a weather file: {missing}")
     if missing:
         print(f"    no weather file, left out: {', '.join(missing)}")
-    out = sum(series) / len(series) * MM_TO_IN
+    daily = weighted_daily(product, [(p, 1.0) for p in found], ['precip'])
+    out = daily['precip'] * MM_TO_IN
     if product != 'B':
-        out.index = dates(first)
+        out.index = dates(daily)
     return out
 
 

@@ -1,9 +1,9 @@
 """
 Extract Daily Basin-Averaged Precipitation for Oroville / Feather River
 ======================================================================
-Grid-weighted daily basin-average precipitation (inches) for the Oroville/Feather River basin
-from the daily weather of one set (``utils.wgen``), with the grid weights of
-CS3_8RI_OROVI_GridInfo.txt.
+Daily basin-average precipitation (inches) for the Oroville/Feather River basin from the daily
+weather of one set (``utils.wgen``), each grid cell of CS3_8RI_OROVI_GridInfo.txt weighted by
+its area inside the basin.
 
 Historical_Unsplit, Product A and LTO give one series over ``WINDOWS``. Product B gives 10
 chunk CSVs of 100 water years each, cut by ``utils.wgen_calendar.chunk_days`` and labelled in
@@ -40,7 +40,7 @@ import pandas as pd
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 from utils.paths import get_module_generated_dir
-from utils.wgen import SETS, dates, met_path, read_met, set_name
+from utils.wgen import SETS, dates, met_path, set_name, weighted_daily
 from utils.wgen_calendar import LABEL_DAYS, N_CHUNKS, chunk_days
 
 _gen = get_module_generated_dir("mod_reservoir/storage_curves")
@@ -64,30 +64,19 @@ def single_file(product: str) -> str:
 
 
 def parse_grid_info_file(grid_info_path):
-    """The basin's cells: grid_id, lat, lon, weight1, weight2 (weight1 is the weight used)."""
+    """The basin's cells: grid_id, lat, lon, cell_area and basin_area (km2; basin_area, the
+    part of the cell inside the basin, is its weight)."""
     return pd.read_csv(grid_info_path, sep=r'\s+', header=None,
-                       names=['grid_id', 'lat', 'lon', 'weight1', 'weight2'])
+                       names=['grid_id', 'lat', 'lon', 'cell_area', 'basin_area'])
 
 
 def basin_daily_precip(grid_info_df, product):
     """Weighted basin-average daily precipitation (inches): Year, Month, Day and precip_inches
     on the rows of the weather files (stamp days for Product B)."""
-    total, weight_total, first = None, 0.0, None
     print(f"  Processing {len(grid_info_df)} grid cells...")
-    for row in grid_info_df.itertuples(index=False):
-        path = met_path(product, row.lat, row.lon)
-        if not path.exists():
-            raise FileNotFoundError(f"{path}: grid cell ({row.lat}, {row.lon}) of the basin has no weather file")
-        met = read_met(product, path, usecols=['precip'])
-        if first is None:
-            first = met
-        elif not np.array_equal(met[['Year', 'Month', 'Day']].to_numpy(),
-                                first[['Year', 'Month', 'Day']].to_numpy()):
-            raise ValueError(f"{path}: its days differ from the other cells of the basin")
-        contrib = met['precip'].to_numpy() * row.weight1
-        total = contrib if total is None else total + contrib
-        weight_total += row.weight1
-    return first[['Year', 'Month', 'Day']].assign(precip_inches=total / weight_total / 25.4)
+    daily = weighted_daily(product, [(met_path(product, row.lat, row.lon), row.basin_area)
+                                     for row in grid_info_df.itertuples(index=False)], ['precip'])
+    return daily[['Year', 'Month', 'Day']].assign(precip_inches=daily['precip'] / 25.4)
 
 
 def write_single(daily, product, output_dir):
@@ -208,7 +197,7 @@ def main():
     print(f"  Grid info: {grid_info_path}")
     print(f"  Output folder: {output_dir}")
     grid_info_df = parse_grid_info_file(grid_info_path)
-    print(f"  Found {len(grid_info_df)} grid cells, total weight {grid_info_df['weight1'].sum():.2f}")
+    print(f"  Found {len(grid_info_df)} grid cells, basin area {grid_info_df['basin_area'].sum():.1f} km2")
 
     daily = basin_daily_precip(grid_info_df, args.product)
     if args.product == 'B':

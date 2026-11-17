@@ -24,6 +24,7 @@ Usage
     w = read_met("historical", met_path("historical", 38.15625, -120.71875))
     w.columns    # Year, Month, Day, precip, tmax, tmin
     dates(w)     # DatetimeIndex 1915-01-01 ... 2018-12-31
+    weighted_daily("A", [(met_path("A", lat, lon), weight), ...], ["precip"])   # basin mean
 """
 from __future__ import annotations
 
@@ -70,13 +71,18 @@ def met_path(product: str, lat, lon) -> Path:
 
 @functools.cache
 def cells(product: str) -> tuple[tuple[float, float, Path], ...]:
-    """Every cell of ``product``: (lat, lon, file), in file-name order."""
+    """Every cell of ``product``: (lat, lon, file), in file-name order. Stops on a file whose
+    name starts with the prefix but is not ``<prefix>_<lat>_<lon>``."""
     prefix = _prefix(product) + "_"
     out = []
     for p in sorted(met_dir(product).glob(prefix + "*")):
         if p.is_file():
-            lat, lon = p.name[len(prefix):].split("_")
-            out.append((float(lat), float(lon), p))
+            try:
+                lat, lon = (float(x) for x in p.name[len(prefix):].split("_"))
+            except ValueError:
+                raise ValueError(f"{p}: not a weather file name ({prefix}<lat>_<lon>); move it "
+                                 f"out of {p.parent}") from None
+            out.append((lat, lon, p))
     if not out:
         raise FileNotFoundError(f"{met_dir(product)}: no {prefix}* files")
     return tuple(out)
@@ -141,6 +147,31 @@ def dates(w: pd.DataFrame) -> pd.DatetimeIndex:
     whose stamp leap years no date type knows)."""
     return pd.DatetimeIndex(pd.to_datetime(w[["Year", "Month", "Day"]].set_axis(
         ["year", "month", "day"], axis=1)))
+
+
+def weighted_daily(product: str, cells, usecols, values=None) -> pd.DataFrame:
+    """The weighted mean over a basin's cells of their daily ``usecols`` (or of the columns
+    ``values(rows)`` makes from each cell's ``read_met`` rows): Year, Month and Day of the
+    files' rows, then one column each, as the sum of value x weight over the sum of the weights.
+    ``cells`` holds (file, weight) pairs. Stops on a missing file and on a file whose days
+    differ from the first's."""
+    total, weight, first = None, 0.0, None
+    for path, w in cells:
+        path = Path(path)
+        if not path.exists():
+            raise FileNotFoundError(f"{path}: a cell of the basin has no weather file")
+        rows = read_met(product, path, usecols=usecols)
+        if first is None:
+            first = rows
+        elif not np.array_equal(rows[["Year", "Month", "Day"]].to_numpy(),
+                                first[["Year", "Month", "Day"]].to_numpy()):
+            raise ValueError(f"{path}: its days differ from the other cells of the basin")
+        part = (rows[list(usecols)] if values is None else values(rows)) * w
+        total = part if total is None else total + part
+        weight += w
+    if first is None:
+        raise ValueError("no cells")
+    return pd.concat([first[["Year", "Month", "Day"]], total / weight], axis=1)
 
 
 def _correct_x10(w: pd.DataFrame, path: Path, key: str) -> None:

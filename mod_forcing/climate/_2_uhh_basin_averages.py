@@ -3,7 +3,7 @@ Extract Monthly Basin-Averaged Climate for UHH Locations
 ========================================================
 Computes weighted-average monthly precipitation, temperature, and VPD for
 UHH (Upper Headwater Hydrology) locations specified in reference/uhh_locations.csv.
-Grid cell weights are read from reference/GridInfo/ files.
+Each grid cell is weighted by its area inside the basin (reference/GridInfo/ files).
 VPD is derived via quantile mapping from temperature using CalSim historical VPD.
 
 Historical_Unsplit, Product A, LTO: one CSV per variable per location; the first two also
@@ -51,7 +51,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 from utils import dss_io
 from utils.csv_io import write_delivery_csv
 from utils.paths import DELIVERY, WEATHER_SETS, delivery_dir, get_base_dir, get_module_generated_dir
-from utils.wgen import SETS, met_path, read_met, set_name
+from utils.wgen import SETS, dates, met_path, set_name, weighted_daily
 from utils.wgen_calendar import (CHUNK_MONTHS, N_CHUNKS, label as calendar_label, month_totals,
                                  water_year, write_chunk_csvs)
 from utils.quantile_mapping import qmap_single
@@ -60,7 +60,8 @@ def parse_grid_info_file(grid_info_path):
     """
     Parse a grid info file to extract grid cell coordinates and weights.
     
-    Format: GridID  Latitude  Longitude  Weight1  Weight2
+    Format: GridID  Latitude  Longitude  CellArea  BasinArea (km2; BasinArea is the part of
+    the cell inside the basin)
     
     Parameters:
     -----------
@@ -69,71 +70,42 @@ def parse_grid_info_file(grid_info_path):
         
     Returns:
     --------
-    pd.DataFrame with columns: grid_id, lat, lon, weight1, weight2
+    pd.DataFrame with columns: grid_id, lat, lon, cell_area, basin_area
     """
     df = pd.read_csv(
         grid_info_path, 
         sep=r'\s+', 
         header=None,
-        names=['grid_id', 'lat', 'lon', 'weight1', 'weight2']
+        names=['grid_id', 'lat', 'lon', 'cell_area', 'basin_area']
     )
     return df
 
 
 def calculate_basin_monthly_averages(grid_info_df, product, date_index=None):
     """
-    Basin-averaged monthly precipitation (inches) and temperature (degF), weighted by the
-    grid info's weight1 column, from the daily weather of each cell (utils.wgen).
+    Basin-averaged monthly precipitation (inches) and temperature (degF), each cell weighted by
+    its area inside the basin (``basin_area``), from the daily weather of each cell (utils.wgen).
 
-    A single series (Historical_Unsplit, Product A, LTO) is aligned to ``date_index`` first,
-    so days outside the files' span count as missing. Product B stays on its stamp days and
-    months (utils.wgen_calendar); every cell must list the same days.
+    Every cell must list the same days (utils.wgen.weighted_daily). A single series
+    (Historical_Unsplit, Product A, LTO) is then aligned to ``date_index``, and its days
+    outside the files' span are left out, so the series ends with the weather (December 2018
+    for Historical_Unsplit and Product A). Product B stays on its stamp days and months
+    (utils.wgen_calendar).
 
     Returns:
     --------
     pd.DataFrame with year, month (stamp months for Product B), precip_inches, tavg_f, and
     date (single series only)
     """
-    weighted_precip_sum = None
-    weighted_tavg_sum = None
-    weight_total = 0.0
-    days = None
-
-    for _, row in grid_info_df.iterrows():
-        weight = row['weight1']
-        path = met_path(product, row['lat'], row['lon'])
-        if not path.exists():
-            raise FileNotFoundError(f"no weather file for grid cell ({row['lat']}, {row['lon']}): {path}")
-        w = read_met(product, path)
-        tavg = (w['tmax'] + w['tmin']) / 2.0
-        if product == "B":
-            if days is None:
-                days = w[['Year', 'Month', 'Day']]
-            elif not np.array_equal(days.to_numpy(), w[['Year', 'Month', 'Day']].to_numpy()):
-                raise ValueError(f"{path}: its days differ from the basin's first cell")
-            precip_series = w['precip'].reset_index(drop=True)
-            tavg_series = tavg.reset_index(drop=True)
-        else:
-            dates = pd.to_datetime(w[['Year', 'Month', 'Day']].rename(columns=str.lower))
-            precip_series = pd.Series(w['precip'].to_numpy(), index=dates).reindex(date_index)
-            tavg_series = pd.Series(tavg.to_numpy(), index=dates).reindex(date_index)
-
-        precip_contrib = precip_series * weight
-        tavg_contrib = tavg_series * weight
-        weighted_precip_sum = precip_contrib if weighted_precip_sum is None else (weighted_precip_sum + precip_contrib)
-        weighted_tavg_sum = tavg_contrib if weighted_tavg_sum is None else (weighted_tavg_sum + tavg_contrib)
-        weight_total += weight
-
-    if weighted_precip_sum is None:
-        raise ValueError("No grid cells in the grid info")
-
-    if product == "B":
-        daily = days.reset_index(drop=True).assign(precip=weighted_precip_sum.to_numpy() / weight_total,
-                                                   tavg=weighted_tavg_sum.to_numpy() / weight_total)
-    else:
+    cells = [(met_path(product, row['lat'], row['lon']), row['basin_area'])
+             for _, row in grid_info_df.iterrows()]
+    daily = weighted_daily(product, cells, ['precip', 'tmax', 'tmin'], values=lambda w: pd.DataFrame(
+        {'precip': w['precip'], 'tavg': (w['tmax'] + w['tmin']) / 2.0}))
+    if product != "B":
+        s = daily[['precip', 'tavg']].set_axis(dates(daily)).reindex(date_index)
         daily = pd.DataFrame({'Year': date_index.year, 'Month': date_index.month, 'Day': date_index.day,
-                              'precip': weighted_precip_sum.to_numpy() / weight_total,
-                              'tavg': weighted_tavg_sum.to_numpy() / weight_total})
+                              'precip': s['precip'].to_numpy(), 'tavg': s['tavg'].to_numpy()}
+                             ).dropna(subset=['precip'])   # a month sum would count them as 0
     m = month_totals(daily, {'precip': 'sum', 'tavg': 'mean'})
     monthly_df = pd.DataFrame({
         'year':          m['Year'],
@@ -371,7 +343,7 @@ def process_location(shorthand, grid_info_file, grid_info_folder, product, outpu
     
     grid_info_df = parse_grid_info_file(grid_info_path)
     print(f"  Number of grid cells: {len(grid_info_df)}")
-    print(f"  Total weight: {grid_info_df['weight1'].sum():.2f}")
+    print(f"  Basin area: {grid_info_df['basin_area'].sum():.1f} km2")
     
     # Calculate basin-averaged monthly data
     monthly_data = calculate_basin_monthly_averages(
@@ -439,7 +411,7 @@ def process_location(shorthand, grid_info_file, grid_info_folder, product, outpu
         'vpd_enabled': vpd_enabled,
         'grid_info_file': grid_info_file,
         'num_grid_cells': len(grid_info_df),
-        'total_weight': grid_info_df['weight1'].sum(),
+        'basin_area_km2': grid_info_df['basin_area'].sum(),
         'mean_monthly_precip_inches': monthly_data['precip_inches'].mean(),
         'mean_monthly_tavg_f': monthly_data['tavg_f'].mean(),
         'total_months': len(monthly_data),
@@ -1022,9 +994,9 @@ def _ppt_filename_stem(shorthand: str) -> str:
 
 
 def _basin_weight_from_gridinfo(grid_info_folder: Path, grid_info_file: str) -> float:
-    """Return total basin area weight (sum of weight1) for a UHH basin."""
+    """The area (km2) of a UHH basin: the sum of its cells' basin_area."""
     df = parse_grid_info_file(grid_info_folder / grid_info_file)
-    return float(df['weight1'].sum())
+    return float(df['basin_area'].sum())
 
 
 def _historical_wy_totals_from_dss(ppt_part_b: str, start_wy: int = 1922, end_wy: int = 2021) -> pd.DataFrame:

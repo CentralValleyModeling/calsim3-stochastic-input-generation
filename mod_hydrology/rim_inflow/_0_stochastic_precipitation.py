@@ -43,7 +43,7 @@ from matplotlib.lines import Line2D
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 from utils.paths import get_module_generated_dir, REPO_ROOT
-from utils.wgen import met_path, read_met
+from utils.wgen import met_path, weighted_daily
 from utils.wgen_calendar import N_CHUNKS, monthly
 
 # %% style
@@ -94,14 +94,9 @@ def gather_precip(product, grid_info):
     """Area-weighted precipitation (in) of the basin: the daily rows (Year, Month, Day, precip;
     stamp days for Product B), the labelled monthly table (chunk, Year, Month, WY, precip) and
     the water-year totals of complete water years (chunk, WY, precip)."""
-    total, weight, first = None, 0.0, None
-    for row in grid_info.itertuples(index=False):
-        met = read_met(product, met_path(product, row.Lat, row.Lon), usecols=['precip'])
-        w = row.f2 / row.f1
-        total = met['precip'] * w if total is None else total + met['precip'] * w
-        weight += w
-        first = met if first is None else first
-    daily = first[['Year', 'Month', 'Day']].assign(precip=total / weight * 0.0393701)
+    basin = weighted_daily(product, [(met_path(product, row.Lat, row.Lon), row.f2 / row.f1)
+                                     for row in grid_info.itertuples(index=False)], ['precip'])
+    daily = basin[['Year', 'Month', 'Day']].assign(precip=basin['precip'] * 0.0393701)
     m = monthly(product, daily, 'sum')
     g = m.groupby(['chunk', 'WY'])['precip']
     annual = g.sum()[g.size() == 12].reset_index()
