@@ -1,20 +1,24 @@
 """
 Postprocess Small Watersheds DSS Runs
 =====================================
-Extracts time series from historical and VIC-precip Small Watersheds DSS
-outputs, merges scenarios into a single CSV, computes summary statistics,
-generates scenario-comparison boxplots, and creates a CalSim validation CSV
-from the VIC_Precip (Product A) scenario.
+Extracts time series from the CalSim historical Small Watersheds run and the
+run of a single weather series (Historical_Unsplit or Product A), merges them
+into a single CSV, computes summary statistics, generates scenario-comparison
+boxplots, and writes the set's delivery CSV.
 
 Inputs
 ------
-- Small Watersheds DSS outputs (historical, VIC-precip scenarios)
+- SmallWatersheds_Runs/SmallWatershed_Historical_1921-2018 (CalSim historical inputs)
+- SmallWatersheds_Runs/SmallWatershed_<Historical_Unsplit|Product_A> (the set's run, from
+  _1_compile_precip_sws.py inputs)
 - Master inventory xlsx
 
 Outputs
 -------
-- <generated>/output/_2_postprocess_product_a/  (merged + summary CSVs, boxplots)
-- <generated>/output/_2_postprocess_product_a/_product_a_validation/  (CalSim-format CSV)
+- <generated>/output/_2_postprocess_single/<Historical_Unsplit|Product_A>/
+  (merged + summary CSVs, boxplots)
+- <generated>/output/_2_postprocess_single/<_historical_unsplit_validation|_product_a_validation>/
+  (_smallwatersheds_<historicalUnsplit|productA>_1922_2018.csv)
 
 Dependencies
 ------------
@@ -22,11 +26,13 @@ Dependencies
 
 Usage
 -----
-Runs the postprocess and writes the validation CSV over utils.paths.PRODUCT_A_WY
-(the SWS Product A run covers WY1921-2018):
-    python _2_postprocess_product_a.py
+Runs the postprocess and writes the delivery CSV over utils.paths.DELIVERY_WY
+(the SWS runs cover WY1921-2018):
+    python mod_hydrology/small_watersheds/_2_postprocess_single.py --product historical
+    python mod_hydrology/small_watersheds/_2_postprocess_single.py --product A
 """
 
+import argparse
 import os
 import sys
 from functools import reduce
@@ -40,26 +46,37 @@ import matplotlib.pyplot as plt
 # Add repo root to path for utils imports
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 from utils import dss_io
-from utils.csv_io import write_product_a_csv
-from utils.paths import PRODUCT_A_WY, get_module_generated_dir, get_inventory_dir
+from utils.csv_io import write_delivery_csv
+from utils.paths import DELIVERY, DELIVERY_WY, WEATHER_SETS, delivery_dir, get_module_generated_dir, get_inventory_dir
 
 _GEN_DIR = get_module_generated_dir("mod_hydrology/small_watersheds")
 
 
 # -- CONSTANTS --------------------------------------------------------
-OUTPUT_DIR = str(_GEN_DIR / "output" / "_2_postprocess_product_a")
-VALIDATION_DIR = str(_GEN_DIR / "output" / "_2_postprocess_product_a" / "_product_a_validation")
+OUTPUT_ROOT = _GEN_DIR / "output" / "_2_postprocess_single"
 
 EXCEL_PATH = str(get_inventory_dir() / "_MASTER_INVENTORY_FOR_STOCHASTIC_INPUT_GENERATION_.xlsx")
 SHEET_NAME = "MASTER"
 
 _sws_runs = _GEN_DIR / "SmallWatersheds_Runs"
-DSS_PATHS = [
-    str(_sws_runs / "SmallWatershed_Historical_1921-2018" / "CVSWShed_FlowContribution3pcntWBA24_2013Init_2021.dss"),      # Value 1
-    str(_sws_runs / "SmallWatershed_Product_A" / "CVSWShed_FlowContribution3pcntWBA24_2013Init_2021.dss"),                  # Value 2
-]
+DSS_NAME = "CVSWShed_FlowContribution3pcntWBA24_2013Init_2021.dss"
+CALSIM_RUN, CALSIM_LABEL = "SmallWatershed_Historical_1921-2018", "Historical_1921"
 
-SCENARIO_LABELS = ['Historical_1921', 'ProductA']
+
+def output_dir(product):
+    """Folder of the merged and summary CSVs and the boxplots of a set."""
+    return str(OUTPUT_ROOT / WEATHER_SETS[product]["name"])
+
+
+def set_label(product):
+    """Scenario column of the set in the merged CSV: ProductA, HistoricalUnsplit."""
+    return WEATHER_SETS[product]["name"].replace("_", "")
+
+
+def dss_paths(product):
+    """The CalSim historical run, then the set's run."""
+    return [str(_sws_runs / CALSIM_RUN / DSS_NAME),
+            str(_sws_runs / f"SmallWatershed_{WEATHER_SETS[product]['name']}" / DSS_NAME)]
 
 
 # -- HELPER FUNCTIONS ------------------------------------------------
@@ -130,20 +147,22 @@ def compute_summary(df, time_unit, agg_func, label, value_cols):
 
 # -- POSTPROCESS ------------------------------------------------------
 
-def run_postprocess():
+def run_postprocess(product):
     """Extract DSS data, merge scenarios, generate summary statistics and boxplots."""
-    os.makedirs(OUTPUT_DIR, exist_ok=True)
+    out_dir = output_dir(product)
+    os.makedirs(out_dir, exist_ok=True)
+    labels = [CALSIM_LABEL, set_label(product)]
 
     # Load master inventory
     excel_partcs, desired_order = load_master_inventory()
 
     # Read all DSS files
     print("Reading DSS files...")
-    dss_data_by_file = [extract_dss_data(path, excel_partcs) for path in DSS_PATHS]
+    dss_data_by_file = [extract_dss_data(path, excel_partcs) for path in dss_paths(product)]
 
     # Convert to long format
     long_dfs = []
-    for df, label in zip(dss_data_by_file, SCENARIO_LABELS):
+    for df, label in zip(dss_data_by_file, labels):
         long_df = df.stack().reset_index()
         long_df.columns = ['Date', 'SV_Name_PartBC', label]
         long_df[['PartB', 'PartC']] = long_df['SV_Name_PartBC'].str.split('/', expand=True)
@@ -165,7 +184,7 @@ def run_postprocess():
     merged_df = merged_df.drop(columns=['PartBC', 'SortOrder'])
 
     # Save final merged time series
-    merged_csv_path = os.path.join(OUTPUT_DIR, "SmallWatersheds_2DSS.csv")
+    merged_csv_path = os.path.join(out_dir, "SmallWatersheds_2DSS.csv")
     merged_df.to_csv(merged_csv_path, index=False)
     print(f"Final CSV saved to: {merged_csv_path}")
 
@@ -175,7 +194,7 @@ def run_postprocess():
     merged_df['Month'] = merged_df['Date'].dt.month
     merged_df['Quarter'] = merged_df['Date'].dt.to_period("Q")
 
-    value_cols = SCENARIO_LABELS
+    value_cols = labels
 
     summary_df = pd.concat([
         compute_summary(merged_df, 'Month',   np.mean,   'Monthly',    value_cols),
@@ -186,7 +205,7 @@ def run_postprocess():
         compute_summary(merged_df, 'Year',    np.median, 'Annual',     value_cols),
     ], ignore_index=True)
 
-    summary_output_path = os.path.join(OUTPUT_DIR, "SmallWatersheds_summary_statistics_by_PartC.csv")
+    summary_output_path = os.path.join(out_dir, "SmallWatersheds_summary_statistics_by_PartC.csv")
     summary_df.to_csv(summary_output_path, index=False)
     print(f"Summary statistics saved to: {summary_output_path}")
 
@@ -223,7 +242,7 @@ def run_postprocess():
         if len(partc_df['Scenario'].unique()) > 1:
             plt.legend(loc='upper right')
         plt.tight_layout()
-        plt.savefig(os.path.join(OUTPUT_DIR, f"Boxplot_{partc}_with_mean.png"), dpi=300)
+        plt.savefig(os.path.join(out_dir, f"Boxplot_{partc}_with_mean.png"), dpi=300)
         plt.show()
 
     print("Postprocessing complete.")
@@ -233,25 +252,23 @@ def run_postprocess():
 
 # -- VALIDATION CSV ---------------------------------------------------
 
-def create_validation_csv(merged_df=None, output_dir=None):
+def create_validation_csv(product, merged_df=None):
     """
-    Create validation CSV from SmallWatersheds postprocess output.
+    Create the delivery CSV of a set from the SmallWatersheds postprocess output.
 
-    Filters the VIC_Precip (Product A) scenario to utils.paths.PRODUCT_A_WY
-    and converts AF to TAF.  Outputs in standard CalSim validation format:
-    Part B, Part C, Year, Month, Value.
+    Filters the set's scenario to utils.paths.DELIVERY_WY and converts AF to TAF.
+    Outputs in standard CalSim validation format: Part B, Part C, Year, Month, Value,
+    in the set's delivery folder (utils.paths.delivery_dir).
 
     Parameters
     ----------
+    product : str
+        Weather set with a delivery (utils.paths.DELIVERY): historical or A.
     merged_df : pd.DataFrame, optional
         Merged postprocess DataFrame (from run_postprocess).  If None, reads
         from SmallWatersheds_2DSS.csv on disk.
-    output_dir : str, optional
-        Output directory for validation CSV.  Defaults to VALIDATION_DIR.
     """
-    if output_dir is None:
-        output_dir = VALIDATION_DIR
-    start_wy, end_wy = PRODUCT_A_WY
+    start_wy, end_wy = DELIVERY_WY
 
     print("=" * 80)
     print("Creating Validation CSV -- Small Watersheds")
@@ -259,7 +276,7 @@ def create_validation_csv(merged_df=None, output_dir=None):
 
     # Load from CSV if no DataFrame provided
     if merged_df is None:
-        source_csv = os.path.join(OUTPUT_DIR, "SmallWatersheds_2DSS.csv")
+        source_csv = os.path.join(output_dir(product), "SmallWatersheds_2DSS.csv")
         if not os.path.exists(source_csv):
             print(f"Error: {source_csv} not found. Run postprocessing first.")
             return
@@ -283,14 +300,14 @@ def create_validation_csv(merged_df=None, output_dir=None):
         print("No data found in the validation period.")
         return
 
-    # Build validation DataFrame using ProductA values
+    # Build the delivery DataFrame from the set's values
     # SmallWatersheds DSS outputs in AF; CalSim baseline expects TAF
     val_df = pd.DataFrame({
         'Part B': df_filtered['PartB'].values,
         'Part C': df_filtered['PartC'].values,
         'Year':   df_filtered['Date'].dt.year.values,
         'Month':  df_filtered['Date'].dt.month.values,
-        'Value':  df_filtered['ProductA'].values / 1000.0   # AF -> TAF
+        'Value':  df_filtered[set_label(product)].values / 1000.0   # AF -> TAF
     })
 
     val_df = val_df.dropna(subset=['Value'])
@@ -298,7 +315,8 @@ def create_validation_csv(merged_df=None, output_dir=None):
         by=['Part B', 'Part C', 'Year', 'Month']
     ).reset_index(drop=True)
 
-    output_file = write_product_a_csv(val_df, output_dir, "_smallwatersheds_productA")
+    output_file = write_delivery_csv(val_df, delivery_dir(OUTPUT_ROOT, product), "_smallwatersheds",
+                                     product)
 
     n_variables = val_df.groupby(['Part B', 'Part C']).ngroups
     print(f"\n  Written   : {output_file}")
@@ -314,8 +332,12 @@ def create_validation_csv(merged_df=None, output_dir=None):
 
 def main():
     """Main entry point."""
-    merged_df = run_postprocess()
-    create_validation_csv(merged_df=merged_df)
+    ap = argparse.ArgumentParser(description="Postprocess the Small Watersheds runs of a weather set.")
+    ap.add_argument("--product", choices=list(DELIVERY), required=True,
+                    help="Weather set: historical (Historical_Unsplit) or A")
+    product = ap.parse_args().product
+    merged_df = run_postprocess(product)
+    create_validation_csv(product, merged_df=merged_df)
 
 
 if __name__ == "__main__":

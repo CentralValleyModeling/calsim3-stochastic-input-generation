@@ -1,21 +1,21 @@
 """
-Reservoir Evaporation Processing Script (Product A & B)
-=======================================================
-Processes WGEN gridded climate data to calculate evaporation time series
-for CalSim 3.0 reservoirs using the Hargreaves-Samani method.
-Automatically finds the nearest weather file for each reservoir.
+Reservoir Evaporation Processing Script
+=======================================
+Monthly evaporation of the CalSim 3.0 reservoirs by the Hargreaves-Samani method, from the daily
+weather of one set at the cell nearest each reservoir.
 
 Inputs
 ------
-- WGEN gridded climate (Product_A / Product_B)
+- The daily weather of the set (utils.wgen): Historical_Unsplit, Product A or Product B
 - reference/reservoir_parameters.json (from _0_extract_reservoir_database)
 
 Dependencies
 ------------
 - evaporation.py  (Hargreaves-Samani engine)
-- utils/paths.py  (data-dir resolution)
+- utils/paths.py, utils/csv_io.py, utils/wgen_calendar.py
 
 Usage:
+    python mod_reservoir/evaporation/_2_run_reservoir_evap.py --product historical    # Historical_Unsplit, all reservoirs
     python mod_reservoir/evaporation/_2_run_reservoir_evap.py --product A             # Product A, all reservoirs
     python mod_reservoir/evaporation/_2_run_reservoir_evap.py --product A FOLSM       # Product A, single reservoir
     python mod_reservoir/evaporation/_2_run_reservoir_evap.py --product A FOLSM SHSTA OROVL  # Product A, specific reservoirs
@@ -23,11 +23,13 @@ Usage:
     python mod_reservoir/evaporation/_2_run_reservoir_evap.py --product B FOLSM       # Product B, single reservoir
     python mod_reservoir/evaporation/_2_run_reservoir_evap.py --compare-a             # Compare B vs A (reads pre-generated outputs)
 
-Output (Product A):
-    - Individual CSV files: output/_2_run_reservoir_evap/Product_A/individual_reservoirs/{Region}/{CODE}.csv
-    - Combined CSV file:    output/_2_run_reservoir_evap/Product_A/combined_evaporation.csv
-    - Summary statistics:   output/_2_run_reservoir_evap/Product_A/summary_statistics.csv
-    - Validation CSV:       output/_2_run_reservoir_evap/_product_a_validation/_reservoir_evaporation_productA_{start_wy}_{end_wy}.csv
+Output (Historical_Unsplit, Product A; <set> is Historical_Unsplit or Product_A):
+    - Individual CSV files: output/_2_run_reservoir_evap/<set>/individual_reservoirs/{Region}/{CODE}.csv
+    - Combined CSV file:    output/_2_run_reservoir_evap/<set>/combined_evaporation.csv
+    - Summary statistics:   output/_2_run_reservoir_evap/<set>/summary_statistics.csv
+    - Delivery CSV:         output/_2_run_reservoir_evap/_historical_unsplit_validation/_reservoir_evaporation_historicalUnsplit_{start_wy}_{end_wy}.csv
+                            and output/_2_run_reservoir_evap/_product_a_validation/_reservoir_evaporation_productA_{start_wy}_{end_wy}.csv
+    - Figures (Product A):  output/_2_run_reservoir_evap/Product_A/figures/
 
 Output (Product B):
     - Chunk CSVs: output/_2_run_reservoir_evap/_product_b_final/reservoir_evaporation_productB_n01.csv ... n10.csv
@@ -50,16 +52,16 @@ import matplotlib.pyplot as plt
 from matplotlib.patches import Patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
-from utils.csv_io import write_product_a_csv
-from utils.paths import PRODUCT_A_WY, get_module_generated_dir, get_base_dir
-from utils.wgen_calendar import require_stamp_days
+from utils.csv_io import write_delivery_csv
+from utils.paths import DELIVERY, DELIVERY_WY, WEATHER_SETS, delivery_dir, get_module_generated_dir
+from utils.wgen import dates
+from utils.wgen_calendar import N_CHUNKS, label, write_chunk_csvs
 
 _gen = get_module_generated_dir("mod_reservoir/evaporation")
 
 from evaporation import (
     EvaporationCalculator,
-    load_climate_data,
-    find_nearest_weather_file,
+    reservoir_weather,
     get_all_reservoir_codes,
     get_reservoir_info
 )
@@ -70,32 +72,12 @@ _MONTH_NAMES = {
 }
 
 
-def _load_climate_data_product_b(file_path: str) -> pd.DataFrame:
-    """
-    Load Product B WGEN climate data with its stamp year and month.
-
-    Product B WGEN files use years 1-1008 (below the pandas Timestamp minimum, ~1677) on a
-    calendar of their own (utils.wgen_calendar), so this loader builds no dates;
-    process_daily_to_monthly groups the rows by stamp year and month.
-    """
-    data = np.loadtxt(file_path)
-    require_stamp_days(len(data), file_path)
-    return pd.DataFrame({
-        'year':      data[:, 0].astype(int),
-        'month':     data[:, 1].astype(int),
-        'precip_mm': data[:, 3],
-        'tmax_c':    data[:, 4],
-        'tmin_c':    data[:, 5],
-    })
-
-
 def process_reservoir(
     reservoir_code: str,
+    product: str,
     start_date: str = '1921-10-01',
     end_date: str = '2018-09-30',
     output_dir: str = 'output/_2_run_reservoir_evap/Product_A',
-    weather_dir: str = '../_00_Data/WGEN/Product_A/1',
-    product_b: bool = False,
 ) -> pd.DataFrame:
     """
     Process one reservoir and save results.
@@ -104,75 +86,58 @@ def process_reservoir(
     -----------
     reservoir_code : str
         Reservoir code
-    start_date : str
-        Start date for Product A clipping (default: 1921-10-01)
-    end_date : str
-        End date for Product A clipping (default: 2018-09-30)
+    product : str
+        Weather set: historical, A or B
+    start_date, end_date : str
+        Days of a single series kept (default: 1921-10-01 to 2018-09-30)
     output_dir : str
-        Output directory
-    weather_dir : str
-        Directory containing WGEN met files
-    product_b : bool
-        If True, skip date clipping and individual file output
+        Output directory of a single series' individual CSVs
 
     Returns:
     --------
     pd.DataFrame
-        Monthly evaporation time series
+        Monthly evaporation: evaporation_in on month-end dates for a single series; Year,
+        Month (stamp months) and evaporation_in for Product B
     """
-    weather_file = find_nearest_weather_file(reservoir_code, weather_dir=weather_dir)
-    if weather_file is None:
-        raise FileNotFoundError(f"{reservoir_code}: no weather file in {weather_dir}")
-
-    # Load daily data
-    if product_b:
-        daily_data = _load_climate_data_product_b(weather_file)
-    else:
-        daily_data = load_climate_data(weather_file)
-        daily_data = daily_data.loc[start_date:end_date]
-
-    # Calculate evaporation
+    daily = reservoir_weather(reservoir_code, product)
     calc = EvaporationCalculator(reservoir_code)
-    evap_df = calc.process_daily_to_monthly(daily_data)
+    if product == 'B':
+        return calc.process_daily_to_monthly(daily)
 
-    # Product A only: save individual reservoir CSV
-    if not product_b:
-        params = get_reservoir_info(reservoir_code)
-        region = params['region']
-        region_folder = region.replace(' ', '_').replace('/', '_')
-        output_path = Path(output_dir) / 'individual_reservoirs' / region_folder
-        output_path.mkdir(parents=True, exist_ok=True)
-        output_file = output_path / f'{reservoir_code}.csv'
-        evap_df.to_csv(output_file)
+    day = dates(daily)
+    evap = calc.process_daily_to_monthly(daily[(day >= start_date) & (day <= end_date)])
+    month_end = pd.DatetimeIndex(pd.to_datetime(dict(year=evap['Year'], month=evap['Month'], day=1))
+                                 + pd.offsets.MonthEnd(0))
+    evap_df = pd.DataFrame({'evaporation_in': evap['evaporation_in'].to_numpy()}, index=month_end)
 
+    params = get_reservoir_info(reservoir_code)
+    region_folder = params['region'].replace(' ', '_').replace('/', '_')
+    output_path = Path(output_dir) / 'individual_reservoirs' / region_folder
+    output_path.mkdir(parents=True, exist_ok=True)
+    evap_df.to_csv(output_path / f'{reservoir_code}.csv')
     return evap_df
 
 
 def process_reservoirs(
+    product: str,
     reservoir_codes: list = None,
     start_date: str = '1921-10-01',
     end_date: str = '2018-09-30',
     output_dir: str = 'output/_2_run_reservoir_evap/Product_A',
-    weather_dir: str = '../_00_Data/WGEN/Product_A/1',
-    product_b: bool = False,
 ) -> dict:
     """
     Process multiple reservoirs.
 
     Parameters:
     -----------
+    product : str
+        Weather set: historical, A or B
     reservoir_codes : list, optional
         List of reservoir codes. If None, processes all.
-    start_date : str
-        Start date (Product A clipping)
-    end_date : str
-        End date (Product A clipping)
+    start_date, end_date : str
+        Days of a single series kept
     output_dir : str
         Output directory
-    weather_dir : str
-        Directory containing WGEN met files
-    product_b : bool
-        If True, use Product B weather data; skip individual files
 
     Returns:
     --------
@@ -182,14 +147,12 @@ def process_reservoirs(
     if reservoir_codes is None:
         reservoir_codes = get_all_reservoir_codes()
 
-    product_label = "Product B" if product_b else "Product A"
     print("="*80)
-    print(f"{product_label} Reservoir Evaporation Processing")
+    print(f"{WEATHER_SETS[product]['name']} Reservoir Evaporation Processing")
     print("="*80)
-    if not product_b:
+    if product != 'B':
         print(f"Period: {start_date} to {end_date}")
     print(f"Reservoirs: {len(reservoir_codes)}")
-    print(f"Weather:  {weather_dir}")
     print(f"Output:   {output_dir}")
     print("="*80)
 
@@ -198,11 +161,7 @@ def process_reservoirs(
 
     for i, code in enumerate(reservoir_codes, 1):
         print(f"[{i:3d}/{len(reservoir_codes)}] {code:6s}: ", end='', flush=True)
-
-        evap_df = process_reservoir(
-            code, start_date, end_date, output_dir,
-            weather_dir=weather_dir, product_b=product_b
-        )
+        evap_df = process_reservoir(code, product, start_date, end_date, output_dir)
         results[code] = evap_df
         annual_avg = evap_df['evaporation_in'].mean() * 12
         print(f"OK {len(evap_df):4d} months | {annual_avg:5.1f} in/yr")
@@ -301,25 +260,25 @@ def create_summary_statistics(
     print(f"  Range: {summary_df['annual_total_in'].min():.2f} - {summary_df['annual_total_in'].max():.2f} in/yr")
 
 
-def create_validation_csv(output_dir=None, validation_dir=None):
+def create_validation_csv(product, output_dir=None):
     """
-    Create a combined validation CSV from individual reservoir files.
+    Create the delivery CSV of a single series from its individual reservoir files.
 
     Reads processed individual reservoir CSVs and creates a long-format CSV
-    with columns Part B, Part C, Year, Month, Value over utils.paths.PRODUCT_A_WY.
+    with columns Part B, Part C, Year, Month, Value over utils.paths.DELIVERY_WY, in the
+    delivery folder of ``product`` (utils.paths.DELIVERY).
 
     Parameters:
     -----------
+    product : str
+        Weather set with a delivery: historical or A
     output_dir : path-like, optional
         Directory containing individual_reservoirs/ subfolders
-    validation_dir : path-like, optional
-        Output directory for the validation CSV
     """
-    start_wy, end_wy = PRODUCT_A_WY
+    start_wy, end_wy = DELIVERY_WY
     if output_dir is None:
-        output_dir = _gen / 'output' / '_2_run_reservoir_evap' / 'Product_A'
-    if validation_dir is None:
-        validation_dir = _gen / 'output' / '_2_run_reservoir_evap' / '_product_a_validation'
+        output_dir = _gen / 'output' / '_2_run_reservoir_evap' / WEATHER_SETS[product]['name']
+    validation_dir = delivery_dir(_gen / 'output' / '_2_run_reservoir_evap', product)
     individual_dir = Path(output_dir) / 'individual_reservoirs'
     if not individual_dir.exists():
         print(f"Error: {individual_dir} not found. Run _2_run_reservoir_evap.py first.")
@@ -330,7 +289,7 @@ def create_validation_csv(output_dir=None, validation_dir=None):
     end_date = pd.Timestamp(end_wy, 9, 30)
 
     print("=" * 80)
-    print("Creating Validation CSV")
+    print(f"Creating {WEATHER_SETS[product]['name']} Delivery CSV")
     print("=" * 80)
     print(f"Period: WY {start_wy}-{end_wy} ({start_date.strftime('%b %Y')} - {end_date.strftime('%b %Y')})")
     print(f"Source: {individual_dir}")
@@ -384,11 +343,11 @@ def create_validation_csv(output_dir=None, validation_dir=None):
     result_df = result_df.sort_values(['Part B', 'Year', 'Month']).reset_index(drop=True)
 
     # Save
-    output_file = write_product_a_csv(result_df, validation_dir, '_reservoir_evaporation_productA')
+    output_file = write_delivery_csv(result_df, validation_dir, '_reservoir_evaporation', product)
 
     n_reservoirs = result_df['Part B'].nunique()
     print(f"\n{'=' * 80}")
-    print(f"Validation CSV: {output_file}")
+    print(f"Delivery CSV: {output_file}")
     print(f"  {n_reservoirs} reservoirs x {len(result_df)} total rows")
     print(f"  Period: WY {start_wy}-{end_wy}")
     print("=" * 80)
@@ -399,45 +358,18 @@ def create_product_b_chunk_outputs(
     output_dir: str = 'output/_2_run_reservoir_evap/_product_b_final'
 ):
     """
-    Write Product B evaporation into 10 long-format chunk CSVs (100 WYs each).
-    Skips first 9 months (Jan-Sep of synthetic year 1) to align to Oct WY start.
-    Template dates: Oct 1921 - Sep 2021 (WY1922-WY2021).
-    Output format columns: Part B, Part C, Year, Month, Value
+    Write Product B evaporation into the 10 long-format chunk CSVs of utils.wgen_calendar
+    (100 WYs each, labelled WY1922-2021): Part B, Part C, Year, Month, Value.
     """
     if not results:
         return
-    months_per_chunk = 1200   # 100 WYs x 12 months
-    skip_months = 9            # Jan-Sep of synthetic year 1
-    total_chunks = 10
-    total_needed = skip_months + months_per_chunk * total_chunks
-
-    date_template = pd.date_range('1921-10-31', periods=months_per_chunk, freq='ME')
-    output_path = Path(output_dir)
-    output_path.mkdir(parents=True, exist_ok=True)
-
-    print(f"\nWriting Product B chunk files ({total_chunks} chunks x {months_per_chunk} months)...")
-    for i in range(total_chunks):
-        rows = []
-        for code, df in results.items():
-            vals = df['evaporation_in'].values
-            if len(vals) < total_needed:
-                raise ValueError(f"{code}: need {total_needed} months, got {len(vals)}")
-            chunk_vals = vals[skip_months + i * months_per_chunk:
-                              skip_months + (i + 1) * months_per_chunk]
-            part_b = f"ER_{code}"
-            for j, val in enumerate(chunk_vals):
-                rows.append({
-                    'Part B': part_b,
-                    'Part C': 'EVAPORATION-RATE',
-                    'Year':  int(date_template[j].year),
-                    'Month': int(date_template[j].month),
-                    'Value': val,
-                })
-        chunk_df = pd.DataFrame(rows, columns=['Part B', 'Part C', 'Year', 'Month', 'Value'])
-        out_file = output_path / f"reservoir_evaporation_productB_n{i+1:02d}.csv"
-        chunk_df.to_csv(out_file, index=False)
-        print(f"  Chunk {i+1:02d}/10: {out_file.name} ({len(results)} reservoirs)")
-    print(f"Product B output: {output_dir}")
+    table = pd.concat([
+        label('B', df[['Year', 'Month', 'evaporation_in']])
+        .rename(columns={'evaporation_in': 'Value'})
+        .assign(**{'Part B': f"ER_{code}", 'Part C': 'EVAPORATION-RATE'})
+        for code, df in results.items()], ignore_index=True)
+    paths = write_chunk_csvs(table, output_dir, 'reservoir_evaporation_productB')
+    print(f"\nProduct B: {len(paths)} chunk files, {len(results)} reservoirs: {output_dir}")
 
 
 def create_temperature_range_boxplot(
@@ -495,16 +427,13 @@ def create_temperature_range_boxplot(
 
         # --- Product A (daily WGEN data) ---
         try:
-            weather_file = find_nearest_weather_file(res_code)
-            if weather_file is not None:
-                daily = load_climate_data(weather_file)
-                daily = daily.loc['1921-10-01':'2018-09-30']
-                if len(daily) > 0:
-                    # Aggregate to monthly means first, then compute range
-                    monthly = daily.resample('ME').mean()
-                    monthly_dtr = monthly['tmax_c'] - monthly['tmin_c']
-                    pa_dtr_mean = monthly_dtr.mean()
-                    dtr_data['Product A'][region].append(pa_dtr_mean)
+            daily = reservoir_weather(res_code, 'A')
+            daily = daily.set_index(dates(daily)).loc['1921-10-01':'2018-09-30']
+            if len(daily) > 0:
+                # Aggregate to monthly means first, then compute range
+                monthly = daily.resample('ME').mean()
+                monthly_dtr = monthly['tmax'] - monthly['tmin']
+                dtr_data['Product A'][region].append(monthly_dtr.mean())
         except Exception as e:
             print(f"    {res_code} Product A DTR error: {e}")
 
@@ -638,8 +567,8 @@ def create_climate_boxplots(
     # Data structure: {variable: {source: {region: [mean_values]}}}
     regions = ['Sacramento Valley', 'San Joaquin Valley', 'Other']
     variables = {
-        'tmin_c':    {'label': 'Avg Monthly Tmin (\u00b0C)',  'has_original': True},
-        'tmax_c':    {'label': 'Avg Monthly Tmax (\u00b0C)',  'has_original': True},
+        'tmin_c':    {'label': 'Avg Monthly Tmin (\u00b0C)',  'has_original': True, 'wgen': 'tmin'},
+        'tmax_c':    {'label': 'Avg Monthly Tmax (\u00b0C)',  'has_original': True, 'wgen': 'tmax'},
     }
     climate_data = {}
     for var in variables:
@@ -673,17 +602,12 @@ def create_climate_boxplots(
 
         # --- Product A (daily WGEN data): precip, tmin, tmax ---
         try:
-            weather_file = find_nearest_weather_file(res_code)
-            if weather_file is not None:
-                daily = load_climate_data(weather_file)
-                daily = daily.loc['1921-10-01':'2018-09-30']
-                if len(daily) > 0:
-                    monthly = daily.resample('ME').mean()
-                    for var in variables:
-                        if var in monthly.columns:
-                            climate_data[var]['Product A'][region].append(
-                                monthly[var].mean()
-                            )
+            daily = reservoir_weather(res_code, 'A')
+            daily = daily.set_index(dates(daily)).loc['1921-10-01':'2018-09-30']
+            if len(daily) > 0:
+                monthly = daily.resample('ME').mean()
+                for var, info in variables.items():
+                    climate_data[var]['Product A'][region].append(monthly[info['wgen']].mean())
         except Exception as e:
             print(f"    {res_code} climate load error: {e}")
 
@@ -986,7 +910,7 @@ def compare_product_b_with_a(
         Directory where comparison CSVs are written.
     """
     if product_a_dir is None:
-        product_a_dir = _gen / 'output' / '_2_run_reservoir_evap' / 'Product_A'
+        product_a_dir = _gen / 'output' / '_2_run_reservoir_evap' / WEATHER_SETS['A']['name']
     if product_b_dir is None:
         product_b_dir = _gen / 'output' / '_2_run_reservoir_evap' / '_product_b_final'
     if output_dir is None:
@@ -1021,7 +945,8 @@ def compare_product_b_with_a(
     # ------------------------------------------------------------------ #
     # Load Product B chunks individually
     # ------------------------------------------------------------------ #
-    chunk_files = sorted(product_b_dir.glob('reservoir_evaporation_productB_n*.csv'))
+    chunk_files = [f for f in (product_b_dir / f'reservoir_evaporation_productB_n{k:02d}.csv'
+                               for k in range(1, N_CHUNKS + 1)) if f.exists()]
     if not chunk_files:
         print(f"Error: No Product B chunk files found in: {product_b_dir}")
         return
@@ -1119,11 +1044,11 @@ def main():
     """Main entry point."""
     import argparse
     parser = argparse.ArgumentParser(
-        description='Run reservoir evaporation for Product A or Product B '
+        description='Run reservoir evaporation for one weather set '
                     '(or compare Product B output to Product A baseline).')
     group = parser.add_mutually_exclusive_group(required=True)
-    group.add_argument('--product', choices=['A', 'B'],
-                       help='Product to generate: A (historical 1921-2018) or B (stochastic 1000-yr chunks).')
+    group.add_argument('--product', choices=list(WEATHER_SETS),
+                       help='Weather set: historical (Historical_Unsplit), A or B')
     group.add_argument('--compare-a', action='store_true',
                        help='Compare existing Product B outputs against the Product A baseline (no new run).')
     parser.add_argument('reservoirs', nargs='*',
@@ -1134,39 +1059,17 @@ def main():
         compare_product_b_with_a()
         return
 
-    product_b = args.product == 'B'
-    if product_b:
-        output_dir = str(_gen / 'output' / '_2_run_reservoir_evap' / '_product_b_final')
-        weather_dir = str(get_base_dir() / 'WGEN' / 'Product_B' / '1')
-        product_label = "Product B (stochastic)"
-    else:
-        output_dir = str(_gen / 'output' / '_2_run_reservoir_evap' / 'Product_A')
-        weather_dir = str(get_base_dir() / 'WGEN' / 'Product_A' / '1')
-        product_label = "Product A (1921-2018)"
-
-    print(f"\n_2_run_reservoir_evap.py  |  {product_label}")
-    print(f"  weather : {weather_dir}")
+    product = args.product
+    out_root = _gen / 'output' / '_2_run_reservoir_evap'
+    output_dir = str(out_root / ('_product_b_final' if product == 'B' else WEATHER_SETS[product]['name']))
+    print(f"\n_2_run_reservoir_evap.py  |  {WEATHER_SETS[product]['name']}")
     print(f"  output  : {output_dir}\n")
 
-    if args.reservoirs:
-        codes = [code.upper() for code in args.reservoirs]
-        print(f"\nProcessing {len(codes)} reservoir(s): {', '.join(codes)}\n")
-        results = process_reservoirs(
-            reservoir_codes=codes,
-            output_dir=output_dir,
-            weather_dir=weather_dir,
-            product_b=product_b,
-        )
-    else:
-        print("\nProcessing all reservoirs...\n")
-        results = process_reservoirs(
-            output_dir=output_dir,
-            weather_dir=weather_dir,
-            product_b=product_b,
-        )
+    codes = [code.upper() for code in args.reservoirs] or None
+    results = process_reservoirs(product, reservoir_codes=codes, output_dir=output_dir)
 
     if len(results) > 0:
-        if product_b:
+        if product == 'B':
             create_product_b_chunk_outputs(results, output_dir=output_dir)
         else:
             create_combined_output(
@@ -1177,10 +1080,12 @@ def main():
                 results,
                 output_file=str(Path(output_dir) / 'summary_statistics.csv')
             )
-            create_validation_csv(output_dir=output_dir)
-            create_annual_boxplot(output_dir=output_dir)
-            create_temperature_range_boxplot(output_dir=output_dir)
-            create_climate_boxplots(output_dir=output_dir)
+            if product in DELIVERY:
+                create_validation_csv(product, output_dir=output_dir)
+            if product == 'A':
+                create_annual_boxplot(output_dir=output_dir)
+                create_temperature_range_boxplot(output_dir=output_dir)
+                create_climate_boxplots(output_dir=output_dir)
 
         print("\n" + "="*80)
         print("Processing complete!")

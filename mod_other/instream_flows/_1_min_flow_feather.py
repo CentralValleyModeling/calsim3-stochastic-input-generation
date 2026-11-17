@@ -56,9 +56,10 @@ INPUTS / OUTPUTS
     read via utils.dss_io.  The spreadsheet still supplies the calibrated
     thresholds and the Value_Spreadsheet reference column.
 
-  Product A  <-  rim-inflow Product A table  calsim_qmap_validation_TS.csv
-    UNIMP_OROV over the whole model run (WY 1916-2018), so the schedule
-    cycles of the delivered years have their preceding years.
+  Historical_Unsplit, Product A  <-  the set's rim-inflow table
+    calsim_qmap_validation_TS.csv: UNIMP_OROV over the whole model run
+    (WY 1916-2018), so the schedule cycles of the delivered years have their
+    preceding years.
 
   Product B  <-  rim-inflow Product B chunks  UNIMP_OROV_qmo_n01..n10.csv
     UNIMP_OROV; the WY-1921 rolling-average seed comes from
@@ -79,9 +80,10 @@ INPUTS / OUTPUTS
     Primary comparison: Value_Spreadsheet (MIF_FEATHER_Logic_Reconstruction.xlsx
       Main_WA cols G-S, rows 4-104, CY 1921-2021)
 
-  Output 2 - Product A (WY 1922-2018, utils.paths.PRODUCT_A_WY)
-    Classifies with the Product A UNIMP_OROV; dates from Oct 1921 - Sep 2018.
+  Output 2 - Historical_Unsplit or Product A (WY 1922-2018, utils.paths.DELIVERY_WY)
+    Classifies with the set's UNIMP_OROV; dates from Oct 1921 - Sep 2018.
     Written to:
+      output/_historical_unsplit_validation/_minflowfeather_historicalUnsplit_1922_2018.csv
       output/_product_a_validation/_minflowfeather_productA_1922_2018.csv
 
   Output 3 - Product B (10 chunks, WY 1922-2021 each)
@@ -99,6 +101,7 @@ Reference:
 Usage
 -----
     python mod_other/instream_flows/_1_min_flow_feather.py --product validation  # Output 1
+    python mod_other/instream_flows/_1_min_flow_feather.py --product historical  # Output 2
     python mod_other/instream_flows/_1_min_flow_feather.py --product A           # Output 2
     python mod_other/instream_flows/_1_min_flow_feather.py --product B           # Output 3
 """
@@ -111,9 +114,11 @@ import numpy as np
 
 # Add repo root to path for utils imports
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
-from utils.csv_io import write_product_a_csv
-from utils.paths import get_base_dir, get_module_generated_dir, get_rim_inflow_outputs
+from utils.csv_io import write_delivery_csv
+from utils.paths import (DELIVERY, WEATHER_SETS, delivery_dir, get_base_dir, get_module_generated_dir,
+                         get_rim_inflow_outputs)
 from utils import dss_io
+from utils.wgen_calendar import LABEL_WY, N_CHUNKS, require_label_months, water_year, write_chunk_csvs
 
 # -----------------------------------------------------------------------------
 # Paths
@@ -130,10 +135,6 @@ DSS_READ_END     = "2021-12-31"
 UNIMP_OROV_KEY = ("UNIMP_OROV", "FLOW-UNIMPAIRED")        # baseline inflow input
 MINFLOW_KEY    = ("MINFLOWFEATHER", "FLOW-MIN-REQUIRED")  # CS3 actual (Value_CS3)
 
-# Product A UNIMP_OROV over the whole model run, from the rim-inflow Product A table
-# (CalSim == UNIMP_OROV).
-PATH_PRODUCT_A_CSV = get_rim_inflow_outputs("A")["ts"]
-
 # Product B directory (10 chunk CSVs)
 PATH_UNIMP_OROV_PB_DIR = get_rim_inflow_outputs("B")["dir"]
 
@@ -146,12 +147,8 @@ OUT_DIR = _gen / "output" / "_1_min_flow_feather"
 # Output 1: wide-format validation (WY 1922-2021, capped by available historical data)
 OUT_VALIDATION = OUT_DIR / "_minflowfeather_validation_1922_2021.csv"
 
-# Output 2: Product A (utils.paths.PRODUCT_A_WY)
-OUT_PRODUCT_A_DIR = _gen / "output" / "_product_a_validation"
-
 # Output 3: Product B - one file per chunk (n01 ... n10)
 OUT_PRODUCT_B_DIR = _gen / "output" / "_product_b_final"
-OUT_PRODUCT_B_PATTERN = str(OUT_PRODUCT_B_DIR / "_minflowfeather_productB_qmo_n{:02d}.csv")
 
 # -----------------------------------------------------------------------------
 # Thresholds  (fixed calibrated constants from spreadsheet)
@@ -195,7 +192,7 @@ _WY_MONTH_ORDER = {m: i for i, m in enumerate([10, 11, 12, 1, 2, 3, 4, 5, 6, 7, 
 
 def _water_year(dates: pd.DatetimeIndex) -> pd.Index:
     """Return integer water year (Oct-Dec of Y -> WY Y+1; Jan-Sep of Y -> WY Y)."""
-    return pd.Index(dates.year.where(dates.month < 10, dates.year + 1))
+    return pd.Index(water_year(dates.year, dates.month))
 
 
 def _select_schedule(ann_def: bool, twoy_def: bool, apjul_dry: bool) -> str:
@@ -298,7 +295,7 @@ def to_calsim_csv(series: pd.Series, part_b: str, part_c: str) -> pd.DataFrame:
     df['Part C']  = part_c
     df['Year']    = df['date'].dt.year
     df['Month']   = df['date'].dt.month
-    df['_wy']     = df['Year'].where(df['Month'] < 10, df['Year'] + 1)
+    df['_wy']     = water_year(df['Year'], df['Month'])
     df['_mo_ord'] = df['Month'].map(_WY_MONTH_ORDER)
     df = (df
           .sort_values(['_wy', '_mo_ord'])
@@ -415,14 +412,15 @@ def _schedule_summary_from_series(unimp_orov: pd.Series) -> dict:
 
 def _load_product_b_chunk(chunk_num: int) -> pd.Series:
     """
-    Load a single Product B UNIMP_OROV chunk (qmap_postAdj column, TAF).
-    Files now carry historical-epoch dates (Oct 1921 - Sep 2021, 1200 rows).
+    Load a single Product B UNIMP_OROV chunk (qmap_postAdj column, TAF), indexed by the
+    month ends of its label months (utils.wgen_calendar.LABEL_MONTHS, Oct 1921 - Sep 2021).
     """
     path = os.path.join(
         PATH_UNIMP_OROV_PB_DIR,
         f'UNIMP_OROV_qmo_n{chunk_num:02d}.csv'
     )
     df = pd.read_csv(path, usecols=['Year', 'Month', 'qmap_postAdj'])
+    require_label_months(df['Year'], df['Month'], os.path.basename(path))
     # Build end-of-month DatetimeIndex from the file's Year/Month columns
     dates = pd.to_datetime(
         {'year': df['Year'], 'month': df['Month'], 'day': 1}
@@ -495,43 +493,46 @@ def run_validation():
     _match_summary('Value_Python',      'Value_Spreadsheet', 'Python  vs Sheet      ')
 
 
-def _read_product_a_unimp_orov(path: Path = PATH_PRODUCT_A_CSV) -> pd.Series:
-    """Load Product A UNIMP_OROV (TAF) over the whole model run from the rim-inflow
-    Product A table (rows where CalSim == UNIMP_OROV)."""
-    df = pd.read_csv(path)
+def _read_single_unimp_orov(product: str) -> pd.Series:
+    """Load the UNIMP_OROV (TAF) of a single series over the whole model run from the set's
+    rim-inflow table (rows where CalSim == UNIMP_OROV)."""
+    df = pd.read_csv(get_rim_inflow_outputs(product)["ts"])
     df = df[df['CalSim'].astype(str).str.upper() == UNIMP_OROV_KEY[0]]
     idx = (pd.to_datetime({'year': df['Year'], 'month': df['Month'], 'day': 1})
            + pd.offsets.MonthEnd(0))
     return pd.Series(df['qmap_postAdj'].astype(float).to_numpy(), index=idx).sort_index()
 
 
-def run_product_a():
-    """Output 2: Product A (utils.paths.PRODUCT_A_WY)."""
+def run_single(product: str):
+    """Output 2: Historical_Unsplit or Product A (utils.paths.DELIVERY_WY)."""
+    name = WEATHER_SETS[product]["name"]
     print("\n" + "-" * 65)
-    print("OUTPUT 2 - Product A  (UNIMP_OROV of the rim-inflow model)")
+    print(f"OUTPUT 2 - {name}  (UNIMP_OROV of the rim-inflow model)")
     print("-" * 65)
 
-    unimp_pa = _read_product_a_unimp_orov()
-    mf_pa    = compute_min_flow_feather(unimp_pa)
-    df_pa = to_calsim_csv(mf_pa, 'MINFLOWFEATHER', 'FLOW-MIN-REQUIRED')
-    out = write_product_a_csv(df_pa, OUT_PRODUCT_A_DIR, '_minflowfeather_productA')
+    unimp = _read_single_unimp_orov(product)
+    mf = compute_min_flow_feather(unimp)
+    df = to_calsim_csv(mf, 'MINFLOWFEATHER', 'FLOW-MIN-REQUIRED')
+    out = write_delivery_csv(df, delivery_dir(_gen / "output", product), '_minflowfeather', product)
     print(f"  Written : {out}")
-    print("  Product A schedule distribution:")
-    _print_schedule_summary(_schedule_summary_from_series(unimp_pa))
+    print(f"  {name} schedule distribution:")
+    _print_schedule_summary(_schedule_summary_from_series(unimp))
 
 
 def run_product_b():
-    """Output 3: Product B - 10 chunks, WY 1922-2021 each."""
-    os.makedirs(OUT_PRODUCT_B_DIR, exist_ok=True)
+    """Output 3: Product B - 10 chunks, WY 1922-2021 each (utils.wgen_calendar.LABEL_WY)."""
     print("\n" + "-" * 65)
-    print("OUTPUT 3 - Product B  (10 chunks, WY 1922-2021)")
+    print(f"OUTPUT 3 - Product B  ({N_CHUNKS} chunks, WY {LABEL_WY[0]}-{LABEL_WY[1]})")
     print("-" * 65)
 
-    # CS3 WY 1921 seed (Oct 1920 - Sep 1921) for 2-year rolling avg priming.
+    # CS3 water year before the label years (WY 1921, Oct 1920 - Sep 1921) primes the
+    # 2-year rolling average.
+    seed_wy = LABEL_WY[0] - 1
     unimp_hist = _read_dss(UNIMP_OROV_KEY)[UNIMP_OROV_KEY]
-    _cs3_seed  = unimp_hist.loc['1920-10-31':'1921-09-30'].copy()
+    _cs3_seed  = unimp_hist.loc[f'{seed_wy - 1}-10-31':f'{seed_wy}-09-30'].copy()
 
-    for n in range(1, 11):
+    chunks = []
+    for n in range(1, N_CHUNKS + 1):
         pb_path = os.path.join(
             PATH_UNIMP_OROV_PB_DIR,
             f'UNIMP_OROV_qmo_n{n:02d}.csv'
@@ -545,24 +546,23 @@ def run_product_b():
         mf_combined    = compute_min_flow_feather(unimp_combined)
         mf_pb          = mf_combined.loc[unimp_pb.index[0]:unimp_pb.index[-1]].copy()
         df_pb          = to_calsim_csv(mf_pb, 'MINFLOWFEATHER', 'FLOW-MIN-REQUIRED')
+        chunks.append(df_pb.assign(chunk=n))
+        print(f"  [n{n:02d}] {len(df_pb):,} rows")
 
-        out_path = OUT_PRODUCT_B_PATTERN.format(n)
-        df_pb.to_csv(out_path, index=False)
-
-        wy_first_pb = int(df_pb.loc[df_pb['Month'] == 10, 'Year'].min()) + 1
-        wy_last_pb  = int(df_pb.loc[df_pb['Month'] == 9,  'Year'].max())
-        print(f"  [n{n:02d}] {len(df_pb):,} rows  WY {wy_first_pb}-{wy_last_pb}  -> {os.path.basename(out_path)}")
+    for out_path in write_chunk_csvs(pd.concat(chunks, ignore_index=True), OUT_PRODUCT_B_DIR,
+                                     "_minflowfeather_productB_qmo"):
+        print(f"  -> {out_path.name}")
 
 
 def main(product: str):
-    """Run one output.  product in {'validation', 'A', 'B'}."""
+    """Run one output.  product in {'validation', 'historical', 'A', 'B'}."""
     print("=" * 65)
     print("MINFLOWFEATHER - Feather River Minimum Instream Flow")
     print("=" * 65)
     if product == 'validation':
         run_validation()
-    elif product == 'A':
-        run_product_a()
+    elif product in DELIVERY:
+        run_single(product)
     elif product == 'B':
         run_product_b()
     print("\nOK  Done.\n")
@@ -574,9 +574,9 @@ if __name__ == '__main__':
         description='Compute MINFLOWFEATHER (Feather River minimum instream flow).'
     )
     parser.add_argument(
-        '--product', choices=['validation', 'A', 'B'], required=True,
+        '--product', choices=['validation', *WEATHER_SETS], required=True,
         help='Which output to run: validation (3-way comparison wide CSV), '
-             'A (Product A historical 1922-2018), or B (Product B 10 stochastic chunks).'
+             'historical (Historical_Unsplit) or A (1922-2018), or B (10 stochastic chunks).'
     )
     args = parser.parse_args()
     main(product=args.product)

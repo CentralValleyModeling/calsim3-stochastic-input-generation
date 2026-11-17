@@ -2,27 +2,29 @@
 SJR Restoration Flow Requirements
 ==================================
 Reconstruct monthly REST_REQ_NP and REST_REQ_P from UNIMP_SJ unimpaired
-flow data, for historical comparison, Product A, and Product B.
+flow data, for historical comparison, Historical_Unsplit, Product A, and
+Product B.
 
 Dependencies
 ------------
 - mod_hydrology/rim_inflow/_1_build_rim_inflow.py, files found through
   utils.paths.get_rim_inflow_outputs:
-    Product A UNIMP_SJ is read from ``calsim_qmap_validation_TS.csv``, the
-    whole model run (filtered by CalSim == UNIMP_SJ), and written over
-    ``utils.paths.PRODUCT_A_WY``.
+    Historical_Unsplit and Product A UNIMP_SJ are read from the set's
+    ``calsim_qmap_validation_TS.csv``, the whole model run (filtered by
+    CalSim == UNIMP_SJ), and written over ``utils.paths.DELIVERY_WY`` to the
+    set's delivery folder (utils.paths.delivery_dir).
     Product B UNIMP_SJ is read from per-chunk CSVs ``UNIMP_SJ_qmo_n*.csv``.
 
 Usage
 -----
     python mod_other/instream_flows/_2_sjr_rest_req.py --product validation
+    python mod_other/instream_flows/_2_sjr_rest_req.py --product historical
     python mod_other/instream_flows/_2_sjr_rest_req.py --product A
     python mod_other/instream_flows/_2_sjr_rest_req.py --product B
 """
 from __future__ import annotations
 
 import math
-import re
 import sys
 from dataclasses import dataclass
 from pathlib import Path
@@ -32,9 +34,10 @@ import pandas as pd
 
 # Add repo root to path for utils imports
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
-from utils.csv_io import write_product_a_csv
-from utils.paths import PRODUCT_A_WY, get_base_dir, get_module_generated_dir, get_rim_inflow_outputs
-from utils.wgen_calendar import N_CHUNKS
+from utils.csv_io import write_delivery_csv
+from utils.paths import (DELIVERY, DELIVERY_WY, WEATHER_SETS, delivery_dir, get_base_dir,
+                         get_module_generated_dir, get_rim_inflow_outputs)
+from utils.wgen_calendar import N_CHUNKS, water_year, write_chunk_csvs
 from utils import dss_io
 
 # -----------------------------------------------------------------------------
@@ -43,13 +46,10 @@ from utils import dss_io
 DSS_FILE = get_base_dir() / "CalSim3" / "__calsim_sv_default__.dss"
 DEFAULT_DSS_READ_START = "1915-01-31"
 DEFAULT_DSS_READ_END = "2021-12-31"
-DEFAULT_PRODUCT_A = get_rim_inflow_outputs("A")["ts"]
 DEFAULT_PRODUCT_B_DIR = get_rim_inflow_outputs("B")["dir"]
 _gen = get_module_generated_dir("mod_other/instream_flows")
 DEFAULT_OUT_HIST = _gen / "output" / "_2_sjr_rest_req"
-DEFAULT_OUT_A = _gen / "output" / "_product_a_validation"
 DEFAULT_OUT_B = _gen / "output" / "_product_b_final"
-DEFAULT_OUT_FIG_A = _gen / "output" / "figures" / "product_a"
 
 #  Conversion Constants
 # -----------------------------------------------------------------------------
@@ -207,10 +207,6 @@ def read_calsim_monthly_pairs(
 # -----------------------------------------------------------------------------
 # Inflow input helpers
 # -----------------------------------------------------------------------------
-def water_year(dt: pd.Timestamp) -> int:
-    return int(dt.year + 1) if dt.month >= 10 else int(dt.year)
-
-
 def restoration_year_for_month(dt: pd.Timestamp) -> int:
     """
     Calendar month -> Restoration Year identifier.
@@ -224,8 +220,9 @@ def read_unimp_csv(path: str | Path) -> pd.Series:
     """Read UNIMP_SJ monthly flow from a rim-inflow output CSV.
 
     Supports two formats:
-    - Product A (CalSim format): columns ``Part B``, ``Year``, ``Month``, ``Value``
-    - Product B (qmap format):   columns ``CalSim``, ``Year``, ``Month``, ``qmap_postAdj``
+    - CalSim format: columns ``Part B``, ``Year``, ``Month``, ``Value``
+    - qmap format:   columns ``CalSim``, ``Year``, ``Month``, ``qmap_postAdj``
+      (the single-series tables and the Product B chunks)
     """
     path = Path(path)
     if not path.exists():
@@ -235,10 +232,8 @@ def read_unimp_csv(path: str | Path) -> pd.Series:
 
     # Detect format and normalise to common column names
     if "Part B" in df.columns:
-        # Product A CalSim format
         name_col, val_col = "Part B", "Value"
     elif "CalSim" in df.columns:
-        # Product B qmap format
         name_col, val_col = "CalSim", "qmap_postAdj"
     else:
         raise ValueError(
@@ -263,7 +258,7 @@ def read_unimp_csv(path: str | Path) -> pd.Series:
 
 def build_water_year_totals(monthly_unimp_sj: pd.Series) -> pd.Series:
     df = monthly_unimp_sj.rename("value").to_frame()
-    df["wy"] = [water_year(ts) for ts in df.index]
+    df["wy"] = water_year(df.index.year, df.index.month)
     grouped = df.groupby("wy")["value"]
     counts = grouped.count()
     wy_totals = grouped.sum().sort_index()
@@ -467,7 +462,7 @@ def get_default_calsim_rest_req(
 
     Used for leading-edge months (Oct 1921-Feb 1922 for Product B) where the
     input UNIMP_SJ data does not cover a complete water year needed for
-    reconstruction. Product A's input starts years before its first
+    reconstruction. The single series start years before their first
     delivered month.
     """
     series_map = read_calsim_monthly_pairs(
@@ -559,17 +554,18 @@ def _fill_leading_edge(
     return np_series, p_series
 
 
-def plot_product_a_validation(
+def plot_single_validation(
     np_series: pd.Series,
     p_series: pd.Series,
     actual_rest_req: dict[str, pd.Series],
     figures_dir: Path,
+    label: str,
     pulse_bpart: str = "REST_REQ_P",
     nonpulse_bpart: str = "REST_REQ_NP",
-    plot_start: str | pd.Timestamp = f"{PRODUCT_A_WY[0] - 1}-10-01",
-    plot_end: str | pd.Timestamp = f"{PRODUCT_A_WY[1]}-09-30",
+    plot_start: str | pd.Timestamp = f"{DELIVERY_WY[0] - 1}-10-01",
+    plot_end: str | pd.Timestamp = f"{DELIVERY_WY[1]}-09-30",
 ) -> list[Path]:
-    """Write the canonical TS+CDF validation figures for Product A.
+    """Write the canonical TS+CDF validation figures of a single series (``label``).
 
     One ``<part_b>.png`` per component comparing the reconstruction against
     the actual CalSim input, in the shared ``utils.validation_plots`` style.
@@ -599,7 +595,7 @@ def plot_product_a_validation(
         fig = plot_ts_cdf(
             series=[
                 Series("Historical", recon.index, actual.to_numpy(dtype=float)),
-                Series("Product A", recon.index, recon.to_numpy(dtype=float)),
+                Series(label, recon.index, recon.to_numpy(dtype=float)),
             ],
             title=title,
             unit="TAF",
@@ -614,41 +610,38 @@ def plot_product_a_validation(
     return written
 
 
-def run_product_a(
-    product_a_csv: Path,
-    outdir: Path,
+def run_single(
+    product: str,
     pulse_bpart: str,
     nonpulse_bpart: str,
     part_c: str,
     default_rest_req: dict[str, pd.Series] | None = None,
-    figures_dir: Path | None = None,
+    figures: bool = True,
 ) -> list[Path]:
-    inflow = read_unimp_csv(product_a_csv)
+    """Historical_Unsplit or Product A: reconstruct from the set's UNIMP_SJ and write the
+    delivery CSVs and figures."""
+    inflow = read_unimp_csv(get_rim_inflow_outputs(product)["ts"])
     recon = reconstruct_rest_req(inflow)
     np_series, p_series = _fill_leading_edge(
         inflow.index, recon, default_rest_req, pulse_bpart, nonpulse_bpart,
     )
+    outdir = delivery_dir(_gen / "output", product)
     written = [
-        write_product_a_csv(to_output_format(p_series, pulse_bpart, part_c), outdir,
-                            "_SJRRPreqPulse_productA"),
-        write_product_a_csv(to_output_format(np_series, nonpulse_bpart, part_c), outdir,
-                            "_SJRRPreqNonPulse_productA"),
+        write_delivery_csv(to_output_format(p_series, pulse_bpart, part_c), outdir,
+                           "_SJRRPreqPulse", product),
+        write_delivery_csv(to_output_format(np_series, nonpulse_bpart, part_c), outdir,
+                           "_SJRRPreqNonPulse", product),
     ]
-    if figures_dir is not None and default_rest_req is not None:
+    if figures and default_rest_req is not None:
         written.extend(
-            plot_product_a_validation(
-                np_series, p_series, default_rest_req, figures_dir,
+            plot_single_validation(
+                np_series, p_series, default_rest_req,
+                _gen / "output" / "figures" / WEATHER_SETS[product]["slug"],
+                WEATHER_SETS[product]["label"],
                 pulse_bpart=pulse_bpart, nonpulse_bpart=nonpulse_bpart,
             )
         )
     return written
-
-
-def infer_b_suffix(path: Path) -> str:
-    match = re.search(r"_n(\d{2})\.csv$", path.name, flags=re.IGNORECASE)
-    if not match:
-        raise ValueError(f"Could not infer n## suffix from {path.name}")
-    return f"n{match.group(1)}"
 
 
 def run_product_b(
@@ -659,39 +652,33 @@ def run_product_b(
     part_c: str,
     default_rest_req: dict[str, pd.Series] | None = None,
 ) -> list[Path]:
-    if product_b_dir.is_file():
-        files = [product_b_dir]
-    else:
-        files = sorted(product_b_dir.glob("UNIMP_SJ_qmo_n*.csv"))
-        expected = [f"UNIMP_SJ_qmo_n{k:02d}.csv" for k in range(1, N_CHUNKS + 1)]
-        if [f.name for f in files] != expected:
-            raise FileNotFoundError(f"{product_b_dir}: expected {expected[0]} ... {expected[-1]}, "
-                                    f"found {[f.name for f in files] or 'none'}")
-
-    outdir.mkdir(parents=True, exist_ok=True)
-    written: list[Path] = []
-    for f in files:
-        suffix = infer_b_suffix(f)
+    """Reconstruct each chunk ``UNIMP_SJ_qmo_n01.csv`` ... ``_n10.csv`` of ``product_b_dir`` and
+    write ``_SJRRPreq<Pulse|NonPulse>_productB_qmo_n01.csv`` ... ``_n10.csv`` to ``outdir``."""
+    pulse, nonpulse = [], []
+    for k in range(1, N_CHUNKS + 1):
+        f = product_b_dir / f"UNIMP_SJ_qmo_n{k:02d}.csv"
+        if not f.exists():
+            raise FileNotFoundError(f"{f} is missing; run "
+                                    "mod_hydrology/rim_inflow/_1_build_rim_inflow.py --product B")
         inflow = read_unimp_csv(f)
         recon = reconstruct_rest_req(inflow)
         np_series, p_series = _fill_leading_edge(
             inflow.index, recon, default_rest_req, pulse_bpart, nonpulse_bpart,
         )
-        pulse_path = outdir / f"_SJRRPreqPulse_productB_qmo_{suffix}.csv"
-        np_path = outdir / f"_SJRRPreqNonPulse_productB_qmo_{suffix}.csv"
-        to_output_format(p_series, pulse_bpart, part_c).to_csv(pulse_path, index=False)
-        to_output_format(np_series, nonpulse_bpart, part_c).to_csv(np_path, index=False)
-        written.extend([pulse_path, np_path])
-    return written
+        pulse.append(to_output_format(p_series, pulse_bpart, part_c).assign(chunk=k))
+        nonpulse.append(to_output_format(np_series, nonpulse_bpart, part_c).assign(chunk=k))
+    return (write_chunk_csvs(pd.concat(pulse, ignore_index=True), outdir, "_SJRRPreqPulse_productB_qmo")
+            + write_chunk_csvs(pd.concat(nonpulse, ignore_index=True), outdir,
+                               "_SJRRPreqNonPulse_productB_qmo"))
 
 
 def main() -> None:
     import argparse
     ap = argparse.ArgumentParser(
         description="Reconstruct REST_REQ_NP and REST_REQ_P from UNIMP_SJ unimpaired flow.")
-    ap.add_argument("--product", choices=["validation", "A", "B"], required=True,
+    ap.add_argument("--product", choices=["validation", *WEATHER_SETS], required=True,
                     help="Output to run: validation (historical-comparison CSV), "
-                         "A (Product A, WY1922-2018), or B (Product B 10 chunks).")
+                         "historical (Historical_Unsplit) or A (WY1922-2018), or B (10 chunks).")
     args = ap.parse_args()
 
     written: list[Path] = []
@@ -709,19 +696,17 @@ def main() -> None:
     else:
         # Read default CalSim REST_REQ values once - used for leading-edge months
         # (Product B's Oct 1921-Feb 1922) that lack complete WY data for
-        # reconstruction, and for the Product A plots.
+        # reconstruction, and for the single-series plots.
         default_rest_req = get_default_calsim_rest_req(dssfile=DSS_FILE)
 
-        if args.product == "A":
+        if args.product in DELIVERY:
             written.extend(
-                run_product_a(
-                    product_a_csv=DEFAULT_PRODUCT_A,
-                    outdir=DEFAULT_OUT_A,
+                run_single(
+                    args.product,
                     pulse_bpart="REST_REQ_P",
                     nonpulse_bpart="REST_REQ_NP",
                     part_c="RELEASE-HYDROGRAPH",
                     default_rest_req=default_rest_req,
-                    figures_dir=DEFAULT_OUT_FIG_A,
                 )
             )
         else:

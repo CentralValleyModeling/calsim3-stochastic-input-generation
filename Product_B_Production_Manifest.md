@@ -47,8 +47,8 @@ Tier 1  FORCING (mod_forcing)
         python mod_forcing/inflows/_2_run_product.py --forcing historical
         python mod_hydrology/rim_inflow/_1_build_rim_inflow.py --product historical
     Climate:
-        python mod_forcing/climate/_1_pp_point_locations.py --source Product_B --scenario 1
-        python mod_forcing/climate/_2_uhh_basin_averages.py --source Product_B --scenario 1
+        python mod_forcing/climate/_1_pp_point_locations.py --product B
+        python mod_forcing/climate/_2_uhh_basin_averages.py --product B
 
 Tier 2  CORE HYDROLOGY (mod_hydrology)
     CalSimHydro:
@@ -80,7 +80,7 @@ Tier 4  DEPENDENT MODULES
     Reservoir Storage Curves:
         python mod_reservoir/storage_curves/_1_wyt_index_curves.py --product B
         python mod_reservoir/storage_curves/_2_qmap.py --product B
-        python mod_reservoir/storage_curves/_3_oroville_daily_precip.py --source Product_B
+        python mod_reservoir/storage_curves/_3_oroville_daily_precip.py --product B
         python mod_reservoir/storage_curves/_4_oroville_level5.py --product B
     Tulare Groundwater Terms:
         python mod_hydrology/tulare_gw_terms/_1_wyt_monthlyavg.py --product B
@@ -172,8 +172,8 @@ byte-identical run-to-run on identical inputs.
 | inflows/_1 | `python mod_forcing/inflows/_1_build_forcing.py --forcing B --cells all` | WGEN `Product_B` met files | the model's input (SAC-SMA: 10 segment stores, one per chunk) and its G2 check against BASE |
 | inflows/_2 historical | `python mod_forcing/inflows/_1_build_forcing.py --forcing historical --cells all` (G2 on the store at the pin), `python mod_forcing/inflows/_2_run_product.py --forcing historical`, then `python mod_hydrology/rim_inflow/_1_build_rim_inflow.py --product historical` | the model checkout at the pin; its historical store | the historical rim inflows the absorb fits of the second stage read (`utils/qmap_fit.py`); they refuse a run from another pin. Once per pin, shared with Product A |
 | inflows/_2 | `python mod_forcing/inflows/_2_run_product.py --forcing B` | the model checkout at the pin; the inputs above | `arc_inflow_monthly.csv` (chunk, date, WY, month, arc, taf, kind; each chunk labelled WY1922-2021), `run_manifest.json` (with G6: each segment starts from the model state the one before kept) |
-| climate/_1 | `python mod_forcing/climate/_1_pp_point_locations.py --source Product_B --scenario 1` | WGEN met files; PP point reference | per-location monthly precip CSVs (per chunk) |
-| climate/_2 | `python mod_forcing/climate/_2_uhh_basin_averages.py --source Product_B --scenario 1` | WGEN met files; CS3 baseline DSS (UHH precip); grid weights | basin-average precip/Tmax/Tmin/VPD + `_product_b_final/` SV CSVs |
+| climate/_1 | `python mod_forcing/climate/_1_pp_point_locations.py --product B` | WGEN met files; PP point reference | per-location monthly precip CSVs (per chunk) |
+| climate/_2 | `python mod_forcing/climate/_2_uhh_basin_averages.py --product B` | WGEN met files; CS3 baseline DSS (UHH precip); grid weights | basin-average precip/Tmax/Tmin/VPD + `_product_b_final/` SV CSVs |
 
 ---
 
@@ -289,7 +289,7 @@ chunk CSVs under `_product_b_final/`.
    - **Inputs:** CS3 baseline DSS; rim inflows (rim_inflow/_1 --product B); `reference/qmap_pairs.csv`
    - **Outputs:** intermediate detail CSVs in `_2_qmap/product_b/` +
      `_product_b_final/*.csv` per chunk
-3. `python mod_reservoir/storage_curves/_3_oroville_daily_precip.py --source Product_B`
+3. `python mod_reservoir/storage_curves/_3_oroville_daily_precip.py --product B`
    - **Inputs:** WGEN Product B met files; `CS3_8RI_OROVI_GridInfo.txt`
      (mod_forcing/climate/reference/GridInfo)
    - **Outputs:** `_3_oroville_daily_precip/oroville_daily_precip_productB_n01.csv` ... n10

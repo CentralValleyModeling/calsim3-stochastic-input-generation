@@ -53,7 +53,7 @@ import pandas as pd
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 from mod_forcing.inflows.adapters import label, load
-from utils.paths import (INFLOW_FORCINGS, get_base_dir, get_inflow_model, get_inflow_repo,
+from utils.paths import (WEATHER_SETS, get_base_dir, get_inflow_model, get_inflow_repo,
                          get_module_generated_dir, sha256_file)
 
 _gen = get_module_generated_dir("mod_forcing/inflows")
@@ -91,7 +91,7 @@ def main():
     base_sub, prefix = BASE_WEATHER[args.forcing]
     base_dir = get_base_dir() / base_sub
     read_base = functools.partial(read_cell, base_dir, prefix)
-    out_dir = _gen / "output" / "_1_build_forcing" / INFLOW_FORCINGS[args.forcing]
+    out_dir = _gen / "output" / "_1_build_forcing" / WEATHER_SETS[args.forcing]["wgen"]
     out_dir.mkdir(parents=True, exist_ok=True)
     print(f"BASE:  {base_dir}")
     if args.forcing in model.BUILT and not args.check_only:

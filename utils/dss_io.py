@@ -21,11 +21,11 @@ Behavior-preservation note
 pre-existing, deliberately different read loops:
 
 - ``read_monthly_series`` reproduces
-  ``utils/qmap_product_a_from_pairs.read_calsim_monthly_pairs`` exactly
+  ``utils/qmap_single_from_pairs.read_calsim_monthly_pairs`` exactly
   (tuple ``(B_upper, C_upper)`` keys, pattern ``/*/*/*/*/1MON/*``, master
   series reindexed onto a fixed month-end range, sort by D-part then path).
 - ``read_monthly_frame`` reproduces
-  ``mod_hydrology/calsimhydro/_3_postprocess_product_a._read_dss`` exactly
+  ``mod_hydrology/calsimhydro/_3_postprocess_single._read_dss`` exactly
   (string ``"B/C"`` keys with C-part case preserved, pattern
   ``/*/*/*/*/1MON/*/`` with trailing slash, inventory filter with all-paths
   fallback, sort by D-part only, wide DataFrame output).
@@ -237,7 +237,7 @@ def read_monthly_series(dss, requested, dss_read_start, dss_read_end):
 # -- Reader variant B: calsimhydro postprocessor (wide DataFrame) -------------
 
 def read_monthly_frame(dss, excel_partcs):
-    """Faithful copy of ``_3_postprocess_product_a._read_dss``'s read loop.
+    """Faithful copy of ``_3_postprocess_single._read_dss``'s read loop.
 
     Parameters
     ----------

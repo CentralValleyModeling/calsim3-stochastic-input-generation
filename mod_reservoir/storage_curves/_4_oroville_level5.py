@@ -3,36 +3,38 @@
 Compute Oroville Rule-Curve Level 5 Storage
 ===========================================
 Computes Oroville rule-curve Level 5 storage from the wetness index for
-Product A and/or Product B.
+Historical_Unsplit, Product A or Product B.
 
 Usage:
+    python mod_reservoir/storage_curves/_4_oroville_level5.py --product historical
     python mod_reservoir/storage_curves/_4_oroville_level5.py --product A
     python mod_reservoir/storage_curves/_4_oroville_level5.py --product B
     python mod_reservoir/storage_curves/_4_oroville_level5.py --product B --chunks 1 2 3
 
 Inputs:
-  Product A:
+  Historical_Unsplit, Product A (<set>: Historical_Unsplit or Product_A):
     <GENERATED>/mod_reservoir/storage_curves/output/_3_oroville_daily_precip/
-      Oroville_Daily_Precip_ProductA_Scenario1.csv  (year, month, day, precip_inches)
+      Oroville_Daily_Precip_<set>.csv  (year, month, day, precip_inches)
   Product B:
     <GENERATED>/mod_reservoir/storage_curves/output/_3_oroville_daily_precip/
       oroville_daily_precip_productB_n01.csv ... n10.csv  (year, month, day, precip_inches)
-  Historical comparison (Product A only):
+  CalSim 3 comparison (Historical_Unsplit, Product A):
     <BASE>/CalSim3/__calsim_sv_default__.dss
       Part B: S_OROVLLEVEL5, Part C: STORAGE-LEVEL (monthly end-of-month series)
 
 Outputs:
-  Product A:
+  Historical_Unsplit, Product A:
+    _historical_unsplit_validation/S_OROVLLEVEL5_historicalUnsplit_<WY1>_<WY2>.csv,
     _product_a_validation/S_OROVLLEVEL5_productA_<WY1>_<WY2>.csv
       columns: Part B, Part C, Year, Month, Value
-    _4_oroville_level5/oroville_level5.xlsx
+    _4_oroville_level5/<set>/oroville_level5.xlsx
       sheets: daily, monthly, compare_level5
-    _4_oroville_level5/figures/product_a/S_OROVLLEVEL5_timeseries.png
-      Product A vs Historical: monthly time series + non-exceedance CDF
-      with R2 / NSE / PBIAS over WY 1922 - <wy_max> (utils.paths.PRODUCT_A_WY).
-    _4_oroville_level5/figures/product_a/S_OROVLLEVEL5_monthly_error.png
-      WY-ordered (Oct-Sep) monthly box plot of error (Product A - Historical, TAF).
-    _4_oroville_level5/figures/product_a/S_OROVLLEVEL5_monthly_pct_error.png
+    _4_oroville_level5/<set>/figures/S_OROVLLEVEL5_timeseries.png
+      The set vs CalSim 3: monthly time series + non-exceedance CDF
+      with R2 / NSE / PBIAS over WY 1922 - <wy_max> (utils.paths.DELIVERY_WY).
+    _4_oroville_level5/<set>/figures/S_OROVLLEVEL5_monthly_error.png
+      WY-ordered (Oct-Sep) monthly box plot of error (set - CalSim 3, TAF).
+    _4_oroville_level5/<set>/figures/S_OROVLLEVEL5_monthly_pct_error.png
       WY-ordered (Oct-Sep) monthly box plot of percent error.
   Product B:
     _product_b_final/S_OROVLLEVEL5_productB_n01.csv ... n10.csv
@@ -75,15 +77,15 @@ import pandas as pd
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 from utils import dss_io
-from utils.csv_io import write_product_a_csv
-from utils.paths import PRODUCT_A_WY, get_base_dir, get_module_generated_dir
+from utils.csv_io import write_delivery_csv
+from utils.paths import DELIVERY, DELIVERY_WY, WEATHER_SETS, delivery_dir, get_base_dir, get_module_generated_dir
 from utils.validation_plots import Series, plot_monthly_box, plot_ts_cdf
-from utils.wgen_calendar import N_CHUNKS
+from utils.wgen import set_name
+from utils.wgen_calendar import N_CHUNKS, water_year
 
 _gen = get_module_generated_dir("mod_reservoir/storage_curves")
 INPUT_DIR = _gen / "output" / "_3_oroville_daily_precip"
 OUTPUT_DIR = _gen / "output" / "_4_oroville_level5"
-VALIDATION_DIR = _gen / "output" / "_product_a_validation"
 PRODUCT_B_DIR = _gen / "output" / "_product_b_final"
 DEFAULT_DSS = get_base_dir() / "CalSim3" / "__calsim_sv_default__.dss"
 
@@ -226,18 +228,17 @@ def _process_one_chunk(csv_path: Path, smax: float, b_taf_per_day: float,
     return str(out_csv)
 
 
-def _plot_product_a_vs_historical(dates, actual_vals, qmap_vals, target_b,
-                                  out_path: Path) -> None:
-    """Two-panel monthly time series + non-exceedance CDF for Product A vs Historical.
+def _plot_set_vs_calsim(dates, actual_vals, set_vals, target_b, set_label,
+                        out_path: Path) -> None:
+    """Two-panel monthly time series + non-exceedance CDF of a weather set's series vs CalSim 3.
 
-    Thin wrapper over :func:`utils.validation_plots.plot_ts_cdf` that supplies
-    the canonical Historical / Product A pairing and lets the helper compute
-    R2 / NSE / PBIAS from the Historical baseline (``compute_metrics_from=0``).
+    Thin wrapper over :func:`utils.validation_plots.plot_ts_cdf` that lets the helper compute
+    R2 / NSE / PBIAS from the CalSim 3 baseline (``compute_metrics_from=0``).
     """
     plot_ts_cdf(
         series=[
             Series("Historical", dates, actual_vals, linewidth=0.8),
-            Series("Product A", dates, qmap_vals),
+            Series(set_label, dates, set_vals),
         ],
         title=f"{target_b} (TAF)",
         unit="TAF",
@@ -251,8 +252,8 @@ def main() -> None:
         description="Compute Oroville rule-curve level5 storage from wetness index.",
     )
     parser.add_argument(
-        "--product", choices=["A", "B"], required=True,
-        help='Product to generate: A (historical 1921-2018) or B (stochastic 1000-yr chunks).',
+        "--product", choices=["historical", "A", "B"], required=True,
+        help='Weather set: historical (Historical_Unsplit), A or B',
     )
     parser.add_argument(
         "--chunks", nargs="+", type=int,
@@ -263,18 +264,18 @@ def main() -> None:
     args = parser.parse_args()
 
     input_dir = INPUT_DIR
-    output_dir = OUTPUT_DIR
-    output_dir.mkdir(parents=True, exist_ok=True)
+    output_dir = OUTPUT_DIR / set_name(args.product)
 
     smax = 3425.2
     b_taf = 10.0
     x_init = 3.5
 
     # =====================
-    # Product A
+    # Historical_Unsplit, Product A
     # =====================
-    if args.product == "A":
-        daily_path = input_dir / "Oroville_Daily_Precip_ProductA_Scenario1.csv"
+    if args.product in DELIVERY:
+        output_dir.mkdir(parents=True, exist_ok=True)
+        daily_path = input_dir / f"Oroville_Daily_Precip_{set_name(args.product)}.csv"
         dss_path = DEFAULT_DSS
 
         for p in [daily_path, dss_path]:
@@ -287,10 +288,10 @@ def main() -> None:
         # Merge with historical Level-5
         monthly = monthly.merge(level5, on="month_end", how="left")
 
-        monthly["WY"] = monthly["month_end"].dt.year + (monthly["month_end"].dt.month >= 10).astype(int)
+        monthly["WY"] = water_year(monthly["month_end"].dt.year, monthly["month_end"].dt.month)
 
-        # Product A format: Part B, Part C, Year, Month, Value over PRODUCT_A_WY
-        start_wy = PRODUCT_A_WY[0]
+        # Delivery format: Part B, Part C, Year, Month, Value over DELIVERY_WY
+        start_wy = DELIVERY_WY[0]
         val_df = pd.DataFrame({
             "Part B": "S_OROVLLEVEL5",
             "Part C": "STORAGE-LEVEL",
@@ -301,7 +302,8 @@ def main() -> None:
         val_df = val_df.dropna(subset=["Value"])
         val_df = val_df.sort_values(["Part B", "Part C", "Year", "Month"]).reset_index(drop=True)
 
-        out_csv = write_product_a_csv(val_df, VALIDATION_DIR, "S_OROVLLEVEL5_productA")
+        out_csv = write_delivery_csv(val_df, delivery_dir(_gen / "output", args.product),
+                                     "S_OROVLLEVEL5", args.product)
 
         # Excel workbook
         compare = monthly.dropna(subset=["S_OROVLLEVEL5"]).copy()
@@ -314,8 +316,8 @@ def main() -> None:
             monthly.drop(columns=["WY"]).to_excel(writer, sheet_name="monthly", index=False)
             compare.drop(columns=["WY"]).to_excel(writer, sheet_name="compare_level5", index=False)
 
-        # Product A vs Historical comparison figure (timeseries + CDF)
-        figures_dir = output_dir / "figures" / "product_a"
+        # The set vs CalSim 3 (timeseries + CDF)
+        figures_dir = output_dir / "figures"
         figures_dir.mkdir(parents=True, exist_ok=True)
         cmp = compare.dropna(subset=["S_OROVLLEVEL5", "S_target_eom_TAF"])
         cmp = cmp.loc[cmp["WY"] >= start_wy]
@@ -324,8 +326,8 @@ def main() -> None:
             actual_vals = cmp["S_OROVLLEVEL5"].to_numpy(dtype=float)
             qmap_vals = cmp["S_target_eom_TAF"].to_numpy(dtype=float)
             fig_path = figures_dir / "S_OROVLLEVEL5_timeseries.png"
-            _plot_product_a_vs_historical(
-                dates, actual_vals, qmap_vals, "S_OROVLLEVEL5", fig_path,
+            _plot_set_vs_calsim(
+                dates, actual_vals, qmap_vals, "S_OROVLLEVEL5", WEATHER_SETS[args.product]["label"], fig_path,
             )
             print(f"Wrote: {fig_path}")
 
@@ -368,7 +370,7 @@ def main() -> None:
             csv_path = input_dir / f"oroville_daily_precip_productB_{chunk_tag}.csv"
             if not csv_path.exists():
                 raise FileNotFoundError(f"{csv_path}: no daily precipitation for chunk {chunk_tag}; "
-                                        "run _3_oroville_daily_precip.py --source Product_B")
+                                        "run _3_oroville_daily_precip.py --product B")
             out_csv = PRODUCT_B_DIR / f"S_OROVLLEVEL5_productB_{chunk_tag}.csv"
             jobs.append((chunk_tag, csv_path, out_csv))
 

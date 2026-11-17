@@ -12,7 +12,7 @@ temperature changes in Product A's weather carry into its pan evaporation.
 Inputs
 ------
 - reference/WBA_Grid_Info.txt  (the Gerber cells)
-- WGEN met files: Historical_Unsplit, and Product_A/1 for --product A
+- The daily weather (utils.wgen.read_met): Historical_Unsplit, and Product A for --product A
 - reference/CS3_PanEvapGerber.dss  (quantile-mapping target)
 
 Outputs
@@ -22,12 +22,12 @@ Outputs
 
 Dependencies
 ------------
-- utils/dss_io.py, utils/quantile_mapping.py
+- utils/dss_io.py, utils/quantile_mapping.py, utils/wgen.py
 - utils/paths.py  (data-dir resolution)
 
 Usage
 -----
-    python mod_hydrology/calsimhydro/_2b_compile_pan_evap.py --product Historical_Unsplit
+    python mod_hydrology/calsimhydro/_2b_compile_pan_evap.py --product historical
     python mod_hydrology/calsimhydro/_2b_compile_pan_evap.py --product A
 """
 
@@ -42,8 +42,9 @@ from pydsstools.core import TimeSeriesContainer
 # Add repo root to path for utils imports
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 from utils import dss_io
-from utils.paths import get_base_dir, get_module_generated_dir
+from utils.paths import WEATHER_SETS, get_module_generated_dir
 from utils.quantile_mapping import qmap_single
+from utils.wgen import dates, met_path, read_met
 
 REFERENCE_DIR = Path(__file__).resolve().parent / "reference"
 PAN_PATH = "/CALSIM/WBA02/PAN-EVAP//1MON/PAN-EVAP/"
@@ -51,11 +52,8 @@ PAN_PATH = "/CALSIM/WBA02/PAN-EVAP//1MON/PAN-EVAP/"
 MONTHS = pd.date_range("1920-10-31", "2018-09-30", freq="ME")
 MM_PER_INCH = 25.4
 
-# --product choice: (WGEN folder, met file prefix, output folder)
-WEATHER = {
-    "Historical_Unsplit": ("Historical_Unsplit", "data", "Historical_Unsplit"),
-    "A": ("Product_A/1", "meteo", "Product_A"),
-}
+# The quantile map is fit on Historical_Unsplit; Product B has no pan evaporation here
+PRODUCTS = ("historical", "A")
 
 
 def gerber_cells(grid_info_file: Path) -> pd.DataFrame:
@@ -82,24 +80,19 @@ def hargreaves_samani_mm(lat_deg: float, dates: pd.DatetimeIndex, tmax: np.ndarr
     return 0.0023 * (ra_mj / 2.45) * ((tmax + tmin) / 2.0 + 17.8) * np.sqrt(delta_t)
 
 
-def monthly_gerber_eto(met_dir: Path, prefix: str, cells: pd.DataFrame) -> pd.Series:
+def monthly_gerber_eto(product: str, cells: pd.DataFrame) -> pd.Series:
     """Area-weighted monthly Hargreaves-Samani ETo (inches) over the Gerber cells, WY 1921-2018."""
     total = None
     for cell in cells.itertuples():
-        met = pd.read_csv(
-            met_dir / f"{prefix}_{cell.lat}_{cell.lon}",
-            sep=r"\s+",
-            header=None,
-            names=["year", "month", "day", "precip", "tmax", "tmin"],
-        )
-        dates = pd.DatetimeIndex(pd.to_datetime(met[["year", "month", "day"]]))
-        eto = hargreaves_samani_mm(cell.lat, dates, met["tmax"].to_numpy(), met["tmin"].to_numpy())
-        weighted = pd.Series(eto * cell.pct_area, index=dates)
+        met = read_met(product, met_path(product, cell.lat, cell.lon), usecols=["tmax", "tmin"])
+        days = dates(met)
+        eto = hargreaves_samani_mm(cell.lat, days, met["tmax"].to_numpy(), met["tmin"].to_numpy())
+        weighted = pd.Series(eto * cell.pct_area, index=days)
         total = weighted if total is None else total + weighted
     monthly = (total / cells["pct_area"].sum()).resample("ME").sum() / MM_PER_INCH
     monthly = monthly.reindex(MONTHS)
     if monthly.isna().any():
-        raise ValueError(f"Gerber cells in {met_dir} do not cover WY 1921-2018")
+        raise ValueError(f"The Gerber cells of {WEATHER_SETS[product]['name']} do not cover WY 1921-2018")
     return monthly
 
 
@@ -142,20 +135,16 @@ def main():
     )
     parser.add_argument(
         "--product",
-        choices=list(WEATHER),
+        choices=PRODUCTS,
         required=True,
-        help="Weather to map: Historical_Unsplit (WGEN historical, not detrended) or A (Product A scenario 1).",
+        help="Weather to map: historical (Historical_Unsplit, not detrended) or A (Product A scenario 1).",
     )
     args = parser.parse_args()
 
-    wgen_dir = get_base_dir() / "WGEN"
     cells = gerber_cells(REFERENCE_DIR / "WBA_Grid_Info.txt")
-    hist_eto = monthly_gerber_eto(wgen_dir / "Historical_Unsplit", "data", cells)
-    met_folder, prefix, out_folder = WEATHER[args.product]
-    if args.product == "Historical_Unsplit":
-        eto = hist_eto
-    else:
-        eto = monthly_gerber_eto(wgen_dir / met_folder, prefix, cells)
+    hist_eto = monthly_gerber_eto("historical", cells)
+    eto = hist_eto if args.product == "historical" else monthly_gerber_eto(args.product, cells)
+    out_folder = WEATHER_SETS[args.product]["name"]
 
     cs3_pan = read_cs3_pan()
     mapped = qmap_single(qmap_frame(eto), qmap_frame(hist_eto), qmap_frame(cs3_pan))

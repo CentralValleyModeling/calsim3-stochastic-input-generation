@@ -1,14 +1,19 @@
 """
-Consolidated Product A Historical-Validation Compiler
-=====================================================
+Consolidated Historical-Validation Compiler of a Single Weather Series
+======================================================================
+Compiles the delivery CSVs of Historical_Unsplit (``--product historical``) or
+Product A (``--product A``) into one CalSim SV DSS over ``utils.paths.DELIVERY_WY``.
 
 Workflow
 --------
-1. Scan each module's ``output/_product_a_validation/`` for data CSVs
+1. Scan each module's delivery folder of the set (``utils.paths.delivery_dir``:
+   ``_historical_unsplit_validation/`` or ``_product_a_validation/``) for data CSVs
 2. Copy those CSVs into ``compiled_input_files/<module>/``
 3. For each module, build an intermediate DSS by overriding the baseline
-   ``__calsim_sv_default__.dss`` with the CSV values
-4. Merge all intermediate DSS records into a single ``ProductA_Historical_Validation_SV.dss``
+   ``__calsim_sv_default__.dss`` with the CSV values. A module with two rows for
+   one SV and month, or an SV that two modules provide, stops the run.
+4. Merge all intermediate DSS records into a single
+   ``<HistoricalUnsplit|ProductA>_Historical_Validation_SV.dss``
 5. Cross-reference against the master inventory to report:
    - Expected (Part B, C) that were successfully modified
    - Expected (Part B, C) that are MISSING (not provided by any module)
@@ -21,12 +26,13 @@ Inventory flags
 - **Constant/Rept = T** -> repeat the last 12 WY months of the baseline across
   the full overwrite window (auto-generated, no CSV needed)
 
-Diagnostic outputs  (all written to ``_product_a_validation/``)
+Diagnostic outputs  (all written to ``historical_unsplit_validation/`` or
+``product_a_validation/``; <tag> is historicalUnsplit or productA)
 ------------------------------------------------------------------------
 - ``compiled_input_files/<module>/*.csv``  - local copies of source CSVs
-- ``<module>__productA.dss``               - per-module intermediate DSS
-- ``_constant_rept__productA.dss``         - auto-filled Constant/Rept DSS
-- ``ProductA_Historical_Validation_SV.dss``           - final compiled DSS
+- ``<module>__<tag>.dss``                  - per-module intermediate DSS
+- ``_constant_rept__<tag>.dss``            - auto-filled Constant/Rept DSS
+- ``<HistoricalUnsplit|ProductA>_Historical_Validation_SV.dss`` - final compiled DSS
 - ``paths_modified.csv``                   - every (Part B/C, module) modified
 - ``paths_unchanged.csv``                  - baseline paths untouched by any module
 - ``paths_not_in_baseline.csv``            - module paths absent from the baseline
@@ -55,6 +61,7 @@ Diagnostic outputs  (all written to ``_product_a_validation/``)
 
 CLI flags
 ---------
+- ``--product {historical,A}``  The weather set (required).
 - ``--compute-stats``  Skip compilation; compute per-path modification
   statistics from an existing compiled DSS and ``paths_modified.csv``.
   Errors out if the compiled DSS has not been created yet.
@@ -82,13 +89,48 @@ from collections import OrderedDict
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 from utils import dss_io
-from utils.paths import (PRODUCT_A_WY, get_base_dir, get_generated_dir, get_module_generated_dir,
-                         get_inventory_dir, get_rim_inflow_outputs)
+from utils.paths import (DELIVERY, DELIVERY_WY, WEATHER_SETS, delivery_dirs, get_base_dir,
+                         get_module_generated_dir, get_inventory_dir)
 
 # Suppress noisy warnings from empty slices (e.g. all-NaN columns in stats)
 warnings.filterwarnings("ignore", message="Mean of empty slice")
 warnings.filterwarnings("ignore", message="All-NaN slice encountered")
 from pydsstools.core import TimeSeriesContainer
+
+
+# -- CLI arguments ------------------------------------------------------------
+_parser = argparse.ArgumentParser(
+    description="Historical Validation of a single weather series - DSS Compilation",
+)
+_parser.add_argument(
+    "--product", choices=list(DELIVERY), required=True,
+    help="Weather set: historical (Historical_Unsplit) or A.",
+)
+_parser.add_argument(
+    "--compute-stats", action="store_true", default=False,
+    help="Skip compilation; compute per-path modification statistics from "
+         "an existing compiled DSS and paths_modified.csv.",
+)
+_parser.add_argument(
+    "--stats-report", action="store_true", default=False,
+    help="Generate summary report and figures from modification_statistics.csv. "
+         "Can be combined with --compute-stats or run standalone.",
+)
+_parser.add_argument(
+    "--no-term-plots", action="store_true", default=False,
+    help="Skip per-variable diagnostic plots (time series + scatter). "
+         "By default these are generated as part of the stats report.",
+)
+_parser.add_argument(
+    "--summary-tables", action="store_true", default=False,
+    help="Generate per-category summary Excel workbook from "
+         "modification_statistics.csv.  Standalone mode - exits after writing.",
+)
+CLI_ARGS = _parser.parse_args()
+PRODUCT = CLI_ARGS.product
+SET_NAME = WEATHER_SETS[PRODUCT]["name"]      # Historical_Unsplit, Product_A
+SET_LABEL = WEATHER_SETS[PRODUCT]["label"]    # figure and table label
+SET_TAG = DELIVERY[PRODUCT]["tag"]            # historicalUnsplit, productA
 
 
 # ------------------------------------------------------------------------------
@@ -98,18 +140,18 @@ _base = get_base_dir()
 _gen  = get_module_generated_dir("postprocessing/sv_compile")
 
 BASELINE_DSS = _base / "CalSim3" / "__calsim_sv_default__.dss"
-OUTPUT_DIR   = _gen / "product_a_validation"
-OUTPUT_DSS   = OUTPUT_DIR / "ProductA_Historical_Validation_SV.dss"
+OUTPUT_DIR   = _gen / f"{WEATHER_SETS[PRODUCT]['slug']}_validation"
+OUTPUT_DSS   = OUTPUT_DIR / f"{SET_NAME.replace('_', '')}_Historical_Validation_SV.dss"
 COMPILED_CSV = OUTPUT_DIR / "compiled_input_files"
 
 INVENTORY_XLSX = get_inventory_dir() / "_MASTER_INVENTORY_FOR_STOCHASTIC_INPUT_GENERATION_.xlsx"
 
 DSS_PATTERN = "/*/*/*/*/1MON/*"
 
-# Overwrite window (inclusive end-of-month timestamps): utils.paths.PRODUCT_A_WY
-OVERWRITE_START = pd.Timestamp(PRODUCT_A_WY[0] - 1, 10, 31)
-OVERWRITE_END   = pd.Timestamp(PRODUCT_A_WY[1],  9, 30)
-WINDOW_MONTHS   = 12 * (PRODUCT_A_WY[1] - PRODUCT_A_WY[0] + 1)
+# Overwrite window (inclusive end-of-month timestamps): utils.paths.DELIVERY_WY
+OVERWRITE_START = pd.Timestamp(DELIVERY_WY[0] - 1, 10, 31)
+OVERWRITE_END   = pd.Timestamp(DELIVERY_WY[1],  9, 30)
+WINDOW_MONTHS   = 12 * (DELIVERY_WY[1] - DELIVERY_WY[0] + 1)
 
 # -- Junction helper for long DSS paths ----------------------------------------
 # The Fortran HEC-DSS library inside pydsstools limits path names to 256 chars.
@@ -145,61 +187,25 @@ def _dss_str(path):
     except ValueError:
         return s
 
-# -- CLI arguments ------------------------------------------------------------
-_parser = argparse.ArgumentParser(
-    description="Product A Historical Validation - DSS Compilation",
-)
-_parser.add_argument(
-    "--compute-stats", action="store_true", default=False,
-    help="Skip compilation; compute per-path modification statistics from "
-         "an existing compiled DSS and paths_modified.csv.",
-)
-_parser.add_argument(
-    "--stats-report", action="store_true", default=False,
-    help="Generate summary report and figures from modification_statistics.csv. "
-         "Can be combined with --compute-stats or run standalone.",
-)
-_parser.add_argument(
-    "--no-term-plots", action="store_true", default=False,
-    help="Skip per-variable diagnostic plots (time series + scatter). "
-         "By default these are generated as part of the stats report.",
-)
-_parser.add_argument(
-    "--summary-tables", action="store_true", default=False,
-    help="Generate per-category summary Excel workbook from "
-         "modification_statistics.csv.  Standalone mode - exits after writing.",
-)
-CLI_ARGS = _parser.parse_args()
-
 # -- Module definitions -------------------------------------------------------
-# label -> (absolute path to validation dir, inventory Input_Category name)
-_gen_dir = get_generated_dir()
-MODULE_CONFIG = OrderedDict([
-    ("calsimhydro",              (_gen_dir / "mod_hydrology/calsimhydro/output/_3_postprocess_product_a/_product_a_validation", 
-        "CalSimHydro")),
-    ("calsimhydro_ee",           (_gen_dir / "mod_hydrology/calsimhydro_ee/output/_2_postprocess_product_a/_product_a_validation",  
-        "CalSimHydroEE")),
-    ("evaporation",              (_gen_dir / "mod_reservoir/evaporation/output/_2_run_reservoir_evap/_product_a_validation",   
-        "Reservoir Evaporation")),
-    ("rim_inflow",               (get_rim_inflow_outputs("A")["sv_dir"],
-        "Rim Inflow")),
-    ("delta_channel_depletion",  (_gen_dir / "mod_hydrology/delta_channel_depletion/output/_2_postprocess_product_a/_product_a_validation", 
-        "Delta Channel Depletion")),
-    ("small_watersheds",         (_gen_dir / "mod_hydrology/small_watersheds/output/_2_postprocess_product_a/_product_a_validation", 
-        "Small Watersheds")),
-    ("storage_curves",           (_gen_dir / "mod_reservoir/storage_curves/output/_product_a_validation",  
-        "Reservoir Storage Curves")),
-    ("instream_flows",           (_gen_dir / "mod_other/instream_flows/output/_product_a_validation", 
-        "Instream Flows")),
-    ("tulare_gw_terms",          (_gen_dir / "mod_hydrology/tulare_gw_terms/output/_1_wyt_monthlyavg/_product_a_validation", 
-        "Tulare Groundwater Terms")),
-    ("climate",                  (_gen_dir / "mod_forcing/climate/output/_product_a_validation",
-        "Climate")),
-    ("miscellaneous",            (_gen_dir / "mod_other/miscellaneous/output/_product_a_validation", 
-            "Other")),
-    ("upper_watershed",          (_gen_dir / "mod_other/upper_watershed/output/_product_a_validation",
-        "Upper Watershed Modules")),
-])
+# module label -> inventory Input_Category name
+INPUT_CATEGORY = {
+    "calsimhydro": "CalSimHydro",
+    "calsimhydro_ee": "CalSimHydroEE",
+    "evaporation": "Reservoir Evaporation",
+    "rim_inflow": "Rim Inflow",
+    "delta_channel_depletion": "Delta Channel Depletion",
+    "small_watersheds": "Small Watersheds",
+    "storage_curves": "Reservoir Storage Curves",
+    "instream_flows": "Instream Flows",
+    "tulare_gw_terms": "Tulare Groundwater Terms",
+    "climate": "Climate",
+    "miscellaneous": "Other",
+    "upper_watershed": "Upper Watershed Modules",
+}
+# label -> (the set's delivery dir, utils.paths.delivery_dirs; inventory Input_Category name)
+MODULE_CONFIG = OrderedDict((label, (folder, INPUT_CATEGORY[label]))
+                            for label, folder in delivery_dirs(PRODUCT).items())
 
 # Inventory categories that are NOT expected to have validation modules
 CATEGORIES_WITHOUT_VALIDATION = {"Closure Terms", "Day-Volume Fraction", "Salinity"}
@@ -549,7 +555,7 @@ def generate_per_variable_plots(stats_csv: Path, cached_series: dict = None):
 
         # Left: time series
         ax_ts.plot(b_x, b_y, color="#1f77b4", lw=0.5, label="Baseline", alpha=0.8)
-        ax_ts.plot(m_x, m_y, color="#d62728", lw=0.5, label="Product A", alpha=0.8)
+        ax_ts.plot(m_x, m_y, color="#d62728", lw=0.5, label=SET_LABEL, alpha=0.8)
         ax_ts.set_ylabel(units if units else "Value")
         ax_ts.set_title(title)
         ax_ts.legend(loc="best", framealpha=0.7)
@@ -580,7 +586,7 @@ def generate_per_variable_plots(stats_csv: Path, cached_series: dict = None):
         ax_sc.set_ylim(lims)
 
         ax_sc.set_xlabel(f"Baseline ({units})" if units else "Baseline")
-        ax_sc.set_ylabel(f"Product A ({units})" if units else "Product A")
+        ax_sc.set_ylabel(f"{SET_LABEL} ({units})" if units else SET_LABEL)
 
         r2_str  = f"R\u00b2 = {r2_val:.3f}"  if np.isfinite(r2_val)  else "R\u00b2 = n/a"
         nse_str = f"NSE = {nse_val:.3f}" if np.isfinite(nse_val) else "NSE = n/a"
@@ -607,7 +613,7 @@ def generate_per_variable_plots(stats_csv: Path, cached_series: dict = None):
         x_pos = np.arange(12)
         w = 0.35
         ax_bar.bar(x_pos - w/2, b_mavg, w, color="#1f77b4", alpha=0.8, label="Baseline")
-        ax_bar.bar(x_pos + w/2, m_mavg, w, color="#d62728", alpha=0.8, label="Product A")
+        ax_bar.bar(x_pos + w/2, m_mavg, w, color="#d62728", alpha=0.8, label=SET_LABEL)
         ax_bar.set_xticks(x_pos)
         ax_bar.set_xticklabels(_MONTH_LABELS)
         ax_bar.set_ylabel(units if units else "Value")
@@ -637,7 +643,7 @@ def generate_per_variable_plots(stats_csv: Path, cached_series: dict = None):
         ax_sc.set_ylim(lims)
 
         ax_sc.set_xlabel(f"Baseline ({units})" if units else "Baseline")
-        ax_sc.set_ylabel(f"Product A ({units})" if units else "Product A")
+        ax_sc.set_ylabel(f"{SET_LABEL} ({units})" if units else SET_LABEL)
 
         r2_val  = _r2(b_mavg, m_mavg)
         nse_val = _nse(b_mavg, m_mavg)
@@ -1185,7 +1191,7 @@ def generate_stats_report(stats_csv: Path, cached_series: dict = None):
     if _has_cols:
 
         def _scatter_base_vs_mod(sub, title, out_path):
-            """Scatter: Mean Annual Baseline (x) vs Mean Annual Product A (y).
+            """Scatter: Mean Annual Baseline (x) vs Mean Annual of the set (y).
             Linear axes, 1:1 line plus +/-10% reference lines."""
             x = sub["Base-Ann-Avg"].values.astype(float)
             y = sub["Mod-Ann-Avg"].values.astype(float)
@@ -1216,7 +1222,7 @@ def generate_stats_report(stats_csv: Path, cached_series: dict = None):
                     alpha=0.6, zorder=1)
 
             ax.set_xlabel("Mean Annual Baseline")
-            ax.set_ylabel("Mean Annual Product A")
+            ax.set_ylabel(f"Mean Annual {SET_LABEL}")
             ax.set_title(f"{title} (n={len(x)})")
             ax.legend(loc="upper left", framealpha=0.7)
 
@@ -1243,7 +1249,7 @@ def generate_stats_report(stats_csv: Path, cached_series: dict = None):
                 unit_label = f" [{unit}]" if unit else ""
                 _scatter_base_vs_mod(
                     unit_sub,
-                    f"{cat}{unit_label} - Baseline vs Product A",
+                    f"{cat}{unit_label} - Baseline vs {SET_LABEL}",
                     _scatter_dir / f"{safe_cat}{suffix}.png",
                 )
                 _n_scatter += 1
@@ -1271,7 +1277,7 @@ def generate_summary_tables(stats_csv: Path):
     - CalSimHydro, CalSimHydroEE, ResEvap, DCD, SWS, Tulare GW, Climate
           Grouped by Part C.  R2/NSE are averaged; annual totals are summed
           across terms (except Climate and ResEvap, which use mean).  Absolute
-          and percent differences between Historical and Product A are included.
+          and percent differences between Historical and the set are included.
     - Rim - Unimpaired
           Individual rows for each UNIMP_* flow.
     - Rim - Total
@@ -1295,13 +1301,13 @@ def generate_summary_tables(stats_csv: Path):
     METRIC_COLS = ["R2-Monthly", "NSE-Monthly"]
     ANN_COLS    = ["Base-Ann-Avg", "Mod-Ann-Avg"]
     DST_METRICS = ["R2 (Monthly)", "NSE (Monthly)"]
-    DST_ANN     = ["Historical (Ann Avg)", "Product A (Ann Avg)"]
+    DST_ANN     = ["Historical (Ann Avg)", f"{SET_LABEL} (Ann Avg)"]
     rename_map  = dict(zip(METRIC_COLS + ANN_COLS, DST_METRICS + DST_ANN))
 
     def _add_diffs(tbl):
         """Append Abs Diff and Pct Diff columns in-place."""
         h = tbl["Historical (Ann Avg)"]
-        p = tbl["Product A (Ann Avg)"]
+        p = tbl[f"{SET_LABEL} (Ann Avg)"]
         tbl["Abs Diff (Ann Avg)"] = p - h
         tbl["Pct Diff (Ann Avg)"] = ((p - h) / h.replace(0, np.nan)) * 100.0
         return tbl
@@ -1392,7 +1398,7 @@ def generate_summary_tables(stats_csv: Path):
         "R2 (Monthly)":         [total_sub["R2-Monthly"].mean()],
         "NSE (Monthly)":        [total_sub["NSE-Monthly"].mean()],
         "Historical (Ann Avg)": [total_sub["Base-Ann-Avg"].sum()],
-        "Product A (Ann Avg)":  [total_sub["Mod-Ann-Avg"].sum()],
+        f"{SET_LABEL} (Ann Avg)":  [total_sub["Mod-Ann-Avg"].sum()],
     }, index=["TOTAL"])
     total_row["Count"] = n_total
     _add_diffs(total_row)
@@ -1662,7 +1668,7 @@ def compute_modification_statistics(all_modified_keys, baseline_bucket):
 # -- Compute-stats-only mode --------------------------------------------------
 if CLI_ARGS.compute_stats:
     print("=" * 72)
-    print("  Product A Historical Validation - Compute Statistics Only")
+    print(f"  {SET_LABEL} Historical Validation - Compute Statistics Only")
     print("=" * 72)
 
     if not OUTPUT_DSS.exists():
@@ -1717,7 +1723,7 @@ if CLI_ARGS.compute_stats:
 # -- Stats-report-only mode (no compilation, no stats recompute) --------------
 if CLI_ARGS.stats_report:
     print("=" * 72)
-    print("  Product A Historical Validation - Generate Stats Report")
+    print(f"  {SET_LABEL} Historical Validation - Generate Stats Report")
     print("=" * 72)
 
     stats_csv = OUTPUT_DIR / "modification_statistics.csv"
@@ -1736,7 +1742,7 @@ if CLI_ARGS.stats_report:
 # -- Summary-tables-only mode -------------------------------------------------
 if CLI_ARGS.summary_tables:
     print("=" * 72)
-    print("  Product A Historical Validation - Summary Tables")
+    print(f"  {SET_LABEL} Historical Validation - Summary Tables")
     print("=" * 72)
 
     stats_csv = OUTPUT_DIR / "modification_statistics.csv"
@@ -1752,7 +1758,7 @@ if CLI_ARGS.summary_tables:
 
 
 print("=" * 72)
-print("  Product A Historical Validation - DSS Compilation")
+print(f"  {SET_LABEL} Historical Validation - DSS Compilation")
 print("=" * 72)
 
 if not BASELINE_DSS.exists():
@@ -1893,7 +1899,7 @@ for label, csvs in available_modules.items():
             override_dict[(partb, partc)] = s
 
     # -- 3b. Create intermediate DSS -----------------------------------------
-    int_dss = OUTPUT_DIR / f"{label}__productA.dss"
+    int_dss = OUTPUT_DIR / f"{label}__{SET_TAG}.dss"
     if int_dss.exists():
         int_dss.unlink()
     for ext in [".dsd", ".dsk", ".dsc"]:
@@ -1976,6 +1982,18 @@ for label, csvs in available_modules.items():
 print("-" * 72)
 print()
 
+# One SV from two modules would leave the DSS with whichever module is layered last.
+_source_of = {}
+_clashes = []
+for label, keys in module_modified.items():
+    for k in sorted(keys):
+        if k in _source_of:
+            _clashes.append(f"{k[0]}/{k[1]} ({_source_of[k]}, {label})")
+        _source_of.setdefault(k, label)
+if _clashes:
+    raise SystemExit(f"{len(_clashes)} SV(s) come from more than one module, e.g. "
+                     + "; ".join(_clashes[:5]))
+
 
 # ------------------------------------------------------------------------------
 # STEP 3b - Auto-fill Constant/Rept SVs from baseline last-12-month pattern
@@ -2015,7 +2033,7 @@ for keys in module_modified.values():
     already_from_csv |= keys
 const_rept_to_fill = const_rept_keys - already_from_csv
 
-const_rept_dss = OUTPUT_DIR / "_constant_rept__productA.dss"
+const_rept_dss = OUTPUT_DIR / f"_constant_rept__{SET_TAG}.dss"
 if const_rept_dss.exists():
     const_rept_dss.unlink()
 for ext in [".dsd", ".dsk", ".dsc"]:
@@ -2061,7 +2079,7 @@ print()
 # ------------------------------------------------------------------------------
 # STEP 4 - Compile final DSS from intermediate DSS files
 # ------------------------------------------------------------------------------
-print("Step 4: Compiling final ProductA_Historical_Validation_SV.dss ...")
+print(f"Step 4: Compiling final {OUTPUT_DSS.name} ...")
 t_start = time.time()
 
 # Start from a copy of the baseline
@@ -2290,7 +2308,7 @@ n_nib_unique  = len(set((r["Part B"], r["Part C"]) for r in module_not_in_base))
 
 lines = [
     "=" * 65,
-    "  Product A Historical Validation - Compilation Summary",
+    f"  {SET_LABEL} Historical Validation - Compilation Summary",
     "=" * 65,
     "",
     f"  Baseline DSS:  {BASELINE_DSS.name}",

@@ -9,7 +9,9 @@ Do not use emojis or non-ASCII characters in code or outputs.
 
 ## Products
 
-**Product A** (WY1922-2018, `utils.paths.PRODUCT_A_WY`): Historical-length scenarios. WGEN matched to historical period, actual wind merged. Single continuous time series per SV.
+**Historical_Unsplit** (`--product historical`, WY1922-2018): the historical weather record without the temperature detrending (WGEN `Historical_Unsplit`). Single continuous time series per SV; the validation basis.
+
+**Product A** (`--product A`, WY1922-2018, `utils.paths.DELIVERY_WY`): Historical-length scenarios. WGEN matched to historical period, actual wind merged. Single continuous time series per SV.
 
 **Product B** (1000 years): Stochastic planning sequences. WGEN stochastic generation, resampled wind. 10 chunks x 100 water years (`*_n01.csv` through `*_n10.csv`). First 9 months skipped for Oct WY alignment.
 
@@ -24,7 +26,7 @@ root/
 │   └── climate/              Point precip, basin-avg climate (T, PPT, VPD); GridInfo basin weights
 │
 ├── mod_hydrology/            Sacramento Valley, East Side, rim inflow, Delta, WYTs
-│   ├── calsimhydro/          Sac Valley: compile precip/ET, postprocess Product A & B
+│   ├── calsimhydro/          Sac Valley: compile precip/ET, postprocess the single series & Product B
 │   ├── calsimhydro_ee/       External elements: compile precip, postprocess
 │   ├── rim_inflow/           Build the rim-inflow SVs from the model's arc flows; skill evaluation
 │   ├── water_year_types/     Sac 40-30-30, SJ 60-20-20 WYT classification
@@ -42,14 +44,14 @@ root/
 │   └── upper_watershed/      Lower Yuba, Don Pedro: WYT/QM/hybrid reconstruction
 │
 ├── postprocessing/           Final compilation and validation
-│   └── sv_compile/           Merge all module outputs → DSS (product_a_historical_validation.py)
+│   └── sv_compile/           Merge all module outputs into DSS (single_series_compilation.py, product_b_compilation.py)
 │
 ├── utils/                    Shared utilities
 │   ├── paths.py              Config & path resolution (data_dir, BASE, GENERATED dirs)
 │   ├── dss_io.py             open_dss() context manager: Windows long-path junction + catalog_flag (THE canonical DSS open)
 │   ├── csv_io.py             SV-format CSV helpers (to_validation_df, read_sv_csv, load_sv_series)
 │   ├── quantile_mapping.py   qmap_single(): empirical CDF QM (deterministic via global QMAP_SEED)
-│   ├── qmap_product_a_from_pairs.py  Reusable Product A split-sample QM driven by qmap_pairs.csv
+│   ├── qmap_single_from_pairs.py  Reusable single-series QM (Historical_Unsplit, Product A) driven by qmap_pairs.csv
 │   ├── qmap_product_b_from_pairs.py  Reusable Product B chunked QM driven by qmap_pairs.csv
 │   ├── wyt_monthlyavg_framework.py  compute_wyt_monthlyavg(): WYT x month reconstruction
 │   └── dss_pickle_builder.py CalView-style DSS cache (values/diffs/units pkl); routes through dss_io
@@ -76,7 +78,7 @@ from utils.paths import get_data_dir, get_base_dir, get_generated_dir, get_modul
 # get_inventory_dir()       -> <repo_root>/inventory
 ```
 
-Data layout: `BASE/WGEN/{Product_A,Product_B}/1/`, `BASE/Historical_Climate_LTO/1_Historical/`, `BASE/CalSim3/__calsim_sv_default__.dss`. Outputs mirror module structure under `GENERATED/`.
+Data layout: `BASE/WGEN/Historical_Unsplit/`, `BASE/WGEN/{Product_A,Product_B}/1/`, `BASE/Historical_Climate_LTO/1_Historical/`, `BASE/CalSim3/__calsim_sv_default__.dss`. Outputs mirror module structure under `GENERATED/`.
 
 ---
 
@@ -89,9 +91,9 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 from utils.paths import get_base_dir, get_module_generated_dir
 ```
 
-**Product selection**: `--product A|B` (required, no default; mod_forcing/climate scripts use `--source Product_A|Product_B|Historical`). A few scripts add a third choice for non-product output (e.g., `--product validation` on `_1_min_flow_feather.py` / `_2_sjr_rest_req.py`, or a separate `--calibrate` flag on `_5_dnp_evaporation.py`). Product A and Product B are always run separately - there is no "both" mode.
+**Weather set selection**: `--product historical|A|B` (required, no default; the keys of `utils.paths.WEATHER_SETS`). Climate and storage curves `_3` also take `LTO` (Historical_Climate_LTO). A few scripts add a choice for non-product output (e.g., `--product validation` on `_1_min_flow_feather.py` / `_2_sjr_rest_req.py`, or a separate `--calibrate` flag on `_5_dnp_evaporation.py`). The sets are always run separately; there is no "all" mode. WGEN files are read through `utils/wgen.py` and dated through `utils/wgen_calendar.py` (Product B: `label`, `write_chunk_csvs`, `LABEL_MONTHS`, `LABEL_DAYS`).
 
-**Output dirs**: `_gen / "output" / "_N_script_name"`. Validation: `output/<script_dir>/_product_a_validation/`. Product B final: `output/_product_b_final/`.
+**Output dirs**: `_gen / "output" / "_N_script_name"`. Delivery of the single series: `utils.paths.delivery_dir(<output root>, product)`, i.e. `_historical_unsplit_validation/` or `_product_a_validation/` (all of them: `utils.paths.delivery_dirs`). Product B final: `output/_product_b_final/`.
 
 **CSV formats**: Standard SV: `Part B, Part C, Year, Month, Value`. Product B long: `date, WY, month, WYT, term, value`. WYT framework: `WaterYear, Month, value`.
 
@@ -148,8 +150,8 @@ The config names the model (`inflow_model`, an adapter in `adapters/`), its fold
 
 | Script | Purpose | Product |
 |--------|---------|---------|
-| `_1_pp_point_locations.py` | Monthly precip for PP point locations from WGEN | A, B, Historical (`--source`, `--scenario`) |
-| `_2_uhh_basin_averages.py` | Basin-average precip/temp/VPD for UHH locations | A, B, Historical (`--source`, `--validate-outputs`) |
+| `_1_pp_point_locations.py` | Monthly precip for PP point locations from WGEN | historical, A, B, LTO (`--product`) |
+| `_2_uhh_basin_averages.py` | Basin-average precip/temp/VPD for UHH locations | historical, A, B, LTO (`--product`, `--validate-outputs`) |
 | `reference/build_8RI_SRBB_gridinfo.py` | Build-time only (needs geopandas): merges Shasta + 7 rim tributary GridInfo components and rasterizes the CT_BENDBRIDGE valley floor (WBA 02/03) from `BASE/CalSim3/calsim3.gpkg` into `CS3_8RI_SRBB_GridInfo.txt`, and writes the valley floor alone as `CS3_I_SRBB_VAL_GridInfo.txt` | n/a |
 | `reference/build_no_gooselake_gridinfo.py` | Build-time only (needs geopandas): `--target {I_SHSTA,SRBB,all}` drops the ~1000 sq mi Goose Lake over-extension outside the authoritative SHSTA / CT_BENDBRIDGE drainage, writing `CS3_I_SHSTA_no_gooselake_GridInfo.txt` and `CS3_8RI_SRBB_no_gooselake_GridInfo.txt` | n/a |
 
@@ -158,17 +160,18 @@ The config names the model (`inflow_model`, an adapter in `adapters/`), its fold
 | Script | Purpose | Product |
 |--------|---------|---------|
 | `_0_compare_et_cshydro_vic.py` | Compare ET: CalSimHydro vs VIC (analysis only) | -- |
-| `_1_compile_precip.py` | Daily WBA precip from WGEN met files | A & B (`--product A|B`) |
+| `_1_compile_precip.py` | Daily WBA precip from WGEN met files | historical, A & B (`--product`) |
 | `_2_compile_et.py` | Area-weighted VIC ET -> QM to CalSim (parallel) | A & B (`--product A|B`, `--n_workers`) |
-| `_3_postprocess_product_a.py` | Extract & postprocess CalSimHydro/Rebalance/Rice DSS -> validation CSVs | A (`--sources`, `--skip-compare`, `--skip-validate`) |
+| `_2b_compile_pan_evap.py` | Gerber pan evaporation per WBA from WGEN temperature | historical, A (`--product`) |
+| `_3_postprocess_single.py` | Extract & postprocess CalSimHydro/Rebalance/Rice DSS -> delivery CSVs | historical, A (`--product`, `--sources`, `--skip-compare`, `--skip-validate`) |
 | `_4_postprocess_product_b.py` | Extract Product B DSS (10 chunks) -> per-chunk CSVs | B (`--sources`, `--chunks`, `--compare-a`) |
 
 ### mod_hydrology/calsimhydro_ee/
 
 | Script | Purpose | Product |
 |--------|---------|---------|
-| `_1_compile_precip_EE.py` | East Side precip from WGEN grids | A & B (`--product A|B`) |
-| `_2_postprocess_product_a.py` | Extract & postprocess CSHydroEE DSS -> validation CSVs | A |
+| `_1_compile_precip_EE.py` | East Side precip from WGEN grids | historical, A & B (`--product`) |
+| `_2_postprocess_single.py` | Extract & postprocess CSHydroEE DSS -> delivery CSVs | historical, A (`--product`) |
 | `_3_postprocess_product_b.py` | Extract Product B DSS (10 chunks) -> per-chunk CSVs | B (`--chunks`, `--compare-a`, `--plot`) |
 
 ### mod_hydrology/rim_inflow/
@@ -194,25 +197,26 @@ Rim components: Sac (SRBB+OROV+YUBA+FOLS), SJ (ST+TU+ME+SJ).
 
 | Script | Purpose | Product |
 |--------|---------|---------|
-| `_1_compile_precip_DETAW.py` | Daily precip for DCD stations from WGEN | A & B (`--product A|B`) |
-| `_2_aggregate_dpflow_gwflow_for_DCD.py` | Aggregate DP/GW flow outputs | -- |
-| `_3_merge_DCD_outputs_for_CS3.py` | Merge DCD outputs for CalSim | -- |
-| `_4_postprocess_product_a.py` | Extract & postprocess DCD DSS -> validation CSVs | A |
-| `_5_postprocess_product_b.py` | Extract Product B DSS (10 chunks) -> per-chunk CSVs | B (`--chunks`, `--compare-a`, `--plot`) |
+| `_1_compile_precip_DETAW.py` | Daily precip for DCD stations from WGEN | historical, A & B (`--product`) |
+| `_aggregate_dpflow_gwflow_for_DCD.py` | Aggregate DP/GW flow outputs | -- |
+| `_merge_DCD_outputs_for_CS3.py` | Merge DCD outputs for CalSim | -- |
+| `_2_postprocess_single.py` | Extract & postprocess DCD DSS -> delivery CSVs | historical, A (`--product`) |
+| `_3_postprocess_product_b.py` | Extract Product B DSS (10 chunks) -> per-chunk CSVs | B (`--chunks`, `--compare-a`, `--plot`) |
 
 ### mod_hydrology/small_watersheds/
 
 | Script | Purpose | Product |
 |--------|---------|---------|
-| `_1_compile_precip_sws.py` | Monthly precip (in/mo) for SWS from WGEN | A & B (`--product A|B`) |
+| `_1_compile_precip_sws.py` | Monthly precip (in/mo) for SWS from WGEN | historical, A & B (`--product`) |
 | `_1b_check_precip_output.py` | Verify compiled precip outputs (diagnostic) | -- |
-| `_2_postprocess_product_a.py` | Extract & postprocess SWS DSS -> validation CSVs | A |
+| `_2_postprocess_single.py` | Extract & postprocess SWS DSS -> delivery CSVs | historical, A (`--product`) |
+| `_3_postprocess_product_b.py` | Extract Product B DSS (10 chunks) -> per-chunk CSVs | B (`--chunks`, `--compare-a`) |
 
 ### mod_hydrology/tulare_gw_terms/
 
 | Script | Purpose | Product |
 |--------|---------|---------|
-| `_1_wyt_monthlyavg.py` | WYT monthly average reconstruction for Tulare GW terms | A & B |
+| `_1_wyt_monthlyavg.py` | WYT monthly average reconstruction for Tulare GW terms | historical, A & B (`--product`) |
 
 ### mod_reservoir/evaporation/
 
@@ -221,7 +225,7 @@ Rim components: Sac (SRBB+OROV+YUBA+FOLS), SJ (ST+TU+ME+SJ).
 | `evaporation.py` | Core Hargreaves-Samani engine (imported by others) | Utility |
 | `_0_extract_reservoir_database.py` | Extract reservoir params from Excel -> JSON | Setup |
 | `_1_excel_to_python_validation.py` | Validate Python vs Excel evap results | Validation |
-| `_2_run_reservoir_evap.py` | Calculate evap for 95 reservoirs + validation output | A & B (`--product A|B`, `--compare-a`) |
+| `_2_run_reservoir_evap.py` | Calculate evap for 95 reservoirs + delivery output | historical, A & B (`--product`, `--compare-a`) |
 
 Oroville Level 5: storage-based, DCR 2023 sedimentation correction (3,538 -> 3,424.8 TAF max).
 
@@ -229,35 +233,38 @@ Oroville Level 5: storage-based, DCR 2023 sedimentation correction (3,538 -> 3,4
 
 | Script | Purpose | Product |
 |--------|---------|---------|
-| `_2_qmap.py` | Quantile-map Mammoth Pool storage via qmap_pairs.csv | A & B (`--product A|B`) |
+| `_1_wyt_index_curves.py` | Storage-level index curves from schedule tables and WYTs | historical, A & B (`--product`) |
+| `_2_qmap.py` | Quantile-map Mammoth Pool storage via qmap_pairs.csv | historical, A & B (`--product`) |
+| `_3_oroville_daily_precip.py` | Daily Oroville basin precip from WGEN | historical, A, B, LTO (`--product`, `--compare`) |
+| `_4_oroville_level5.py` | S_OROVLLEVEL5 from Oroville storage and precip | historical, A & B (`--product`) |
 
 ### mod_other/instream_flows/
 
 | Script | Purpose | Product |
 |--------|---------|---------|
-| `_1_min_flow_feather.py` | MINFLOWFEATHER via threshold logic on annual Oroville flow | A & B |
-| `_2_sjr_rest_req.py` | SJR restoration flow requirements (REST_REQ_NP, REST_REQ_P) from UNIMP_SJ | A & B |
+| `_1_min_flow_feather.py` | MINFLOWFEATHER via threshold logic on annual Oroville flow | validation, historical, A & B (`--product`) |
+| `_2_sjr_rest_req.py` | SJR restoration flow requirements (REST_REQ_NP, REST_REQ_P) from UNIMP_SJ | validation, historical, A & B (`--product`) |
 
 ### mod_other/miscellaneous/
 
 | Script | Purpose | Product |
 |--------|---------|---------|
 | `_0_extract_others.py` | Extract misc SVs from CalSim baseline DSS | Setup |
-| `_1_wyt_monthlyavg.py` | WYT monthly average reconstruction for misc SVs | A & B |
-| `_2_DeltaAccretionForNDOI.py` | Delta accretion: precip x area x coeff (direct calc) | A & B |
-| `_3_hybrid.py` | Hybrid (WYT+QM)/2 for misc terms | A & B (`--product A|B`) |
-| `_4_qmap.py` | Quantile mapping via qmap_pairs.csv for misc SVs | A & B (`--product A|B`) |
+| `_1_wyt_monthlyavg.py` | WYT monthly average reconstruction for misc SVs | historical, A & B (`--product`) |
+| `_2_DeltaAccretionForNDOI.py` | Delta accretion: precip x area x coeff (direct calc) | historical, A & B (`--product`) |
+| `_3_hybrid.py` | Hybrid (WYT+QM)/2 for misc terms | historical, A & B (`--product`) |
+| `_4_qmap.py` | Quantile mapping via qmap_pairs.csv for misc SVs | historical, A & B (`--product`) |
 
 ### mod_other/upper_watershed/
 
 | Script | Purpose | Product |
 |--------|---------|---------|
 | `_0_load_sv.py` | Load module SV outputs from DSS | Setup |
-| `_1_wyt_monthlyavg.py` | WYT monthly average reconstruction for upper watershed SVs | A & B |
-| `_2_qmap.py` | Quantile mapping via qmap_pairs.csv for upper watershed SVs | A & B (`--product A|B`) |
-| `_3_hybrid.py` | Hybrid (WYT+QM)/2 for upper watershed terms | A & B (`--product A|B`) |
-| `_4_pge_wy_allocation.py` | PGE_WY_ALLOCATION_SV: threshold logic on annual Folsom flow | A & B |
-| `_5_dnp_evaporation.py` | Don Pedro evaporation | A & B |
+| `_1_wyt_monthlyavg.py` | WYT monthly average reconstruction for upper watershed SVs | historical, A & B (`--product`) |
+| `_2_qmap.py` | Quantile mapping via qmap_pairs.csv for upper watershed SVs | historical, A & B (`--product`) |
+| `_3_hybrid.py` | Hybrid (WYT+QM)/2 for upper watershed terms | historical, A & B (`--product`) |
+| `_4_pge_wy_allocation.py` | PGE_WY_ALLOCATION_SV: threshold logic on annual Folsom flow | historical, A & B (`--product`) |
+| `_5_dnp_evaporation.py` | Don Pedro evaporation | historical, A & B (`--product`), `--calibrate` |
 
 ---
 
@@ -278,14 +285,14 @@ Oroville Level 5: storage-based, DCR 2023 sedimentation correction (3,538 -> 3,4
 - `_0_*.py` -- setup, database extraction, data loading
 - `_1_*.py` -- first processing step (compile precip, calculate indices)
 - `_2_*.py` -- second step (quantile map, aggregate)
-- `_3_*.py` -- third step ... (postprocessing, Product A validation, scenario comparison, etc.)
-- `*_postprocess_product_a.py` -- standard Product A validation postprocessor
+- `_3_*.py` -- third step ... (postprocessing, scenario comparison, etc.)
+- `*_postprocess_single.py` -- postprocessor of an external run of Historical_Unsplit or Product A (`--product historical|A`)
 - `*_postprocess_product_b.py` -- standard Product B postprocessor (chunked DSS extraction)
 
 ### Output Files & CalSim Conventions
 
-- Product A: `*_productA_<first WY>_<last WY>.csv`, WY1922-2018 (`utils.paths.PRODUCT_A_WY`) except CalSimHydro and CalSimHydroEE (WY1972-2018); `utils.csv_io.write_product_a_csv` clips to it and removes a series' other spans
-- Product B: `*_productB_n01.csv` through `*_n10.csv` (10 chunks)
+- Historical_Unsplit and Product A: `*_historicalUnsplit_<first WY>_<last WY>.csv` in `_historical_unsplit_validation/` and `*_productA_<first WY>_<last WY>.csv` in `_product_a_validation/`, WY1922-2018 (`utils.paths.DELIVERY_WY`), or the water years a run covers within it; `utils.csv_io.write_delivery_csv` clips to it and removes a series' other spans; `python utils/check_outputs.py` checks the files of both sets before a compile
+- Product B: `*_productB_n01.csv` through `*_n10.csv` (10 chunks, each labelled WY1922-2021; `utils.wgen_calendar.write_chunk_csvs`)
 - Water Year: Oct-Sep (WY N = Oct(N-1) through Sep(N))
 - Reservoir codes: 5-letter (SHSTA, OROVL, FOLSM)
 - WGEN met files: `meteo_LAT_LON` (e.g., `meteo_38.5_120.3`)

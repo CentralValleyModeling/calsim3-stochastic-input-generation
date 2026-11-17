@@ -1,267 +1,158 @@
 """
 Compile WBA Precipitation for CalSimHydroEE
 ============================================
-Computes simple-average daily precipitation (mm -> in) across all VIC grid cells
-within each Water Balance Area (WBA) and writes outputs for CalSimHydroEE.
-
-Product A: one CSV per WBA (full period), optional DSS file.
-Product B: 10 chunk CSVs per WBA (Jan 1920 - Dec 2021 each, 100-WY core per chunk)
-           + optional per-chunk DSS files.
+Simple-average daily precipitation (mm -> in) across the grid cells of each Water Balance Area
+(WBA) from the daily weather of one set (``utils.wgen``), written for CalSimHydroEE. Cells of
+the coordinate list with no weather file (water cells of Suisun Bay and the Delta, 13 of them)
+are left out of their WBA's average.
 
 Inputs
 ------
-- reference/CalSimHydroEE_WBA_Coordinate_List.csv
-- WGEN/Product_A/1/  or  WGEN/Product_B/1/  (meteo_<Lat>_<Lon> files)
+- reference/CalSimHydroEE_WBA_Coordinate_List.csv (WBA, Lat, Long, gridID)
+- The daily weather of the set (``utils.wgen.read_met``)
 
 Outputs
 -------
-- output/_1_compile_precip_EE/Product_A/pcp/<WBA>_pcp.csv
-- output/_1_compile_precip_EE/Product_B/pcp/<WBA>_pcp_n01.csv ... n10.csv
-- (optional) CS3_DailyPrecipitation_EE.dss  /  CS3_DailyPrecipitation_EE_n01.dss ... n10.dss
+- output/_1_compile_precip_EE/<set>/pcp/<WBA>_pcp.csv and CS3_DailyPrecipitation_EE.dss,
+  <set> being Historical_Unsplit or Product_A
+- output/_1_compile_precip_EE/Product_B/pcp/<WBA>_pcp_n01.csv ... n10.csv and
+  CS3_DailyPrecipitation_EE_n01.dss ... n10.dss, each 1 Jan 1920 - 31 Dec 2021
+  (``utils.wgen_calendar.daily_chunk_1920_2021``)
 
 Usage
 -----
-    # Product A (clip to CalSim validation window)
-    python mod_hydrology/calsimhydro_ee/_1_compile_precip_EE.py --product A \
-        --clip_period 1920-10-01 2018-09-30
-
-    # Product B (10 chunks)
+    python mod_hydrology/calsimhydro_ee/_1_compile_precip_EE.py --product historical
+    python mod_hydrology/calsimhydro_ee/_1_compile_precip_EE.py --product A
+    python mod_hydrology/calsimhydro_ee/_1_compile_precip_EE.py --product A --clip_period 1920-10-01 2018-09-30
     python mod_hydrology/calsimhydro_ee/_1_compile_precip_EE.py --product B
-
-    # Process specific WBAs only (Product A)
-    python mod_hydrology/calsimhydro_ee/_1_compile_precip_EE.py --product A --wbas 2 5 10
-
-    # Skip DSS output (Product A)
-    python mod_hydrology/calsimhydro_ee/_1_compile_precip_EE.py --product A --no_dss
+    python mod_hydrology/calsimhydro_ee/_1_compile_precip_EE.py --product A --wbas 2 5 10 --no_dss
 """
 
 import argparse
-import os
 import sys
 from pathlib import Path
 
+import numpy as np
 import pandas as pd
 from pydsstools.core import TimeSeriesContainer
 
-# Add repo root to path for utils imports
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 from utils import dss_io
-from utils.paths import get_base_dir, get_module_generated_dir
-from utils.wgen_calendar import N_CHUNKS, STAMP_DAYS, daily_chunk_1920_2021
+from utils.paths import WEATHER_SETS, get_module_generated_dir
+from utils.wgen import dates, met_path, read_met
+from utils.wgen_calendar import DAYS_1920_2021, N_CHUNKS, daily_chunk_1920_2021
+
+MM_TO_IN = 0.0393701
+DSS_PART = "/IWFM/E{wba}/PRECIP//1DAY/PRECIPITATION"
 
 
-class CompileWBAPrecipEE:
-    """
-    Compile daily WBA precipitation (simple average across grids) for CalSimHydroEE.
-    Input coordinate file columns (CSV): WBA,Lat,Long,gridID
-    Met file expectation: one file per grid cell, containing columns:
-        Year Month Day precip tmax tmin   (precip in mm)
-    File naming:
-       {met_prefix}_{Lat}_{Long}
-    """
-    def __init__(
-        self,
-        coord_file,
-        met_path,
-        output_path,
-        start_date_vic,
-        end_date_vic,
-        met_prefix,
-        met_sep,
-        clip_period=None,
-        write_dss=True,
-        product_b=False,
-    ):
-        self.coord_file = coord_file
-        self.met_path = met_path
-        self.output_path = output_path
-        self.start_date_vic = start_date_vic
-        self.end_date_vic = end_date_vic
-        self.met_prefix = met_prefix
-        self.met_sep = met_sep
-        self.clip_period = clip_period
-        self.write_dss_flag = write_dss
-        self.product_b = product_b
-        self.met_columns = ['Year', 'Month', 'Day', 'precip', 'tmax', 'tmin']
-        if self.product_b:
-            # Product B: one WGEN row per stamp day (utils.wgen_calendar)
-            self.dates = pd.RangeIndex(STAMP_DAYS)
-        else:
-            self.dates = pd.date_range(start=self.start_date_vic, end=self.end_date_vic, freq='D')
-        os.makedirs(self.output_path, exist_ok=True)
+def wba_daily_precip(product: str, cells: pd.DataFrame) -> pd.Series:
+    """Simple-average daily precipitation (in/day) over a WBA's cells that have a weather file,
+    indexed by date (by stamp day for Product B)."""
+    series, first, missing = [], None, []
+    for row in cells.drop_duplicates(subset=['gridID']).itertuples(index=False):
+        path = met_path(product, row.Lat, row.Long)
+        if not path.exists():
+            missing.append(path.name)
+            continue
+        met = read_met(product, path, usecols=['precip'])
+        if first is None:
+            first = met
+        elif not np.array_equal(met[['Year', 'Month', 'Day']].to_numpy(),
+                                first[['Year', 'Month', 'Day']].to_numpy()):
+            raise ValueError(f"{path}: its days differ from the other cells of the WBA")
+        series.append(met['precip'])
+    if not series:
+        raise ValueError(f"No cell of the WBA has a weather file: {missing}")
+    if missing:
+        print(f"    no weather file, left out: {', '.join(missing)}")
+    out = sum(series) / len(series) * MM_TO_IN
+    if product != 'B':
+        out.index = dates(first)
+    return out
 
-    def _met_filename(self, row):
-        return f"{self.met_prefix}_{row.Lat}_{row.Long}"
 
-    def _read_met(self, filepath):
-        return pd.read_csv(filepath, sep=self.met_sep, header=None, names=self.met_columns, engine='python')
+def put_daily(dss, wba: str, start: str, values) -> None:
+    tsc = TimeSeriesContainer()
+    tsc.pathname = DSS_PART.format(wba=wba)
+    tsc.startDateTime = f"{start} 24:00"
+    tsc.numberValues = len(values)
+    tsc.units = "IN/DAY"
+    tsc.type = "PER-CUM"
+    tsc.interval = 1
+    tsc.values = np.asarray(values, dtype=float)
+    dss.put_ts(tsc)
 
-    def _extract_precip_series(self, met_df):
-        # Assume precip column is in mm; return Series indexed by internal daily index (0..n-1)
-        return met_df['precip']
 
-    def compute_wba_precip(self, wba_df):
-        # Deduplicate gridIDs
-        wba_df = wba_df.drop_duplicates(subset=['gridID'])
-        series_list = []
-        for _, row in wba_df.iterrows():
-            fn = self._met_filename(row)
-            fp = os.path.join(self.met_path, fn)
-            if not os.path.exists(fp):
-                print(f"Missing met file: {fp}")
-                continue
-            met_df = self._read_met(fp)
-            pcp = self._extract_precip_series(met_df)
-            series_list.append(pcp)
+def write_single(results: dict, output_path: Path, clip_period, write_dss: bool) -> None:
+    """One CSV per WBA over every day, and the DSS file over ``clip_period`` (every day when
+    it is not given)."""
+    for wba, pcp in results.items():
+        pcp.to_csv(output_path / 'pcp' / f"{wba}_pcp.csv", header=False)
+    if not write_dss:
+        print("DSS output skipped (--no_dss).")
+        return
+    dss_file = output_path / "CS3_DailyPrecipitation_EE.dss"
+    with dss_io.open_dss(str(dss_file), catalog_flag=False) as dss:
+        for wba, pcp in results.items():
+            if clip_period:
+                pcp = pcp[clip_period[0]:clip_period[1]]
+            put_daily(dss, wba, f"{pcp.index[0]:%Y-%m-%d}", pcp.values)
+    print(f"  Wrote {len(results)} WBAs to {dss_file.name}")
 
-        if not series_list:
-            raise ValueError("No precipitation series found for WBA.")
 
-        # Align length check
-        n_days = len(self.dates)
-        for s in series_list:
-            if len(s) != n_days:
-                raise ValueError(f"Length mismatch: expected {n_days} days, got {len(s)}")
-
-        # Simple average
-        avg_mm = sum(series_list) / len(series_list)
-        avg_in = avg_mm * 0.0393701
-        avg_in.index = self.dates[:len(avg_in)]
-        return avg_in
-
-    def run(self, select_wbas=None):
-        coord = pd.read_csv(self.coord_file)
-        if select_wbas:
-            target = set(int(x) for x in select_wbas)
-            coord = coord[coord['WBA'].isin(target)]
-        wba_ids = sorted(coord['WBA'].unique())
-        product_label = "Product B" if self.product_b else "Product A"
-        print(f"Compiling {len(wba_ids)} WBAs ({product_label})...")
-        results = {}
-        pcp_dir = os.path.join(self.output_path, 'pcp')
-        os.makedirs(pcp_dir, exist_ok=True)
-        for idx, wba_id in enumerate(wba_ids, 1):
-            print(f"  [{idx}/{len(wba_ids)}] WBA {wba_id}")
-            sub = coord[coord['WBA'] == wba_id].copy()
-            pcp = self.compute_wba_precip(sub)
-            if not self.product_b:
-                out_csv = os.path.join(pcp_dir, f"{wba_id}_pcp.csv")
-                pcp.to_csv(out_csv, header=False)
-            results[str(wba_id)] = pcp
-        if self.product_b:
-            self._write_product_b_chunks(results, pcp_dir)
-        print(f"Done. {len(results)} WBAs compiled.")
-        return results
-
-    def _write_product_b_chunks(self, results, pcp_dir):
-        # Per WBA and chunk, 1 Jan 1920 - 31 Dec 2021 (utils.wgen_calendar.daily_chunk_1920_2021).
-        date_template = pd.date_range('1920-01-01', '2021-12-31', freq='D')
-        print(f"  Product B: {len(date_template)} days per chunk, {N_CHUNKS} chunks")
-        for wba, pcp_data in results.items():
-            for i in range(N_CHUNKS):
-                chunk_values = daily_chunk_1920_2021(pcp_data.values, i + 1)
-                df = pd.DataFrame({
-                    'y': date_template.year,
-                    'm': date_template.month,
-                    'd': date_template.day,
-                    'pcp': chunk_values,
-                })
-                out_file = os.path.join(pcp_dir, f"{wba}_pcp_n{i+1:02d}.csv")
-                df.to_csv(out_file, header=False, index=False)
-                print(f"    Chunk {i+1:02d}/10: {os.path.basename(out_file)}")
-
-    def write_to_dss(self, results):
-        if not self.write_dss_flag:
-            print("DSS output skipped (--no_dss).")
-            return
-        if self.product_b:
-            self._write_product_b_dss(results)
-            return
-        dss_file = os.path.join(self.output_path, "CS3_DailyPrecipitation_EE.dss")
-        print(f"Writing DSS: {dss_file}")
-        with dss_io.open_dss(dss_file, catalog_flag=False) as dss:
-            for wba, series in results.items():
-                data = series
-                start_for_path = self.start_date_vic
-                if self.clip_period:
-                    data = data[self.clip_period[0]:self.clip_period[1]]
-                    start_for_path = self.clip_period[0]
-                tsc = TimeSeriesContainer()
-                tsc.pathname = f"/IWFM/E{wba}/PRECIP//1DAY/PRECIPITATION"
-                tsc.startDateTime = f"{start_for_path} 24:00"
-                tsc.numberValues = len(data)
-                tsc.units = "IN/DAY"
-                tsc.type = "PER-CUM"
-                tsc.interval = 1
-                tsc.values = data.values.astype(float)
-                dss.put_ts(tsc)
-        print(f"  Wrote {len(results)} WBAs to {os.path.basename(dss_file)}")
-
-    def _write_product_b_dss(self, results):
-        # Write 10 per-chunk DSS files, Jan 1920 - Dec 2021 each.
-        start_dt_str = "01JAN1920 24:00"
-        for i in range(N_CHUNKS):
-            dss_file = os.path.join(self.output_path, f"CS3_DailyPrecipitation_EE_n{i+1:02d}.dss")
-            print(f"  Writing DSS chunk {i+1:02d}/10: {os.path.basename(dss_file)}")
-            with dss_io.open_dss(dss_file, catalog_flag=False) as dss:
-                for wba, pcp_data in results.items():
-                    chunk_values = daily_chunk_1920_2021(pcp_data.values, i + 1)
-                    tsc = TimeSeriesContainer()
-                    tsc.pathname = f"/IWFM/E{wba}/PRECIP//1DAY/PRECIPITATION"
-                    tsc.startDateTime = start_dt_str
-                    tsc.numberValues = len(chunk_values)
-                    tsc.units = "IN/DAY"
-                    tsc.type = "PER-CUM"
-                    tsc.interval = 1
-                    tsc.values = chunk_values.astype(float)
-                    dss.put_ts(tsc)
+def write_product_b(results: dict, output_path: Path, write_dss: bool) -> None:
+    """Per WBA and chunk, a CSV and (unless --no_dss) a DSS record over 1 Jan 1920 - 31 Dec 2021."""
+    days = DAYS_1920_2021
+    print(f"  Product B: {len(days)} days per chunk, {N_CHUNKS} chunks")
+    for k in range(1, N_CHUNKS + 1):
+        chunk = {wba: daily_chunk_1920_2021(pcp.values, k) for wba, pcp in results.items()}
+        for wba, values in chunk.items():
+            pd.DataFrame({'y': days.year, 'm': days.month, 'd': days.day, 'pcp': values}).to_csv(
+                output_path / 'pcp' / f"{wba}_pcp_n{k:02d}.csv", header=False, index=False)
+        if write_dss:
+            with dss_io.open_dss(str(output_path / f"CS3_DailyPrecipitation_EE_n{k:02d}.dss"),
+                                 catalog_flag=False) as dss:
+                for wba, values in chunk.items():
+                    put_daily(dss, wba, "01JAN1920", values)
+        print(f"    Chunk {k:02d}/{N_CHUNKS} written")
 
 
 def main():
     ap = argparse.ArgumentParser(description="Compile simple-average WBA precipitation for CalSimHydroEE.")
-    ap.add_argument('--coord_file', default=None, help='CalSimHydroEE_WBA_Coordinate_List.csv path (default: reference/...)')
-    ap.add_argument('--met_path', default=None,
-                    help='Directory containing WGEN met files.')
+    ap.add_argument('--product', choices=list(WEATHER_SETS), required=True,
+                    help='Weather set: historical (Historical_Unsplit), A or B')
+    ap.add_argument('--coord_file', default=None,
+                    help='CalSimHydroEE_WBA_Coordinate_List.csv path (default: reference/...)')
     ap.add_argument('--output_path', default=None,
-                    help='Output directory.')
-    ap.add_argument('--start_date_vic', default='1915-01-01')
-    ap.add_argument('--end_date_vic', default='2018-12-31')
-    ap.add_argument('--wbas', nargs='*', default=None, help='Optional list of WBA IDs to process')
-    ap.add_argument('--met_prefix', default='meteo', help='Prefix for met files')
-    ap.add_argument('--met_sep', default='\\s+', help='Separator for met files (regex OK)')
-    ap.add_argument('--clip_period', nargs=2, default=None, help='Optional clip start end (YYYY-MM-DD) [Product A only]')
+                    help='Output directory (default: output/_1_compile_precip_EE/<set>)')
+    ap.add_argument('--wbas', nargs='*', default=None, help='WBA IDs to process (default: all)')
+    ap.add_argument('--clip_period', nargs=2, default=None,
+                    help='First and last day (YYYY-MM-DD) of the DSS series, Historical_Unsplit '
+                         'and Product A only (default: every day)')
     ap.add_argument('--no_dss', action='store_true', help='Do not write DSS output')
-    ap.add_argument('--product', choices=['A', 'B'], required=True,
-                    help='Product to generate: A (historical 1921-2018) or B (stochastic 1000-yr chunks).')
     args = ap.parse_args()
 
-    _script_dir = Path(__file__).resolve().parent
-    _base = get_base_dir()
-    _gen = get_module_generated_dir("mod_hydrology/calsimhydro_ee")
+    script_dir = Path(__file__).resolve().parent
+    coord_file = args.coord_file or script_dir / 'reference' / 'CalSimHydroEE_WBA_Coordinate_List.csv'
+    output_path = Path(args.output_path or get_module_generated_dir("mod_hydrology/calsimhydro_ee")
+                       / 'output' / '_1_compile_precip_EE' / WEATHER_SETS[args.product]['name'])
+    (output_path / 'pcp').mkdir(parents=True, exist_ok=True)
 
-    coord_file = args.coord_file or str(_script_dir / 'reference' / 'CalSimHydroEE_WBA_Coordinate_List.csv')
-    product_b = args.product == 'B'
-    if product_b:
-        met_path = args.met_path or str(_base / 'WGEN' / 'Product_B' / '1')
-        output_path = args.output_path or str(_gen / 'output' / '_1_compile_precip_EE' / 'Product_B')
+    coord = pd.read_csv(coord_file)
+    if args.wbas:
+        coord = coord[coord['WBA'].isin({int(x) for x in args.wbas})]
+    wba_ids = sorted(coord['WBA'].unique())
+    print(f"Compiling {len(wba_ids)} WBAs ({WEATHER_SETS[args.product]['name']})...")
+    results = {}
+    for i, wba in enumerate(wba_ids, 1):
+        print(f"  [{i}/{len(wba_ids)}] WBA {wba}")
+        results[str(wba)] = wba_daily_precip(args.product, coord[coord['WBA'] == wba])
+    if args.product == 'B':
+        write_product_b(results, output_path, not args.no_dss)
     else:
-        met_path = args.met_path or str(_base / 'WGEN' / 'Product_A' / '1')
-        output_path = args.output_path or str(_gen / 'output' / '_1_compile_precip_EE' / 'Product_A')
-
-    runner = CompileWBAPrecipEE(
-        coord_file=coord_file,
-        met_path=met_path,
-        output_path=output_path,
-        start_date_vic=args.start_date_vic,
-        end_date_vic=args.end_date_vic,
-        met_prefix=args.met_prefix,
-        met_sep=args.met_sep,
-        clip_period=args.clip_period,
-        write_dss=not args.no_dss,
-        product_b=product_b,
-    )
-    results = runner.run(select_wbas=args.wbas)
-    runner.write_to_dss(results)
+        write_single(results, output_path, args.clip_period, not args.no_dss)
+    print(f"Done. {len(results)} WBAs compiled.")
 
 
 if __name__ == "__main__":

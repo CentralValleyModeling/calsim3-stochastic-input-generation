@@ -45,7 +45,7 @@ from pydsstools.heclib.dss import HecDss
 
 # Add repo root to path for utils imports
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
-from utils.paths import get_base_dir, get_module_generated_dir, get_rim_inflow_outputs, REPO_ROOT
+from utils.paths import get_base_dir, get_module_generated_dir, get_rim_inflow_outputs
 
 # %% style
 sns.set_style("ticks")
@@ -64,7 +64,6 @@ MINOR_GRID_KW = dict(alpha=0.08, color='k', linestyle='-',  linewidth=0.3)
 COLORS  = dict(cs3='steelblue', hist='indianred', synth='#d4aaaa')
 
 _gen = get_module_generated_dir("mod_hydrology/rim_inflow")
-_GRID_DIR = REPO_ROOT / "mod_forcing" / "climate" / "reference" / "GridInfo"
 
 # %% settings
 LOCATION    = 'CS3_8RI_OROVI'   # CS3_8RI_OROVI | CS3_I_SHSTA
@@ -73,8 +72,6 @@ CS3_DSS     = str(get_base_dir() / "CalSim3" / "__calsim_sv_default__.dss")
 CALSIM_KEY  = CS3_PATH.split('/')[0]                # e.g., 'UNIMP_OROV'
 HIST_CSV    = str(get_rim_inflow_outputs("A")["ts"])
 STOCH_DIR   = str(get_rim_inflow_outputs("B")["dir"])
-GRID_INFO   = str(_GRID_DIR / f'{LOCATION}_GridInfo.txt')
-METEO_COLS = ['Year', 'Month', 'Day', 'PRECIP', 'TMAX', 'TMIN']
 _FIG_DIR = str(_gen / "output" / "_0_stochastic_inflow_explore")
 os.makedirs(_FIG_DIR, exist_ok=True)
 
@@ -95,22 +92,6 @@ def _legend_handles(cs3=False):
         Rectangle((0, 0), 1, 1, facecolor=COLORS['synth'], edgecolor='none', alpha=0.7, label='Product B (Stoch)'),
     ]
     return handles
-
-
-def gather_precip(meteo_dir, grid_info, start_date):
-    """Area-weighted precipitation from WGEN meteo files. Returns (daily, monthly, annual)."""
-    precip = pd.Series(dtype=float)
-    area_sum = 0.0
-    for _, row in grid_info.iterrows():
-        path = os.path.join(meteo_dir, f"meteo_{row.Lat}_{row.Lon}")
-        if not os.path.exists(path):
-            raise FileNotFoundError(f"Meteo file not found: {path}")
-        df = pd.read_csv(path, sep='  ', header=None, engine='python', names=METEO_COLS)
-        precip = precip.add(df['PRECIP'], fill_value=0)
-        area_sum += row['f2'] / row['f1']
-    precip = (precip / area_sum) * 0.0393701  # mm → in
-    precip.index = pd.date_range(start=start_date, periods=len(precip), freq='D')
-    return precip, precip.resample('ME').sum(), precip.resample('YE').sum()
 
 
 def _grid(ax, axis='both'):

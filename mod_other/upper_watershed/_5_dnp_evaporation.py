@@ -9,13 +9,13 @@ Two run modes
              CalSim data (S_PEDRO_SV, ER_PEDRO_SV, E_PEDRO_SV). Writes
              polynomial coefficients + diagnostics.
 
-  A          Generate Product A E_PEDRO_SV using the calibrated polynomial,
-             synthetic storage from reference/, and ER from
+  --product historical, A
+             Generate the set's E_PEDRO_SV using the calibrated polynomial,
+             the set's S_PEDRO_SV storage, and ER from
              mod_reservoir/evaporation output.
 
-  B          Same as A but for Product B.
-
-  both       Run both A and B (calibrate must have been run first).
+  --product B
+             Same for each Product B chunk.
 
 Reference inputs (./reference/)
 --------------------------------
@@ -26,12 +26,13 @@ Reference inputs (./reference/)
 External inputs
 ---------------
   mod_reservoir/evaporation output (ER_PEDRO):
-    _2_run_reservoir_evap/_product_a_validation/_reservoir_evaporation_productA_1922_2018.csv
-      (filter Part B == 'ER_PEDRO'; the span is utils.paths.PRODUCT_A_WY)
+    _2_run_reservoir_evap/<delivery folder>/_reservoir_evaporation_<tag>_1922_2018.csv
+      (filter Part B == 'ER_PEDRO'; folder and tag from utils.paths.DELIVERY, the span
+      is utils.paths.DELIVERY_WY)
     _2_run_reservoir_evap/_product_b_final/reservoir_evaporation_productB_n*.csv
       (filter Part B == 'ER_PEDRO')
-  mod_other/upper_watershed GENERATED output (storage):
-    _product_a_validation/S_PEDRO_SV_product_a_1922_2018.csv
+  mod_other/upper_watershed GENERATED output (storage, from _1_wyt_monthlyavg.py):
+    <delivery folder>/S_PEDRO_SV_<tag>_1922_2018.csv
     _product_b_final/S_PEDRO_SV_product_b_n*.csv
 
 Outputs  (data/GENERATED/mod_other/upper_watershed/output/)
@@ -42,11 +43,13 @@ Outputs  (data/GENERATED/mod_other/upper_watershed/output/)
     hypsographic_curve.csv
     hypsographic_curve.png
     time_series_storage_area.png
-  _5_dnp_evaporation/Product_A/
-    product_a_evaporation_timeseries.png
-    product_a_monthly_pattern.png
+  _5_dnp_evaporation/<Historical_Unsplit|Product_A>/
+    <historical_unsplit|product_a>_evaporation_timeseries.png
+    <historical_unsplit|product_a>_monthly_pattern.png
   _5_dnp_evaporation/Product_B/
-    ...
+    product_b_monthly_pattern.png
+  _historical_unsplit_validation/
+    _e_pedro_sv_evaporation_historicalUnsplit_1922_2018.csv
   _product_a_validation/
     _e_pedro_sv_evaporation_productA_1922_2018.csv
   _product_b_final/
@@ -55,6 +58,7 @@ Outputs  (data/GENERATED/mod_other/upper_watershed/output/)
 Usage
 -----
   python mod_other/upper_watershed/_5_dnp_evaporation.py --calibrate
+  python mod_other/upper_watershed/_5_dnp_evaporation.py --product historical
   python mod_other/upper_watershed/_5_dnp_evaporation.py --product A
   python mod_other/upper_watershed/_5_dnp_evaporation.py --product B
 """
@@ -72,8 +76,9 @@ from scipy.stats import pearsonr
 
 # -- Repo path setup -----------------------------------------------------------
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
-from utils.csv_io import write_product_a_csv
-from utils.paths import PRODUCT_A_WY, get_module_generated_dir
+from utils.csv_io import delivery_name, write_delivery_csv
+from utils.paths import WEATHER_SETS, delivery_dir, get_module_generated_dir
+from utils.wgen_calendar import N_CHUNKS, write_chunk_csvs
 
 _SCRIPT_DIR = Path(__file__).resolve().parent
 _GEN_DIR    = get_module_generated_dir("mod_other/upper_watershed")
@@ -85,9 +90,6 @@ REF_DIR = _SCRIPT_DIR / "reference"
 # -- Generated output directories ---------------------------------------------
 OUTPUT_ROOT   = _GEN_DIR / "output" / "_5_dnp_evaporation"
 CALIBRATE_DIR = OUTPUT_ROOT / "calibrate"
-OUTPUT_A_DIR  = OUTPUT_ROOT / "Product_A"
-OUTPUT_B_DIR  = OUTPUT_ROOT / "Product_B"
-CSV_A_DIR     = _GEN_DIR / "output" / "_product_a_validation"
 CSV_B_DIR     = _GEN_DIR / "output" / "_product_b_final"
 
 # -- External input: reservoir evaporation rates -------------------------------
@@ -242,42 +244,39 @@ def run_calibrate() -> None:
 
 
 # -------------------------------------------------------------------------------
-# Modes 2 & 3 - generate Product A / B
+# Modes 2 & 3 - generate a single series / Product B
 # -------------------------------------------------------------------------------
 
 def _load_storage_ref(product: str) -> pd.DataFrame:
     """
-    Load S_PEDRO_SV storage (TAF) for Product A from the GENERATED validation dir.
+    Load the S_PEDRO_SV storage (TAF) of a single series from its delivery folder.
 
     Expects standard SV CSV format: Part B, Part C, Year, Month, Value.
-    Reads S_PEDRO_SV_product_a_<PRODUCT_A_WY>.csv in _product_a_validation/.
+    Reads ``utils.csv_io.delivery_name("S_PEDRO_SV", product)``.
     """
-    path = CSV_A_DIR / "S_PEDRO_SV_product_a_{}_{}.csv".format(*PRODUCT_A_WY)
+    path = delivery_dir(_GEN_DIR / "output", product) / delivery_name("S_PEDRO_SV", product)
     df = pd.read_csv(path)
     df["date"] = pd.to_datetime(df[["Year", "Month"]].assign(Day=1))
     df = df.rename(columns={"Value": "storage_taf"})
-    print(f"  Storage (Product A): {path.name}  ({len(df)} months, "
+    print(f"  Storage ({WEATHER_SETS[product]['name']}): {path.name}  ({len(df)} months, "
           f"{df['date'].min().date()} - {df['date'].max().date()})")
     return df
 
 
 def _load_storage_chunks_b() -> list:
     """
-    Load all S_PEDRO_SV Product B chunk CSVs from _product_b_final/.
+    Load the S_PEDRO_SV Product B chunk CSVs S_PEDRO_SV_product_b_n01.csv ... _n10.csv
+    from _product_b_final/.
 
-    Globs S_PEDRO_SV_product_b_n*.csv and returns a list of (label, df) pairs,
-    one per chunk (n01-n10). Each df has columns: date, storage_taf.
+    Returns a list of (label, df) pairs, one per chunk (n01-n10). Each df has
+    columns: date, storage_taf.
     """
-    pattern = "S_PEDRO_SV_product_b_n*.csv"
-    matches = sorted(CSV_B_DIR.glob(pattern))
-    if not matches:
-        raise FileNotFoundError(
-            f"No S_PEDRO_SV Product B chunk files found in:\n  {CSV_B_DIR}\n"
-            f"  (pattern: {pattern})"
-        )
     chunks = []
-    for f in matches:
-        label = f.stem.split("_")[-1]   # e.g. 'n01'
+    for k in range(1, N_CHUNKS + 1):
+        label = f"n{k:02d}"
+        f = CSV_B_DIR / f"S_PEDRO_SV_product_b_{label}.csv"
+        if not f.exists():
+            raise FileNotFoundError(f"No S_PEDRO_SV Product B chunk file {f.name} in:\n  {CSV_B_DIR}")
         df = pd.read_csv(f)
         df["date"] = pd.to_datetime(df[["Year", "Month"]].assign(Day=1))
         df = df.rename(columns={"Value": "storage_taf"})
@@ -287,51 +286,45 @@ def _load_storage_chunks_b() -> list:
     return chunks
 
 
-def _load_er_a() -> pd.DataFrame:
+def _load_er_single(product: str) -> pd.DataFrame:
     """
-    Load ER_PEDRO (inches/month) for Product A from the evaporation validation CSV.
+    Load the ER_PEDRO (inches/month) of a single series from the evaporation delivery CSV.
 
-    Reads _product_a_validation/_reservoir_evaporation_productA_<PRODUCT_A_WY>.csv,
-    filters rows where Part B == 'ER_PEDRO'.
+    Reads ``utils.csv_io.delivery_name("_reservoir_evaporation", product)`` in the set's
+    delivery folder, filters rows where Part B == 'ER_PEDRO'.
     Returns df with columns: date (month-start), er_inches.
     """
-    path = (_EVAP_OUTROOT / "_product_a_validation"
-            / "_reservoir_evaporation_productA_{}_{}.csv".format(*PRODUCT_A_WY))
+    path = (delivery_dir(_EVAP_OUTROOT, product)
+            / delivery_name("_reservoir_evaporation", product))
     df = pd.read_csv(path)
     df = df[df["Part B"] == "ER_PEDRO"].copy()
     if df.empty:
         raise ValueError(f"No rows with Part B == 'ER_PEDRO' found in {path.name}")
     df["date"] = pd.to_datetime(df[["Year", "Month"]].assign(Day=1))
     df = df.rename(columns={"Value": "er_inches"})[["date", "er_inches"]]
-    print(f"  ER Product A: {path.name}  ({len(df)} months, "
+    print(f"  ER {WEATHER_SETS[product]['name']}: {path.name}  ({len(df)} months, "
           f"{df['date'].min().date()} - {df['date'].max().date()})")
     return df
 
 
 def _load_er_b_chunks() -> dict:
     """
-    Load ER_PEDRO for each Product B chunk from the evaporation _product_b_final/ dir.
-
-    Globs reservoir_evaporation_productB_n*.csv, filters Part B == 'ER_PEDRO'.
+    Load ER_PEDRO for each Product B chunk from the evaporation _product_b_final/ dir:
+    reservoir_evaporation_productB_n01.csv ... _n10.csv, rows where Part B == 'ER_PEDRO'.
     Returns dict {label: df} where label is 'n01'..'n10' and df has
     columns: date (month-start), er_inches.
     """
     search_dir = _EVAP_OUTROOT / "_product_b_final"
-    pattern = "reservoir_evaporation_productB_n*.csv"
-    matches = sorted(search_dir.glob(pattern))
-    if not matches:
-        raise FileNotFoundError(
-            f"No Product B reservoir evaporation chunk files found in:\n  {search_dir}\n"
-            f"  (pattern: {pattern})"
-        )
     chunks = {}
-    for f in matches:
-        label = f.stem.split("_")[-1]   # e.g. 'n01'
+    for k in range(1, N_CHUNKS + 1):
+        label = f"n{k:02d}"
+        f = search_dir / f"reservoir_evaporation_productB_{label}.csv"
+        if not f.exists():
+            raise FileNotFoundError(f"No Product B reservoir evaporation chunk file {f.name} in:\n  {search_dir}")
         df = pd.read_csv(f)
         df = df[df["Part B"] == "ER_PEDRO"].copy()
         if df.empty:
-            print(f"  WARNING: No ER_PEDRO rows in {f.name}, skipping")
-            continue
+            raise ValueError(f"No ER_PEDRO rows in {f.name}")
         df["date"] = pd.to_datetime(df[["Year", "Month"]].assign(Day=1))
         df = df.rename(columns={"Value": "er_inches"})[["date", "er_inches"]]
         chunks[label] = df
@@ -341,13 +334,15 @@ def _load_er_b_chunks() -> dict:
 
 
 def run_generate(product: str) -> None:
-    """Generate E_PEDRO_SV for Product A or B."""
+    """Generate E_PEDRO_SV for a weather set (utils.paths.WEATHER_SETS)."""
+    name = WEATHER_SETS[product]["name"]
+    label = WEATHER_SETS[product]["label"]
     print("\n" + "=" * 72)
-    print(f"GENERATE: Don Pedro Evaporation - Product {product}")
+    print(f"GENERATE: Don Pedro Evaporation - {name}")
     print("=" * 72)
 
-    out_dir = OUTPUT_A_DIR if product == "A" else OUTPUT_B_DIR
-    csv_dir = CSV_A_DIR if product == "A" else CSV_B_DIR
+    out_dir = OUTPUT_ROOT / name
+    csv_dir = CSV_B_DIR if product == "B" else delivery_dir(_GEN_DIR / "output", product)
     out_dir.mkdir(parents=True, exist_ok=True)
     csv_dir.mkdir(parents=True, exist_ok=True)
 
@@ -355,14 +350,14 @@ def run_generate(product: str) -> None:
     coeffs_path = CALIBRATE_DIR / "hypsographic_polynomial_coeffs.csv"
     if not coeffs_path.exists():
         raise FileNotFoundError(
-            f"Polynomial coefficients not found - run `--run calibrate` first.\n  {coeffs_path}"
+            f"Polynomial coefficients not found - run --calibrate first.\n  {coeffs_path}"
         )
     poly_func = load_polynomial(coeffs_path)
     c = pd.read_csv(coeffs_path)["value"].values
     print(f"  Polynomial: A = {c[0]:.6e}-S2 + {c[1]:.6e}-S + {c[2]:.6e}")
 
     # -------------------------------------------------------------------------
-    # Product B: process each storage chunk separately -> 10 output files
+    # Product B: process each storage chunk separately -> one output file per chunk
     # -------------------------------------------------------------------------
     if product == "B":
         storage_chunks = _load_storage_chunks_b()
@@ -370,10 +365,9 @@ def run_generate(product: str) -> None:
         print(f"\nProcessing {len(storage_chunks)} Product B chunks...")
 
         all_monthly = []
+        frames = []
         for label, stor in storage_chunks:
-            er_chunk = er_chunks.get(label)
-            if er_chunk is None:
-                raise SystemExit(f"{label}: no ER chunk, so its old output would stay in place")
+            er_chunk = er_chunks[label]
             stor = stor.copy()
             stor["date"] = stor["date"].dt.to_period("M").dt.to_timestamp()
             stor["surface_area_acres"] = poly_func(stor["storage_taf"])
@@ -389,24 +383,26 @@ def run_generate(product: str) -> None:
             if missing_er:
                 raise SystemExit(f"{label}: {missing_er} months have no ER")
 
-            out_csv = csv_dir / f"_e_pedro_sv_evaporation_productB_{label}.csv"
-            pd.DataFrame({
+            frames.append(pd.DataFrame({
+                "chunk":   int(label[1:]),
                 "Part B":  "E_PEDRO_SV",
                 "Part C":  "EVAPORATION",
                 "Year":    stor["date"].dt.year,
                 "Month":   stor["date"].dt.month,
                 "Value":   stor["e_cfs"],
-            }).to_csv(out_csv, index=False)
+            }))
             valid = stor["e_cfs"].dropna()
             print(f"  {label}: {len(stor)} months | "
-                  f"E_PEDRO_SV {valid.min():.2f}-{valid.max():.2f} CFS | {out_csv.name}")
+                  f"E_PEDRO_SV {valid.min():.2f}-{valid.max():.2f} CFS")
             all_monthly.append((label, stor))
+        write_chunk_csvs(pd.concat(frames, ignore_index=True), csv_dir, "_e_pedro_sv_evaporation_productB")
 
         # Monthly pattern plot: each B chunk individually + Product A overlay
         fig, ax = plt.subplots(figsize=(12, 6))
 
         # Product A generated output (if available)
-        pa_file = CSV_A_DIR / "_e_pedro_sv_evaporation_productA_{}_{}.csv".format(*PRODUCT_A_WY)
+        pa_file = (delivery_dir(_GEN_DIR / "output", "A")
+                   / delivery_name("_e_pedro_sv_evaporation", "A"))
         if pa_file.exists():
             pa_e = pd.read_csv(pa_file)
             pa_monthly = pa_e.groupby("Month")["Value"].mean()
@@ -434,17 +430,17 @@ def run_generate(product: str) -> None:
         return
 
     # -------------------------------------------------------------------------
-    # Product A: single continuous time series over PRODUCT_A_WY
+    # Historical_Unsplit or Product A: single continuous time series over DELIVERY_WY
     # -------------------------------------------------------------------------
     storage = _load_storage_ref(product)
     storage["date"] = storage["date"].dt.to_period("M").dt.to_timestamp()
 
     storage_start = storage["date"].min().date()
     storage_end   = storage["date"].max().date()
-    print(f"  Note: Product A storage covers {storage_start} to {storage_end}; "
+    print(f"  Note: {name} storage covers {storage_start} to {storage_end}; "
           "E_PEDRO_SV output will be limited to this period.")
 
-    er_a = _load_er_a()
+    er_a = _load_er_single(product)
     er_a["date"] = er_a["date"].dt.to_period("M").dt.to_timestamp()
 
     storage["surface_area_acres"] = poly_func(storage["storage_taf"])
@@ -466,13 +462,13 @@ def run_generate(product: str) -> None:
     valid = storage["e_cfs"].dropna()
     print(f"  E_PEDRO_SV: {valid.min():.2f}-{valid.max():.2f} CFS  (mean {valid.mean():.2f})")
 
-    out_csv = write_product_a_csv(pd.DataFrame({
+    out_csv = write_delivery_csv(pd.DataFrame({
         "Part B":  "E_PEDRO_SV",
         "Part C":  "EVAPORATION",
         "Year":    storage["date"].dt.year,
         "Month":   storage["date"].dt.month,
         "Value":   storage["e_cfs"],
-    }), csv_dir, "_e_pedro_sv_evaporation_productA")
+    }), csv_dir, "_e_pedro_sv_evaporation", product)
     print(f"  Wrote: {out_csv.name}")
 
     # -- Plots ----------------------------------------------------------------
@@ -490,20 +486,21 @@ def run_generate(product: str) -> None:
     if s_hist is not None:
         ax1.plot(s_hist["date"], s_hist["storage_taf"], lw=1,
                  color="blue", alpha=0.7, label="Historical")
-    ax1.plot(storage["date"], storage["storage_taf"], lw=1, color="green", label="Product A")
+    ax1.plot(storage["date"], storage["storage_taf"], lw=1, color="green", label=label)
     ax1.set_ylabel("Storage (TAF)")
-    ax1.set_title("Don Pedro: Product A Storage")
+    ax1.set_title(f"Don Pedro: {label} Storage")
     ax1.legend(); ax1.grid(alpha=0.3)
 
     if e_hist is not None:
         ax2.plot(e_hist["date"], e_hist["e_cfs"], lw=1,
                  color="blue", alpha=0.7, label="Historical")
-    ax2.plot(storage["date"], storage["e_cfs"], lw=1, color="green", label="Product A")
+    ax2.plot(storage["date"], storage["e_cfs"], lw=1, color="green", label=label)
     ax2.set_ylabel("Evaporation (CFS)")
-    ax2.set_title("Don Pedro: Product A Evaporation")
+    ax2.set_title(f"Don Pedro: {label} Evaporation")
     ax2.legend(); ax2.grid(alpha=0.3)
     plt.tight_layout()
-    plt.savefig(out_dir / "product_a_evaporation_timeseries.png", dpi=150, bbox_inches="tight")
+    plt.savefig(out_dir / f"{WEATHER_SETS[product]['slug']}_evaporation_timeseries.png", dpi=150,
+                bbox_inches="tight")
     plt.close()
 
     storage["month_num"] = storage["date"].dt.month
@@ -515,14 +512,15 @@ def run_generate(product: str) -> None:
         ax3.plot(eh_m["month_num"], eh_m["e_cfs"], "o-", lw=2,
                  color="blue", alpha=0.7, label="Historical")
     ax3.plot(e_monthly["month_num"], e_monthly["e_cfs"], "s-", lw=2,
-             color="green", label="Product A")
+             color="green", label=label)
     ax3.set_xticks(range(1, 13))
     ax3.set_xticklabels(list("JFMAMJJASOND"))
     ax3.set_xlabel("Month"); ax3.set_ylabel("Average Evaporation (CFS)")
-    ax3.set_title("Don Pedro: Product A Monthly Average Evaporation")
+    ax3.set_title(f"Don Pedro: {label} Monthly Average Evaporation")
     ax3.legend(); ax3.grid(alpha=0.3)
     plt.tight_layout()
-    plt.savefig(out_dir / "product_a_monthly_pattern.png", dpi=150, bbox_inches="tight")
+    plt.savefig(out_dir / f"{WEATHER_SETS[product]['slug']}_monthly_pattern.png", dpi=150,
+                bbox_inches="tight")
     plt.close()
 
     if e_hist is not None:
@@ -549,8 +547,9 @@ def main() -> None:
     )
     group = parser.add_mutually_exclusive_group(required=True)
     group.add_argument(
-        "--product", choices=["A", "B"],
-        help="Generate E_PEDRO_SV for the chosen product (requires --calibrate to have been run first).",
+        "--product", choices=list(WEATHER_SETS),
+        help="Generate E_PEDRO_SV for a weather set: historical (Historical_Unsplit), A or B "
+             "(requires --calibrate to have been run first).",
     )
     group.add_argument(
         "--calibrate", action="store_true",

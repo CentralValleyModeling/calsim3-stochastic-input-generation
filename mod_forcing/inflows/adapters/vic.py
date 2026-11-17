@@ -32,7 +32,7 @@ import numpy as np
 import pandas as pd
 
 from mod_forcing.inflows.adapters import x10_days, ymd
-from utils.paths import (INFLOW_FORCINGS, get_base_dir, get_module_generated_dir, remove_tree,
+from utils.paths import (WEATHER_SETS, get_base_dir, get_module_generated_dir, remove_tree,
                          sha256_file)
 from utils.wgen_calendar import require_stamp_days, stamp_month_of_day
 
@@ -100,7 +100,7 @@ def inputs(repo: Path, forcing: str, build_dir: Path) -> list[Path]:
 
 
 def flux_store(forcing: str) -> Path:
-    return get_module_generated_dir("mod_forcing/inflows") / "vic_fluxes" / INFLOW_FORCINGS[forcing]
+    return get_module_generated_dir("mod_forcing/inflows") / "vic_fluxes" / WEATHER_SETS[forcing]["wgen"]
 
 
 def stored(store: Path, key: str) -> Path:

@@ -6,35 +6,36 @@ UHH (Upper Headwater Hydrology) locations specified in reference/uhh_locations.c
 Grid cell weights are read from reference/GridInfo/ files.
 VPD is derived via quantile mapping from temperature using CalSim historical VPD.
 
-Product A / Historical: one CSV per variable per location.
-Product B: 10 long-format chunk CSVs per variable (100 WY each, Oct 1921 - Sep 2021).
+Historical_Unsplit, Product A, LTO: one CSV per variable per location; the first two also
+write delivery CSVs. Product B: 10 long-format chunk CSVs per variable (100 WY each, Oct 1921 -
+Sep 2021). The weather is read through utils.wgen and labelled by utils.wgen_calendar.
 
 Inputs
 ------
 - reference/uhh_locations.csv
 - reference/GridInfo/<location>_GridInfo.txt
-- WGEN/Product_A/1/  or  WGEN/Product_B/1/  or  Historical_Climate_LTO/  (meteo files)
+- BASE/WGEN/<Historical_Unsplit | Product_A/1 | Product_B/1>, or BASE/Historical_Climate_LTO
 - reference/calsim_climate_sv.xlsx  (historical VPD target for quantile mapping)
 
 Outputs
 -------
-- output/_2_uhh_basin_averages/product_a/PPT_<name>_UHH.csv
-- output/_2_uhh_basin_averages/product_a/T<name>_UHH.csv
-- output/_2_uhh_basin_averages/product_a/VPD<name>_UHH.csv
-- output/_product_a_validation/_uhh_{precip,temperature,vpd}_productA_{start_wy}_{end_wy}.csv
+- output/_2_uhh_basin_averages/<Historical_Unsplit|Product_A|LTO>/PPT_<name>_UHH.csv,
+  T<name>_UHH.csv, VPD<name>_UHH.csv
+- output/_historical_unsplit_validation/_uhh_{precip,temperature,vpd}_historicalUnsplit_1922_2018.csv
+- output/_product_a_validation/_uhh_{precip,temperature,vpd}_productA_1922_2018.csv
 - output/_product_b_final/_uhh_precip_productB_n01.csv ... n10.csv  (same pattern for temp/vpd)
 
 Usage
 -----
-    python mod_forcing/climate/_2_uhh_basin_averages.py --source Historical
-    python mod_forcing/climate/_2_uhh_basin_averages.py --source Product_A --scenario 1
-    python mod_forcing/climate/_2_uhh_basin_averages.py --source Product_B --scenario 1
+    python mod_forcing/climate/_2_uhh_basin_averages.py --product historical
+    python mod_forcing/climate/_2_uhh_basin_averages.py --product A
+    python mod_forcing/climate/_2_uhh_basin_averages.py --product B
+    python mod_forcing/climate/_2_uhh_basin_averages.py --product LTO
 
     # Validate Product A outputs against historical reference
-    python mod_forcing/climate/_2_uhh_basin_averages.py --validate-outputs --scenario 1
+    python mod_forcing/climate/_2_uhh_basin_averages.py --validate-outputs
 """
 
-import os
 import sys
 import argparse
 import pandas as pd
@@ -48,10 +49,12 @@ from matplotlib.patches import Patch
 # Add repo root to path for utils imports
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 from utils import dss_io
-from utils.paths import get_base_dir, get_module_generated_dir
-from utils.wgen_calendar import require_stamp_days, stamp_month_index, stamp_month_of_day
+from utils.csv_io import write_delivery_csv
+from utils.paths import DELIVERY, WEATHER_SETS, delivery_dir, get_base_dir, get_module_generated_dir
+from utils.wgen import SETS, met_path, read_met, set_name
+from utils.wgen_calendar import (CHUNK_MONTHS, N_CHUNKS, label as calendar_label, month_totals,
+                                 water_year, write_chunk_csvs)
 from utils.quantile_mapping import qmap_single
-
 
 def parse_grid_info_file(grid_info_path):
     """
@@ -77,175 +80,70 @@ def parse_grid_info_file(grid_info_path):
     return df
 
 
-def find_meteo_file(lat, lon, data_folder):
+def calculate_basin_monthly_averages(grid_info_df, product, date_index=None):
     """
-    Find the meteo file for a specific lat/lon coordinate.
-    
-    Parameters:
-    -----------
-    lat : float
-        Latitude
-    lon : float
-        Longitude
-    data_folder : str
-        Path to folder containing meteo files
-        
-    Returns:
-    --------
-    str : Path to meteo file, or None if not found
-    """
-    # Format filename as meteo_LAT_LON
-    expected_filename = f"meteo_{lat}_{lon}"
-    meteo_path = os.path.join(data_folder, expected_filename)
-    
-    if os.path.exists(meteo_path):
-        return meteo_path
-    else:
-        return None
+    Basin-averaged monthly precipitation (inches) and temperature (degF), weighted by the
+    grid info's weight1 column, from the daily weather of each cell (utils.wgen).
 
-
-def read_meteo_file(filepath, product_b=False):
-    """
-    Read a meteo file and return as a pandas DataFrame.
-    
-    File format: YEAR MONTH DAY PRECIP(mm) TMAX(C) TMIN(C)
-    
-    Parameters:
-    -----------
-    filepath : str
-        Path to meteo file
-    product_b : bool
-        If True, skip pd.to_datetime (Product B years 1-1008 are below
-        pandas Timestamp minimum ~1677). The caller groups the rows by stamp month
-        (utils.wgen_calendar).
-        
-    Returns:
-    --------
-    pd.DataFrame with columns: precip_mm, tmax_c, tmin_c, tavg_c
-        (plus 'date' column when product_b=False)
-    """
-    data = pd.read_csv(
-        filepath, 
-        sep=r'\s+', 
-        header=None,
-        names=['year', 'month', 'day', 'precip_mm', 'tmax_c', 'tmin_c']
-    )
-    
-    # Create date column only for Product A / Historical (Product B years are out of range)
-    if not product_b:
-        data['date'] = pd.to_datetime(data[['year', 'month', 'day']])
-    
-    # Calculate daily average temperature
-    data['tavg_c'] = (data['tmax_c'] + data['tmin_c']) / 2.0
-    
-    return data
-
-
-def calculate_basin_monthly_averages(grid_info_df, data_folder, date_index=None, product_b=False):
-    """
-    Calculate basin-averaged monthly precipitation and temperature.
-    Uses weighted aggregation approach similar to small watersheds processing.
-
-    For Product B, WGEN files have years 1-1008 (below pandas Timestamp min ~1677)
-    on a calendar of their own: the rows are the stamp days from 1 January of stamp
-    year 1, summed or averaged by stamp month (utils.wgen_calendar). No reindexing
-    is performed; all rows in the file are used directly.
-
-    Parameters:
-    -----------
-    grid_info_df : pd.DataFrame
-        DataFrame with grid cell info (lat, lon, weights)
-    data_folder : str
-        Path to folder containing meteo files
-    date_index : pd.DatetimeIndex, optional
-        Full date range for Product A / Historical alignment
-    product_b : bool
-        If True, use the stamp days (no date alignment)
+    A single series (Historical_Unsplit, Product A, LTO) is aligned to ``date_index`` first,
+    so days outside the files' span count as missing. Product B stays on its stamp days and
+    months (utils.wgen_calendar); every cell must list the same days.
 
     Returns:
     --------
-    pd.DataFrame with monthly basin-averaged precip and temp
+    pd.DataFrame with year, month (stamp months for Product B), precip_inches, tavg_f, and
+    date (single series only)
     """
     weighted_precip_sum = None
     weighted_tavg_sum = None
     weight_total = 0.0
+    days = None
 
-    for idx, row in grid_info_df.iterrows():
-        lat = row['lat']
-        lon = row['lon']
-        weight = row['weight1']  # Using weight1 column
-
-        # Find and read meteo file
-        meteo_file = find_meteo_file(lat, lon, data_folder)
-
-        if meteo_file is None:
-            raise FileNotFoundError(f"no meteo file for grid cell ({lat}, {lon}) in {data_folder}")
-
-        # Read daily data
-        daily_raw = read_meteo_file(meteo_file, product_b=product_b)
-
-        if product_b:
-            # Product B: years 1-1008 can't be parsed as Timestamps. The rows must be
-            # the stamp days from 1 January of stamp year 1 (utils.wgen_calendar).
-            require_stamp_days(len(daily_raw), meteo_file)
-            if not np.array_equal(stamp_month_index(daily_raw['year'], daily_raw['month']),
-                                  stamp_month_of_day()):
-                raise ValueError(f"{meteo_file}: the rows are not the stamp days from year 1")
-            daily_data = pd.Series(daily_raw['precip_mm'].values, name='precip_mm')
-            tavg_s = pd.Series(
-                ((daily_raw['tmax_c'].values + daily_raw['tmin_c'].values) / 2.0),
-                name='tavg_c'
-            )
-            precip_series = daily_data
-            tavg_series = tavg_s
+    for _, row in grid_info_df.iterrows():
+        weight = row['weight1']
+        path = met_path(product, row['lat'], row['lon'])
+        if not path.exists():
+            raise FileNotFoundError(f"no weather file for grid cell ({row['lat']}, {row['lon']}): {path}")
+        w = read_met(product, path)
+        tavg = (w['tmax'] + w['tmin']) / 2.0
+        if product == "B":
+            if days is None:
+                days = w[['Year', 'Month', 'Day']]
+            elif not np.array_equal(days.to_numpy(), w[['Year', 'Month', 'Day']].to_numpy()):
+                raise ValueError(f"{path}: its days differ from the basin's first cell")
+            precip_series = w['precip'].reset_index(drop=True)
+            tavg_series = tavg.reset_index(drop=True)
         else:
-            daily_data = daily_raw.set_index('date')
-            # Ensure full date coverage (fill missing with NaN)
-            precip_series = daily_data.reindex(date_index)['precip_mm']
-            tavg_series = daily_data.reindex(date_index)['tavg_c']
+            dates = pd.to_datetime(w[['Year', 'Month', 'Day']].rename(columns=str.lower))
+            precip_series = pd.Series(w['precip'].to_numpy(), index=dates).reindex(date_index)
+            tavg_series = pd.Series(tavg.to_numpy(), index=dates).reindex(date_index)
 
-        # Apply weight and accumulate
         precip_contrib = precip_series * weight
         tavg_contrib = tavg_series * weight
-
         weighted_precip_sum = precip_contrib if weighted_precip_sum is None else (weighted_precip_sum + precip_contrib)
         weighted_tavg_sum = tavg_contrib if weighted_tavg_sum is None else (weighted_tavg_sum + tavg_contrib)
         weight_total += weight
 
     if weighted_precip_sum is None:
-        raise ValueError("No valid meteo files found for any grid cells")
+        raise ValueError("No grid cells in the grid info")
 
-    # Normalize by total weight
-    daily_precip_mm = weighted_precip_sum / weight_total
-    daily_tavg_c = weighted_tavg_sum / weight_total
-
-    if product_b:
-        # stamp months (utils.wgen_calendar), in order from January of stamp year 1
-        stamp_month = stamp_month_of_day()
-        monthly_precip_mm = daily_precip_mm.groupby(stamp_month).sum()
-        monthly_tavg_c = daily_tavg_c.groupby(stamp_month).mean()
-        monthly_df = pd.DataFrame({
-            'year':          monthly_precip_mm.index // 12 + 1,
-            'month':         monthly_precip_mm.index % 12 + 1,
-            'precip_inches': (monthly_precip_mm.values / 25.4),
-            'tavg_f':        (monthly_tavg_c.values * 9 / 5) + 32,
-        })
-        # No 'date' column for Product B (synthetic year labels only)
+    if product == "B":
+        daily = days.reset_index(drop=True).assign(precip=weighted_precip_sum.to_numpy() / weight_total,
+                                                   tavg=weighted_tavg_sum.to_numpy() / weight_total)
     else:
-        monthly_precip_mm = daily_precip_mm.resample('MS').sum()
-        monthly_precip_inches = monthly_precip_mm / 25.4
-        monthly_tavg_c = daily_tavg_c.resample('MS').mean()
-        monthly_tavg_f = (monthly_tavg_c * 9 / 5) + 32
-        monthly_df = pd.DataFrame({
-            'year':          monthly_precip_inches.index.year,
-            'month':         monthly_precip_inches.index.month,
-            'precip_inches': monthly_precip_inches.values,
-            'tavg_f':        monthly_tavg_f.values,
-        })
-        monthly_df['date'] = monthly_precip_inches.index
-
+        daily = pd.DataFrame({'Year': date_index.year, 'Month': date_index.month, 'Day': date_index.day,
+                              'precip': weighted_precip_sum.to_numpy() / weight_total,
+                              'tavg': weighted_tavg_sum.to_numpy() / weight_total})
+    m = month_totals(daily, {'precip': 'sum', 'tavg': 'mean'})
+    monthly_df = pd.DataFrame({
+        'year':          m['Year'],
+        'month':         m['Month'],
+        'precip_inches': m['precip'].to_numpy() / 25.4,
+        'tavg_f':        (m['tavg'].to_numpy() * 9 / 5) + 32,
+    })
+    if product != "B":
+        monthly_df['date'] = pd.to_datetime(dict(year=monthly_df['year'], month=monthly_df['month'], day=1))
     return monthly_df
-
 
 def read_uhh_locations(csv_file):
     """
@@ -340,7 +238,7 @@ def apply_vpd_quantile_mapping(temp_monthly, target_vpd, source_type):
     target_vpd : pd.DataFrame
         Target historical VPD data with columns: year, month, value (kPa)
     source_type : str
-        'Product_A', 'Product_B', or 'Historical'
+        The weather set: 'historical', 'A', 'B' or 'LTO'
         
     Returns:
     --------
@@ -353,15 +251,15 @@ def apply_vpd_quantile_mapping(temp_monthly, target_vpd, source_type):
     # Remove any NaN values from target VPD
     target_vpd = target_vpd.dropna(subset=['value'])
 
-    if source_type == 'Product_B':
+    if source_type == 'B':
         # Product B has stamp year labels (1-1008) that don't overlap with
         # historical VPD years (1921-2018), so year-based filtering/merging won't work.
         # qmap_single builds independent per-month (1-12) distributions for basis
         # and target, so only the month labels need to be correct -- years are
         # irrelevant.  Product B months are the stamp months (utils.wgen_calendar),
         # so we use them directly (no label overwriting).
-        # Use up to 1200 months (~100 WY), truncated to whichever series is shorter.
-        n_calib = min(len(temp_basis_sim), len(target_vpd), 1200)
+        # Use up to one chunk's length (100 WY), truncated to whichever series is shorter.
+        n_calib = min(len(temp_basis_sim), len(target_vpd), CHUNK_MONTHS)
         basis_hist_temp = temp_basis_sim.iloc[:n_calib].copy().reset_index(drop=True)
         target_hist_vpd = target_vpd.iloc[:n_calib].copy().reset_index(drop=True)
     else:
@@ -393,7 +291,7 @@ def apply_vpd_quantile_mapping(temp_monthly, target_vpd, source_type):
     if len(basis_hist_temp) < 12:
         raise ValueError(f"Insufficient calibration data: only {len(basis_hist_temp)} months available (need at least 12)")
     
-    if source_type == 'Product_B':
+    if source_type == 'B':
         print(f"    Calibration period: {len(basis_hist_temp)} months (positional alignment with historical VPD)")
     else:
         print(f"    Calibration period: {len(basis_hist_temp)} months ({calib_start} to {calib_end})")
@@ -414,11 +312,11 @@ def apply_vpd_quantile_mapping(temp_monthly, target_vpd, source_type):
     return vpd_mapped[['year', 'month', 'vpd_kpa']]
 
 
-def process_location(shorthand, grid_info_file, grid_info_folder, data_folder, output_folder, date_index, args, excel_file):
+def process_location(shorthand, grid_info_file, grid_info_folder, product, output_folder, date_index, excel_file):
     """
     Process a single UHH location: compute basin-averaged monthly data.
     Creates separate output files for precipitation (PPT_*), temperature (T*), and VPD (VPD*).
-    
+
     Parameters:
     -----------
     shorthand : str
@@ -427,14 +325,12 @@ def process_location(shorthand, grid_info_file, grid_info_folder, data_folder, o
         Name of the grid info file
     grid_info_folder : Path
         Path to folder containing grid info files
-    data_folder : str
-        Path to folder containing meteo files
+    product : str
+        The weather set ('historical', 'A', 'B', 'LTO')
     output_folder : Path
         Path to output folder
     date_index : pd.DatetimeIndex
         Full date range for the analysis period
-    args : argparse.Namespace
-        Command-line arguments (needed to check source type)
     excel_file : Path
         Path to calsim_climate_sv.xlsx file with target VPD data
         
@@ -479,9 +375,8 @@ def process_location(shorthand, grid_info_file, grid_info_folder, data_folder, o
     
     # Calculate basin-averaged monthly data
     monthly_data = calculate_basin_monthly_averages(
-        grid_info_df, data_folder,
+        grid_info_df, product,
         date_index=date_index,
-        product_b=(args.source == 'Product_B')
     )
     
     # Apply VPD quantile mapping using temperature as basis
@@ -493,7 +388,7 @@ def process_location(shorthand, grid_info_file, grid_info_folder, data_folder, o
         vpd_data = apply_vpd_quantile_mapping(
             temp_monthly=monthly_data[['year', 'month', 'tavg_f']],
             target_vpd=target_vpd,
-            source_type=args.source
+            source_type=product
         )
         # Merge VPD into monthly_data
         monthly_data = monthly_data.merge(vpd_data, on=['year', 'month'], how='left')
@@ -510,7 +405,7 @@ def process_location(shorthand, grid_info_file, grid_info_folder, data_folder, o
     # Construct VPD location name
     vpd_location_name = f"VPD{base_shorthand}_UHH"
 
-    if args.source == 'Product_B':
+    if product == 'B':
         # For Product B, defer all file writing to write_product_b_chunks().
         # Return the full monthly_data so main() can compile across locations.
         print(f"  Product B: {len(monthly_data)} months loaded (will compile into chunks)")
@@ -556,131 +451,6 @@ def process_location(shorthand, grid_info_file, grid_info_folder, data_folder, o
     return summary
 
 
-def create_validation_csv(
-    source_dir: str = 'output/_2_uhh_basin_averages/product_a',
-    validation_dir: str = 'output/_product_a_validation',
-    start_wy: int = 1971,
-    end_wy: int = 2018
-):
-    """
-    Create combined validation CSVs from individual UHH basin average files.
-
-    Reads processed PPT, T, and VPD CSVs and creates long-format CSVs
-    with columns Part B, Part C, Year, Month, Value for the validation period.
-
-    Parameters:
-    -----------
-    source_dir : str
-        Directory containing individual PPT_*, T*, VPD* CSV files
-    validation_dir : str
-        Output directory for the validation CSVs
-    start_wy : int
-        Start water year (default: 1971)
-    end_wy : int
-        End water year (default: 2018)
-    """
-    source_path = Path(source_dir)
-    if not source_path.exists():
-        print(f"Error: {source_path} not found. Run Product_A processing first.")
-        return
-
-    # Validation period: Oct of start_wy through Sep of end_wy
-    start_date = pd.Timestamp(start_wy, 10, 1)
-    end_date = pd.Timestamp(end_wy, 9, 30)
-
-    print("=" * 80)
-    print("Creating Validation CSVs - UHH Basin Averages")
-    print("=" * 80)
-    print(f"Period: WY {start_wy}-{end_wy} ({start_date.strftime('%b %Y')} - {end_date.strftime('%b %Y')})")
-    print(f"Source: {source_path}")
-
-    # Define the three variable types to process
-    var_configs = [
-        {
-            'prefix': 'PPT_',
-            'part_c': 'PRECIP',
-            'value_col': 'precip_inches',
-            'output_name': f'_uhh_precip_productA_{start_wy}_{end_wy}.csv',
-            'label': 'Precipitation'
-        },
-        {
-            'prefix': 'T',
-            'part_c': 'Temperature',
-            'value_col': 'tavg_f',
-            'output_name': f'_uhh_temperature_productA_{start_wy}_{end_wy}.csv',
-            'label': 'Temperature'
-        },
-        {
-            'prefix': 'VPD',
-            'part_c': 'VPD',
-            'value_col': 'vpd_kpa',
-            'output_name': f'_uhh_vpd_productA_{start_wy}_{end_wy}.csv',
-            'label': 'VPD'
-        }
-    ]
-
-    val_path = Path(validation_dir)
-    val_path.mkdir(parents=True, exist_ok=True)
-
-    for config in var_configs:
-        print(f"\n--- {config['label']} ---")
-        all_rows = []
-
-        # Find matching CSV files (exclude _summary.csv)
-        if config['prefix'] == 'T':
-            # Temperature files: T*_UHH.csv but NOT TR, TU which could match PPT_TR etc.
-            # Match files starting with T but not with PPT_ or VPD
-            csv_files = sorted([
-                f for f in source_path.glob('T*_UHH.csv')
-                if not f.name.startswith('PPT_') and not f.name.startswith('VPD')
-            ])
-        else:
-            csv_files = sorted(source_path.glob(f'{config["prefix"]}*_UHH.csv'))
-
-        print(f"  Found {len(csv_files)} files")
-
-        for csv_file in csv_files:
-            location_name = csv_file.stem  # e.g., PPT_FOLS_UHH, TFO_UHH, VPDFO_UHH
-
-            # Read individual CSV
-            df = pd.read_csv(csv_file)
-            df['date'] = pd.to_datetime(df['date'])
-
-            # Filter to validation period
-            mask = (df['date'] >= start_date) & (df['date'] <= end_date)
-            df_filtered = df.loc[mask].copy()
-
-            if df_filtered.empty:
-                print(f"    {location_name}: no data in validation period, skipping")
-                continue
-
-            # Build long-format rows
-            for _, row in df_filtered.iterrows():
-                all_rows.append({
-                    'Part B': location_name,
-                    'Part C': config['part_c'],
-                    'Year': int(row['year']),
-                    'Month': int(row['month']),
-                    'Value': round(row[config['value_col']], 6)
-                })
-
-            print(f"    {location_name}: {len(df_filtered)} months")
-
-        if not all_rows:
-            print(f"  No {config['label']} data found for the validation period.")
-            continue
-
-        # Write combined CSV
-        output_df = pd.DataFrame(all_rows)
-        output_file = val_path / config['output_name']
-        output_df.to_csv(output_file, index=False)
-
-        n_locations = output_df['Part B'].nunique()
-        print(f"  Written: {output_file} ({n_locations} locations, {len(output_df)} rows)")
-
-    print(f"\n{'=' * 80}")
-    print("Validation CSVs complete.")
-    print(f"{'=' * 80}")
 
 
 ###############################################################################
@@ -1083,7 +853,7 @@ def run_validate_outputs(scenario):
     excel_file = script_dir / "reference" / "calsim_climate_sv.xlsx"
     if not excel_file.exists():
         excel_file = script_dir / "input" / "calsim_climate_sv.xlsx"
-    data_folder = gen_dir / "output" / "_2_uhh_basin_averages" / "product_a"
+    data_folder = gen_dir / "output" / "_2_uhh_basin_averages" / set_name("A")
     validation_folder = gen_dir / "output" / "_3_validation"
     validation_folder.mkdir(parents=True, exist_ok=True)
     
@@ -1105,7 +875,7 @@ def run_validate_outputs(scenario):
     print("="*80)
     print("UHH BASIN AVERAGES VALIDATION")
     print("="*80)
-    print(f"Scenario: Product_A / {scenario}")
+    print(f"Weather set: {scenario}")
     print(f"CalSim file: {excel_file}")
     print(f"Data folder: {data_folder}")
     print(f"Validation output folder: {validation_folder}")
@@ -1175,127 +945,61 @@ def run_validate_outputs(scenario):
     print(f"Annual comparison plots saved to: {validation_folder}")
 
 
-def write_product_a_validation(summaries, output_folder, start_wy=1922, end_wy=2018):
-    """
-    Create combined long-format validation CSVs from processed Product A summaries.
-    Output: _uhh_precip_productA_{start_wy}_{end_wy}.csv,
-            _uhh_temperature_productA_{start_wy}_{end_wy}.csv,
-            _uhh_vpd_productA_{start_wy}_{end_wy}.csv
-    Format: Part B, Part C, Year, Month, Value
-    """
-    start_date = pd.Timestamp(start_wy - 1, 10, 1)
-    end_date = pd.Timestamp(end_wy, 9, 30)
-    output_path = Path(output_folder)
+#: Per variable: the monthly column, its file stem, the location-name key of the summary and the
+#: Part C of the delivery CSVs and of Product B's chunks.
+VARIABLES = [
+    {'col': 'precip_inches', 'stem': '_uhh_precip',      'name_key': 'ppt_location_name',
+     'part_c': 'PRECIP',      'part_c_b': 'PRECIP'},
+    {'col': 'tavg_f',        'stem': '_uhh_temperature', 'name_key': 'temp_location_name',
+     'part_c': 'Temperature', 'part_c_b': 'TEMPERATURE'},
+    {'col': 'vpd_kpa',       'stem': '_uhh_vpd',         'name_key': 'vpd_location_name',
+     'part_c': 'VPD',         'part_c_b': 'VPD'},
+]
 
-    var_configs = [
-        {'col': 'precip_inches', 'part_c': 'PRECIP',      'name_key': 'ppt_location_name',  'file_stem': f'_uhh_precip_productA_{start_wy}_{end_wy}'},
-        {'col': 'tavg_f',        'part_c': 'Temperature',  'name_key': 'temp_location_name', 'file_stem': f'_uhh_temperature_productA_{start_wy}_{end_wy}'},
-        {'col': 'vpd_kpa',       'part_c': 'VPD',          'name_key': 'vpd_location_name',  'file_stem': f'_uhh_vpd_productA_{start_wy}_{end_wy}'},
-    ]
 
-    print(f"\nCreating Product A validation CSVs (WY {start_wy}-{end_wy})...")
-    for vc in var_configs:
-        col = vc['col']
-        all_rows = []
-        for s in summaries:
-            md = s.get('_monthly_data')
-            if md is None or col not in md.columns or 'date' not in md.columns:
-                continue
-            loc_name = s[vc['name_key']]
-            if loc_name == 'N/A':
-                continue
-            mask = (md['date'] >= start_date) & (md['date'] <= end_date)
-            df_f = md.loc[mask]
-            for _, row in df_f.iterrows():
-                all_rows.append({
-                    'Part B': loc_name,
-                    'Part C': vc['part_c'],
-                    'Year': int(row['year']),
-                    'Month': int(row['month']),
-                    'Value': round(row[col], 6),
-                })
-
-        if not all_rows:
-            print(f"  No data for {vc['part_c']} validation CSV.")
+def _sv_rows(summaries, var, part_c):
+    """The monthly series of one variable across locations in SV format (Part B = location),
+    by file month; locations without the variable are skipped."""
+    frames = []
+    for s in summaries:
+        md = s.get('_monthly_data')
+        if md is None or var['col'] not in md.columns or s[var['name_key']] == 'N/A':
             continue
+        frames.append(pd.DataFrame({'Part B': s[var['name_key']], 'Part C': part_c,
+                                    'Year': md['year'], 'Month': md['month'],
+                                    'Value': md[var['col']]}))
+    return pd.concat(frames, ignore_index=True) if frames else None
 
-        output_df = pd.DataFrame(all_rows)
-        output_file = output_path / f"{vc['file_stem']}.csv"
-        output_df.to_csv(output_file, index=False)
-        n_locations = output_df['Part B'].nunique()
-        print(f"  {output_file.name} ({n_locations} locations, {len(output_df)} rows)")
+
+def write_delivery(summaries, output_root, product):
+    """The delivery CSVs of a single series over DELIVERY_WY (values rounded to 6 decimals)."""
+    print(f"\nWriting the {WEATHER_SETS[product]['name']} delivery CSVs...")
+    for var in VARIABLES:
+        df = _sv_rows(summaries, var, var['part_c'])
+        if df is None:
+            print(f"  No data for {var['part_c']} delivery CSV.")
+            continue
+        df['Value'] = df['Value'].map(lambda v: round(v, 6))
+        out = write_delivery_csv(df, delivery_dir(output_root, product), var['stem'], product)
+        print(f"  {out.name} ({df['Part B'].nunique()} locations)")
 
 
 def write_product_b_chunks(summaries: list, output_folder):
-    """
-    Compile all locations into 10 long-format chunk CSVs (100 WYs each).
-    Skips first 9 months (Jan-Sep synthetic year 1) for WY alignment.
-    Template dates: Oct 1921 - Sep 2021 (WY1922-2021).
-    Writes three file sets: _uhh_precip_productB_n01..n10.csv,
-                            _uhh_temperature_productB_n01..n10.csv,
-                            _uhh_vpd_productB_n01..n10.csv
-    Format: Part B, Part C, Year, Month, Value
-    """
-    skip_months     = 9     # Jan-Sep of synthetic year 1
-    months_per_chunk = 1200 # 100 WYs x 12 months
-    total_chunks    = 10
-    total_needed    = skip_months + months_per_chunk * total_chunks
-
-    date_template = pd.date_range('1921-10-31', periods=months_per_chunk, freq='ME')
-    output_path = Path(output_folder)
-    output_path.mkdir(parents=True, exist_ok=True)
-
-    var_configs = [
-        {'col': 'precip_inches', 'part_c': 'PRECIP',      'name_key': 'ppt_location_name',  'file_stem': '_uhh_precip_productB'},
-        {'col': 'tavg_f',        'part_c': 'TEMPERATURE',  'name_key': 'temp_location_name', 'file_stem': '_uhh_temperature_productB'},
-        {'col': 'vpd_kpa',       'part_c': 'VPD',          'name_key': 'vpd_location_name',  'file_stem': '_uhh_vpd_productB'},
-    ]
-
-    print(f"\nWriting Product B chunk files ({total_chunks} chunks x {months_per_chunk} months)...")
-
-    for vc in var_configs:
-        col = vc['col']
-        loc_data = {}
-        for s in summaries:
-            md = s.get('_monthly_data')
-            if md is None or col not in md.columns:
-                continue
-            loc_name = s[vc['name_key']]
-            if loc_name == 'N/A':
-                continue
-            vals = md[col].values
-            if len(vals) < total_needed:
-                raise ValueError(f"{loc_name}: {len(vals)} months, need {total_needed}")
-            loc_data[loc_name] = vals
-
-        if not loc_data:
-            print(f"  Skipping {vc['file_stem']} - no valid locations")
+    """The 10 long-format chunk CSVs per variable, each labelled WY1922-2021
+    (utils.wgen_calendar): _uhh_precip_productB_n01..n10.csv, _uhh_temperature_productB_*,
+    _uhh_vpd_productB_*."""
+    print("\nWriting Product B chunk files...")
+    for var in VARIABLES:
+        df = _sv_rows(summaries, var, var['part_c_b'])
+        if df is None:
+            print(f"  Skipping {var['stem']}_productB - no valid locations")
             continue
-
-        for i in range(total_chunks):
-            rows = []
-            for loc_name, vals in loc_data.items():
-                chunk_vals = vals[
-                    skip_months + i * months_per_chunk :
-                    skip_months + (i + 1) * months_per_chunk
-                ]
-                for j, val in enumerate(chunk_vals):
-                    rows.append({
-                        'Part B': loc_name,
-                        'Part C': vc['part_c'],
-                        'Year':   int(date_template[j].year),
-                        'Month':  int(date_template[j].month),
-                        'Value':  val,
-                    })
-            chunk_df = pd.DataFrame(rows, columns=['Part B', 'Part C', 'Year', 'Month', 'Value'])
-            out_file = output_path / f"{vc['file_stem']}_n{i+1:02d}.csv"
-            chunk_df.to_csv(out_file, index=False)
-            print(f"  Chunk {i+1:02d}/10: {out_file.name} ({len(loc_data)} locations)")
-
-        print(f"  {vc['file_stem']}: {total_chunks} chunks written")
-
+        labelled = pd.concat([calendar_label('B', g.drop(columns=['Part B', 'Part C'])).assign(
+            **{'Part B': key[0], 'Part C': key[1]}) for key, g in df.groupby(['Part B', 'Part C'], sort=False)],
+            ignore_index=True)
+        paths = write_chunk_csvs(labelled, output_folder, f"{var['stem']}_productB")
+        print(f"  {var['stem']}_productB: {len(paths)} chunks written")
     print(f"Product B chunks: {output_folder}")
-
 
 ###############################################################################
 # Historical vs Product B comparison (annual WY precip boxplots)
@@ -1368,7 +1072,7 @@ def _historical_wy_totals_from_dss(ppt_part_b: str, start_wy: int = 1922, end_wy
         "month": s.index.month,
         "precip_inches": s.values,
     })
-    df["WY"] = df["year"] + (df["month"] >= 10).astype(int)
+    df["WY"] = water_year(df["year"], df["month"])
     df = df[(df["WY"] >= start_wy) & (df["WY"] <= end_wy)]
     counts = df.groupby("WY").size()
     complete_wys = counts[counts == 12].index
@@ -1388,7 +1092,7 @@ def _long_format_wy_totals(csv_path: Path) -> dict:
     df = pd.read_csv(csv_path)
     df['Value'] = pd.to_numeric(df['Value'], errors='coerce')
     df = df.dropna(subset=['Value'])
-    df['WY'] = df['Year'] + (df['Month'] >= 10).astype(int)
+    df['WY'] = water_year(df['Year'], df['Month'])
     out: dict = {}
     for loc_name, sub in df.groupby('Part B'):
         counts = sub.groupby('WY').size()
@@ -1561,7 +1265,7 @@ def run_compare_historical_productB(args):
     if not productB_dir.exists():
         raise FileNotFoundError(f"Product B folder not found: {productB_dir}")
 
-    out_dir = gen_dir / "output" / "_2_uhh_basin_averages" / "product_b" / "_compare_historical_productB"
+    out_dir = gen_dir / "output" / "_2_uhh_basin_averages" / set_name("B") / "_compare_historical_productB"
     out_dir.mkdir(parents=True, exist_ok=True)
 
     # Read UHH locations table
@@ -1585,7 +1289,8 @@ def run_compare_historical_productB(args):
         print(f"  {shorthand}: {len(hist_wy_by_loc[shorthand])} WYs, weight={weights_by_loc[shorthand]:.2f}")
 
     # Load Product B WY totals per chunk per location
-    chunk_files = sorted(productB_dir.glob("_uhh_precip_productB_n*.csv"))
+    chunk_files = [f for f in (productB_dir / f"_uhh_precip_productB_n{k:02d}.csv"
+                               for k in range(1, N_CHUNKS + 1)) if f.exists()]
     if not chunk_files:
         raise FileNotFoundError(f"No Product B precip chunk files found in {productB_dir}")
 
@@ -1604,7 +1309,7 @@ def run_compare_historical_productB(args):
     # format as the Product B chunks, so it reads with the same helper.
     empty_wy = pd.DataFrame(columns=['WY', 'precip_inches'])
     productA_by_loc: dict = {}
-    productA_val_dir = gen_dir / "output" / "_product_a_validation"
+    productA_val_dir = delivery_dir(gen_dir / "output", "A")
     productA_files = sorted(productA_val_dir.glob("_uhh_precip_productA_*.csv"))
     if productA_files:
         productA_csv = productA_files[-1]
@@ -1744,7 +1449,7 @@ def run_compare_historical_productB(args):
 def parse_arguments():
     """
     Parse command-line arguments.
-    
+
     Returns:
     --------
     argparse.Namespace : Parsed arguments
@@ -1752,19 +1457,9 @@ def parse_arguments():
     parser = argparse.ArgumentParser(
         description='Extract monthly basin-averaged precip and temp for UHH locations'
     )
-    parser.add_argument(
-        '--source',
-        type=str,
-        required=False,
-        choices=['Product_A', 'Product_B', 'Historical'],
-        help='Weather data source: Product_A, Product_B, or Historical'
-    )
-    parser.add_argument(
-        '--scenario',
-        type=str,
-        required=False,
-        help='Scenario number (required for Product_A/Product_B, e.g., 1, 2, 3, ...)'
-    )
+    parser.add_argument('--product', choices=SETS,
+                        help='Weather set: historical (WGEN Historical_Unsplit), A, B '
+                             '(WGEN scenario 1) or LTO (Historical_Climate_LTO)')
     parser.add_argument(
         '--validate-outputs',
         action='store_true',
@@ -1776,7 +1471,7 @@ def parse_arguments():
         action='store_true',
         dest='compare_historical_productB',
         help='Compare historical annual WY precipitation against Product A and Product B '
-             '(n01-n10) boxplots. The Product A box is included when its validation CSV is '
+             '(n01-n10) boxplots. The Product A box is included when its delivery CSV is '
              'available. Generates one figure per UHH location plus area-weighted aggregates '
              'for the Sacramento Valley, San Joaquin Valley, and all UHH locations '
              '(TR and WH excluded).'
@@ -1791,27 +1486,21 @@ def parse_arguments():
         '--start_date',
         type=str,
         default='1920-10-01',
-        help='Start date for analysis (default: 1920-10-01)'
+        help='Start date of a single series (default: 1920-10-01)'
     )
     parser.add_argument(
         '--end_date',
         type=str,
         default='2021-09-30',
-        help='End date for analysis (default: 2021-09-30)'
+        help='End date of a single series (default: 2021-09-30)'
     )
-    
+
     args = parser.parse_args()
-    
-    # --source is required unless a standalone action is used
+
+    # --product is required unless a standalone action is used
     standalone = args.validate_outputs or args.compare_historical_productB
-    if not standalone and not args.source:
-        parser.error("--source is required (or use --validate-outputs / --compare-historical-productB)")
-    
-    # Validate scenario requirement
-    if args.source in ['Product_A', 'Product_B']:
-        if not args.scenario:
-            parser.error(f"--scenario is required when using source '{args.source}'")
-    
+    if not standalone and not args.product:
+        parser.error("--product is required (or use --validate-outputs / --compare-historical-productB)")
     return args
 
 
@@ -1819,113 +1508,73 @@ def main():
     """
     Main function to extract monthly basin averages for UHH locations.
     """
-    # Parse command-line arguments
     args = parse_arguments()
-    
-    # Handle --validate-outputs mode
+
     if args.validate_outputs:
-        scenario = args.scenario if args.scenario else '1'
-        run_validate_outputs(scenario)
+        run_validate_outputs(set_name("A"))
         return
 
-    # Handle --compare-historical-productB mode
     if args.compare_historical_productB:
         run_compare_historical_productB(args)
         return
-    
-    # Set up paths
+
+    product = args.product
     script_dir = Path(__file__).parent.resolve()
-    base_dir = get_base_dir()
     gen_dir = get_module_generated_dir("mod_forcing/climate")
-    
-    # Input files
+
     uhh_locations_file = script_dir / args.locations
     excel_file = script_dir / "reference" / "calsim_climate_sv.xlsx"
     if not excel_file.exists():
         excel_file = script_dir / "input" / "calsim_climate_sv.xlsx"
     repo_root = Path(__file__).resolve().parents[2]
     grid_info_folder = repo_root / "mod_forcing" / "climate" / "reference" / "GridInfo"
-    
-    # Build data path based on source type
-    if args.source == "Historical":
-        data_folder = base_dir / "Historical_Climate_LTO"
-        output_folder = gen_dir / "output" / "_2_uhh_basin_averages" / "historical"
-        script_output_folder = output_folder
-    else:
-        # Product_A or Product_B with scenario
-        data_folder = base_dir / "WGEN" / args.source / args.scenario
-        if args.source == 'Product_A':
-            output_folder = gen_dir / "output" / "_2_uhh_basin_averages" / "product_a"
-            script_output_folder = output_folder
-        else:
-            output_folder = gen_dir / "output" / "_product_b_final"
-            script_output_folder = gen_dir / "output" / "_2_uhh_basin_averages" / "product_b"
-    
-    output_folder.mkdir(parents=True, exist_ok=True)
+
+    script_output_folder = gen_dir / "output" / "_2_uhh_basin_averages" / set_name(product)
     script_output_folder.mkdir(parents=True, exist_ok=True)
-    
-    # Convert to string for file operations
-    data_folder_str = str(data_folder)
-    
+
     print("="*80)
     print("EXTRACTING MONTHLY BASIN AVERAGES FOR UHH LOCATIONS")
     print("="*80)
-    print(f"Weather source: {args.source}")
-    if args.scenario:
-        print(f"Scenario: {args.scenario}")
-    print(f"Data folder: {data_folder_str}")
+    print(f"Weather set: {set_name(product)}")
     print(f"Grid info folder: {grid_info_folder}")
-    print(f"Output folder: {output_folder}")
-    
-    # Check if data folder exists
-    if not os.path.exists(data_folder_str):
-        raise FileNotFoundError(f"Data folder not found: {data_folder_str}")
-    
-    # Check if grid info folder exists
+    print(f"Output folder: {script_output_folder}")
+
     if not grid_info_folder.exists():
         raise FileNotFoundError(f"Grid info folder not found: {grid_info_folder}")
-    
-    # Create date index for full analysis period
-    date_index = pd.date_range(start=args.start_date, end=args.end_date, freq='D')
-    print(f"Analysis period: {args.start_date} to {args.end_date} ({len(date_index)} days)")
-    
-    # Read UHH locations
+
+    date_index = None
+    if product != 'B':
+        date_index = pd.date_range(start=args.start_date, end=args.end_date, freq='D')
+        print(f"Analysis period: {args.start_date} to {args.end_date} ({len(date_index)} days)")
+
     print(f"\nReading UHH locations from: {uhh_locations_file}")
     locations_df = read_uhh_locations(uhh_locations_file)
     print(f"Found {len(locations_df)} watershed locations to process")
-    
-    # Process each location (each will create both PPT and T files)
+
     summaries, failed = [], []
     for idx, row in locations_df.iterrows():
         try:
-            summary = process_location(
+            summaries.append(process_location(
                 shorthand=row['location'],
                 grid_info_file=row['grid_info_file'],
                 grid_info_folder=grid_info_folder,
-                data_folder=data_folder_str,
-                output_folder=output_folder,
+                product=product,
+                output_folder=script_output_folder,
                 date_index=date_index,
-                args=args,
                 excel_file=excel_file
-            )
-            summaries.append(summary)
+            ))
         except Exception as e:
             print(f"  ERROR processing {row['location']}: {str(e)}")
             failed.append(row['location'])
     if failed:
         raise SystemExit(f"{len(failed)} location(s) failed, so their SVs would be missing: {failed}")
-    
-    # Save summary file
-    if summaries:
-        # Compile Product B chunks across all locations before writing summary
-        if args.source == 'Product_B':
-            write_product_b_chunks(summaries, output_folder)
-        elif args.source == 'Product_A':
-            validation_dir = gen_dir / "output" / "_product_a_validation"
-            validation_dir.mkdir(parents=True, exist_ok=True)
-            write_product_a_validation(summaries, validation_dir)
 
-        # Strip internal keys (prefixed _) before writing CSV
+    if summaries:
+        if product == 'B':
+            write_product_b_chunks(summaries, gen_dir / "output" / "_product_b_final")
+        elif product in DELIVERY:
+            write_delivery(summaries, gen_dir / "output", product)
+
         summary_rows = [{k: v for k, v in s.items() if not k.startswith('_')} for s in summaries]
         summary_df = pd.DataFrame(summary_rows)
         summary_file = script_output_folder / "_summary.csv"
@@ -1935,8 +1584,7 @@ def main():
         print(f"Successfully processed {len(summaries)} out of {len(locations_df)} locations")
         print(f"Summary saved to: {summary_file}")
         print(f"{'='*80}")
-        
-        # Print summary statistics
+
         print("\nSummary Statistics:")
         print(f"  Average number of grid cells per basin: {summary_df['num_grid_cells'].mean():.1f}")
         print(f"  Average monthly precip (across all basins): {summary_df['mean_monthly_precip_inches'].mean():.2f} inches")

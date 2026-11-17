@@ -7,7 +7,7 @@ CalSim 3.0 reservoirs with reservoir-specific parameters.
 
 Inputs
 ------
-- WGEN gridded temperature (supplied by the caller)
+- The daily weather of a set (utils.wgen), from the cell nearest each reservoir
 - reference/reservoir_parameters.json
 
 Outputs
@@ -16,10 +16,9 @@ Outputs
 
 Dependencies
 ------------
-- utils/paths.py  (data-dir resolution)
+- utils/wgen.py  (weather files)
 """
 
-import calendar
 import json
 import sys
 from pathlib import Path
@@ -29,11 +28,9 @@ import numpy as np
 import pandas as pd
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
-from utils.paths import get_module_generated_dir, get_base_dir
+from utils.wgen import nearest_cell, read_met
 
-_gen = get_module_generated_dir("mod_reservoir/evaporation")
 _PARAMS_FILE = Path(__file__).resolve().parent / "reference" / "reservoir_parameters.json"
-_WGEN_PA_DIR  = get_base_dir() / "WGEN" / "Product_A" / "1"
 
 
 class EvaporationCalculator:
@@ -170,194 +167,57 @@ class EvaporationCalculator:
 
         return max(0.0, self.adjustment_factor * (uncalibrated * slope + intercept))
 
-    def process_monthly_timeseries(
-        self,
-        dates: pd.DatetimeIndex,
-        tmax_c: np.ndarray,
-        tmin_c: np.ndarray
-    ) -> pd.DataFrame:
+    def process_daily_to_monthly(self, daily: pd.DataFrame) -> pd.DataFrame:
         """
-        Process monthly temperature data to calculate evaporation rates.
+        Monthly evaporation (inches/month) from daily temperatures.
 
         Parameters:
         -----------
-        dates : pd.DatetimeIndex
-            Monthly dates
-        tmax_c : np.ndarray
-            Monthly average maximum temperatures (degC)
-        tmin_c : np.ndarray
-            Monthly average minimum temperatures (degC)
+        daily : pd.DataFrame
+            Daily rows with Year, Month, tmax and tmin (degC), as utils.wgen.read_met returns
+            them; Product B's are stamp months
 
         Returns:
         --------
         pd.DataFrame
-            Monthly evaporation rates
+            Year, Month and evaporation_in per month of the rows, in their order; each month
+            takes the number of days it has in the rows
         """
-        evap_rates = []
-
-        for date, tmax, tmin in zip(dates, tmax_c, tmin_c):
-            month = date.month
-            days = calendar.monthrange(date.year, month)[1]
-            evap = self.calculate_monthly_regression(tmax, tmin, month, days)
-            evap_rates.append(evap)
-
-        df = pd.DataFrame({
-            'evaporation_in': evap_rates
-        }, index=dates)
-
-        return df
-
-    def process_daily_to_monthly(
-        self,
-        daily_data: pd.DataFrame,
-        tmax_col: str = 'tmax_c',
-        tmin_col: str = 'tmin_c'
-    ) -> pd.DataFrame:
-        """
-        Convert daily temperature data to monthly evaporation rates.
-
-        Parameters:
-        -----------
-        daily_data : pd.DataFrame
-            Daily temperature data with datetime index, or (Product B) with the stamp
-            'year' and 'month' columns of utils.wgen_calendar
-        tmax_col : str
-            Column name for maximum temperature
-        tmin_col : str
-            Column name for minimum temperature
-
-        Returns:
-        --------
-        pd.DataFrame
-            Monthly evaporation rates
-        """
-        if {'year', 'month'} <= set(daily_data.columns):
-            # Product B: stamp months, each with the number of days it has in the record
-            g = daily_data.groupby(['year', 'month'])
-            monthly = g[[tmax_col, tmin_col]].mean()
-            evap = [self.calculate_monthly_regression(tmax, tmin, month, days)
-                    for (_, month), tmax, tmin, days in zip(monthly.index, monthly[tmax_col],
-                                                            monthly[tmin_col], g.size())]
-            return pd.DataFrame({'evaporation_in': evap}, index=monthly.index)
-        monthly = daily_data.resample('ME').agg({
-            tmax_col: 'mean',
-            tmin_col: 'mean'
-        })
-
-        return self.process_monthly_timeseries(
-            monthly.index,
-            monthly[tmax_col].values,
-            monthly[tmin_col].values
-        )
+        g = daily.groupby(['Year', 'Month'], sort=False)
+        monthly = g[['tmax', 'tmin']].mean()
+        evap = [self.calculate_monthly_regression(tmax, tmin, month, days)
+                for (_, month), tmax, tmin, days in zip(monthly.index, monthly['tmax'],
+                                                        monthly['tmin'], g.size())]
+        return pd.DataFrame({'Year': monthly.index.get_level_values(0),
+                             'Month': monthly.index.get_level_values(1),
+                             'evaporation_in': evap})
 
 
-def load_climate_data(
-    file_path: str,
-    start_date: str = '1915-01-01'
+def reservoir_weather(
+    reservoir_code: str,
+    product: str,
+    params_file: Optional[str] = None
 ) -> pd.DataFrame:
     """
-    Load gridded climate data from Product_A WGEN format files.
-
-    File format (6 space-delimited columns):
-    1. Year
-    2. Month
-    3. Day
-    4. Precipitation (mm) - not used
-    5. Maximum temperature (degC)
-    6. Minimum temperature (degC)
-
-    Parameters:
-    -----------
-    file_path : str
-        Path to climate data file
-    start_date : str
-        Start date for time series (default: '1915-01-01')
-
-    Returns:
-    --------
-    pd.DataFrame
-        Daily climate data with datetime index
-    """
-    data = np.loadtxt(file_path)
-    
-    # Create dates from year, month, day columns
-    dates = pd.to_datetime({
-        'year': data[:, 0].astype(int),
-        'month': data[:, 1].astype(int),
-        'day': data[:, 2].astype(int)
-    })
-
-    df = pd.DataFrame({
-        'precip_mm': data[:, 3],
-        'tmax_c': data[:, 4],
-        'tmin_c': data[:, 5]
-    }, index=dates)
-
-    return df
-
-
-def find_nearest_weather_file(
-    reservoir_code: str,
-    weather_dir=None,
-    params_file: Optional[str] = None
-) -> Optional[str]:
-    """
-    Find nearest weather data file for a reservoir from Product_A WGEN data.
+    Daily weather of the cell of ``product`` nearest a reservoir.
 
     Parameters:
     -----------
     reservoir_code : str
         Reservoir code
-    weather_dir : str
-        Directory containing weather files (Product_A)
+    product : str
+        Weather set (a key of utils.paths.WEATHER_SETS)
     params_file : str, optional
         Path to reservoir_parameters.json
 
     Returns:
     --------
-    str or None
-        Path to nearest weather file
+    pd.DataFrame
+        Year, Month, Day, precip (mm), tmax and tmin (degC) (utils.wgen.read_met)
     """
-    if params_file is None:
-        params_file = _PARAMS_FILE
-    if weather_dir is None:
-        weather_dir = _WGEN_PA_DIR
-
-    with open(params_file, 'r') as f:
-        all_params = json.load(f)
-
-    if reservoir_code not in all_params:
-        return None
-
-    params = all_params[reservoir_code]
-    res_lat = params['latitude']
-    res_lon = params['longitude']
-
-    weather_path = Path(weather_dir)
-    if not weather_path.exists():
-        return None
-
-    min_dist = float('inf')
-    nearest_file = None
-
-    # Product_A files are named: meteo_LAT_LON
-    for file in weather_path.glob('meteo_*'):
-        parts = file.name.split('_')
-        if len(parts) != 3:
-            continue
-
-        try:
-            file_lat = float(parts[1])
-            file_lon = float(parts[2])
-            dist = np.sqrt((file_lat - res_lat)**2 + (file_lon - res_lon)**2)
-
-            if dist < min_dist:
-                min_dist = dist
-                nearest_file = str(file)
-        except ValueError:
-            continue
-
-    return nearest_file
+    params = get_reservoir_info(reservoir_code, params_file)
+    _, _, path, _ = nearest_cell(product, params['latitude'], params['longitude'])
+    return read_met(product, path)
 
 
 def get_all_reservoir_codes(params_file: Optional[str] = None) -> list:

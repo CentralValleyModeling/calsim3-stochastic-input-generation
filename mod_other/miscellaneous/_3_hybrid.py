@@ -1,12 +1,12 @@
 """
-Miscellaneous Hybrid Terms = (WYT_avg + QMap) / 2 (Product A or Product B)
-==========================================================================
+Miscellaneous Hybrid Terms = (WYT_avg + QMap) / 2
+=================================================
 Single driver for Hybrid = (WYT monthly average + Quantile Mapping) / 2 over
 the miscellaneous terms in ``reference/hybrid_terms_miscellaneous.csv``.
 Three logical parts run in sequence:
 
   1. WYT monthly averaging (calls utils.wyt_monthlyavg_framework).
-  2. Quantile mapping (calls the Product A or Product B engine).
+  2. Quantile mapping (calls the single-series or the Product B engine).
   3. Average the two intermediate per-term results to produce the final SV.
 
 The QM part follows each term's ``fit`` column (utils.qmap_fit) and is
@@ -21,36 +21,39 @@ Inputs
 - ``BASE/CalSim3/__calsim_sv_default__.dss`` (targets, WYT patterns and the
   predictors of pass fits, for both A and B)
 - WYT historical reference: ``mod_hydrology/water_year_types/reference/``
-- WYT target by product:
+- WYT target by weather set:
+    * historical: ``mod_hydrology/water_year_types/output/_1_calc_WYTs/Historical_Unsplit/``
     * A: ``mod_hydrology/water_year_types/output/_1_calc_WYTs/Product_A/``
     * B: ``mod_hydrology/water_year_types/output/_1_calc_WYTs/Product_B/``
 - Rim inflow simulation (utils.paths.get_rim_inflow_outputs):
+    * historical: ``_riminflow_historicalUnsplit_1922_2018.csv``
     * A: ``_riminflow_productA_1922_2018.csv``
     * B: ``<PartB>_qmo_n{01..10}.csv``
     * the historical-unsplit run, for absorb fits
 
 Outputs
 -------
-- ``output/_3_hybrid/product_a/`` (--product A) or
-  ``output/_3_hybrid/product_b/`` (--product B): intermediates
+- ``output/_3_hybrid/<historical_unsplit|product_a|product_b>/``: intermediates
   (``hybrid_wyt/``, ``hybrid_qmap/``, ``hybrid_wyt_monthly_avg_historical/``)
-- ``output/_3_hybrid/figures/product_a/`` -- per-term TS+CDF and monthly
-  error box (--product A)
-- ``output/_product_a_validation/<part_b>_product_a_<wy>_<wy>.csv``
-  (--product A) -- final hybrid SV
+- ``output/_3_hybrid/figures/<historical_unsplit|product_a>/`` -- per-term TS+CDF
+  and monthly error box (--product historical, A)
+- ``output/<_historical_unsplit_validation|_product_a_validation>/``
+  ``<part_b>_<historicalUnsplit|productA>_<wy>_<wy>.csv`` (--product historical, A)
+  -- final hybrid SV
 - ``output/_product_b_final/<part_b>_product_b_n{01..10}.csv``
   (--product B) -- final hybrid SV per chunk
 
 Dependencies
 ------------
 - utils.wyt_monthlyavg_framework
-- utils.qmap_product_a_from_pairs
+- utils.qmap_single_from_pairs
 - utils.qmap_product_b_from_pairs
 - utils.validation_plots (transitive)
 - utils.paths
 
 Usage
 -----
+    python mod_other/miscellaneous/_3_hybrid.py --product historical
     python mod_other/miscellaneous/_3_hybrid.py --product A
     python mod_other/miscellaneous/_3_hybrid.py --product B
 """
@@ -65,20 +68,22 @@ from pathlib import Path
 import pandas as pd
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
-from utils.csv_io import write_product_a_csv
-from utils.paths import PRODUCT_A_WY, get_base_dir, get_module_generated_dir, get_rim_inflow_outputs
+from utils.csv_io import delivery_name, write_delivery_csv
+from utils.paths import (DELIVERY, WEATHER_SETS, delivery_dir, get_base_dir, get_module_generated_dir,
+                         get_rim_inflow_outputs)
 from utils.wyt_monthlyavg_framework import (
     compute_wyt_pattern,
     compute_product_targets,
     plot_actual_vs_recon_validation,
 )
-from utils.qmap_product_a_from_pairs import run_product_a_qmap_from_pairs
+from utils.qmap_single_from_pairs import run_single_qmap_from_pairs
 from utils.qmap_product_b_from_pairs import (
+    PRODUCT_B_CHUNKS,
     run_product_b_qmap_from_pairs,
     read_qmap_pairs,
     build_output_filename,
-    find_timeseries_in_dir,
 )
+from utils.wgen_calendar import write_chunk_csvs
 
 # -- Paths --------------------------------------------------------------
 _REPO_DIR = Path(__file__).resolve().parents[2]
@@ -96,15 +101,11 @@ DSS_READ_END = "2021-09-30"
 OUTPUT_PREFIX = "miscellaneous"
 WYT_HIST_DIR = str(_REPO_DIR / "mod_hydrology" / "water_year_types" / "reference")
 
-# -- Config (Product A specific) ---------------------------------------
-WYT_PRODUCT_A_DIR = str(_wyt_gen / "output" / "_1_calc_WYTs" / "Product_A")
-PRODUCT_A_RIM_CSV = get_rim_inflow_outputs("A")["sv"]
+# WYT targets by weather set: <WYT_DIR>/<set name>
+WYT_DIR = _wyt_gen / "output" / "_1_calc_WYTs"
 
 # -- Config (Product B specific) ---------------------------------------
-WYT_PRODUCT_B_DIR = str(_wyt_gen / "output" / "_1_calc_WYTs" / "Product_B")
 SIM_IN_DIR_B = get_rim_inflow_outputs("B")["dir"]
-PRODUCT_B_START = "1921-10-31"
-PRODUCT_B_END = "2021-09-30"
 
 
 # -- Helpers -----------------------------------------------------------
@@ -155,10 +156,11 @@ def _to_sv_format(df: pd.DataFrame) -> pd.DataFrame:
     })
 
 
-def _load_final_a_as_long(final_dir: Path) -> pd.DataFrame:
-    """Load *_product_a_*.csv SV files into long format for plot_actual_vs_recon_validation."""
+def _load_final_single_as_long(final_dir: Path, product: str) -> pd.DataFrame:
+    """Load the delivery CSVs of a single series into long format for
+    plot_actual_vs_recon_validation."""
     frames = []
-    for path in sorted(Path(final_dir).glob("*_product_a_*.csv")):
+    for path in sorted(Path(final_dir).glob(f"*_{DELIVERY[product]['tag']}_*.csv")):
         df = pd.read_csv(path)
         df.columns = [str(c).strip() for c in df.columns]
         date = pd.to_datetime(
@@ -184,7 +186,7 @@ def run_wyt(product: str, prefix: str, wyt_terms_df: pd.DataFrame,
     """Compute WYT monthly averages and write intermediate per-product CSVs.
 
     Naming convention for the per-term WYT intermediate file:
-      A: ``<part_b>_product_a_<wy_min>_<wy_max>.csv`` (wy_min/max from framework)
+      historical, A: ``utils.csv_io.delivery_name(<part_b>, product)``
       B: ``<part_b>_product_b_<tag>.csv`` (tag = n01 .. n10 per stochastic chunk)
     """
     wyt_csv = base_dir / "_wyt_terms_tmp.csv"
@@ -210,25 +212,24 @@ def run_wyt(product: str, prefix: str, wyt_terms_df: pd.DataFrame,
     hist_cmp_df.to_csv(hist_dir / f"{prefix}_actual_vs_reconstructed.csv", index=False)
     print(f"  Historical pattern: {hist_dir}")
 
-    print(f"\n{'='*60}\nComputing Product {product} WYT targets\n{'='*60}")
+    print(f"\n{'='*60}\nComputing {WEATHER_SETS[product]['name']} WYT targets\n{'='*60}")
     targets = compute_product_targets(
         product=product,
-        wyt_target_dir=WYT_PRODUCT_A_DIR if product == "A" else WYT_PRODUCT_B_DIR,
+        wyt_target_dir=str(WYT_DIR / WEATHER_SETS[product]["name"]),
         pat_wide=pat_wide,
         term_specs=term_specs,
     )
 
     wyt_intermediate_dir.mkdir(parents=True, exist_ok=True)
-    for name, df in targets.items():
-        sv = _to_sv_format(df)
-        if product == "A":
-            for part_b, grp in sv.groupby("Part B"):
-                print(f"  - {write_product_a_csv(grp, wyt_intermediate_dir, f'{part_b}_product_a')}")
-        else:  # B
-            tag = name.replace("product_b_", "")
-            for part_b, grp in sv.groupby("Part B"):
-                out = wyt_intermediate_dir / f"{part_b}_product_b_{tag}.csv"
-                grp.to_csv(out, index=False)
+    if product != "B":
+        for name, df in targets.items():
+            for part_b, grp in _to_sv_format(df).groupby("Part B"):
+                print(f"  - {write_delivery_csv(grp, wyt_intermediate_dir, part_b, product)}")
+    else:  # targets {"product_b_nXX": frame}
+        sv = pd.concat([_to_sv_format(df).assign(chunk=int(name[-2:])) for name, df in targets.items()],
+                       ignore_index=True)
+        for part_b, grp in sv.groupby("Part B"):
+            for out in write_chunk_csvs(grp, wyt_intermediate_dir, f"{part_b}_product_b"):
                 print(f"  - {out}")
 
     wyt_csv.unlink(missing_ok=True)
@@ -239,19 +240,20 @@ def run_wyt(product: str, prefix: str, wyt_terms_df: pd.DataFrame,
 ### Part 2 - Quantile Mapping ###
 ####################################################################
 
-def run_qmap_a(qmap_pairs_df: pd.DataFrame, base_dir: Path,
-               qmap_intermediate_dir: Path) -> None:
-    """Run Product A QM and write CalSim-format intermediates."""
+def run_qmap_single(product: str, qmap_pairs_df: pd.DataFrame, base_dir: Path,
+                    qmap_intermediate_dir: Path) -> None:
+    """Run the QM of a single series and write CalSim-format intermediates."""
     qmap_csv = base_dir / "_qmap_pairs_tmp.csv"
     base_dir.mkdir(parents=True, exist_ok=True)
     qmap_pairs_df.to_csv(qmap_csv, index=False)
 
     qmap_intermediate_dir.mkdir(parents=True, exist_ok=True)
     with tempfile.TemporaryDirectory() as _tmp_detail:
-        run_product_a_qmap_from_pairs(
+        run_single_qmap_from_pairs(
+            product=product,
             pair_csv=qmap_csv,
             dss_file=DSS_FILE,
-            product_a_rim_csv=PRODUCT_A_RIM_CSV,
+            rim_csv=get_rim_inflow_outputs(product)["sv"],
             output_dir=_tmp_detail,
             validation_dir=str(qmap_intermediate_dir),
         )
@@ -272,42 +274,34 @@ def run_qmap_b(qmap_pairs_df: pd.DataFrame, base_dir: Path,
         dss_file=DSS_FILE,
         sim_in_dir=str(SIM_IN_DIR_B),
         out_dir=str(base_dir),
-        product_b_start=PRODUCT_B_START,
-        product_b_end=PRODUCT_B_END,
         output_tag="qmap",
     )
 
     # Reformat per-chunk detail CSVs into SV-format intermediates
-    qmap_intermediate_dir.mkdir(parents=True, exist_ok=True)
     df_pairs = read_qmap_pairs(qmap_csv)
-    timeseries_list = find_timeseries_in_dir(SIM_IN_DIR_B)
 
     total = 0
-    for ts in timeseries_list:
-        for _, row in df_pairs.iterrows():
-            target_b = row["target_part_b"]
-            target_c = row["target_part_c"]
-            src_fname = build_output_filename(target_b, ts, output_tag="qmap")
-            src_path = base_dir / src_fname
+    for _, row in df_pairs.iterrows():
+        target_b = row["target_part_b"]
+        target_c = row["target_part_c"]
+        frames = []
+        for chunk, ts in enumerate(PRODUCT_B_CHUNKS, 1):
+            src_path = base_dir / build_output_filename(target_b, ts, output_tag="qmap")
             if not src_path.exists():
                 raise FileNotFoundError(f"{src_path}: the quantile map wrote no {ts} output "
                                         f"for {target_b}")
-
             df = pd.read_csv(src_path)
             src_path.unlink()
-            final_df = pd.DataFrame({
+            frames.append(pd.DataFrame({
+                "chunk": chunk,
                 "Part B": target_b,
                 "Part C": target_c,
                 "Year": df["year"].astype(int),
                 "Month": df["month"].astype(int),
                 "Value": df["target_qm_sim"],
-            })
-            final_df.to_csv(
-                qmap_intermediate_dir / f"{target_b}_product_b_{ts}.csv",
-                index=False,
-            )
-            total += 1
-        print(f"  {ts}: wrote QMap intermediate CSV(s)")
+            }))
+        total += len(write_chunk_csvs(pd.concat(frames, ignore_index=True), qmap_intermediate_dir,
+                                      f"{target_b}_product_b"))
 
     qmap_csv.unlink(missing_ok=True)
     print(f"  QMap intermediates: {total} file(s)")
@@ -317,9 +311,9 @@ def run_qmap_b(qmap_pairs_df: pd.DataFrame, base_dir: Path,
 ### Part 3 - Final Hybrid = (WYT + QMap) / 2 ###
 ####################################################################
 
-def run_final_hybrid_a(wyt_intermediate_dir: Path, qmap_intermediate_dir: Path,
-                       final_dir: Path) -> None:
-    """Average WYT and QMap results and write final Product A CSVs."""
+def run_final_hybrid_single(product: str, wyt_intermediate_dir: Path,
+                            qmap_intermediate_dir: Path, final_dir: Path) -> None:
+    """Average WYT and QMap results and write the final delivery CSVs of a single series."""
     final_dir.mkdir(parents=True, exist_ok=True)
 
     terms_df = pd.read_csv(HYBRID_TERMS_CSV)
@@ -331,13 +325,12 @@ def run_final_hybrid_a(wyt_intermediate_dir: Path, qmap_intermediate_dir: Path,
         part_b = str(term["term_part_b"]).strip()
         part_c = str(term["term_part_c"]).strip()
 
-        # Both intermediates cover PRODUCT_A_WY (csv_io.write_product_a_csv)
-        span = "{}_{}".format(*PRODUCT_A_WY)
-        wyt_path = wyt_intermediate_dir / f"{part_b}_product_a_{span}.csv"
-        qmap_path = qmap_intermediate_dir / f"{part_b}_productA_{span}.csv"
+        # Both intermediates cover DELIVERY_WY (csv_io.write_delivery_csv)
+        wyt_path = wyt_intermediate_dir / delivery_name(part_b, product)
+        qmap_path = qmap_intermediate_dir / delivery_name(part_b, product)
         for path in (wyt_path, qmap_path):
             if not path.exists():
-                raise FileNotFoundError(f"Missing Product A intermediate for {part_b}: {path}")
+                raise FileNotFoundError(f"Missing intermediate for {part_b}: {path}")
 
         df_wyt = pd.read_csv(wyt_path)
         df_qmap = pd.read_csv(qmap_path)
@@ -363,7 +356,7 @@ def run_final_hybrid_a(wyt_intermediate_dir: Path, qmap_intermediate_dir: Path,
             "Value": (merged["Value_wyt"] + merged["Value_qmap"]) / 2.0,
         })
 
-        print(f"  - {write_product_a_csv(out_df, final_dir, f'{part_b}_product_a')}")
+        print(f"  - {write_delivery_csv(out_df, final_dir, part_b, product)}")
         total += 1
 
     print(f"  Final hybrid: {total} file(s) written to {final_dir}")
@@ -372,30 +365,16 @@ def run_final_hybrid_a(wyt_intermediate_dir: Path, qmap_intermediate_dir: Path,
 def run_final_hybrid_b(wyt_intermediate_dir: Path, qmap_intermediate_dir: Path,
                        final_dir: Path) -> None:
     """Average WYT and QMap results per chunk and write final Product B CSVs."""
-    final_dir.mkdir(parents=True, exist_ok=True)
-
     terms_df = pd.read_csv(HYBRID_TERMS_CSV)
     terms_df.columns = [str(c).strip().lower() for c in terms_df.columns]
     terms = terms_df[["term_part_b", "term_part_c"]].drop_duplicates()
 
-    # Detect available timeseries tags from WYT output
-    tags = set()
-    for path in sorted(wyt_intermediate_dir.glob("*_product_b_*.csv")):
-        idx = path.stem.rfind("_product_b_")
-        if idx >= 0:
-            tags.add(path.stem[idx + len("_product_b_"):])
-    tags = sorted(tags)
-    if not tags:
-        raise FileNotFoundError(
-            f"No WYT Product B files in {wyt_intermediate_dir}"
-        )
-
     total = 0
-    for ts in tags:
-        for _, term in terms.iterrows():
-            part_b = str(term["term_part_b"]).strip()
-            part_c = str(term["term_part_c"]).strip()
-
+    for _, term in terms.iterrows():
+        part_b = str(term["term_part_b"]).strip()
+        part_c = str(term["term_part_c"]).strip()
+        frames = []
+        for chunk, ts in enumerate(PRODUCT_B_CHUNKS, 1):
             wyt_path = wyt_intermediate_dir / f"{part_b}_product_b_{ts}.csv"
             if not wyt_path.exists():
                 raise FileNotFoundError(
@@ -423,17 +402,16 @@ def run_final_hybrid_b(wyt_intermediate_dir: Path, qmap_intermediate_dir: Path,
                     f"No overlapping Year/Month for {part_b}/{part_c} in {ts}"
                 )
 
-            out_df = pd.DataFrame({
+            frames.append(pd.DataFrame({
+                "chunk": chunk,
                 "Part B": part_b,
                 "Part C": part_c,
                 "Year": merged["Year"].astype(int),
                 "Month": merged["Month"].astype(int),
                 "Value": (merged["Value_wyt"] + merged["Value_qmap"]) / 2.0,
-            })
-            out_df.to_csv(final_dir / f"{part_b}_product_b_{ts}.csv", index=False)
-            total += 1
-
-        print(f"  {ts}: wrote final hybrid CSV(s)")
+            }))
+        total += len(write_chunk_csvs(pd.concat(frames, ignore_index=True), final_dir,
+                                      f"{part_b}_product_b"))
 
     print(f"  Final hybrid: {total} file(s) written to {final_dir}")
 
@@ -444,47 +422,45 @@ def run_final_hybrid_b(wyt_intermediate_dir: Path, qmap_intermediate_dir: Path,
 
 def main() -> None:
     parser = argparse.ArgumentParser(
-        description="Miscellaneous hybrid terms = (WYT_avg + QMap) / 2"
-                    " (Product A or Product B)",
+        description="Miscellaneous hybrid terms = (WYT_avg + QMap) / 2",
     )
     parser.add_argument(
-        "--product", choices=["A", "B"], required=True,
-        help="Product to generate: A (WY1922-2018 historical-length; one "
-             "continuous series per term) or B (10 stochastic chunks).",
+        "--product", choices=list(WEATHER_SETS), required=True,
+        help="Weather set: historical (Historical_Unsplit) or A (WY1922-2018; one "
+             "continuous series per term), or B (10 stochastic chunks).",
     )
     args = parser.parse_args()
 
-    if args.product == "A":
-        base_dir = _gen / "output" / "_3_hybrid" / "product_a"
-        final_dir = _gen / "output" / "_product_a_validation"
-    else:
-        base_dir = _gen / "output" / "_3_hybrid" / "product_b"
-        final_dir = _gen / "output" / "_product_b_final"
+    product = args.product
+    name = WEATHER_SETS[product]["name"]
+    base_dir = _gen / "output" / "_3_hybrid" / WEATHER_SETS[product]["slug"]
+    final_dir = (_gen / "output" / "_product_b_final" if product == "B"
+                 else delivery_dir(_gen / "output", product))
 
     wyt_intermediate_dir = base_dir / "hybrid_wyt"
     qmap_intermediate_dir = base_dir / "hybrid_qmap"
 
     wyt_terms_df, qmap_pairs_df = prepare_hybrid_input_files(HYBRID_TERMS_CSV)
 
-    print(f"\n=== Part 1: WYT Averaging (Product {args.product}) ===")
+    print(f"\n=== Part 1: WYT Averaging ({name}) ===")
     hist_cmp_df, term_specs = run_wyt(
-        args.product, OUTPUT_PREFIX, wyt_terms_df,
+        product, OUTPUT_PREFIX, wyt_terms_df,
         base_dir, wyt_intermediate_dir,
     )
 
-    print(f"\n=== Part 2: Quantile Mapping (Product {args.product}) ===")
-    if args.product == "A":
-        run_qmap_a(qmap_pairs_df, base_dir, qmap_intermediate_dir)
+    print(f"\n=== Part 2: Quantile Mapping ({name}) ===")
+    if product != "B":
+        run_qmap_single(product, qmap_pairs_df, base_dir, qmap_intermediate_dir)
     else:
         run_qmap_b(qmap_pairs_df, base_dir, qmap_intermediate_dir)
 
-    print(f"\n=== Part 3: Final Hybrid (Product {args.product}) ===")
-    if args.product == "A":
-        run_final_hybrid_a(wyt_intermediate_dir, qmap_intermediate_dir, final_dir)
-        figures_dir = _gen / "output" / "_3_hybrid" / "figures" / "product_a"
-        recon_long = _load_final_a_as_long(final_dir)
+    print(f"\n=== Part 3: Final Hybrid ({name}) ===")
+    if product != "B":
+        run_final_hybrid_single(product, wyt_intermediate_dir, qmap_intermediate_dir, final_dir)
+        figures_dir = _gen / "output" / "_3_hybrid" / "figures" / WEATHER_SETS[product]["slug"]
+        recon_long = _load_final_single_as_long(final_dir, product)
         plot_actual_vs_recon_validation(
-            recon_long, hist_cmp_df, term_specs, figures_dir, label="Product A",
+            recon_long, hist_cmp_df, term_specs, figures_dir, label=WEATHER_SETS[product]["label"],
         )
         print(f"  Figures: {figures_dir}/ (TS+CDF per term)")
     else:

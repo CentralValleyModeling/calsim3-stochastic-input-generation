@@ -1,34 +1,29 @@
 """
-Postprocess CalSimHydroEE Run Outputs
-=====================================
-Extracts monthly time series from CalSimHydroEE output DSS files across multiple
-scenarios, merges them into a single long-format CSV, computes summary statistics
-(monthly/quarterly/annual mean and median by PartC), and generates per-PartC boxplots.
+Postprocess DCD (Delta Channel Depletion) DSS Outputs
+=====================================================
+Extracts time series from DCD DSS output files (the CalSim PlanningStudy run and
+the run of a single weather series, Historical_Unsplit or Product A), merges
+them into comparison CSVs, computes summary statistics, generates boxplots, and
+writes the set's delivery CSV for CalSim compilation.
 
-Scenarios compared
-------------------
-- Historical            (CalSimHydroEE_Historical_1972-2018)
-- VIC_Precip            (CalSimHydroEE_VICPrecip_1972-2018)
-- QM_ET                 (CalSimHydroEE_QMET_1972-2018)
-- Product_A             (CalSimHydroEE_Product_A)
+Inputs:
+    - DeltaChannelDepletion_Runs/DCD_Calsim3_PlanningStudy_1921-2018
+    - DeltaChannelDepletion_Runs/DCD_Calsim3_PlanningStudy_<Historical_Unsplit|Product_A>
 
-Inputs
-------
-- CalSimHydroEE_Runs/<scenario>/CalSimHydroEE_DP_EA.dss
-- _MASTER_INVENTORY_FOR_STOCHASTIC_INPUT_GENERATION_.xlsx
+Usage:
+    python mod_hydrology/delta_channel_depletion/_2_postprocess_single.py --product historical
+    python mod_hydrology/delta_channel_depletion/_2_postprocess_single.py --product A
 
-Outputs
--------
-- output/_2_postprocess_product_a/calsimHydroEE_1972-2018_DSS.csv
-- output/_2_postprocess_product_a/calsimHydroEE_summary_statistics_by_PartC.csv
-- output/_2_postprocess_product_a/Boxplot_<PartC>_with_mean.png
-- output/_2_postprocess_product_a/_product_a_validation/_cshydroEE_productA_1972_2018.csv
-
-Usage
------
-    python mod_hydrology/calsimhydro_ee/_2_postprocess_product_a.py
+Output (<set> is Historical_Unsplit or Product_A):
+    - output/_2_postprocess_single/<set>/DeltaChannelDepletion_DSS.csv
+    - output/_2_postprocess_single/<set>/DeltaChannelDepletion_summary_statistics_by_PartC.csv
+    - output/_2_postprocess_single/<set>/Boxplot_{PartC}_with_mean.png
+    - output/_2_postprocess_single/<_historical_unsplit_validation|_product_a_validation>/
+      _dcd_<historicalUnsplit|productA>_1922_2018.csv
 """
 
+import argparse
+import calendar
 import os
 import sys
 from functools import reduce
@@ -42,57 +37,59 @@ import matplotlib.pyplot as plt
 # Add repo root to path for utils imports
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 from utils import csv_io, dss_io
-from utils.paths import get_module_generated_dir, get_inventory_dir
+from utils.paths import (DELIVERY, DELIVERY_WY, WEATHER_SETS, delivery_dir, get_module_generated_dir,
+                         get_inventory_dir)
+
+_GEN_DIR = get_module_generated_dir("mod_hydrology/delta_channel_depletion")
 
 
 # RESULTS ROOT
-_GEN_DIR = get_module_generated_dir("mod_hydrology/calsimhydro_ee")
-OUTPUT_DIR = str(_GEN_DIR / "output" / "_2_postprocess_product_a")
-os.makedirs(OUTPUT_DIR, exist_ok=True)
-
-VALIDATION_DIR = str(_GEN_DIR / "output" / "_2_postprocess_product_a" / "_product_a_validation")
-os.makedirs(VALIDATION_DIR, exist_ok=True)
-
-# Validation window (water years)
-START_WY = 1972
-END_WY   = 2018
+OUTPUT_ROOT = _GEN_DIR / "output" / "_2_postprocess_single"
 
 # Load Excel Master File
 excel_path = str(get_inventory_dir() / "_MASTER_INVENTORY_FOR_STOCHASTIC_INPUT_GENERATION_.xlsx")
 sheet_name = "MASTER"
 df_master = pd.read_excel(excel_path, sheet_name=sheet_name)
 
-# Filter CalSimHydroEE rows
-CalSimHydroEE_rows = df_master[(df_master.iloc[:, 8] == 'CalSimHydroEE') & (df_master.iloc[:, 9] == 'IDCOutputEE.dss')]
-CalSimHydroEE_SVnames = [str(name).strip().upper() for name in CalSimHydroEE_rows.iloc[:, 7].tolist()]
+# Filter SmallWatersheds rows
+SmallWatersheds_rows = df_master[(df_master.iloc[:, 8] == 'Delta Channel Depletion') & (df_master.iloc[:, 9] == 'DCD_island_month.dss')]
+SmallWatersheds_SVnames = [str(name).strip().upper() for name in SmallWatersheds_rows.iloc[:, 7].tolist()]
 
 # Create mapping: formatted PartB/PartC -> original SV name
 excel_to_part_BC = lambda n: n.upper().replace(" ", "_")
-excel_partcs = {excel_to_part_BC(n): n for n in CalSimHydroEE_SVnames}
+excel_partcs = {excel_to_part_BC(n): n for n in SmallWatersheds_SVnames}
 
 # Get desired sort order based on master file (column 7)
-desired_order = [excel_to_part_BC(name) for name in CalSimHydroEE_rows.iloc[:, 7].tolist()]
+desired_order = [excel_to_part_BC(name) for name in SmallWatersheds_rows.iloc[:, 7].tolist()]
 
 # DSS File Paths
-_ee_runs = _GEN_DIR / "CalSimHydroEE_Runs"
-dss_paths = [
-    str(_ee_runs / "CalSimHydroEE_Historical_1972-2018" / "CalSimHydroEE_DP_EA.dss"),
-    str(_ee_runs / "CalSimHydroEE_VICPrecip_1972-2018" / "CalSimHydroEE_DP_EA.dss"),
-    str(_ee_runs / "CalSimHydroEE_QMET_1972-2018" / "CalSimHydroEE_DP_EA.dss"),
-    str(_ee_runs / "CalSimHydroEE_Product_A" / "CalSimHydroEE_DP_EA.dss"),
-]
+_dcd_runs = _GEN_DIR / "DeltaChannelDepletion_Runs"
+_DSS_IN_RUN = Path("DCD") / "Output" / "CALSIM3" / "CS3sv_DCD_PRISM_Dtrnd.dss"
+
+
+def dss_paths(product):
+    """The CalSim PlanningStudy run, then the set's run."""
+    return [str(_dcd_runs / "DCD_Calsim3_PlanningStudy_1921-2018" / _DSS_IN_RUN),
+            str(_dcd_runs / f"DCD_Calsim3_PlanningStudy_{WEATHER_SETS[product]['name']}" / _DSS_IN_RUN)]
+
+
+def set_label(product):
+    """Scenario column of the set in the merged CSV: ProductA, HistoricalUnsplit."""
+    return WEATHER_SETS[product]["name"].replace("_", "")
 
 
 # Function to Extract DSS Time Series
 def extract_dss_data(dss_path):
     # Open via utils.dss_io (auto directory-junction for long paths,
-    # catalog_flag=True -- identical _DSS_LINK path / _PATH_LIMIT=200 as the
-    # removed local helper). The bespoke read loop below is preserved verbatim
-    # (no-trailing-slash pattern, sort by Part C index 2) because it differs
+    # version=7, catalog_flag=True -- identical _DSS_LINK / _PATH_LIMIT=200 as
+    # the removed local helper). The bespoke read loop below is preserved
+    # verbatim (no-trailing-slash pattern, sort by Part C) because it differs
     # from dss_io.read_monthly_frame -- only the open is consolidated.
     dss_path = Path(dss_path).resolve()
+    print(f"    Reading DSS: {dss_path.name}")
+
     data_dict = {}
-    with dss_io.open_dss(dss_path, version=6, catalog_flag=True) as dss:
+    with dss_io.open_dss(dss_path, version=7, catalog_flag=True) as dss:
         all_paths = dss.getPathnameList("/*/*/*/*/1MON/*")
         buckets = {}
         for p in all_paths:
@@ -119,14 +116,42 @@ def extract_dss_data(dss_path):
     return pd.DataFrame(data_dict).sort_index()
 
 
+def to_validation_csv(df, start_wy=DELIVERY_WY[0], end_wy=DELIVERY_WY[1]):
+    """Convert wide DataFrame to validation format (Part B, Part C, Year, Month, Value).
+
+    The format transform delegates to csv_io.to_validation_df; the CFS->TAF
+    unit conversion is DCD-specific (DSS outputs are CFS PER-AVER; CalSim
+    baseline expects TAF) and is preserved verbatim.
+    """
+    long = csv_io.to_validation_df(df, start_wy, end_wy)
+    if long.empty:
+        return long
+
+    # TAF = CFS * days_in_month * 86400 / 43560 / 1000
+    CFS_TAF_PER_DAY = 86400.0 / 43560.0 / 1000.0
+    days = long.apply(
+        lambda r: calendar.monthrange(int(r['Year']), int(r['Month']))[1], axis=1
+    )
+    long['Value'] = long['Value'] * days * CFS_TAF_PER_DAY
+
+    return long
+
+
 def main():
+    ap = argparse.ArgumentParser(description="Postprocess the DCD runs of a weather set.")
+    ap.add_argument("--product", choices=list(DELIVERY), required=True,
+                    help="Weather set: historical (Historical_Unsplit) or A")
+    product = ap.parse_args().product
+    OUTPUT_DIR = str(OUTPUT_ROOT / WEATHER_SETS[product]["name"])
+    os.makedirs(OUTPUT_DIR, exist_ok=True)
+
     # Read All DSS Files
-    dss_data_by_file = [extract_dss_data(path) for path in dss_paths]
+    dss_data_by_file = [extract_dss_data(path) for path in dss_paths(product)]
 
     # Convert to Long Format
 
     # Define meaningful scenario names matching DSS file order
-    scenario_labels = ['Historical', 'VIC_Precip', 'QM_ET', 'Product_A']
+    scenario_labels = ['PlanningStudy', set_label(product)]
 
     long_dfs = []
     for df, label in zip(dss_data_by_file, scenario_labels):
@@ -152,9 +177,18 @@ def main():
     merged_df = merged_df.drop(columns=['PartBC', 'SortOrder'])
 
     # Save Final Merged Time Series
-    merged_csv_path = os.path.join(OUTPUT_DIR, "calsimHydroEE_1972-2018_DSS.csv")
+    merged_csv_path = os.path.join(OUTPUT_DIR, "DeltaChannelDepletion_DSS.csv")
     merged_df.to_csv(merged_csv_path, index=False)
     print(f"Final CSV saved to: {merged_csv_path}")
+
+    # Delivery CSV of the set, from its already-extracted data (second DSS file)
+    val_df = to_validation_csv(dss_data_by_file[1])
+
+    if not val_df.empty:
+        val_csv_path = csv_io.write_delivery_csv(val_df, delivery_dir(OUTPUT_ROOT, product), "_dcd", product)
+        n_vars = val_df.groupby(['Part B', 'Part C']).ngroups
+        print(f"Validation CSV saved: {val_csv_path}")
+        print(f"  Variables: {n_vars}  |  Rows: {len(val_df):,}")
 
     # Summary Statistics by PartC
 
@@ -166,7 +200,7 @@ def main():
     merged_df['Month'] = merged_df['Date'].dt.month
     merged_df['Quarter'] = merged_df['Date'].dt.to_period("Q")
 
-    value_cols = ['Historical', 'VIC_Precip', 'QM_ET', 'Product_A']
+    value_cols = scenario_labels
 
     def compute_summary(df, time_unit, agg_func, label):
         grouped = df.groupby(['PartC', time_unit])[value_cols].agg(agg_func).reset_index()
@@ -192,16 +226,16 @@ def main():
     ], ignore_index=True)
 
     # Save summary statistics to CSV
-    summary_output_path = os.path.join(OUTPUT_DIR, "calsimHydroEE_summary_statistics_by_PartC.csv")
+    summary_output_path = os.path.join(OUTPUT_DIR, "DeltaChannelDepletion_summary_statistics_by_PartC.csv")
     summary_df.to_csv(summary_output_path, index=False)
     print(f"Summary statistics saved to: {summary_output_path}")
 
     # BOX PLOT
 
     # --- Prepare Data ---
-    plot_df = merged_df[['PartC'] + value_cols].copy()
+    plot_df = merged_df[['PartC'] + scenario_labels].copy()
     plot_df_melted = plot_df.melt(id_vars='PartC',
-                                  value_vars=value_cols,
+                                  value_vars=scenario_labels,
                                   var_name='Scenario', value_name='Value')
     plot_df_melted = plot_df_melted.dropna()
 
@@ -242,29 +276,6 @@ def main():
         # Optional save
         plt.savefig(os.path.join(OUTPUT_DIR, f"Boxplot_{partc}_with_mean.png"), dpi=300)
 
-    # CalSim Historical Validation Extraction
-    print("\n" + "=" * 80)
-    print("CalSimHydroEE -- CalSim Historical Validation Extraction")
-    print(f"Period: WY {START_WY}-{END_WY}")
-    print("=" * 80)
-
-    # Reuse the already-extracted Product_A data (index 3 in dss_data_by_file)
-    product_a_df = dss_data_by_file[3]
-    val_df = csv_io.to_validation_df(product_a_df, START_WY, END_WY)
-
-    if val_df.empty:
-        print("  No data in validation period.")
-    else:
-        val_out_file = os.path.join(VALIDATION_DIR, f"_cshydroEE_productA_{START_WY}_{END_WY}.csv")
-        val_df.to_csv(val_out_file, index=False)
-        n_vars = val_df.groupby(['Part B', 'Part C']).ngroups
-        print(f"  Written : {val_out_file}")
-        print(f"  Variables: {n_vars}  |  Rows: {len(val_df):,}")
-
-    print("=" * 80)
-    print("Validation extraction complete.")
-    print("=" * 80)
-
 
 if __name__ == "__main__":
     main()
@@ -275,9 +286,9 @@ if __name__ == "__main__":
 
 # # --- Prepare Data ---
 # # Melt the data to long format
-# plot_df = merged_df[['PartC', 'Historical', 'VIC_Precip', 'QM_ET']].copy()
+# plot_df = merged_df[['PartC', 'Historical_1921', 'ProductA']].copy()
 # plot_df_melted = plot_df.melt(id_vars='PartC',
-#                               value_vars=['Historical', 'VIC_Precip', 'QM_ET'],
+#                               value_vars=['Historical_1921', 'ProductA'],
 #                               var_name='Scenario', value_name='Value')
 # # Drop NaNs
 # plot_df_melted = plot_df_melted.dropna()

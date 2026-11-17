@@ -50,7 +50,7 @@ import pandas as pd
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 from utils import dss_io
 from utils.paths import get_base_dir, get_module_generated_dir, get_rim_inflow_outputs
-from utils.wgen_calendar import N_CHUNKS
+from utils.wgen_calendar import N_CHUNKS, require_label_months, water_year
 
 # Paths
 _GEN_DIR = get_module_generated_dir("mod_other/day_volume_fractions")
@@ -202,6 +202,7 @@ def load_chunk_inflows(rim_dir: Path, chunk: int, ref_csv: Path) -> pd.DataFrame
             continue
 
         df = pd.read_csv(csv_path, usecols=["Year", "Month", "qmap_postAdj"])
+        require_label_months(df["Year"], df["Month"], csv_path.name)
         series_dict[partb] = df.set_index(["Year", "Month"])["qmap_postAdj"].rename(partb)
 
     if missing:
@@ -219,7 +220,7 @@ def compute_chunk_annual_index(df_chunk: pd.DataFrame) -> pd.Series:
     """Sum all inflow columns by water year for a Product B chunk."""
     df = df_chunk.copy()
     df = df.reset_index()
-    df["WY"] = np.where(df["Month"] >= 10, df["Year"] + 1, df["Year"])
+    df["WY"] = water_year(df["Year"], df["Month"])
 
     flow_cols = [c for c in df.columns if c not in ("Year", "Month", "WY")]
     annual = df.groupby("WY")[flow_cols].sum().sum(axis=1)

@@ -8,7 +8,7 @@ Inputs
 ------
 - CalSim baseline DSS (historical term series)
 - reference/wyt_avg_terms.csv (term specs + WYT basin per term)
-- water_year_types WYT indices (Product A / Product B)
+- water_year_types WYT indices of the weather set (Historical_Unsplit, Product A or Product B)
 
 Outputs
 -------
@@ -16,10 +16,10 @@ Outputs
     pattern CSV and actual-vs-reconstructed CSV
 - <generated>/output/_1_wyt_monthlyavg/figures/historical/
     TS+CDF and monthly error box per term (historical method check)
-- <generated>/output/_1_wyt_monthlyavg/figures/product_a/
-    TS+CDF and monthly error box per term (--product A)
-- <generated>/output/_product_a_validation/
-    final Product A SV CSVs (--product A)
+- <generated>/output/_1_wyt_monthlyavg/figures/<historical_unsplit|product_a>/
+    TS+CDF and monthly error box per term (--product historical, A)
+- <generated>/output/<_historical_unsplit_validation|_product_a_validation>/
+    final delivery SV CSVs (--product historical, A)
 - <generated>/output/_product_b_final/
     final Product B per-chunk SV CSVs (--product B)
 
@@ -31,6 +31,7 @@ Dependencies
 
 Usage
 -----
+    python mod_other/upper_watershed/_1_wyt_monthlyavg.py --product historical
     python mod_other/upper_watershed/_1_wyt_monthlyavg.py --product A
     python mod_other/upper_watershed/_1_wyt_monthlyavg.py --product B
 """
@@ -45,8 +46,9 @@ import pandas as pd
 
 # Add repo root to path for utils imports
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
-from utils.paths import get_base_dir, get_module_generated_dir
-from utils.csv_io import write_product_a_csv
+from utils.paths import WEATHER_SETS, delivery_dir, get_base_dir, get_module_generated_dir
+from utils.csv_io import write_delivery_csv
+from utils.wgen_calendar import write_chunk_csvs
 from utils.wyt_monthlyavg_framework import compute_wyt_pattern, compute_product_targets, plot_wyt_hist_validation, plot_actual_vs_recon_validation
 
 
@@ -72,14 +74,11 @@ OUTPUT_PREFIX = "upper_watershed"
 #   - term_part_c
 #   - basin_wyt    (sj or sac; can vary by term)
 
-_WYT_INPUT_DIRS = {"A": "Product_A", "B": "Product_B"}
-
 # Where the historical WYT CSVs live
 wyt_hist_dir = str(_REPO_DIR / "mod_hydrology" / "water_year_types" / "reference")
 
 # -- RESULTS ROOT ------------------------------------------------------
 BASE_RESULTS_DIR = _gen / "output"/"_1_wyt_monthlyavg"
-PRODUCT_A_DIR = _gen / "output" / "_product_a_validation"
 PRODUCT_B_DIR = _gen / "output" / "_product_b_final"
 
 
@@ -95,32 +94,35 @@ def _to_sv_format(df: pd.DataFrame) -> pd.DataFrame:
     return out
 
 
+def _chunk_table(targets) -> pd.DataFrame:
+    """Product B targets ({"product_b_nXX": frame}) as one SV-format table with a ``chunk``
+    column, for utils.wgen_calendar.write_chunk_csvs."""
+    return pd.concat([_to_sv_format(df).assign(chunk=int(name[-2:])) for name, df in targets.items()],
+                     ignore_index=True)
+
+
 def _write_targets(product_key: str, prefix: str, targets) -> None:
     """Write final SV-format CSVs (Part B, Part C, Year, Month, Value)."""
-    print(f"\nProduct {product_key} targets:")
+    print(f"\n{WEATHER_SETS[product_key]['name']} targets:")
 
     if product_key == "B":
-        PRODUCT_B_DIR.mkdir(parents=True, exist_ok=True)
-        for name, df in targets.items():
-            sv = _to_sv_format(df)
-            tag = name.replace("product_b_", "")
-            for part_b, grp in sv.groupby("Part B"):
-                out = PRODUCT_B_DIR / f"{part_b}_product_b_{tag}.csv"
-                grp.to_csv(out, index=False)
+        for part_b, grp in _chunk_table(targets).groupby("Part B"):
+            for out in write_chunk_csvs(grp, PRODUCT_B_DIR, f"{part_b}_product_b"):
                 print(f"  - {out}")
 
-    elif product_key == "A":
+    else:
         for name, df in targets.items():
             for part_b, grp in _to_sv_format(df).groupby("Part B"):
-                print(f"  - {write_product_a_csv(grp, PRODUCT_A_DIR, f'{part_b}_product_a')}")
+                out = write_delivery_csv(grp, delivery_dir(_gen / "output", product_key), part_b, product_key)
+                print(f"  - {out}")
 
 
 
 def main() -> None:
     ap = argparse.ArgumentParser(
         description="Upper-Watershed terms via WYT monthly-average reconstruction.")
-    ap.add_argument("--product", choices=["A", "B"], required=True,
-                    help='Product to generate: A (historical 1921-2018) or B (stochastic 1000-yr chunks).')
+    ap.add_argument("--product", choices=list(WEATHER_SETS), required=True,
+                    help='Weather set: historical (Historical_Unsplit), A or B')
     args = ap.parse_args()
 
     prefix = OUTPUT_PREFIX.strip() if OUTPUT_PREFIX else Path(terms_csv).stem
@@ -159,9 +161,9 @@ def main() -> None:
 
     # Compute and write targets per product
     for prod_key in products:
-        print(f"\n{'='*60}\nComputing Product {prod_key} targets\n{'='*60}")
+        print(f"\n{'='*60}\nComputing {WEATHER_SETS[prod_key]['name']} targets\n{'='*60}")
         wyt_product_dir = str(
-            _wyt_gen / "output" / "_1_calc_WYTs" / _WYT_INPUT_DIRS[prod_key]
+            _wyt_gen / "output" / "_1_calc_WYTs" / WEATHER_SETS[prod_key]["name"]
         )
         targets = compute_product_targets(
             product=prod_key,
@@ -171,10 +173,11 @@ def main() -> None:
         )
         _write_targets(prod_key, prefix, targets)
 
-        if prod_key == "A":
-            prod_a_fig_dir = BASE_RESULTS_DIR / "figures" / "product_a"
-            plot_actual_vs_recon_validation(targets["product_a"], hist_cmp_df, term_specs, prod_a_fig_dir)
-            print(f"  - {prod_a_fig_dir}/ (TS+CDF per term)")
+        if prod_key != "B":
+            fig_dir = BASE_RESULTS_DIR / "figures" / WEATHER_SETS[prod_key]["slug"]
+            plot_actual_vs_recon_validation(targets[prod_key], hist_cmp_df, term_specs, fig_dir,
+                                            label=WEATHER_SETS[prod_key]["label"])
+            print(f"  - {fig_dir}/ (TS+CDF per term)")
 
 
 if __name__ == "__main__":

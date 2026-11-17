@@ -56,6 +56,7 @@ import pandas as pd
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 from utils import dss_io
 from utils.paths import get_base_dir, get_module_generated_dir
+from utils.wgen_calendar import N_CHUNKS, label, write_chunk_csvs
 
 # DSS read window (matches CalSim historical period)
 DEFAULT_DSS_READ_START = "1921-10-31"
@@ -322,80 +323,31 @@ def _write_product_b_chunks(
     term_cols: list[str],
 ) -> None:
     """
-    Split the weighted closure-term series into 10 x 100-water-year chunk CSVs,
-    following the standard Product B convention.
-
-    The input series must contain at least 12,009 months
-    (9 alignment months + 10 chunks x 1,200 months).  Typically this means the
-    WGEN synthetic calendar runs from stamp_year 1 through at least the first
-    9 months of stamp_year 1001 (i.e., stamp_year 1..1000 plus Jan-Sep of 1001).
-
-    Steps:
-      1. Sort by (stamp_year, stamp_month) to get a contiguous series of at
-         least 12,009 months.
-      2. Skip the first 9 months (Jan-Sep of stamp_year 1) to align to an
-         October (water-year) start.
-      3. Slice the remaining 12,000 months into 10 chunks of 1,200 months
-         (100 water years) each.
-      4. Re-label each chunk with the historical WY 1922-2021 template.
-      5. Write one CSV per chunk in long format:
-         Part B, Part C, Year, Month, Value
+    Split the weighted closure-term series (one row per stamp month: stamp_year, stamp_month
+    and the term columns) into the Product B chunks of utils.wgen_calendar: chunk k is
+    October of stamp year 100(k-1)+1 to September of stamp year 100k+1, labelled WY1922-2021.
+    Writes ``<term>_productB_n01.csv`` ... ``_n10.csv`` in long format
+    (Part B, Part C, Year, Month, Value); a chunk short of its 1,200 months stops the run.
+    NaN values are filled forward, then backward, within each chunk, so every month has a
+    closure term (the compilation drops NaN rows).
     """
-    months_per_chunk = 100 * 12   # 1200 months = 100 water years
-    total_chunks = 10
-    skip_months = 9               # Jan-Sep of year 1 -> start at October
-    total_needed = skip_months + months_per_chunk * total_chunks  # 12009
-
-    # Sort to ensure contiguous ordering
-    wt = weighted.sort_values(["stamp_year", "stamp_month"]).reset_index(drop=True)
-    if len(wt) < total_needed:
-        raise ValueError(
-            f"Weighted series has {len(wt)} months; need at least {total_needed} "
-            f"({skip_months} skip + {total_chunks} x {months_per_chunk})."
-        )
-
-    # Skip first 9 months to align to October (WY start)
-    aligned = wt.iloc[skip_months:].reset_index(drop=True)
-
-    # Build the WY 1922-2021 date template (Year, Month) -- 1200 entries
-    years_tpl, months_tpl = [], []
-    for wy in range(1922, 2022):
-        for m in (10, 11, 12):           # Oct-Dec of previous calendar year
-            years_tpl.append(wy - 1)
-            months_tpl.append(m)
-        for m in range(1, 10):           # Jan-Sep of the WY calendar year
-            years_tpl.append(wy)
-            months_tpl.append(m)
-    years_tpl = np.array(years_tpl)
-    months_tpl = np.array(months_tpl)
-
+    stamp = weighted.sort_values(["stamp_year", "stamp_month"]).reset_index(drop=True)
+    lab = label("B", stamp.rename(columns={"stamp_year": "Year", "stamp_month": "Month"})
+                [["Year", "Month", *term_cols]])
     product_b_dir = DEFAULT_PROD_B_DIR
-    product_b_dir.mkdir(parents=True, exist_ok=True)
 
     for term in term_cols:
         short = term.removeprefix("CT_").removesuffix("_SV")
-
-        for i in range(total_chunks):
-            start = i * months_per_chunk
-            end = (i + 1) * months_per_chunk
-            chunk = aligned.iloc[start:end]
-
-            # Forward-fill then back-fill any NaN values so every
-            # month has a valid closure term (avoids row-count mismatches
-            # downstream when the compilation script drops NaN rows).
-            vals = chunk[term].copy().ffill().bfill().values
-
-            df_out = pd.DataFrame({
-                "Part B": term,
-                "Part C": CLOSURE_C_PART,
-                "Year": years_tpl,
-                "Month": months_tpl,
-                "Value": vals,
-            })
-            fname = f"{short}_productB_n{i + 1:02d}.csv"
-            df_out.to_csv(product_b_dir / fname, index=False)
-
-        print(f"  Wrote 10 chunks for {short}")
+        df_out = pd.DataFrame({
+            "chunk": lab["chunk"],
+            "Part B": term,
+            "Part C": CLOSURE_C_PART,
+            "Year": lab["Year"],
+            "Month": lab["Month"],
+            "Value": lab.groupby("chunk")[term].transform(lambda s: s.ffill().bfill()),
+        })
+        write_chunk_csvs(df_out, product_b_dir, f"{short}_productB")
+        print(f"  Wrote {N_CHUNKS} chunks for {short}")
 
     print(f"Product B chunks written to: {product_b_dir.resolve()}")
 

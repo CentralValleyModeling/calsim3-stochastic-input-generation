@@ -8,8 +8,8 @@ NOTE: Lloyd/Cherry spreadsheet is missing from the inventory. Will use Eleanor e
 
 - **95 reservoirs**: 52 Sacramento Valley + 38 San Joaquin Valley + 5 Other
 - **Methodology**: Hargreaves-Samani equation with monthly regression calibration
-- **Input**: Daily gridded temperature data (°C) from Product A (1915-2018)
-- **Output**: Monthly evaporation rates (inches/month) from Oct 1921 - Sep 2018
+- **Input**: Daily Tmax and Tmin (°C) of one weather set (Historical_Unsplit, Product A or Product B) at the WGEN cell nearest each reservoir
+- **Output**: Monthly evaporation (inches/month); Historical_Unsplit and Product A are delivered over WY1922-2018, Product B as 10 chunks labelled WY1922-2021
 - **Validation**: 0.00% mean difference from Excel, 100% pass rate (all 95 reservoirs)
 
 ## File Structure
@@ -19,8 +19,7 @@ mod_reservoir/evaporation/
 ├── evaporation.py                          # Core calculation module
 ├── _0_extract_reservoir_database.py         # Extract parameters or query database
 ├── _1_excel_to_python_validation.py         # Validation script
-├── _2_run_reservoir_evap.py                 # Product A & B processing script
-├── _3_postprocess_for_calsim_validation.py  # CalSim validation CSV
+├── _2_run_reservoir_evap.py                 # Evaporation of one weather set
 └── README.md                                # This file
 
 data/BASE/CalSim3/ReservoirEvaporationSpreadsheets/   # Original Excel spreadsheets (96 files)
@@ -37,24 +36,23 @@ data/GENERATED/mod_reservoir/evaporation/              # All generated outputs
     │   ├── validation_results.csv
     │   ├── figures/
     │   └── reservoir_details/             # 95 individual comparison CSVs
-    ├── _2_run_reservoir_evap/
-    │   ├── Product_A/
-    │   │   ├── individual_reservoirs/{Region}/{CODE}.csv
-    │   │   ├── combined_evaporation.csv
-    │   │   ├── summary_statistics.csv
-    │   │   └── figures/
-    │   └── Product_B/
-    │       └── reservoir_evaporation_productB_n{01..10}.csv
-    └── _calsim_historical_validation/
-        └── _reservoir_evaporation_productA_{start}_{end}.csv
+    └── _2_run_reservoir_evap/
+        ├── Historical_Unsplit/, Product_A/
+        │   ├── individual_reservoirs/{Region}/{CODE}.csv
+        │   ├── combined_evaporation.csv
+        │   ├── summary_statistics.csv
+        │   └── figures/                   # Product A
+        ├── _historical_unsplit_validation/_reservoir_evaporation_historicalUnsplit_1922_2018.csv
+        ├── _product_a_validation/_reservoir_evaporation_productA_1922_2018.csv
+        ├── _product_b_final/reservoir_evaporation_productB_n{01..10}.csv
+        └── _compare_ab/                       # --compare-a
 ```
 
 ## Run Scripts
 
 0. **`_0_extract_reservoir_database.py`** - Extract parameters from Excel or query database
 1. **`_1_excel_to_python_validation.py`** - Validate Python vs Excel calculations
-2. **`_2_run_reservoir_evap.py`** - Process Product A / Product B weather data for evaporation
-3. **`_3_postprocess_for_calsim_validation.py`** - Create CalSim validation CSV
+2. **`_2_run_reservoir_evap.py`** - Evaporation of one weather set (`--product historical|A|B`), with the delivery CSV of Historical_Unsplit and Product A
 
 All scripts resolve input/output paths via `utils.paths` (`get_module_generated_dir`, `get_base_dir`).
 
@@ -78,9 +76,10 @@ python _1_excel_to_python_validation.py FOLSM SHSTA OROVL # Specific reservoirs
 
 Expected: 0.00% mean difference, 100% pass rate across all 95 reservoirs.
 
-### 2. Process Product A / B Data
+### 2. Run a Weather Set
 
 ```bash
+python mod_reservoir/evaporation/_2_run_reservoir_evap.py --product historical         # Historical_Unsplit, all reservoirs
 python mod_reservoir/evaporation/_2_run_reservoir_evap.py --product A                  # Product A, all reservoirs
 python mod_reservoir/evaporation/_2_run_reservoir_evap.py --product A FOLSM SHSTA OROVL  # Product A, specific reservoirs
 python mod_reservoir/evaporation/_2_run_reservoir_evap.py --product B                  # Product B, all reservoirs
@@ -99,11 +98,10 @@ codes = get_all_reservoir_codes()  # All 95 codes
 
 ## Input Data
 
-Weather files resolved via `get_base_dir() / "WGEN" / "Product_A" / "1"` (or `Product_B`):
-- Format: `meteo_LAT_LON` (6 space-delimited columns: Year, Month, Day, Precip, Tmax, Tmin)
+`evaporation.reservoir_weather` reads the daily weather of a set at the WGEN cell nearest the reservoir through `utils.wgen` (`nearest_cell`, `read_met`; the set folders are `utils.paths.WEATHER_SETS`):
+- Format: `<prefix>_LAT_LON` (`data` for Historical_Unsplit, `meteo` for Products A and B; 6 space-delimited columns: Year, Month, Day, Precip, Tmax, Tmin)
 - Uses: Tmax (°C) and Tmin (°C) only
-- Period: Daily 1915-01-01 to 2018-12-31 (Product A)
-- Automatically matched to reservoirs by nearest lat/lon
+- Period: daily 1915-01-01 to 2018-12-31 for Historical_Unsplit and Product A; Product B rows follow the stamp calendar of `utils.wgen_calendar`
 
 Excel spreadsheets at `data/BASE/CalSim3/ReservoirEvaporationSpreadsheets/`.
 
@@ -134,13 +132,13 @@ Each reservoir has unique Ra values, calibration factors, and adjustment paramet
 ## Example Usage
 
 ```python
-from evaporation import EvaporationCalculator, load_climate_data, find_nearest_weather_file
+from evaporation import EvaporationCalculator, reservoir_weather
 
-# Single reservoir
+# Single reservoir, Product A, WY1922-2018
 calc = EvaporationCalculator('FOLSM')
-weather_file = find_nearest_weather_file('FOLSM')  # auto-resolves from data/BASE/WGEN
-daily_data = load_climate_data(weather_file)
-monthly_evap = calc.process_daily_to_monthly(daily_data.loc['1921-10-01':'2018-09-30'])
+daily = reservoir_weather('FOLSM', 'A')  # Year, Month, Day, precip, tmax, tmin of the nearest cell
+wy = daily['Year'] + (daily['Month'] >= 10)
+monthly_evap = calc.process_daily_to_monthly(daily[(wy >= 1922) & (wy <= 2018)])
 ```
 
 ## Validation Results

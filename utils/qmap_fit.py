@@ -1,7 +1,7 @@
 """
 Fit window and predictor sources of the quantile maps driven by the rim-inflow model
 ====================================================================================
-Shared by ``utils.qmap_product_a_from_pairs``, ``utils.qmap_product_b_from_pairs`` (the
+Shared by ``utils.qmap_single_from_pairs``, ``utils.qmap_product_b_from_pairs`` (the
 ``qmap_pairs.csv`` and hybrid-term pairs) and ``mod_hydrology/rim_inflow/_1_build_rim_inflow.py``.
 
 Every fit uses WY1950-2018 (``FIT_WY``). Each pair names its fit in a ``fit`` column:
