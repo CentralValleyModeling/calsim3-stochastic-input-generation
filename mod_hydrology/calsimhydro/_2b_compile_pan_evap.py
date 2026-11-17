@@ -3,22 +3,28 @@ Compile Gerber Pan Evaporation for CalSimHydro
 ==============================================
 Computes Hargreaves-Samani reference ET at the eight Gerber grid cells from
 WGEN temperature and quantile-maps it onto the CalSim 3 Gerber pan
-evaporation record, writing the WBA 02 pan evaporation for WY 1921-2018.
+evaporation record, writing the WBA 02 pan evaporation: WY 1921-2018 for
+Historical_Unsplit and Product A, January 1920 to December 2021 for each
+Product B chunk.
 
 The quantile map is fit on Historical_Unsplit weather against the CS3 record
 over WY 1921-2018 and applied to the weather of the chosen product, so the
-temperature changes in Product A's weather carry into its pan evaporation.
+temperature changes in Product A's and Product B's weather carry into their pan
+evaporation. Product B is mapped over all its stamp months and then cut into
+chunks (utils.wgen_calendar.monthly_chunk_1920_2021).
 
 Inputs
 ------
 - reference/WBA_Grid_Info.txt  (the Gerber cells)
-- The daily weather (utils.wgen.read_met): Historical_Unsplit, and Product A for --product A
+- The daily weather (utils.wgen.read_met): Historical_Unsplit, and the --product set
 - reference/CS3_PanEvapGerber.dss  (quantile-mapping target)
 
 Outputs
 -------
 - <generated>/output/_2_compile_et/Historical_Unsplit/  (PanEvap_QMAP_results.csv, CS3_PanEvap.dss)
 - <generated>/output/_2_compile_et/Product_A/            (with --product A)
+- <generated>/output/_2_compile_et/Product_B/            (with --product B: PanEvap_QMAP_results.csv
+                                                          by stamp month, CS3_PanEvap_n01.dss ... _n10.dss)
 
 Dependencies
 ------------
@@ -29,6 +35,7 @@ Usage
 -----
     python mod_hydrology/calsimhydro/_2b_compile_pan_evap.py --product historical
     python mod_hydrology/calsimhydro/_2b_compile_pan_evap.py --product A
+    python mod_hydrology/calsimhydro/_2b_compile_pan_evap.py --product B
 """
 
 import argparse
@@ -45,15 +52,15 @@ from utils import dss_io
 from utils.paths import WEATHER_SETS, get_module_generated_dir
 from utils.quantile_mapping import qmap_single
 from utils.wgen import dates, met_path, read_met
+from utils.wgen_calendar import N_CHUNKS, monthly_chunk_1920_2021, stamp_day_of_year, stamp_month_of_day
 
 REFERENCE_DIR = Path(__file__).resolve().parent / "reference"
 PAN_PATH = "/CALSIM/WBA02/PAN-EVAP//1MON/PAN-EVAP/"
-# WY 1921-2018, the CalSimHydro Product A period
+# WY 1921-2018, the CalSimHydro period of Historical_Unsplit and Product A
 MONTHS = pd.date_range("1920-10-31", "2018-09-30", freq="ME")
 MM_PER_INCH = 25.4
 
-# The quantile map is fit on Historical_Unsplit; Product B has no pan evaporation here
-PRODUCTS = ("historical", "A")
+PRODUCTS = ("historical", "A", "B")
 
 
 def gerber_cells(grid_info_file: Path) -> pd.DataFrame:
@@ -66,11 +73,11 @@ def gerber_cells(grid_info_file: Path) -> pd.DataFrame:
     return grid.loc[grid["wba_id"] == "Gerber", ["lat", "lon", "pct_area"]]
 
 
-def hargreaves_samani_mm(lat_deg: float, dates: pd.DatetimeIndex, tmax: np.ndarray, tmin: np.ndarray) -> np.ndarray:
-    """Daily Hargreaves-Samani ETo (mm/day), the form of step 10a in mod_forcing/climate/_3_refet_cimis_adj."""
+def hargreaves_samani_mm(lat_deg: float, doy: np.ndarray, tmax: np.ndarray, tmin: np.ndarray) -> np.ndarray:
+    """Daily Hargreaves-Samani ETo (mm/day) on days of the year ``doy``, the form of step 10a in
+    mod_forcing/climate/_3_refet_cimis_adj."""
     phi = np.radians(lat_deg)
-    doy = dates.dayofyear.to_numpy()
-    dr = 1 + 0.033 * np.cos(2 * np.pi * doy / 365.25)
+    dr =1 + 0.033 * np.cos(2 * np.pi * doy / 365.25)
     delta = 0.409 * np.sin(2 * np.pi * doy / 365.25 - 1.39)
     omega_s = np.arccos(-np.tan(phi) * np.tan(delta))
     ra_mj = (24 * 60 / np.pi) * 0.0820 * dr * (
@@ -81,12 +88,14 @@ def hargreaves_samani_mm(lat_deg: float, dates: pd.DatetimeIndex, tmax: np.ndarr
 
 
 def monthly_gerber_eto(product: str, cells: pd.DataFrame) -> pd.Series:
-    """Area-weighted monthly Hargreaves-Samani ETo (inches) over the Gerber cells, WY 1921-2018."""
+    """Area-weighted monthly Hargreaves-Samani ETo (inches) over the Gerber cells, WY 1921-2018,
+    of a single series (Historical_Unsplit or Product A)."""
     total = None
     for cell in cells.itertuples():
         met = read_met(product, met_path(product, cell.lat, cell.lon), usecols=["tmax", "tmin"])
         days = dates(met)
-        eto = hargreaves_samani_mm(cell.lat, days, met["tmax"].to_numpy(), met["tmin"].to_numpy())
+        eto = hargreaves_samani_mm(cell.lat, days.dayofyear.to_numpy(), met["tmax"].to_numpy(),
+                                   met["tmin"].to_numpy())
         weighted = pd.Series(eto * cell.pct_area, index=days)
         total = weighted if total is None else total + weighted
     monthly = (total / cells["pct_area"].sum()).resample("ME").sum() / MM_PER_INCH
@@ -94,6 +103,19 @@ def monthly_gerber_eto(product: str, cells: pd.DataFrame) -> pd.Series:
     if monthly.isna().any():
         raise ValueError(f"The Gerber cells of {WEATHER_SETS[product]['name']} do not cover WY 1921-2018")
     return monthly
+
+
+def stamp_monthly_gerber_eto(cells: pd.DataFrame) -> np.ndarray:
+    """Area-weighted monthly Hargreaves-Samani ETo (inches) over the Gerber cells of Product B,
+    one value per stamp month from January of stamp year 1 (utils.wgen_calendar)."""
+    total = None
+    for cell in cells.itertuples():
+        # read_met checks that the rows are the stamp days in order, so row i is stamp day i
+        met = read_met("B", met_path("B", cell.lat, cell.lon), usecols=["tmax", "tmin"])
+        eto = hargreaves_samani_mm(cell.lat, stamp_day_of_year(), met["tmax"].to_numpy(),
+                                   met["tmin"].to_numpy()) * cell.pct_area
+        total = eto if total is None else total + eto
+    return np.bincount(stamp_month_of_day(), weights=total / cells["pct_area"].sum()) / MM_PER_INCH
 
 
 def read_cs3_pan() -> pd.Series:
@@ -114,19 +136,35 @@ def qmap_frame(monthly: pd.Series) -> pd.DataFrame:
     })
 
 
-def write_dss(dss_file: Path, pan: pd.Series) -> None:
+def write_dss(dss_file: Path, pan, start: str) -> None:
+    """Write the monthly pan evaporation ``pan`` (inches) from the month ending at ``start``."""
     tsc = TimeSeriesContainer()
     tsc.pathname = PAN_PATH
-    tsc.startDateTime = "31OCT1920 24:00:00"
+    tsc.startDateTime = start
     tsc.numberValues = len(pan)
     tsc.units = "Inch"
     tsc.type = "PER-CUM"
     tsc.interval = 1
-    tsc.values = pan.to_numpy(dtype=float)
+    tsc.values = np.asarray(pan, dtype=float)
     # A fresh file, so no record from an earlier run survives next to this one
     dss_file.unlink(missing_ok=True)
     with dss_io.open_dss(dss_file, version=6, catalog_flag=False) as dss:
         dss.put_ts(tsc)
+
+
+def write_product_b(cells: pd.DataFrame, hist_eto: pd.Series, cs3_pan: pd.Series, out_dir: Path):
+    """Quantile-map Product B's ETo over all its stamp months with the Historical_Unsplit fit,
+    write the stamp-month table and one DSS per chunk (January 1920 to December 2021), and
+    return the pan evaporation and the ETo by stamp month."""
+    eto = stamp_monthly_gerber_eto(cells)
+    i = np.arange(len(eto))
+    sim = pd.DataFrame({"year": i // 12 + 1, "month": i % 12 + 1, "value": eto})
+    pan = qmap_single(sim, qmap_frame(hist_eto), qmap_frame(cs3_pan))["quantile_mapped_value"].to_numpy()
+    pd.DataFrame({"Year": sim["year"], "Month": sim["month"], "hs_eto_in": eto, "pan_evap_in": pan}).to_csv(
+        out_dir / "PanEvap_QMAP_results.csv", index=False, float_format="%.4f")
+    for k in range(1, N_CHUNKS + 1):
+        write_dss(out_dir / f"CS3_PanEvap_n{k:02d}.dss", monthly_chunk_1920_2021(pan, k), "31JAN1920 24:00:00")
+    return pan, eto
 
 
 def main():
@@ -137,29 +175,32 @@ def main():
         "--product",
         choices=PRODUCTS,
         required=True,
-        help="Weather to map: historical (Historical_Unsplit, not detrended) or A (Product A scenario 1).",
+        help="Weather to map: historical (Historical_Unsplit, not detrended), A (Product A "
+             "scenario 1) or B (Product B, 10 chunks).",
     )
     args = parser.parse_args()
 
     cells = gerber_cells(REFERENCE_DIR / "WBA_Grid_Info.txt")
     hist_eto = monthly_gerber_eto("historical", cells)
-    eto = hist_eto if args.product == "historical" else monthly_gerber_eto(args.product, cells)
     out_folder = WEATHER_SETS[args.product]["name"]
-
     cs3_pan = read_cs3_pan()
-    mapped = qmap_single(qmap_frame(eto), qmap_frame(hist_eto), qmap_frame(cs3_pan))
-    pan = pd.Series(mapped["quantile_mapped_value"].to_numpy(), index=MONTHS)
 
     # Beside the CalSimHydro RefET and CropET of _2_compile_et.py
     out_dir = get_module_generated_dir("mod_hydrology/calsimhydro") / "output" / "_2_compile_et" / out_folder
     out_dir.mkdir(parents=True, exist_ok=True)
-    table = pd.DataFrame({"hs_eto_in": eto, "pan_evap_in": pan, "cs3_pan_evap_in": cs3_pan})
-    table.rename_axis("date").to_csv(out_dir / "PanEvap_QMAP_results.csv", float_format="%.4f")
-    write_dss(out_dir / "CS3_PanEvap.dss", pan)
+    if args.product == "B":
+        pan, eto = write_product_b(cells, hist_eto, cs3_pan, out_dir)
+    else:
+        eto = hist_eto if args.product == "historical" else monthly_gerber_eto(args.product, cells)
+        mapped = qmap_single(qmap_frame(eto), qmap_frame(hist_eto), qmap_frame(cs3_pan))
+        pan = pd.Series(mapped["quantile_mapped_value"].to_numpy(), index=MONTHS)
+        table = pd.DataFrame({"hs_eto_in": eto, "pan_evap_in": pan, "cs3_pan_evap_in": cs3_pan})
+        table.rename_axis("date").to_csv(out_dir / "PanEvap_QMAP_results.csv", float_format="%.4f")
+        write_dss(out_dir / "CS3_PanEvap.dss", pan, "31OCT1920 24:00:00")
 
-    years = len(MONTHS) / 12
+    years = len(pan) / 12
     print(f"{out_folder}: pan evaporation {pan.sum() / years:.1f} in/yr, "
-          f"CS3 record {cs3_pan.sum() / years:.1f} in/yr, HS ETo {eto.sum() / years:.1f} in/yr")
+          f"CS3 record {cs3_pan.sum() / (len(MONTHS) / 12):.1f} in/yr, HS ETo {eto.sum() / years:.1f} in/yr")
     print(f"Wrote {out_dir}")
 
 
