@@ -6,5 +6,7 @@
     "inflow_model": "sacsma",
     "inflow_repo": "../SAC-SMA",
     "inflow_env": "sacsma",
-    "inflow_pin": "76893ca6cc773baab94863585317d22305f60cc7"
+    "inflow_pin": "76893ca6cc773baab94863585317d22305f60cc7",
+    "cupplus_python": "",
+    "cup_work_dir": ""
 }

@@ -63,6 +63,8 @@ PRODUCT_A_SCRIPTS = [
     "mod_forcing/inflows/_2_run_product.py",
     "mod_forcing/climate/_1_pp_point_locations.py",
     "mod_forcing/climate/_2_uhh_basin_averages.py",
+    "mod_forcing/climate/_3_refet_f1_factors.py",
+    "mod_forcing/climate/_4_refet_product_et.py",
     "mod_hydrology/calsimhydro/_1_compile_precip.py",
     "mod_hydrology/calsimhydro/_2b_compile_pan_evap.py",
     "mod_hydrology/calsimhydro_ee/_1_compile_precip_EE.py",

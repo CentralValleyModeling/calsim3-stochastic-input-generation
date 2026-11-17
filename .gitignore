@@ -54,3 +54,6 @@ desktop.ini
 
 # ── GitHub special ────────────────────────────────────────────────────────────
 .github/scripts/
+
+# CUP+ working copies of the reference ET step 14
+_cup_work/

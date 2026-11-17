@@ -11,7 +11,8 @@ The configuration is ``config_default.json`` (tracked), overridden key by key by
 built on another rim-inflow model. A user key that the defaults lack (keys starting with ``_``
 are comments), or a ``CSSTOCHASTIC_CONFIG`` file that does not exist, stops the import. Keys:
 ``data_dir``, ``generated_dir``, ``archive_dir``, ``inflow_model``, ``inflow_repo``,
-``inflow_env``, ``inflow_pin``. On Windows the data paths carry the long-path prefix.
+``inflow_env``, ``inflow_pin``, ``cupplus_python``, ``cup_work_dir``. On Windows the data paths
+carry the long-path prefix.
 
 - Folders: ``get_data_dir``, ``get_base_dir`` (``<data_dir>/BASE``), ``get_generated_dir``
   (``<data_dir>/<generated_dir>``), ``get_module_generated_dir``, ``get_archive_dir`` (the
@@ -354,6 +355,26 @@ def remove_tree(path: Path) -> None:
     the way."""
     if path.exists():
         shutil.rmtree(path, onerror=_clear_readonly)
+
+
+def get_cupplus_python() -> str:
+    """Interpreter of the CUP+ (PyCUP) environment, config key ``cupplus_python``.
+
+    PyCUP needs numpy 1 and pandas 2, so the reference ET step 14 runs it in its own
+    environment as a subprocess. Empty when the key is not set."""
+    return str(_CFG.get("cupplus_python", "") or "")
+
+
+def get_cup_work_dir() -> Path:
+    """Folder of the CUP+ (PyCUP) working copies of the reference ET step 14, config key
+    ``cup_work_dir``; empty (the default) means ``<repo>/_cup_work``, a relative value is
+    taken from the repo root. PyCUP's DSS library truncates path names at 256 characters,
+    so this must be a short local path; it is returned without the long path prefix."""
+    raw = str(_CFG.get("cup_work_dir", "") or "")
+    if not raw:
+        return REPO_ROOT / "_cup_work"
+    path = Path(raw).expanduser()
+    return path if path.is_absolute() else (REPO_ROOT / path).resolve()
 
 
 def get_inventory_dir() -> Path:
