@@ -135,8 +135,10 @@ last.
   DETAW-DCD run folder, and `_1c_build_cs3sv_dss.py` builds `CS3sv_DCD_PRISM_Dtrnd.dss` from the
   finished run. They take the place of the aggregate and merge scripts and of
   `NOTES_To_Run_DCD_and_Outputs.txt`. DCD runs after the water year types.
-- A Product B chunk runs through WY2021 and repeats 2018's land use and groundwater rates for
-  2019-2021.
+- Every set runs on the planning study's land use, the same in every year, with its own water
+  year types. A chunk of Product B runs through WY2021, so its run folder needs rows 2019-2021
+  added to `GW_RATES_CALSIM3.TXT`.
+- `_1_compile_precip_DETAW.py` writes `mm_pcp.csv` and `LODI_PT.csv`, the file names DETAW reads.
 
 ### Stops in place of stale output
 

@@ -272,8 +272,9 @@ chunk CSVs under `_product_b_final/`.
    - **Outputs:** daily DCD-station precip per chunk
 2. `python mod_hydrology/delta_channel_depletion/_1b_prepare_dcd_run.py --product B --chunk N --run-dir <run>`, per chunk
    - **Inputs:** the chunk's DCD-station weather; water_year_types `_SacWYT_nKK.csv` (Tier 3);
-     a copy of `DCD_Calsim3_PlanningStudy_1921-2018`
-   - **Outputs:** the run's weather, Landuse TYPE, WYTYPES and GW_RATES, WY1922-2021
+     a copy of `DCD_Calsim3_PlanningStudy_1921-2018` with rows 2019-2021 at 0.40 added to
+     `DCD/NODCU/GW_RATES_CALSIM3.TXT`
+   - **Outputs:** the run's weather, Landuse and WYTYPES, WY1922-2021
 3. **[EXTERNAL] DETAW/DCD model run (10 chunks)**: `python DCD.py` in `<run>/DCD`
 4. `python mod_hydrology/delta_channel_depletion/_1c_build_cs3sv_dss.py --run-dir <run>`, per chunk
    - **Outputs:** `<run>/DCD/Output/CALSIM3/CS3sv_DCD_PRISM_Dtrnd.dss` (DSS 6)

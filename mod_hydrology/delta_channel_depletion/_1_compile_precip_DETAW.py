@@ -9,7 +9,7 @@ Inputs
 ------
 - reference/USBR_LTO_ClimateChange_DCD_StnsVICCoordinates_20210425.csv (or --coord_file):
   Station, Lat, Lon or Long
-- reference/mm_pcp4.csv, reference/LODI_PT4.csv (beside the coordinate file): the 30 Sep 1921
+- reference/mm_pcp.csv, reference/LODI_PT.csv (beside the coordinate file): the 30 Sep 1921
   row that heads every Product B chunk
 - daily weather of the set (utils.wgen.weighted_daily)
 
@@ -17,10 +17,10 @@ Outputs
 -------
 Under <generated>/mod_hydrology/delta_channel_depletion/output/_1_compile_precip_DETAW/ (or
 --output_csv, --lodi_output_csv):
-- <Historical_Unsplit|Product_A>/mm_pcp4.csv (year, month, day, DOY, one column per station)
-  and LODI_PT4.csv (Date, Year, Month, DOY, Pcp(mm), Tx(oC), Tn(oC)), over every day of the
+- <Historical_Unsplit|Product_A>/mm_pcp.csv (year, month, day, DOY, one column per station)
+  and LODI_PT.csv (Date, Year, Month, DOY, Pcp(mm), Tx(oC), Tn(oC)), over every day of the
   weather files or --clip_period
-- Product_B/mm_pcp4_n01.csv ... _n10.csv and LODI_PT4_n01.csv ... _n10.csv, each 30 Sep 1921 -
+- Product_B/mm_pcp_n01.csv ... _n10.csv and LODI_PT_n01.csv ... _n10.csv, each 30 Sep 1921 -
   30 Sep 2021 (utils.wgen_calendar.chunk_days)
 
 Dependencies
@@ -98,8 +98,8 @@ def write_single(res: dict, output_csv: Path, lodi_csv: Path, clip_period) -> No
 
 def write_product_b(res: dict, output_csv: Path, lodi_csv: Path, ref_dir: Path) -> None:
     """The 10 chunks of ``chunk_days``, each headed by the 30 Sep 1921 reference row."""
-    ref_pcp = pd.read_csv(ref_dir / 'mm_pcp4.csv', nrows=1).iloc[0]
-    ref_lodi = pd.read_csv(ref_dir / 'LODI_PT4.csv', nrows=1).iloc[0]
+    ref_pcp = pd.read_csv(ref_dir / 'mm_pcp.csv', nrows=1).iloc[0]
+    ref_lodi = pd.read_csv(ref_dir / 'LODI_PT.csv', nrows=1).iloc[0]
     print(f"  Product B: {len(CHUNK_DAYS)} days per chunk, {N_CHUNKS} chunks")
     for k in range(1, N_CHUNKS + 1):
         first, n = chunk_days(k)
@@ -124,9 +124,9 @@ def main():
                     help='Station coordinate CSV (default: reference/USBR_LTO_ClimateChange_DCD_'
                          'StnsVICCoordinates_20210425.csv)')
     ap.add_argument('--output_csv', default=None,
-                    help='Station CSV (default: output/_1_compile_precip_DETAW/<set>/mm_pcp4.csv)')
+                    help='Station CSV (default: output/_1_compile_precip_DETAW/<set>/mm_pcp.csv)')
     ap.add_argument('--lodi_output_csv', default=None,
-                    help='Lodi CSV (default: output/_1_compile_precip_DETAW/<set>/LODI_PT4.csv)')
+                    help='Lodi CSV (default: output/_1_compile_precip_DETAW/<set>/LODI_PT.csv)')
     ap.add_argument('--clip_period', nargs=2, default=None,
                     help='First and last day (YYYY-MM-DD), Historical_Unsplit and Product A only '
                          '(default: every day)')
@@ -137,8 +137,8 @@ def main():
                       / 'USBR_LTO_ClimateChange_DCD_StnsVICCoordinates_20210425.csv')
     out_dir = (get_module_generated_dir("mod_hydrology/delta_channel_depletion") / 'output'
                / '_1_compile_precip_DETAW' / WEATHER_SETS[args.product]['name'])
-    output_csv = Path(args.output_csv or out_dir / 'mm_pcp4.csv')
-    lodi_csv = Path(args.lodi_output_csv or out_dir / 'LODI_PT4.csv')
+    output_csv = Path(args.output_csv or out_dir / 'mm_pcp.csv')
+    lodi_csv = Path(args.lodi_output_csv or out_dir / 'LODI_PT.csv')
     output_csv.parent.mkdir(parents=True, exist_ok=True)
     lodi_csv.parent.mkdir(parents=True, exist_ok=True)
 
