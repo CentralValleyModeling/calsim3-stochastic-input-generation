@@ -5,8 +5,8 @@ Reads the pickle cache of ``_productA_pickle_builder.py`` and writes, per period
 table of mean water-year values of each metric against the baseline and a figure per
 metric (monthly time series and non-exceedance CDF with R2 / NSE / PBIAS against the
 baseline). A Storage metric's water-year value is its end-of-September value, any
-other metric's the sum of its months. Default periods: Full_Validation_WY1972_2018
-and Drought_WY1987_1992. ``_historical_modified_postproc.py`` runs the same
+other metric's the sum of its months. Default periods: Full_Validation_WY1922_2018
+(utils.paths.DELIVERY_WY) and Drought_WY1987_1992. ``_historical_modified_postproc.py`` runs the same
 ``run_post_processing_package`` with its own periods.
 
 Inputs
@@ -51,7 +51,7 @@ RUN_DIR = Path(__file__).resolve().parent
 REPO_ROOT = RUN_DIR.parents[1]
 
 _sys.path.insert(0, str(REPO_ROOT))
-from utils.paths import get_generated_dir
+from utils.paths import DELIVERY_WY, get_generated_dir
 from utils.validation_plots import Series, plot_ts_cdf
 
 PICKLE_DIR = (
@@ -87,11 +87,11 @@ class Period:
 
 
 FULL_VALIDATION = Period(
-    name="Full_Validation_WY1972_2018",
-    start=pd.Timestamp("1971-10-01"),
-    end=pd.Timestamp("2018-09-30"),
-    wy_start=1972,
-    wy_end=2018,
+    name=f"Full_Validation_WY{DELIVERY_WY[0]}_{DELIVERY_WY[1]}",
+    start=pd.Timestamp(f"{DELIVERY_WY[0] - 1}-10-01"),
+    end=pd.Timestamp(f"{DELIVERY_WY[1]}-09-30"),
+    wy_start=DELIVERY_WY[0],
+    wy_end=DELIVERY_WY[1],
 )
 
 DROUGHT_878892 = Period(

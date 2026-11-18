@@ -17,7 +17,8 @@ Inputs
   (default Historical)
 - Optional, for the Product A 10-year rolling mean on the 1000-year series:
   <generated>/postprocessing/calsim_runs/product_a/pickle_files/ (``--product-a-pickle-dir``;
-  "" turns it off), from water year ``--product-a-start-wy`` (default 1972; 0 for all)
+  "" turns it off), from water year ``--product-a-start-wy`` (default 1922,
+  utils.paths.DELIVERY_WY; 0 for all)
 
 Outputs
 -------
@@ -75,7 +76,7 @@ REPO_ROOT = RUN_DIR.parents[1]
 import sys as _sys
 
 _sys.path.insert(0, str(REPO_ROOT))
-from utils.paths import get_generated_dir
+from utils.paths import DELIVERY_WY, get_generated_dir
 
 PICKLE_DIR = get_generated_dir() / "postprocessing" / "calsim_runs" / "product_b" / "pickle_files"
 OUT_DIR = get_generated_dir() / "postprocessing" / "calsim_runs" / "product_b" / "output"
@@ -2289,7 +2290,7 @@ def run_post_processing_package(
     sequence_frame_years: int = DEFAULT_SEQUENCE_FRAME_YEARS,
     product_a_pickle_dir: str | Path | None = None,
     product_a_label: str = "Product A",
-    product_a_start_wy: int | None = 1972,
+    product_a_start_wy: int | None = DELIVERY_WY[0],
 ) -> Dict[str, str]:
     df_values, _df_diffs, units, fields = load_pickles(pickle_dir)
     df_values["Date"] = pd.to_datetime(df_values["Date"])
@@ -2642,10 +2643,10 @@ def main() -> None:
     parser.add_argument(
         "--product-a-start-wy",
         type=int,
-        default=1972,
+        default=DELIVERY_WY[0],
         help=(
             "Earliest water year to include from the Product A series when overlaying "
-            "on the 1000-yr timeseries (default: 1972). Use 0 to disable filtering."
+            f"on the 1000-yr timeseries (default: {DELIVERY_WY[0]}). Use 0 to disable filtering."
         ),
     )
     args = parser.parse_args()

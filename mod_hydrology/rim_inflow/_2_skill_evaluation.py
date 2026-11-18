@@ -8,10 +8,12 @@ archive, and measures how both models respond to the Product A detrending. Stops
 G3, skill. The model's Historical_Unsplit SVs (direct, no bias correction; built by
 _1_build_rim_inflow.py) and the raw VIC Historical_Unsplit run of the v1.0 archive (routed,
 before quantile mapping and the anchor mass balance; see VIC's historical run below), each
-against CalSim3, monthly, on three windows of water years:
+against CalSim3, monthly, on four windows of water years. The training years are ``TRAIN_WY``
+of sacsma/dpl/calsim/arcs.py at the pinned commit (``inflow_pin``), 1950-1975 and 1986-2015:
 
-- 1976-1985: held out of the dPL training, the only out-of-sample test
-- 1950-2018 less 1976-1985: in-sample
+- the gap inside the training span (1976-1985): held out of the dPL training
+- the years after it through 2018 (2016-2018): also out of sample
+- the training years: in-sample
 - 1922-1949: diagnostic only; the pre-1950 forcing is too uncertain to judge a model on
 
 G3r, response. Product A scenario 1 minus historical unsplit, by period, for both models:
@@ -60,6 +62,9 @@ Usage
     python mod_hydrology/rim_inflow/_2_skill_evaluation.py
 """
 
+import ast
+import re
+import subprocess
 import sys
 from pathlib import Path
 
@@ -68,8 +73,8 @@ import pandas as pd
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 from mod_hydrology.rim_inflow._1_build_rim_inflow import read_calsim3, read_inventory_part_c
-from utils.paths import (get_archive_dir, get_arc_inflows, get_inflow_model,
-                         get_module_generated_dir, get_rim_inflow_outputs)
+from utils.paths import (get_archive_dir, get_arc_inflows, get_inflow_model, get_inflow_pin,
+                         get_inflow_repo, get_module_generated_dir, get_rim_inflow_outputs)
 from utils.validation_plots import nse, pbias, r2
 from utils.wgen_calendar import water_year
 
@@ -86,14 +91,32 @@ def wys(a: int, b: int) -> set:
     return set(range(a, b + 1))
 
 
-HELD_OUT = wys(1976, 1985)
+def pinned_train_wy() -> list:
+    """TRAIN_WY of sacsma/dpl/calsim/arcs.py at the pinned commit: (first, last) water years."""
+    path = "sacsma/dpl/calsim/arcs.py"
+    text = subprocess.run(["git", "-C", str(get_inflow_repo()), "show", f"{get_inflow_pin()}:{path}"],
+                          capture_output=True, text=True, check=True).stdout
+    m = re.search(r"^TRAIN_WY\b[^=\n]*=\s*(.+)$", text, re.M)
+    if not m:
+        raise ValueError(f"no TRAIN_WY in {path} at {get_inflow_pin()}")
+    return sorted(ast.literal_eval(m.group(1)))
+
+
+def span(years: set) -> str:
+    return f"{min(years)}-{max(years)}"
+
+
+TRAIN_SPANS = pinned_train_wy()
+TRAINED = set().union(*(wys(a, b) for a, b in TRAIN_SPANS))     # the years dPL-CalSim trains on
+HELD_OUT = wys(TRAIN_SPANS[0][0], TRAIN_SPANS[-1][1]) - TRAINED
+AFTER = wys(TRAIN_SPANS[-1][1] + 1, 2018)
 WINDOWS = {
-    "WY1976-1985 held out": HELD_OUT,
-    "WY1950-2018 less 1976-1985 in-sample": wys(1950, 2018) - HELD_OUT,
+    f"WY{span(HELD_OUT)} held out": HELD_OUT,
+    f"WY{span(AFTER)} after training": AFTER,
+    "training years in-sample": TRAINED,
     "WY1922-1949 diagnostic": wys(1922, 1949),
 }
-TRAINED = wys(1950, 2018) - HELD_OUT          # the years dPL-CalSim trains on
-NOT_TRAINED = wys(1922, 1949) | HELD_OUT
+NOT_TRAINED = wys(1922, 2018) - TRAINED
 PERIODS = [(1922, 1935), (1936, 1950), (1951, 1970), (1971, 1990), (1991, 2018)]
 GROUPS = {
     "Sacramento four": ["UNIMP_SRBB", "UNIMP_OROV", "UNIMP_YUBA", "UNIMP_FOLS"],

@@ -270,8 +270,9 @@ def check_reference_csvs(rel, text):
 
 # Deprecated pandas offset aliases (pandas 2.2). Compared on the part before
 # any '-' anchor, so 'A-OCT' / 'AS-OCT' / 'Q-DEC' are caught via 'A'/'AS'/'Q'.
+# 'YS' (year start) is the replacement for 'AS' and stays valid.
 _DEPRECATED_FREQ = {
-    "M", "A", "Q", "Y", "AS", "YS", "BM", "BA", "BAS", "BQ", "BY",
+    "M", "A", "Q", "Y", "AS", "BM", "BA", "BAS", "BQ", "BY",
     "H", "T", "S", "L", "U", "N",
 }
 # Only ``freq=`` and ``.resample(`` are checked. ``.asfreq()`` is deliberately
