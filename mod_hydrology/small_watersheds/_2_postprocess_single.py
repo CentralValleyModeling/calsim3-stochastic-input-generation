@@ -108,6 +108,8 @@ def extract_dss_data(dss_path, excel_partcs):
     differs from dss_io.read_monthly_frame, so it stays here.
     """
     dss_path = Path(dss_path).resolve()
+    if not dss_path.is_file():  # opening a missing DSS would create an empty one
+        raise FileNotFoundError(f"{dss_path} not found; run the Small Watersheds model first")
     print(f"    Reading DSS: {dss_path.name}")
 
     data_dict = {}
@@ -243,7 +245,7 @@ def run_postprocess(product):
             plt.legend(loc='upper right')
         plt.tight_layout()
         plt.savefig(os.path.join(out_dir, f"Boxplot_{partc}_with_mean.png"), dpi=300)
-        plt.show()
+        plt.close()
 
     print("Postprocessing complete.")
 

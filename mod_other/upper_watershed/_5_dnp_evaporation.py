@@ -437,9 +437,8 @@ def run_generate(product: str) -> None:
 
     missing_er = storage["er_inches"].isna().sum()
     if missing_er:
-        print(f"  WARNING: {missing_er} months missing ER - will output NaN")
-    else:
-        print(f"  ER matched for all {len(storage)} months")
+        raise SystemExit(f"{name}: {missing_er} months have no ER")
+    print(f"  ER matched for all {len(storage)} months")
 
     storage["days"]  = storage["date"].dt.days_in_month
     storage["e_cfs"] = _calc_evap_cfs(
@@ -461,14 +460,15 @@ def run_generate(product: str) -> None:
     print(f"  Wrote: {out_csv.name}")
 
     # -- Plots ----------------------------------------------------------------
+    # The historical files are dated by month end; the generated series by month start
     e_hist = s_hist = None
     if (REF_DIR / "s_pedro_sv_historical.csv").exists():
         s_hist = pd.read_csv(REF_DIR / "s_pedro_sv_historical.csv")
-        s_hist["date"] = pd.to_datetime(s_hist["Date"])
+        s_hist["date"] = pd.to_datetime(s_hist["Date"]).dt.to_period("M").dt.to_timestamp()
         s_hist = s_hist.rename(columns={"value": "storage_taf"})
     if (REF_DIR / "e_pedro_sv_historical.csv").exists():
         e_hist = pd.read_csv(REF_DIR / "e_pedro_sv_historical.csv")
-        e_hist["date"] = pd.to_datetime(e_hist["Date"])
+        e_hist["date"] = pd.to_datetime(e_hist["Date"]).dt.to_period("M").dt.to_timestamp()
         e_hist = e_hist.rename(columns={"value": "e_cfs"})
 
     fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(14, 10), sharex=True)

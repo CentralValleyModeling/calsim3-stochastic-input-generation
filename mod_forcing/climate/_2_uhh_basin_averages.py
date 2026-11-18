@@ -14,7 +14,8 @@ Inputs
   Historical_Unsplit over WY1922-2018 for the VPD fit
 - reference/calsim_climate_sv.xlsx: VPD<XX>_UHH, the QM target. Each location's map is fit per
   calendar month on Historical_Unsplit basin Tavg against CalSim VPD over WY1922-2018
-  (utils.paths.DELIVERY_WY) and applied to every set. A location whose fit fails gets no VPD.
+  (utils.paths.DELIVERY_WY) and applied to every set. A location whose fit fails stops the run
+  before any delivery file is written.
 - --compare-historical-productB: <base>/CalSim3/__calsim_sv_default__.dss (PPT_*_UHH) and the
   Product A and B precipitation outputs below
 
@@ -330,31 +331,21 @@ def process_location(shorthand, grid_info_file, grid_info_folder, product, outpu
     
     # VPD from the set's temperature through the Historical_Unsplit map
     print("  Applying VPD quantile mapping...")
-    try:
-        target_vpd = read_target_vpd_data(excel_file, base_shorthand)
-        print(f"    Target VPD data: {len(target_vpd)} months")
-        if product == 'historical':
-            fit_temp = monthly_data
-        else:
-            fit_temp = calculate_basin_monthly_averages(grid_info_df, 'historical', date_index=VPD_FIT_DAYS)
+    target_vpd = read_target_vpd_data(excel_file, base_shorthand)
+    print(f"    Target VPD data: {len(target_vpd)} months")
+    if product == 'historical':
+        fit_temp = monthly_data
+    else:
+        fit_temp = calculate_basin_monthly_averages(grid_info_df, 'historical', date_index=VPD_FIT_DAYS)
 
-        vpd_data = apply_vpd_quantile_mapping(
-            temp_monthly=monthly_data[['year', 'month', 'tavg_f']],
-            fit_temp=fit_temp,
-            target_vpd=target_vpd,
-        )
-        # Merge VPD into monthly_data
-        monthly_data = monthly_data.merge(vpd_data, on=['year', 'month'], how='left')
-        vpd_enabled = True
-        print("  VPD quantile mapping completed")
-    except Exception as e:
-        import traceback
-        print(f"  Warning: VPD quantile mapping failed: {e}")
-        print("  Error details:")
-        traceback.print_exc()
-        print("  Proceeding without VPD output")
-        vpd_enabled = False
-    
+    vpd_data = apply_vpd_quantile_mapping(
+        temp_monthly=monthly_data[['year', 'month', 'tavg_f']],
+        fit_temp=fit_temp,
+        target_vpd=target_vpd,
+    )
+    monthly_data = monthly_data.merge(vpd_data, on=['year', 'month'], how='left')
+    print("  VPD quantile mapping completed")
+
     # Construct VPD location name
     vpd_location_name = f"VPD{base_shorthand}_UHH"
 
@@ -376,32 +367,28 @@ def process_location(shorthand, grid_info_file, grid_info_folder, product, outpu
         temp_data.to_csv(temp_file, index=False)
         print(f"  Temperature saved: {temp_file.name}")
         
-        # VPD file (if available)
-        if vpd_enabled:
-            vpd_data_out = monthly_data[['year', 'month', 'vpd_kpa', 'date']].copy()
-            vpd_file = output_folder / f"{vpd_location_name}.csv"
-            vpd_data_out.to_csv(vpd_file, index=False)
-            print(f"  VPD saved: {vpd_file.name}")
-    
+        # VPD file
+        vpd_data_out = monthly_data[['year', 'month', 'vpd_kpa', 'date']].copy()
+        vpd_file = output_folder / f"{vpd_location_name}.csv"
+        vpd_data_out.to_csv(vpd_file, index=False)
+        print(f"  VPD saved: {vpd_file.name}")
+
     # Return summary info
-    summary = {
+    return {
         'shorthand': shorthand,
         'ppt_location_name': ppt_location_name,
         'temp_location_name': temp_location_name,
-        'vpd_location_name': vpd_location_name if vpd_enabled else 'N/A',
-        'vpd_enabled': vpd_enabled,
+        'vpd_location_name': vpd_location_name,
         'grid_info_file': grid_info_file,
         'num_grid_cells': len(grid_info_df),
         'basin_area_km2': grid_info_df['basin_area'].sum(),
         'mean_monthly_precip_inches': monthly_data['precip_inches'].mean(),
         'mean_monthly_tavg_f': monthly_data['tavg_f'].mean(),
         'total_months': len(monthly_data),
+        'mean_monthly_vpd_kpa': monthly_data['vpd_kpa'].mean(),
         # Included for Product B chunk compilation; excluded when saving _summary.csv
         '_monthly_data': monthly_data,
     }
-    if vpd_enabled:
-        summary['mean_monthly_vpd_kpa'] = monthly_data['vpd_kpa'].mean()
-    return summary
 
 
 
@@ -904,16 +891,14 @@ VARIABLES = [
 
 def _sv_rows(summaries, var, part_c):
     """The monthly series of one variable across locations in SV format (Part B = location),
-    by file month; locations without the variable are skipped."""
+    by file month."""
     frames = []
     for s in summaries:
-        md = s.get('_monthly_data')
-        if md is None or var['col'] not in md.columns or s[var['name_key']] == 'N/A':
-            continue
+        md = s['_monthly_data']
         frames.append(pd.DataFrame({'Part B': s[var['name_key']], 'Part C': part_c,
                                     'Year': md['year'], 'Month': md['month'],
                                     'Value': md[var['col']]}))
-    return pd.concat(frames, ignore_index=True) if frames else None
+    return pd.concat(frames, ignore_index=True)
 
 
 def write_delivery(summaries, output_root, product):
@@ -921,9 +906,6 @@ def write_delivery(summaries, output_root, product):
     print(f"\nWriting the {WEATHER_SETS[product]['name']} delivery CSVs...")
     for var in VARIABLES:
         df = _sv_rows(summaries, var, var['part_c'])
-        if df is None:
-            print(f"  No data for {var['part_c']} delivery CSV.")
-            continue
         df['Value'] = df['Value'].map(lambda v: round(v, 6))
         out = write_delivery_csv(df, delivery_dir(output_root, product), var['stem'], product)
         print(f"  {out.name} ({df['Part B'].nunique()} locations)")
@@ -936,10 +918,7 @@ def write_product_b_chunks(summaries: list, output_folder):
     print("\nWriting Product B chunk files...")
     for var in VARIABLES:
         df = _sv_rows(summaries, var, var['part_c'])
-        if df is None:
-            print(f"  Skipping {var['stem']}_productB - no valid locations")
-            continue
-        labelled = pd.concat([calendar_label('B', g.drop(columns=['Part B', 'Part C'])).assign(
+        labelled =pd.concat([calendar_label('B', g.drop(columns=['Part B', 'Part C'])).assign(
             **{'Part B': key[0], 'Part C': key[1]}) for key, g in df.groupby(['Part B', 'Part C'], sort=False)],
             ignore_index=True)
         paths = write_chunk_csvs(labelled, output_folder, f"{var['stem']}_productB")

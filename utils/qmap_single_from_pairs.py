@@ -21,11 +21,12 @@ Workflow per (target, predictor) pair (``run_single_qmap_from_pairs``)
    the simulation window, so this is a comparison, not a held-out validation.
 6. Write the detail CSV, the delivery CSV and three figures.
 
-A pair without training data, target or simulation months is skipped with a
-warning. ``read_qmap_pairs`` reads the pairs file: target_part_b, target_part_c,
+A pair without training data, target or simulation months stops the run, so a
+previous run's delivery CSV is never left in place of a pair that was not mapped.
+``read_qmap_pairs`` reads the pairs file: target_part_b, target_part_c,
 predictor_part_b, predictor_part_c and fit, optional lower_bound, upper_bound and
-allow_negative (absent: the ``allow_negative`` argument); target_part_b must be
-unique, and reversed bounds are swapped.
+allow_negative (a blank cell or no column: the ``allow_negative`` argument);
+target_part_b must be unique, and reversed bounds are swapped.
 
 Inputs
 ------
@@ -95,6 +96,22 @@ def norm_token(value) -> str:
     return clean_text(value).upper()
 
 
+_TRUE = {"true", "yes", "t", "y", "1", "1.0"}
+_FALSE = {"false", "no", "f", "n", "0", "0.0"}
+
+
+def _parse_flag(value, label: str):
+    """True, False, or None for a blank cell."""
+    text = clean_text(value).lower()
+    if text == "":
+        return None
+    if text in _TRUE:
+        return True
+    if text in _FALSE:
+        return False
+    raise ValueError(f"{label}: {value!r} is not True/False, 1/0 or yes/no")
+
+
 # -- Pair CSV reader ----------------------------------------------------------
 def read_qmap_pairs(pair_csv: str | Path) -> pd.DataFrame:
     """Read and validate qmap_pairs.csv.
@@ -105,8 +122,9 @@ def read_qmap_pairs(pair_csv: str | Path) -> pd.DataFrame:
 
     A predictor_part_b of the form ``I_A+I_B`` is the sum of those SVs.
 
-    Optional columns (created with defaults if missing):
-      lower_bound, upper_bound, allow_negative (True/False, default False)
+    Optional columns (created blank if missing):
+      lower_bound, upper_bound, allow_negative (True/False, 1/0 or yes/no; blank
+      leaves it to the caller's ``allow_negative``)
 
     Rows with every cell blank, as a spreadsheet can leave below the table, are dropped.
     """
@@ -128,15 +146,8 @@ def read_qmap_pairs(pair_csv: str | Path) -> pd.DataFrame:
     df["lower_bound"] = pd.to_numeric(df["lower_bound"], errors="coerce")
     df["upper_bound"] = pd.to_numeric(df["upper_bound"], errors="coerce")
 
-    # Parse allow_negative: accept True/False/1/0/yes/no; default to False.
-    if "allow_negative" in df.columns:
-        _truthy = {"true", "yes", "t", "y"}
-        df["allow_negative"] = (
-            df["allow_negative"]
-            .apply(lambda v: str(v).strip().lower() in _truthy if pd.notna(v) else False)
-        )
-    else:
-        df["allow_negative"] = False
+    df["allow_negative"] = df["allow_negative"].apply(
+        lambda v: _parse_flag(v, f"{pair_csv.name} allow_negative")).astype(object)
 
     df = df[
         (df["target_part_b"] != "")
@@ -283,13 +294,14 @@ def run_single_qmap_from_pairs(
     dss_read_start, dss_read_end : str
         DSS read window boundaries.
     allow_negative : bool
-        Fallback default when the CSV does not include an ``allow_negative``
-        column.  Per-pair values in the CSV take precedence.
+        Used for a pair whose ``allow_negative`` cell is blank or when the CSV
+        has no such column.  Per-pair values in the CSV take precedence.
 
     Returns
     -------
     dict
-        ``{pairs_requested, pairs_processed, pairs_skipped}``.
+        ``{pairs_requested, pairs_processed}``; a pair that cannot be mapped
+        raises ``ValueError``.
     """
     if product not in DELIVERY:
         raise ValueError(f"product must be one of {list(DELIVERY)}")
@@ -332,7 +344,6 @@ def run_single_qmap_from_pairs(
 
     # -- Process each pair ----------------------------------------------------
     pairs_processed = 0
-    pairs_skipped = 0
 
     for _, row in df_pairs.iterrows():
         target_b = row["target_part_b"]
@@ -343,7 +354,9 @@ def run_single_qmap_from_pairs(
         parts = predictor_parts(pred_b)
         lb = row["lower_bound"]
         ub = row["upper_bound"]
-        pair_allow_neg = row.get("allow_negative", allow_negative)
+        flag = row["allow_negative"]
+        pair_allow_neg = allow_negative if flag is None or pd.isna(flag) else bool(flag)
+        pair = f"{pair_csv.name} {target_b}/{target_c} <- {pred_b}/{pred_c}"
 
         print(f"\n{'='*60}")
         print(f"Target: {target_b} / {target_c}")
@@ -359,15 +372,9 @@ def run_single_qmap_from_pairs(
         target_full = dss_data.get(tgt_key)
 
         if predictor_full is None or predictor_full.dropna().empty:
-            print(f"  WARNING: No {fit} training data for predictor "
-                  f"{pred_b}/{pred_c}, skipping.")
-            pairs_skipped += 1
-            continue
+            raise ValueError(f"{pair}: no {fit} training data for the predictor")
         if target_full is None or target_full.dropna().empty:
-            print(f"  WARNING: No DSS data for target "
-                  f"{target_b}/{target_c}, skipping.")
-            pairs_skipped += 1
-            continue
+            raise ValueError(f"{pair}: no DSS data for the target in {dss_file}")
 
         # 2) Slice the fit window
         pred_train = predictor_full.loc[FIT_START:FIT_END].dropna()
@@ -375,9 +382,7 @@ def run_single_qmap_from_pairs(
 
         common_train = pred_train.index.intersection(tgt_train.index)
         if common_train.empty:
-            print("  WARNING: No common training months, skipping.")
-            pairs_skipped += 1
-            continue
+            raise ValueError(f"{pair}: no common training months")
         pred_train = pred_train.loc[common_train]
         tgt_train = tgt_train.loc[common_train]
 
@@ -389,24 +394,16 @@ def run_single_qmap_from_pairs(
             parts, lambda p: csv_io.load_sv_series(rim_csv, p, pred_c),
         )
         if pred_sim is None:
-            print(f"  WARNING: No {name} data for a part of predictor "
-                  f"{pred_b}/{pred_c}, skipping.")
-            pairs_skipped += 1
-            continue
+            raise ValueError(f"{pair}: no {name} data for a part of the predictor in {rim_csv}")
         pred_sim = pred_sim.loc[sim_start:sim_end].dropna()
 
         if pred_sim.empty:
-            print(f"  WARNING: No {name} data for predictor "
-                  f"{pred_b}/{pred_c}, skipping.")
-            pairs_skipped += 1
-            continue
+            raise ValueError(f"{pair}: no {name} predictor data in {sim_start} to {sim_end}")
 
         tgt_actual = target_full.loc[sim_start:sim_end].dropna()
         common_sim = pred_sim.index.intersection(tgt_actual.index)
         if common_sim.empty:
-            print("  WARNING: No common simulation months, skipping.")
-            pairs_skipped += 1
-            continue
+            raise ValueError(f"{pair}: no common simulation months")
         pred_sim = pred_sim.loc[common_sim]
         tgt_actual = tgt_actual.loc[common_sim]
 
@@ -487,11 +484,9 @@ def run_single_qmap_from_pairs(
 
         pairs_processed += 1
 
-    print(f"\nDone: {pairs_processed} processed, {pairs_skipped} skipped "
-          f"out of {len(df_pairs)} pair(s).")
+    print(f"\nDone: {pairs_processed} of {len(df_pairs)} pair(s) mapped.")
 
     return {
         "pairs_requested": len(df_pairs),
         "pairs_processed": pairs_processed,
-        "pairs_skipped": pairs_skipped,
     }

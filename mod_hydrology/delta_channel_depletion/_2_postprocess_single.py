@@ -89,14 +89,16 @@ def set_label(product):
 
 # Function to Extract DSS Time Series
 def extract_dss_data(dss_path):
-    # Open via utils.dss_io (a directory junction for a long path, version=7,
+    # Open via utils.dss_io (a directory junction for a long path, version=6,
     # catalog_flag=True). The read loop below (no-trailing-slash pattern, sort by
     # Part C) differs from dss_io.read_monthly_frame, so it stays here.
     dss_path = Path(dss_path).resolve()
+    if not dss_path.is_file():  # opening a missing DSS would create an empty one
+        raise FileNotFoundError(f"{dss_path} not found; run _1c_build_cs3sv_dss.py first")
     print(f"    Reading DSS: {dss_path.name}")
 
     data_dict = {}
-    with dss_io.open_dss(dss_path, version=7, catalog_flag=True) as dss:
+    with dss_io.open_dss(dss_path, version=6, catalog_flag=True) as dss:
         all_paths = dss.getPathnameList("/*/*/*/*/1MON/*")
         buckets = {}
         for p in all_paths:

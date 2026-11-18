@@ -7,18 +7,19 @@ with every provided SV replaced. Cross-checks the result against the master inve
 compares each chunk with the baseline.
 
 1. Reads the chunk CSVs (``*_n01.csv`` ... ``*_n10.csv``) of each module folder of
-   ``MODULE_CONFIG_B`` and copies them to compiled_input_files/<module>/. Stops when a module,
-   or one of the chunks compiled, has no CSVs, unless ``--allow-missing``; stops when no module
-   has CSVs, and when the rim inflows' run is not the configured model at its pin
-   (``utils.paths.require_pinned_run``).
+   ``MODULE_CONFIG_B``. Stops when a module, or one of the chunks compiled, has no CSVs, unless
+   ``--allow-missing``; stops when no module has CSVs, and when the rim inflows' run is not the
+   configured model at its pin (``utils.paths.require_pinned_run``).
 2. Cross-references the inventory (sheet MASTER): expected SVs provided or missing, and SVs it
    does not expect; SVs flagged Missing = T or Used in DCR = F are skipped.
 3. Fills each Constant/Rept SV that no module provides with the baseline's last complete water
    year, repeated over the 1,200 label months.
 4. Merges each chunk's rows within the label months. Stops when an SV has two rows for one
-   month (in one module or from two modules). Reports an SV without 1,200 months.
-   Writes ProductB_SV_<chunk>.csv, then (unless ``--skip-dss``) ProductB_SV_<chunk>.dss: a copy
-   of the baseline with the chunk's values written into the baseline records of its SVs.
+   month (in one module or from two modules). Reports an SV without 1,200 months. Once every
+   chunk has merged, copies the source CSVs to compiled_input_files/<module>/ and writes
+   ProductB_SV_<chunk>.csv, then ProductB_SV_<chunk>.dss: a copy of the baseline with the
+   chunk's values written into the baseline records of its SVs. ``--skip-dss`` deletes the
+   chunk's DSS of an earlier compile instead, so no DSS is left beside a CSV it does not match.
 5. Writes the coverage and inventory diagnostics.
 6. Unless ``--skip-comparison``, compares the monthly means of every SV per chunk with the
    baseline's over WY1922-2021 and draws the figures.
@@ -1853,19 +1854,6 @@ for svs in module_svs.values():
 print(f"  Total unique (Part B, Part C) from modules: {len(all_module_keys):,}")
 
 
-# -- Copy source CSVs into compiled_input_files/<module>/ --
-print()
-print("  Copying source CSVs into compiled_input_files/ ...")
-remove_tree(COMPILED_CSV)
-COMPILED_CSV.mkdir(parents=True)
-for label, src_paths in module_src_paths.items():
-    dest_dir = COMPILED_CSV / label
-    dest_dir.mkdir(parents=True, exist_ok=True)
-    for csv_path in src_paths:
-        shutil.copy2(csv_path, dest_dir / csv_path.name)
-    print(f"    {label:40s}  -> {len(src_paths)} file(s) copied")
-
-
 # ==================================================================
 # STEP 2 -- Inventory cross-reference
 # ==================================================================
@@ -2024,11 +2012,6 @@ for chunk_idx in ACTIVE_CHUNKS:
         ["Part B", "Part C", "Year", "Month"]
     ).reset_index(drop=True)
 
-    # Write per-chunk compiled CSV
-    COMPILED_DIR.mkdir(parents=True, exist_ok=True)
-    chunk_csv_path = COMPILED_DIR / f"ProductB_SV_{tag}.csv"
-    compiled.to_csv(chunk_csv_path, index=False)
-
     compiled_chunks[tag] = compiled
 
     sv_keys = set(zip(compiled["Part B"], compiled["Part C"]))
@@ -2054,6 +2037,28 @@ for chunk_idx in ACTIVE_CHUNKS:
 
 print("-" * 72)
 print(f"  Merge completed in {time.time()-t0_compile:.1f}s")
+print()
+
+# Every chunk merged without a stop, so the outputs of an earlier compile can be replaced
+print("  Copying source CSVs into compiled_input_files/ ...")
+remove_tree(COMPILED_CSV)
+COMPILED_CSV.mkdir(parents=True)
+for label, src_paths in module_src_paths.items():
+    dest_dir = COMPILED_CSV / label
+    dest_dir.mkdir(parents=True, exist_ok=True)
+    for csv_path in src_paths:
+        shutil.copy2(csv_path, dest_dir / csv_path.name)
+    print(f"    {label:40s}  -> {len(src_paths)} file(s) copied")
+COMPILED_DIR.mkdir(parents=True, exist_ok=True)
+for tag, compiled in compiled_chunks.items():
+    compiled.to_csv(COMPILED_DIR / f"ProductB_SV_{tag}.csv", index=False)
+    if CLI_ARGS.skip_dss:
+        for suffix in (".dss", ".dsc", ".dsd", ".dsk"):
+            stale = COMPILED_DIR / f"ProductB_SV_{tag}{suffix}"
+            if stale.exists():
+                stale.unlink()
+                print(f"    deleted {stale.name} of an earlier compile (--skip-dss)")
+print(f"  Wrote {len(compiled_chunks)} chunk CSVs to {COMPILED_DIR}")
 print()
 
 

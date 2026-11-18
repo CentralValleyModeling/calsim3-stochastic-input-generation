@@ -53,7 +53,7 @@ from utils.qmap_product_b_from_pairs import (
     write_product_b_sv,
 )
 
-# Fallback when qmap_pairs.csv has no allow_negative column (single series only).
+# For a blank allow_negative cell or no such column in qmap_pairs.csv (single series only).
 ALLOW_NEGATIVE = False
 
 

@@ -30,6 +30,11 @@ Historical_Unsplit or Product_A:
 
 Delivery and chunk CSVs: Part B, Part C, Year, Month, Value.
 
+Reservoir codes after --product historical or A rerun only those reservoirs' individual files;
+the delivery CSV is rebuilt from every individual file, and the combined, summary and figure
+outputs, which describe all reservoirs, are left as they are. Product B takes no codes, since
+its chunk files hold every reservoir.
+
 Dependencies
 ------------
 evaporation.py; utils.paths, utils.csv_io, utils.wgen, utils.wgen_calendar; matplotlib
@@ -1053,8 +1058,11 @@ def main():
     group.add_argument('--compare-a', action='store_true',
                        help='Compare existing Product B outputs against the Product A baseline (no new run).')
     parser.add_argument('reservoirs', nargs='*',
-                        help='Optional reservoir codes to process (e.g., FOLSM SHSTA). If empty, all reservoirs.')
+                        help='Optional reservoir codes to rerun with --product historical or A '
+                             '(e.g., FOLSM SHSTA). If empty, all reservoirs.')
     args = parser.parse_args()
+    if args.reservoirs and args.product == 'B':
+        parser.error('Product B takes no reservoir codes: its chunk files hold every reservoir')
 
     if args.compare_a:
         compare_product_b_with_a()
@@ -1072,6 +1080,10 @@ def main():
     if len(results) > 0:
         if product == 'B':
             create_product_b_chunk_outputs(results, output_dir=output_dir)
+        elif codes:
+            create_validation_csv(product, output_dir=output_dir)
+            print("Reservoir subset: combined_evaporation.csv, summary_statistics.csv and the "
+                  "figures were left as they are")
         else:
             create_combined_output(
                 results,
