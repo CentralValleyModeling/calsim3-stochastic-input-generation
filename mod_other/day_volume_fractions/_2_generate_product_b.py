@@ -5,8 +5,10 @@ Daily VOL-FRACTION patterns of each Product B chunk: every chunk water year take
 baseline pattern of the donor water year (WY1955 or later, 12 complete months) with the nearest
 annual flow index, the water-year sum of the reference inflows.
 
-When donor and target February differ in day count, the February fractions are resampled by
-cumulative-volume interpolation so the month sums to 1. Days without a fraction get 0.
+When donor and target February differ in day count, the donor's fractions on its real February
+days are resampled by cumulative-volume interpolation onto the target's real days, so the month
+still sums to 1. Days past the end of a month get 0, and the script stops if any month of a chunk
+does not sum to 1 over its days.
 
 Inputs
 ------
@@ -153,19 +155,19 @@ def build_historical_annual_index(dss_path: Path, ref_csv: Path) -> pd.Series:
             if key in wanted:
                 buckets.setdefault(key, []).append(p)
 
-        found_keys = set(buckets.keys())
-        missing = wanted - found_keys
+        # The synthetic index sums every reference inflow, so the historical one must too
+        missing = wanted - set(buckets)
         if missing:
-            print(f"  WARNING: {len(missing)} reference inflows NOT found in DSS:")
-            for pb, pc in sorted(missing):
-                print(f"    - {pb}/{pc}")
-        print(f"  Found {len(found_keys)}/{len(wanted)} reference inflows in DSS")
+            raise ValueError(f"{len(missing)} reference inflows not found in {Path(dss_path).name}: "
+                             + ", ".join(f"{pb}/{pc}" for pb, pc in sorted(missing)))
+        print(f"  Found {len(buckets)}/{len(wanted)} reference inflows in DSS")
 
         for key in sorted(buckets):
             part_b, _ = key
             series = _read_dss_series(dss, buckets[key])
-            if series.notna().any():
-                dss_monthly[part_b] = series
+            if not series.notna().any():
+                raise ValueError(f"reference inflow {part_b} has no values in {Path(dss_path).name}")
+            dss_monthly[part_b] = series
 
     df = pd.DataFrame(dss_monthly).sort_index()
     df.index = pd.to_datetime(df.index)
@@ -267,16 +269,32 @@ def _resample_feb_fractions(fractions, tgt_days):
     return np.diff(cum_tgt)
 
 
+def _day_number(part_b: str) -> int:
+    """DAY7 -> 7."""
+    if not (part_b.startswith("DAY") and part_b[3:].isdigit()):
+        raise ValueError(f"VOL-FRACTION Part B {part_b!r} is not DAY<n>")
+    return int(part_b[3:])
+
+
+def day_columns(columns) -> list:
+    """The DAY<n> columns in day order, which must run DAY1, DAY2, ... without a gap."""
+    days = sorted((c for c in columns if c != "Month"), key=_day_number)
+    if [_day_number(c) for c in days] != list(range(1, len(days) + 1)):
+        raise ValueError(f"VOL-FRACTION days are not DAY1..DAY{len(days)}: {days}")
+    return days
+
+
 # Borrow vol-fraction pattern and format as standard Product B output
 def build_product_b_vf(df_match: pd.DataFrame, vf_lookup: dict) -> pd.DataFrame:
     """For each matched WY, borrow vol-fraction pattern from historical year.
 
     Returns long-format DataFrame: Part B, Part C, Year, Month, Value
 
-    February handling: Part B columns are daily bins whose fractions sum to 1
+    February handling: Part B columns are daily bins DAY1..DAY31 whose fractions sum to 1
     for each month.  If source and target February have the same day count
-    (both 28 or both 29), use the fractions directly.  If they differ,
-    resample via cumulative-volume interpolation so the sum stays 1.
+    (both 28 or both 29), use the fractions directly.  If they differ, the
+    source's real days are resampled onto the target's real days via
+    cumulative-volume interpolation so the sum stays 1.
     """
     rows = []
     for _, match_row in df_match.iterrows():
@@ -288,7 +306,7 @@ def build_product_b_vf(df_match: pd.DataFrame, vf_lookup: dict) -> pd.DataFrame:
             continue
 
         vf_data = vf_lookup[hist_wy]  # DataFrame with Month column + Part B columns
-        part_b_cols = sorted(c for c in vf_data.columns if c != "Month")
+        part_b_cols = day_columns(vf_data.columns)
 
         # February day counts for source / target
         src_feb_days = 29 if calendar.isleap(hist_wy) else 28
@@ -303,48 +321,20 @@ def build_product_b_vf(df_match: pd.DataFrame, vf_lookup: dict) -> pd.DataFrame:
             else:
                 year = syn_wy
 
-            # -- February with a day-count mismatch: resample daily bins --
+            # -- February with a day-count mismatch: resample the real days --
             if month == 2 and feb_mismatch:
-                # Collect non-NaN daily fractions in Part B sort order
-                src_parts = []
-                src_vals = []
+                src_vals = np.nan_to_num(
+                    np.array([vf_row[pb] for pb in part_b_cols[:src_feb_days]], dtype=float))
+                new_fracs = dict(zip(part_b_cols[:tgt_feb_days],
+                                     _resample_feb_fractions(src_vals, tgt_feb_days)))
                 for pb in part_b_cols:
-                    v = vf_row[pb]
-                    if not np.isnan(v):
-                        src_parts.append(pb)
-                        src_vals.append(v)
-
-                new_fracs = _resample_feb_fractions(
-                    np.array(src_vals), tgt_feb_days,
-                )
-
-                written_parts = set()
-                for i, new_val in enumerate(new_fracs):
-                    if i < len(src_parts):
-                        pb = src_parts[i]
-                    else:
-                        # Extra day (28 -> 29): pick next unused Part B bin
-                        used = set(src_parts)
-                        extra = [p for p in part_b_cols if p not in used]
-                        pb = extra[0] if extra else src_parts[-1]
-                    written_parts.add(pb)
                     rows.append({
                         "Part B": pb,
                         "Part C": "VOL-FRACTION",
                         "Year": year,
                         "Month": month,
-                        "Value": new_val,
+                        "Value": new_fracs.get(pb, 0.0),
                     })
-                # Write 0 for any Part B columns not covered by resampling
-                for pb in part_b_cols:
-                    if pb not in written_parts:
-                        rows.append({
-                            "Part B": pb,
-                            "Part C": "VOL-FRACTION",
-                            "Year": year,
-                            "Month": month,
-                            "Value": 0.0,
-                        })
                 continue
 
             # -- All other months (or Feb with matching day count): direct --
@@ -366,6 +356,20 @@ def build_product_b_vf(df_match: pd.DataFrame, vf_lookup: dict) -> pd.DataFrame:
     return df
 
 
+def check_month_sums(df: pd.DataFrame, label: str, tol: float = 1e-6) -> None:
+    """Every month sums to 1 over its real days and holds 0 on the days past its end."""
+    day = df["Part B"].map(_day_number)
+    month_days = [calendar.monthrange(int(y), int(m))[1] for y, m in zip(df["Year"], df["Month"])]
+    real = day <= np.asarray(month_days)
+    sums = df["Value"].where(real, 0.0).groupby([df["Year"], df["Month"]]).sum()
+    spill = df["Value"].where(~real, 0.0).abs().groupby([df["Year"], df["Month"]]).sum()
+    bad = sums.index[((sums - 1).abs() > tol) | (spill > tol)]
+    if len(bad):
+        y, m = bad[0]
+        raise ValueError(f"{label}: {len(bad)} months do not sum to 1 over their days, first "
+                         f"{y}-{m:02d} (real days {sums[(y, m)]:.6f}, past the end {spill[(y, m)]:.6f})")
+
+
 # Process a single chunk (top-level for pickling by ProcessPoolExecutor)
 def _process_chunk(chunk, rim_dir, ref_csv, hist_annual, vf_lookup, out_dir, match_dir):
     """Process one Product B chunk: load inflows, match WYs, write output."""
@@ -379,6 +383,7 @@ def _process_chunk(chunk, rim_dir, ref_csv, hist_annual, vf_lookup, out_dir, mat
     df_match = match_to_historical(syn_annual, hist_annual,
                                     available_wys=set(vf_lookup.keys()))
     df_vf_chunk = build_product_b_vf(df_match, vf_lookup)
+    check_month_sums(df_vf_chunk, f"chunk {chunk_tag}")
 
     out_dir.mkdir(parents=True, exist_ok=True)
     out_csv = out_dir / f"vol_fraction_productB_{chunk_tag}.csv"
