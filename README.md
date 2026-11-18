@@ -112,7 +112,9 @@ Follow the relevant manifest start to finish; it points at each module in depend
 ### 5. Documentation
 
 Published documentation: **https://centralvalleymodeling.github.io/calsim3-stochastic-input-generation/**
-(deployed automatically from `main` by `.github/workflows/deploy-docs.yml`).
+(deployed automatically from `main` by `.github/workflows/deploy-docs.yml`). The site holds the
+docs of every release tag and of `main`, with a version menu, and opens on the newest tag;
+`python docs/build_versions.py --out docs/_build/site` builds the same site locally.
 
 The docs are a Sphinx site under `docs/`. To work on them locally:
 

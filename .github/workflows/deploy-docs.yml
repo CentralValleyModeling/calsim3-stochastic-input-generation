@@ -3,6 +3,7 @@ name: Deploy Sphinx Docs to GitHub Pages
 on:
   push:
     branches: [main]   # Auto-deploy whenever main is updated
+    tags: ['v*']       # The site opens on the newest release tag
   workflow_dispatch:   # Also allow manual trigger from the GitHub Actions UI
 
 permissions:
@@ -21,6 +22,9 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+        with:
+          ref: main        # the in-progress docs are main's, whatever triggered the run
+          fetch-depth: 0   # every release tag; each builds from its own docs/
 
       - name: Set up Python
         uses: actions/setup-python@v5
@@ -30,15 +34,15 @@ jobs:
       - name: Install Sphinx dependencies
         run: pip install -r docs/requirements.txt
 
-      - name: Build HTML documentation
-        run: |
-          cd docs
-          make html
+      # One folder per release tag and one for main, switcher.json for the version menu,
+      # and a root page that opens the newest tag.
+      - name: Build the docs of every version
+        run: python docs/build_versions.py --out docs/_build/site
 
       - name: Upload pages artifact
         uses: actions/upload-pages-artifact@v3
         with:
-          path: docs/_build/html
+          path: docs/_build/site
 
   deploy:
     runs-on: ubuntu-latest
