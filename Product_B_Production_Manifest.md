@@ -24,9 +24,10 @@
 >
 > **Tier structure mirrors `docs/source/input-generation/overview.md`:**
 > Tier 1 Forcing -> Tier 2 Core Hydrology -> Tier 3 Water Year Types ->
-> Tier 4 Dependent Modules -> Tier 5 Final Compilation. Within Tier 2,
-> each external-run model is presented as a contiguous block:
-> compile precip/ET -> [EXTERNAL] model run -> postprocess.
+> Tier 4 Dependent Modules -> Tier 5 Final Compilation. Each external-run
+> model is presented as a contiguous block:
+> compile precip/ET -> [EXTERNAL] model run -> postprocess. Delta Channel
+> Depletion sits in Tier 4 because its runs take the chunks' water year types.
 >
 > **Per-script details** (CLI flags / methodology) live in each script's
 > standardized header docstring. Convention is enforced by
@@ -53,7 +54,8 @@ Tier 1  FORCING (mod_forcing)
 Tier 2  CORE HYDROLOGY (mod_hydrology)
     CalSimHydro:
         python mod_hydrology/calsimhydro/_1_compile_precip.py --product B
-        ET: no Product B producer yet (steps 10a-14 of mod_forcing/climate/_3_refet_cimis_adj write Product A)
+        python mod_forcing/climate/_3_refet_f1_factors.py --step all          (setup; once, on Historical_Unsplit)
+        python mod_forcing/climate/_4_refet_product_et.py --product B         (after _1: step 13 reads its precip)
         python mod_hydrology/calsimhydro/_2b_compile_pan_evap.py --product B
         -> [EXTERNAL] CalSimHydro model run (10 chunks)
         python mod_hydrology/calsimhydro/_4_postprocess_product_b.py
@@ -67,18 +69,18 @@ Tier 2  CORE HYDROLOGY (mod_hydrology)
         python mod_hydrology/small_watersheds/_1_compile_precip_sws.py --product B
         -> [EXTERNAL] Small Watersheds model run (10 chunks)
         python mod_hydrology/small_watersheds/_3_postprocess_product_b.py
-    Delta Channel Depletion:
-        python mod_hydrology/delta_channel_depletion/_1_compile_precip_DETAW.py --product B
-        python mod_hydrology/delta_channel_depletion/_1b_prepare_dcd_run.py --product B --chunk N --run-dir <run>
-        -> [EXTERNAL] DETAW/DCD model run (10 chunks)
-        python mod_hydrology/delta_channel_depletion/_1c_build_cs3sv_dss.py --run-dir <run>  (per chunk)
-        python mod_hydrology/delta_channel_depletion/_3_postprocess_product_b.py
 
 Tier 3  WATER YEAR TYPES (mod_hydrology)
         python mod_hydrology/water_year_types/_1_calc_WYTs.py --product B
 
 Tier 4  DEPENDENT MODULES
-    Reservoir Evaporation:=
+    Delta Channel Depletion (its runs take the chunks' Sacramento year types):
+        python mod_hydrology/delta_channel_depletion/_1_compile_precip_DETAW.py --product B
+        python mod_hydrology/delta_channel_depletion/_1b_prepare_dcd_run.py --product B --chunk N --run-dir <run>
+        -> [EXTERNAL] DETAW/DCD model run (10 chunks)
+        python mod_hydrology/delta_channel_depletion/_1c_build_cs3sv_dss.py --run-dir <run>  (per chunk)
+        python mod_hydrology/delta_channel_depletion/_3_postprocess_product_b.py
+    Reservoir Evaporation:
         python mod_reservoir/evaporation/_2_run_reservoir_evap.py --product B
     Reservoir Storage Curves:
         python mod_reservoir/storage_curves/_1_wyt_index_curves.py --product B
@@ -120,7 +122,7 @@ Tier 5  FINAL COMPILATION (postprocessing)
 
         Optional CLI flags:
           --chunks N [N ...]   Process specific chunks (default: all 10).
-          --skip-comparison    Skip the Product A vs B comparison step.
+          --skip-comparison    Skip the comparison with the CalSim 3 baseline.
           --skip-dss           Skip DSS file generation (CSV only).
           --allow-missing      Compile even if a module or chunk has no CSVs
                                (the baseline then fills its SVs).
@@ -132,7 +134,7 @@ Tier 5  FINAL COMPILATION (postprocessing)
 ```
 
 Final-compiler module scan order (authoritative -- `MODULE_CONFIG_B` in
-`product_b_compilation.py:165-208`):
+`product_b_compilation.py`):
 calsimhydro -> calsimhydro_ee -> evaporation -> rim_inflow ->
 delta_channel_depletion -> small_watersheds -> storage_curves ->
 instream_flows -> tulare_gw_terms -> climate -> miscellaneous ->
@@ -191,8 +193,13 @@ chunk CSVs under `_product_b_final/`.
 1. `python mod_hydrology/calsimhydro/_1_compile_precip.py --product B`
    - **Inputs:** WGEN met files; WBA grid info
    - **Outputs:** daily WBA precip CSVs per chunk
-2. ET: no Product B producer in the repo yet. Steps 10a-14 of
-   `mod_forcing/climate/_3_refet_cimis_adj` write Product A only.
+2. `python mod_forcing/climate/_4_refet_product_et.py --product B`, after
+   `python mod_forcing/climate/_3_refet_f1_factors.py --step all` (once, on Historical_Unsplit)
+   - **Inputs:** WGEN Product B weather; the F1 table of `_3_refet_f1_factors.py`; step 13
+     reads the per-chunk precipitation of step 1
+   - **Outputs:** `_2_compile_et/Product_B/CS3_RefETo_n01.dss` ... `_n10.dss` (step 11) and
+     `CS3_ET_n01.dss` ... `_n10.dss` (step 14, with the bare soil and urban climatologies of
+     the existing input), each Jan 1920 - Dec 2021
 3. `python mod_hydrology/calsimhydro/_2b_compile_pan_evap.py --product B`
    - **Inputs:** WGEN temperature of Historical_Unsplit (the QM fit) and Product B
    - **Outputs:** `_2_compile_et/Product_B/CS3_PanEvap_n01.dss` ... `_n10.dss`
@@ -246,25 +253,6 @@ chunk CSVs under `_product_b_final/`.
    - **Inputs:** external SWS DSS; master inventory
    - **Outputs:** `_product_b_final/*.csv`
 
-### Delta Channel Depletion (28 vars)
-
-1. `python mod_hydrology/delta_channel_depletion/_1_compile_precip_DETAW.py --product B`
-   - **Inputs:** WGEN met files; DCD station list
-   - **Outputs:** daily DCD-station precip per chunk
-2. `python mod_hydrology/delta_channel_depletion/_1b_prepare_dcd_run.py --product B --chunk N --run-dir <run>`, per chunk
-   - **Inputs:** the chunk's DCD-station weather; water_year_types `_SacWYT_nKK.csv` (run
-     `_1_calc_WYTs.py --product B` first); a copy of `DCD_Calsim3_PlanningStudy_1921-2018`
-   - **Outputs:** the run's weather, Landuse TYPE, WYTYPES and GW_RATES, WY1922-2021
-3. **[EXTERNAL] DETAW/DCD model run (10 chunks)**: `python DCD.py` in `<run>/DCD`
-4. `python mod_hydrology/delta_channel_depletion/_1c_build_cs3sv_dss.py --run-dir <run>`, per chunk
-   - **Outputs:** `<run>/DCD/Output/CALSIM3/CS3sv_DCD_PRISM_Dtrnd.dss` (DSS 6)
-5. `python mod_hydrology/delta_channel_depletion/_3_postprocess_product_b.py`
-   - Optional: `--chunks 1 2 3`, `--compare-a`, `--plot`
-   - **Inputs:** `DeltaChannelDepletion_Runs/DCD_Calsim3_PlanningStudy_Product_B/
-     CS3sv_DCD_PRISM_Dtrnd_n{01..10}.DSS`; master inventory (CFS->TAF)
-   - **Outputs:** `_dcd_productB_n{01..10}.csv` and
-     `_product_b_final/*.csv`
-
 ---
 
 ## Tier 3 - Water Year Types (mod_hydrology)
@@ -276,6 +264,25 @@ chunk CSVs under `_product_b_final/`.
 ---
 
 ## Tier 4 - Dependent Modules
+
+### Delta Channel Depletion (28 vars)
+
+1. `python mod_hydrology/delta_channel_depletion/_1_compile_precip_DETAW.py --product B`
+   - **Inputs:** WGEN met files; DCD station list
+   - **Outputs:** daily DCD-station precip per chunk
+2. `python mod_hydrology/delta_channel_depletion/_1b_prepare_dcd_run.py --product B --chunk N --run-dir <run>`, per chunk
+   - **Inputs:** the chunk's DCD-station weather; water_year_types `_SacWYT_nKK.csv` (Tier 3);
+     a copy of `DCD_Calsim3_PlanningStudy_1921-2018`
+   - **Outputs:** the run's weather, Landuse TYPE, WYTYPES and GW_RATES, WY1922-2021
+3. **[EXTERNAL] DETAW/DCD model run (10 chunks)**: `python DCD.py` in `<run>/DCD`
+4. `python mod_hydrology/delta_channel_depletion/_1c_build_cs3sv_dss.py --run-dir <run>`, per chunk
+   - **Outputs:** `<run>/DCD/Output/CALSIM3/CS3sv_DCD_PRISM_Dtrnd.dss` (DSS 6)
+5. `python mod_hydrology/delta_channel_depletion/_3_postprocess_product_b.py`
+   - Optional: `--chunks 1 2 3`, `--compare-a`, `--plot`
+   - **Inputs:** `DeltaChannelDepletion_Runs/DCD_Calsim3_PlanningStudy_Product_B/
+     CS3sv_DCD_PRISM_Dtrnd_n{01..10}.DSS`; master inventory (CFS->TAF)
+   - **Outputs:** `_dcd_productB_n{01..10}.csv` and
+     `_product_b_final/*.csv`
 
 ### Reservoir Evaporation (95 vars)
 
@@ -383,7 +390,7 @@ patterns auto-filled by the final compiler from the CalSim baseline
 
 | Script | Command | Inputs | Outputs |
 |---|---|---|---|
-| sv_compile (final) | `python postprocessing/sv_compile/product_b_compilation.py` (`--chunks N`; `--skip-comparison`; `--skip-dss`; `--summary-figures`) | every module's `_product_b_final/*.csv`; CS3 baseline DSS; master inventory; optional Product A compiled DSS for comparison | `ProductB_SV_n{01..10}.dss` (10 chunks; canonical window Oct 1921 - Sep 2021 / WY 1922-2021; first 9 months of each chunk skipped for water-year alignment); inventory cross-reference CSVs; `product_b_vs_a_comparison.csv` and `product_b_vs_calsim_base_comparison.csv` + per-category `figures/` |
+| sv_compile (final) | `python postprocessing/sv_compile/product_b_compilation.py` (`--chunks N`; `--skip-comparison`; `--skip-dss`; `--summary-figures`) | every module's `_product_b_final/*.csv`; CS3 baseline DSS; master inventory | `ProductB_SV_n{01..10}.dss` (10 chunks; canonical window Oct 1921 - Sep 2021 / WY 1922-2021; first 9 months of each chunk skipped for water-year alignment); inventory cross-reference CSVs; `product_b_vs_calsim_base_comparison.csv` + per-category `figures/` |
 | n10 cold-start fix | `python postprocessing/calsim_runs/infeasibilities/n10.py` | compiled `ProductB_SV_n10.dss`; CalSim baseline DSS | `ProductB_SV_n10_fixed.dss` -- baseline SV values restored for months <= Oct 1921, curing the n10 first-timestep LP infeasibility caused by an extreme cold-start stochastic draw (Cosumnes/Sacramento inflows 10-60x baseline at Oct 1921); Nov 1921 - Sep 2021 stochastic sequence preserved. **Required:** use `_n10_fixed.dss` (not the raw `_n10.dss`) as the n10 input to CalSim, and re-run this script whenever n10 is recompiled. Only n10 needs an SV-side fix; other chunks are handled by WRESL model-code changes. |
 | (optional) calsim_runs | `python postprocessing/calsim_runs/_productB_pickle_builder.py`; `python postprocessing/calsim_runs/_productB_postproc.py` | external CalSim 3.0 run results consuming `ProductB_SV_n{01..10}.dss` | Product B run pickle cache (per-chunk values / diffs / units pkls) |
 

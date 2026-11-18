@@ -142,7 +142,7 @@ through `utils.dss_io` and no hard-coded `../data`. The shape:
 
 WGEN -> rim-inflow model (mod_forcing/inflows) -> rim_inflow builder -> [water_year_types, mod_other, ...]; WGEN -> [climate, calsimhydro, calsimhydro_ee, evaporation, ...] -> postprocessing/sv_compile -> Final DSS
 
-**Tiers**: (1) mod_forcing/inflows, (2) mod_forcing/climate, (3) mod_hydrology/*, (4) water_year_types, (5) delta_channel_depletion + small_watersheds, (6) mod_reservoir/evaporation (independent), (7) mod_other/*, (8) postprocessing/sv_compile
+**Tiers**: (1) mod_forcing/inflows, (2) mod_forcing/climate (its reference ET, `_4_refet_product_et.py`, after `mod_hydrology/calsimhydro/_1_compile_precip.py`, whose precipitation step 13 reads), (3) mod_hydrology/*, (4) water_year_types, (5) delta_channel_depletion + small_watersheds, (6) mod_reservoir/evaporation (independent), (7) mod_other/*, (8) postprocessing/sv_compile
 
 ---
 

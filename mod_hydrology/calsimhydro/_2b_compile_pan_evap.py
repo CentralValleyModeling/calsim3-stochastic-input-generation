@@ -18,8 +18,8 @@ Inputs
 
 Outputs
 -------
-Under <generated>/mod_hydrology/calsimhydro/output/_2_compile_et/, beside the RefET and CropET
-of mod_forcing/climate/_3_refet_cimis_adj (steps 11a and 14):
+Under <generated>/mod_hydrology/calsimhydro/output/_2_compile_et/, beside CS3_RefETo.dss and
+CS3_ET.dss of mod_forcing/climate/_4_refet_product_et.py (steps 11 and 14):
 - <Historical_Unsplit|Product_A>/PanEvap_QMAP_results.csv (date, hs_eto_in, pan_evap_in,
   cs3_pan_evap_in) and CS3_PanEvap.dss, WY1921-2018
 - Product_B/PanEvap_QMAP_results.csv by stamp month, and CS3_PanEvap_n01.dss ... _n10.dss,
@@ -73,8 +73,8 @@ def gerber_cells(grid_info_file: Path) -> pd.DataFrame:
 
 
 def hargreaves_samani_mm(lat_deg: float, doy: np.ndarray, tmax: np.ndarray, tmin: np.ndarray) -> np.ndarray:
-    """Daily Hargreaves-Samani ETo (mm/day) on days of the year ``doy``, the form of step 10a in
-    mod_forcing/climate/_3_refet_cimis_adj."""
+    """Daily Hargreaves-Samani ETo (mm/day) on days of the year ``doy``, the form of step 10 of
+    mod_forcing/climate/refet_cimis_adj.py."""
     phi = np.radians(lat_deg)
     dr =1 + 0.033 * np.cos(2 * np.pi * doy / 365.25)
     delta = 0.409 * np.sin(2 * np.pi * doy / 365.25 - 1.39)

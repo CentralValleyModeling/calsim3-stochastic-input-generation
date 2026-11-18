@@ -33,9 +33,10 @@
 >
 > **Tier structure mirrors `docs/source/input-generation/overview.md`:**
 > Tier 1 Forcing -> Tier 2 Core Hydrology -> Tier 3 Water Year Types ->
-> Tier 4 Dependent Modules -> Tier 5 Final Compilation. Within Tier 2, each
-> external-run model is presented as a contiguous block:
-> compile precip/ET -> [EXTERNAL] model run -> postprocess.
+> Tier 4 Dependent Modules -> Tier 5 Final Compilation. Each external-run
+> model is presented as a contiguous block:
+> compile precip/ET -> [EXTERNAL] model run -> postprocess. Delta Channel
+> Depletion sits in Tier 4 because its run takes the set's water year types.
 >
 > **Per-script details** (CLI flags / methodology) live in each script's
 > standardized header docstring. Convention is enforced by
@@ -61,7 +62,8 @@ Tier 1  FORCING (mod_forcing)
 Tier 2  CORE HYDROLOGY (mod_hydrology)
     CalSimHydro:
         python mod_hydrology/calsimhydro/_1_compile_precip.py --product A --clip_period 1920-10-01 2018-09-30
-        ET: steps 10a-14 of mod_forcing/climate/_3_refet_cimis_adj (Product A)
+        python mod_forcing/climate/_3_refet_f1_factors.py --step all          (setup; once, on Historical_Unsplit)
+        python mod_forcing/climate/_4_refet_product_et.py --product A         (after _1: step 13 reads its precip)
         python mod_hydrology/calsimhydro/_2b_compile_pan_evap.py --product A
         -> [EXTERNAL] CalSimHydro model run
         python mod_hydrology/calsimhydro/_3_postprocess_single.py --product A --sources cshydro rebalance rice
@@ -75,17 +77,17 @@ Tier 2  CORE HYDROLOGY (mod_hydrology)
         python mod_hydrology/small_watersheds/_1_compile_precip_sws.py --product A
         -> [EXTERNAL] Small Watersheds model run
         python mod_hydrology/small_watersheds/_2_postprocess_single.py --product A
-    Delta Channel Depletion:
-        python mod_hydrology/delta_channel_depletion/_1_compile_precip_DETAW.py --product A
-        python mod_hydrology/delta_channel_depletion/_1b_prepare_dcd_run.py --product A --run-dir <run>
-        -> [EXTERNAL] DETAW/DCD model run
-        python mod_hydrology/delta_channel_depletion/_1c_build_cs3sv_dss.py --run-dir <run>
-        python mod_hydrology/delta_channel_depletion/_2_postprocess_single.py --product A
 
 Tier 3  WATER YEAR TYPES (mod_hydrology)
         python mod_hydrology/water_year_types/_1_calc_WYTs.py --product A
 
 Tier 4  DEPENDENT MODULES
+    Delta Channel Depletion (its run takes the set's Sacramento year types):
+        python mod_hydrology/delta_channel_depletion/_1_compile_precip_DETAW.py --product A
+        python mod_hydrology/delta_channel_depletion/_1b_prepare_dcd_run.py --product A --run-dir <run>
+        -> [EXTERNAL] DETAW/DCD model run
+        python mod_hydrology/delta_channel_depletion/_1c_build_cs3sv_dss.py --run-dir <run>
+        python mod_hydrology/delta_channel_depletion/_2_postprocess_single.py --product A
     Reservoir Evaporation:
         python mod_reservoir/evaporation/_0_extract_reservoir_database.py --extract   (setup; run once)
         python mod_reservoir/evaporation/_2_run_reservoir_evap.py --product A
@@ -143,8 +145,10 @@ upper_watershed. An SV that two modules deliver stops the compile.
   filtering and the final compiler's expected/missing/constant-rept
   accounting.
 - `<module>/reference/qmap_pairs.csv` -- QM target/predictor pairs.
-- `mod_hydrology/rim_inflow/reference/CalSim3_VIC_name_mapping.csv`,
-  `RimInflowAnchor.xlsx` -- rim QM pairing + anchor/tributary mass balance.
+- `mod_hydrology/rim_inflow/reference/CalSim3_inflow_mapping.csv` -- the
+  method of each rim-inflow SV: model arc, anchor sum, pass-through QM;
+  `CalSim3_VIC_name_mapping.csv` names the VIC series the skill evaluation
+  scores beside it.
 - `.github/copilot-instructions.md` -- per-module script tables and the
   numbered-script convention enforced by `utils/check_scripts.py`.
 
@@ -178,10 +182,12 @@ Watersheds; `<set>`: `Historical_Unsplit`, `Product_A`).
 1. `python mod_hydrology/calsimhydro/_1_compile_precip.py --product A --clip_period 1920-10-01 2018-09-30`
    - **Inputs:** WGEN met files; WBA grid info
    - **Outputs:** daily WBA precip CSVs under `_1_compile_precip/<set>/`
-2. ET: steps 10a-14 of `mod_forcing/climate/_3_refet_cimis_adj`, run from that folder
-   - **Inputs:** WGEN Product A weather; CIMIS ETo 2004-2018
-   - **Outputs:** `_2_compile_et/Product_A/CS3_RefETo.dss` (step 11a) and `CS3_ET.dss`
-     (step 14). Product A only.
+2. `python mod_forcing/climate/_4_refet_product_et.py --product A`, after
+   `python mod_forcing/climate/_3_refet_f1_factors.py --step all` (once, on Historical_Unsplit)
+   - **Inputs:** WGEN weather of the set; the F1 table of `_3_refet_f1_factors.py` (fit on
+     CIMIS ETo 2004-2018); step 13 reads the precipitation of step 1
+   - **Outputs:** `_2_compile_et/Product_A/CS3_RefETo.dss` (step 11) and `CS3_ET.dss`
+     (step 14, with the bare soil and urban climatologies of the existing input)
 3. `python mod_hydrology/calsimhydro/_2b_compile_pan_evap.py --product A`
    - **Inputs:** WGEN temperature
    - **Outputs:** Gerber pan evaporation per WBA
@@ -202,7 +208,7 @@ Watersheds; `<set>`: `Historical_Unsplit`, `Product_A`).
    - **Inputs:** the set's CSHydroEE DSS; master inventory
    - **Outputs:** `_cshydroEE_productA_<span>.csv`, the run's water years within WY 1922-2018 (+ merged/summary/boxplots under `_2_postprocess_single/<set>/`)
 
-### Rim Inflow (227 vars)
+### Rim Inflow (228 vars)
 
 1. `python mod_hydrology/rim_inflow/_1_build_rim_inflow.py --product A`
    - **Inputs:** the arc flows of inflows/_2 (only from a run at the pin); `CalSim3_inflow_mapping.csv`; CS3 baseline DSS (pass-through QM fits of the aliases)
@@ -219,21 +225,6 @@ Watersheds; `<set>`: `Historical_Unsplit`, `Product_A`).
    - **Inputs:** the set's SWS DSS; master inventory
    - **Outputs:** `_smallwatersheds_productA_1922_2018.csv` (+ merged/summary/boxplots under `_2_postprocess_single/<set>/`)
 
-### Delta Channel Depletion (28 vars)
-
-1. `python mod_hydrology/delta_channel_depletion/_1_compile_precip_DETAW.py --product A`
-   - **Inputs:** WGEN met files; DCD station list
-   - **Outputs:** daily DCD-station precip
-2. `python mod_hydrology/delta_channel_depletion/_1b_prepare_dcd_run.py --product A --run-dir <run>`
-   - **Inputs:** the set's DCD-station weather; water_year_types `_SacWYT.csv` (run `_1_calc_WYTs.py --product A` first); the run folder `DCD_<set>_1921-2018`, a copy of `DCD_Calsim3_PlanningStudy_1921-2018`
-   - **Outputs:** the run's weather, Landuse TYPE and WYTYPES, WY1922-2018
-3. **[EXTERNAL] DETAW/DCD model run**: `python DCD.py` in `<run>/DCD`
-4. `python mod_hydrology/delta_channel_depletion/_1c_build_cs3sv_dss.py --run-dir <run>`
-   - **Outputs:** `DCD_<set>_1921-2018/DCD/Output/CALSIM3/CS3sv_DCD_PRISM_Dtrnd.dss` (DSS 6; the postprocessor also reads the baseline run `DCD_Calsim3_PlanningStudy_1921-2018`)
-5. `python mod_hydrology/delta_channel_depletion/_2_postprocess_single.py --product A`
-   - **Inputs:** the set's DCD DSS; master inventory (CFS->TAF)
-   - **Outputs:** `_dcd_productA_1922_2018.csv` (+ merged/summary/boxplots under `_2_postprocess_single/<set>/`)
-
 ---
 
 ## Tier 3 - Water Year Types (mod_hydrology)
@@ -245,6 +236,21 @@ Watersheds; `<set>`: `Historical_Unsplit`, `Product_A`).
 ---
 
 ## Tier 4 - Dependent Modules
+
+### Delta Channel Depletion (28 vars)
+
+1. `python mod_hydrology/delta_channel_depletion/_1_compile_precip_DETAW.py --product A`
+   - **Inputs:** WGEN met files; DCD station list
+   - **Outputs:** daily DCD-station precip
+2. `python mod_hydrology/delta_channel_depletion/_1b_prepare_dcd_run.py --product A --run-dir <run>`
+   - **Inputs:** the set's DCD-station weather; water_year_types `_SacWYT.csv` (Tier 3); the run folder `DCD_<set>_1921-2018`, a copy of `DCD_Calsim3_PlanningStudy_1921-2018`
+   - **Outputs:** the run's weather, Landuse TYPE and WYTYPES, WY1922-2018
+3. **[EXTERNAL] DETAW/DCD model run**: `python DCD.py` in `<run>/DCD`
+4. `python mod_hydrology/delta_channel_depletion/_1c_build_cs3sv_dss.py --run-dir <run>`
+   - **Outputs:** `DCD_<set>_1921-2018/DCD/Output/CALSIM3/CS3sv_DCD_PRISM_Dtrnd.dss` (DSS 6; the postprocessor also reads the baseline run `DCD_Calsim3_PlanningStudy_1921-2018`)
+5. `python mod_hydrology/delta_channel_depletion/_2_postprocess_single.py --product A`
+   - **Inputs:** the set's DCD DSS; master inventory (CFS->TAF)
+   - **Outputs:** `_dcd_productA_1922_2018.csv` (+ merged/summary/boxplots under `_2_postprocess_single/<set>/`)
 
 ### Reservoir Evaporation (95 vars)
 
