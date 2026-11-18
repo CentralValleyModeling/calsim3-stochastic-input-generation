@@ -273,9 +273,21 @@ def daily_chunk_1920_2021(values, chunk: int) -> np.ndarray:
     is a leap year), Oct-Dec 2021 the 92 days after them, and 1920 is a copy of 1921 with 28
     February repeated as 29 February."""
     first, n = chunk_days(chunk)
-    values = np.asarray(values)
-    jan_sep = np.delete(values[first - 274:first], 31 + 28)
-    from_1921 = np.concatenate([jan_sep, values[first:first + n + 92]])
+    return days_1920_2021(np.asarray(values)[first - 274:first + n + 92])
+
+
+#: Days of a chunk's 101 stamp years, the years labelled 1921-2021 (26 of them leap years).
+CHUNK_YEAR_DAYS = 101 * 365 + 26
+
+
+def days_1920_2021(stamp_days) -> np.ndarray:
+    """``daily_chunk_1920_2021`` from the days of the chunk's own stamp years, the years labelled
+    1921 to 2021, from 1 January of the first (a leap year) to 31 December of the last: rows of a
+    1-D or 2-D array, ``CHUNK_YEAR_DAYS`` of them."""
+    stamp_days = np.asarray(stamp_days)
+    if len(stamp_days) != CHUNK_YEAR_DAYS:
+        raise ValueError(f"{len(stamp_days)} days, not the {CHUNK_YEAR_DAYS} of a chunk's stamp years")
+    from_1921 = np.delete(stamp_days, 31 + 28, axis=0)
     y1921 = from_1921[:365]
     return np.concatenate([y1921[:59], y1921[58:59], y1921[59:], from_1921])
 

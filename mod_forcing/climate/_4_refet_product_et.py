@@ -10,14 +10,16 @@ from its WGEN weather and the correction factors of ``_3_refet_f1_factors.py``:
     step 11  area weighted monthly ETo per WBA, subregion and small watershed
              (manual section 8) and CS3_RefETo.dss
     step 12  monthly polygon ETo to daily values by a cubic spline, a Python
-             replica of the macro of DWR's CUP+ Excel workbook (manual section 9)
+             replica of the macro of DWR's CUP+ Excel workbook (manual section 9);
+             a Product B chunk's spline runs over its stamp years and its days are
+             laid out like its precipitation
     step 13  daily precipitation per WBA for CUP+: CalSimHydro's series from
              mod_hydrology/calsimhydro/_1_compile_precip.py, and WBA_DETAW from
              its step 0 grid cells
     step 14  the CUP+ (PyCUP) crop ET run on the 43 WBAs, and CS3_ET.dss: crop
-             ET per WBA and land use type plus the 64 crop ET records that do
-             not depend on climate (42 SL climatologies, 2 RI terms), copied
-             from the existing CalSimHydro input
+             ET per WBA and land use type plus the 106 crop ET records that do
+             not depend on climate (the bare soil and urban climatologies of 42
+             WBAs, 2 RI terms), copied from the existing CalSimHydro input
 
 Manual: User_Manual_CS3_Domain_v2.pdf (Mohammad Monirul Hasan, DWR MSO); the
 library ``refet_cimis_adj.py`` states where the code departs from it.

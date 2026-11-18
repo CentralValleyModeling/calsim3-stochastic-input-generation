@@ -1189,21 +1189,43 @@ def spline_daily(monthly_means: np.ndarray) -> np.ndarray:
     return daily
 
 
-def disaggregate(monthly: pd.DataFrame) -> pd.DataFrame:
-    """Daily ETo (inches/day) for every calendar year of a month end indexed table of
-    monthly totals. Day counts follow the Gregorian calendar of the index years."""
-    blocks = []
-    for year in range(monthly.index[0].year, monthly.index[-1].year + 1):
-        totals = monthly.loc[str(year)]
-        if len(totals) != 12:
-            raise ValueError(f"{year}: {len(totals)} months in the monthly table, expected 12")
-        days = np.array([calendar.monthrange(year, month)[1] for month in range(1, 13)], dtype=float)
-        daily = spline_daily(totals.to_numpy(dtype=float) / days[:, None])
-        if calendar.isleap(year):
-            daily = np.vstack([daily, daily[-1:]])     # Splint!T415 = N414
-        dates = pd.date_range(f"{year}-01-01", f"{year}-12-31", freq="D")
-        blocks.append(pd.DataFrame(daily, index=dates, columns=monthly.columns))
-    return pd.concat(blocks)
+def spline_year(totals: np.ndarray, lengths: np.ndarray) -> np.ndarray:
+    """Daily ETo of one year from its 12 monthly totals (rows) and month lengths: 365 rows, or
+    366 when February has 29 days."""
+    daily = spline_daily(totals / lengths[:, None])
+    if lengths[1] == 29:
+        daily = np.vstack([daily, daily[-1:]])     # Splint!T415 = N414
+    return daily
+
+
+def disaggregate(monthly: pd.DataFrame, chunk: int | None = None) -> pd.DataFrame:
+    """Daily ETo (inches/day) for every calendar year of a month end indexed table of monthly
+    totals. A single series follows the Gregorian calendar of its years. A Product B chunk's
+    table runs January 1920 to December 2021 (chunk_monthly_window), so each year from 1921 is
+    one of the chunk's stamp years: its totals are divided by the stamp month lengths, its
+    spline runs over the stamp year's days, and those days are laid out on 1920-2021 like the
+    chunk's precipitation (chunk_daily_window)."""
+    years = range(monthly.index[0].year, monthly.index[-1].year + 1)
+
+    def totals(year: int) -> np.ndarray:
+        table = monthly.loc[str(year)]
+        if len(table) != 12:
+            raise ValueError(f"{year}: {len(table)} months in the monthly table, expected 12")
+        return table.to_numpy(dtype=float)
+
+    if chunk is None:
+        return pd.concat([pd.DataFrame(spline_year(totals(year), gregorian_month_lengths(year)),
+                                       index=pd.date_range(f"{year}-01-01", f"{year}-12-31", freq="D"),
+                                       columns=monthly.columns)
+                          for year in years])
+    if (years[0], years[-1]) != (CHUNK_START_YEAR, CHUNK_END_YEAR):
+        raise ValueError(f"chunk {chunk}: the monthly table runs {years[0]}-{years[-1]}, not "
+                         f"{CHUNK_START_YEAR}-{CHUNK_END_YEAR}")
+    first_stamp_year = wgen_calendar.chunk_span(chunk)[0][0]      # labelled 1921
+    stamp_days = np.vstack([spline_year(totals(year), stamp_month_lengths(first_stamp_year + year - 1921))
+                            for year in range(CHUNK_START_YEAR + 1, CHUNK_END_YEAR + 1)])
+    return pd.DataFrame(wgen_calendar.days_1920_2021(stamp_days), index=chunk_day_index(),
+                        columns=monthly.columns)
 
 
 def write_etocum_table(monthly: pd.DataFrame, path: Path) -> None:
@@ -1337,9 +1359,10 @@ def wba_columns(columns) -> list[str]:
 # - CS3_RefETo.dss: monthly reference ETo per WBA, /CALSIM/WBA 02/REF-ET//1MON/REFETO/,
 #   IN/MONTH, PER-CUM (step 11);
 # - CS3_ET.dss: monthly crop ET per WBA and land use type,
-#   /IWFM/WBA02_AL_ET/RATE_INCH//1MON/EVAPOTRANSPIRATION/, IN, PER-CUM, plus the 64 crop ET
-#   records that do not depend on climate, copied from the existing input: 42 SL climatologies
-#   (part D 01JAN4000) and 2 RI terms in 11 decade blocks (step 14).
+#   /IWFM/WBA02_AL_ET/RATE_INCH//1MON/EVAPOTRANSPIRATION/, IN, PER-CUM, plus the 106 crop ET
+#   records that do not depend on climate, copied from the existing input: the bare soil (SL)
+#   and urban (UR) climatologies of the 42 WBAs (part D 01JAN4000, urban zero in Dec-Feb) and
+#   2 RI terms in 11 decade blocks (step 14). CUP+ writes no SL or UR record.
 # Every DSS goes through utils.dss_io.open_dss (pydsstools, long path junction).
 
 STATIC_CROP_ET_WBAS = {
@@ -1350,9 +1373,12 @@ STATIC_CROP_ET_WBAS = {
     "WBA26N", "WBA26S", "WBA50", "WBA60N", "WBA60S", "WBA61", "WBA62",
     "WBA63", "WBA64", "WBA71", "WBA72", "WBA73", "WBA90", "WBA91",
 }
+CLIMATOLOGY_LAND_USES = ("SL", "UR")
+CLIMATOLOGY_PART_B = {f"{wba}_{land_use}_ET" for wba in STATIC_CROP_ET_WBAS
+                      for land_use in CLIMATOLOGY_LAND_USES}
 STATIC_RI_CROP_ET_PART_B = {"WBA02_RI_ET", "WBA03_RI_ET"}
 STATIC_RI_CROP_ET_D_PARTS = {f"01JAN{year}" for year in range(1920, 2030, 10)}
-LEGACY_RECORD_COUNT = len(STATIC_CROP_ET_WBAS) + len(STATIC_RI_CROP_ET_PART_B) * len(STATIC_RI_CROP_ET_D_PARTS)
+LEGACY_RECORD_COUNT = len(CLIMATOLOGY_PART_B) + len(STATIC_RI_CROP_ET_PART_B) * len(STATIC_RI_CROP_ET_D_PARTS)
 
 
 def remove_dss_files(path: Path) -> None:
@@ -1475,8 +1501,10 @@ def validate_land_use_et(path: Path, part_bs: list[str], start_year: int, end_ye
 
 
 def copy_legacy_crop_et_records(target_dss: Path, reference_dss: Path) -> int:
-    """Copy the 42 SL climatologies and the 22 RI decade block records from the historical
-    CalSimHydro ET input into the target, and verify they are all there."""
+    """Copy the 84 SL and UR climatologies and the 22 RI decade block records from the
+    historical CalSimHydro ET input into the target, and verify they are all there. Stops if
+    the target already holds an SL or UR record: CalSimHydro reads these pathnames with a blank
+    part D, so a CUP+ series beside the climatology would be ambiguous."""
     from utils import dss_io
 
     reference_dss = Path(reference_dss)
@@ -1489,9 +1517,15 @@ def copy_legacy_crop_et_records(target_dss: Path, reference_dss: Path) -> int:
     with dss_io.open_dss(reference_dss, version=6, catalog_flag=False) as source:
         with dss_io.open_dss(target_dss, version=6, catalog_flag=False) as target:
             source_paths = source.getPathnameList("/*/*/*/*/*/*/") or []
-            existing = {pathname.upper() for pathname in target.getPathnameList("/*/*/*/*/*/*/") or []}
+            target_paths = target.getPathnameList("/*/*/*/*/*/*/") or []
+            existing = {pathname.upper() for pathname in target_paths}
+            clashes = sorted({pathname.strip("/").split("/")[1].upper() for pathname in target_paths}
+                             & CLIMATOLOGY_PART_B)
+            if clashes:
+                raise ValueError(f"{target_dss} already holds {len(clashes)} SL/UR records, first "
+                                 f"{clashes[0]}; they come only from the climatologies")
             required = []
-            found_sl = set()
+            found_climatology = set()
             found_ri = {part_b: set() for part_b in STATIC_RI_CROP_ET_PART_B}
             for pathname in source_paths:
                 parts = pathname.strip("/").split("/")
@@ -1501,21 +1535,19 @@ def copy_legacy_crop_et_records(target_dss: Path, reference_dss: Path) -> int:
                 part_b = part_b.upper()
                 if part_c.upper() != "RATE_INCH" or part_f.upper() != "EVAPOTRANSPIRATION":
                     continue
-                if part_b.endswith("_SL_ET") and part_d.upper() == "01JAN4000":
-                    wba = part_b.removesuffix("_SL_ET")
-                    if wba in STATIC_CROP_ET_WBAS:
-                        found_sl.add(wba)
-                        required.append(pathname)
+                if part_b in CLIMATOLOGY_PART_B and part_d.upper() == "01JAN4000":
+                    found_climatology.add(part_b)
+                    required.append(pathname)
                 elif part_b in STATIC_RI_CROP_ET_PART_B:
                     found_ri[part_b].add(part_d.upper())
                     if part_d.upper() in STATIC_RI_CROP_ET_D_PARTS:
                         required.append(pathname)
-            missing_sl = STATIC_CROP_ET_WBAS - found_sl
+            missing_climatology = CLIMATOLOGY_PART_B - found_climatology
             missing_ri = {part_b: sorted(STATIC_RI_CROP_ET_D_PARTS - parts_d)
                           for part_b, parts_d in found_ri.items() if STATIC_RI_CROP_ET_D_PARTS - parts_d}
-            if missing_sl or missing_ri:
-                raise ValueError(f"reference DSS lacks legacy CropET records: SL={sorted(missing_sl)}, "
-                                 f"RI blocks={missing_ri}")
+            if missing_climatology or missing_ri:
+                raise ValueError(f"reference DSS lacks legacy CropET records: "
+                                 f"SL/UR={sorted(missing_climatology)}, RI blocks={missing_ri}")
             if len(required) != LEGACY_RECORD_COUNT:
                 raise ValueError(f"reference DSS has duplicate legacy CropET pathnames; found "
                                  f"{len(required)}, expected {LEGACY_RECORD_COUNT}")
@@ -1627,7 +1659,8 @@ def daily_crop_etc(pycup, wba: str, eto_in: pd.Series, precip_in: pd.Series, poo
 
 def land_use_et(pycup, monthly: pd.DataFrame, wbas: list[str]) -> dict[str, pd.Series]:
     """Monthly ET (in) of each CalSimHydro land use type, the weighted sum of its crops' ETc,
-    keyed by CalSimHydro part B (WBA_02 and AL give WBA02_AL_ET)."""
+    keyed by CalSimHydro part B (WBA_02 and AL give WBA02_AL_ET). The SL and UR land uses are
+    left out: CalSimHydro takes them from the climatologies (copy_legacy_crop_et_records)."""
     wba_table = pd.read_csv(cup_tables_dir() / "WBATable.csv")
     cc_table = pd.read_csv(cup_tables_dir() / "ccTable.csv")
     out = {}
@@ -1636,6 +1669,8 @@ def land_use_et(pycup, monthly: pd.DataFrame, wbas: list[str]) -> dict[str, pd.S
         sacramento = wba_table.loc[wba_table.WBA == wba, "SacRSJR"].iloc[0] == 1
         cc_ratio = cc_table.loc[cc_table.WBA == wba, "ccRatio"].iloc[0]
         for land_use in table["CSH_CrpAbv"].unique():
+            if land_use in CLIMATOLOGY_LAND_USES:
+                continue
             crops = table[table["CSH_CrpAbv"] == land_use].copy()
             crops["RegionWeight"] = crops["SacWeighting"] if sacramento else crops["SJWeighting"]
             weights = pycup.getCropWeights(crops, cc_ratio)
@@ -1801,7 +1836,7 @@ def spline_step(product: Product, step11_dir: Path, out_dir: Path, chunk: int | 
     out_dir = Path(out_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
     write_etocum_table(monthly, out_dir / named(ETOCUM_CSV, chunk))
-    daily = disaggregate(monthly)
+    daily = disaggregate(monthly, chunk)
     path = out_dir / named(ETO_DAILY_CSV, chunk)
     write_daily_csv(daily, path)
     log(f"  wrote {path.name} ({len(daily):,} days, {daily.shape[1]} series)")
@@ -1867,8 +1902,8 @@ def crop_et_chunk(product: Product, chunk: int | None, pycup, pool) -> Path:
         f"ETo and precipitation days: {eto.index[0].date()} through {eto.index[-1].date()}\n"
         f"CUP+ land use records verified for {product.start_year}-01 through {product.end_year}-12: "
         f"{checked}\n"
-        f"Legacy CropET records copied: {copied} of {LEGACY_RECORD_COUNT} (42 SL climatologies and "
-        "2 RI terms with 11 decade blocks)\n"
+        f"Legacy CropET records copied: {copied} of {LEGACY_RECORD_COUNT} (42 SL and 42 UR "
+        "climatologies, 2 RI terms with 11 decade blocks)\n"
         "WBA_91 takes WBA 90's grid cells for ETo and WBA 90's CalSimHydro precipitation.\n",
         encoding="ascii")
     log(f"  wrote {path.name}: {checked} CUP+ records and {copied} legacy records")
