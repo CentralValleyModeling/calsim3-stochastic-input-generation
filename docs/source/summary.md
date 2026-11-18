@@ -1,5 +1,7 @@
 # Wrap-up
 
+This page summarizes v1.0 ({doc}`changelog`).
+
 ## Key results
 
 Phase I delivered both products and validated them against the CalSim 3 baseline (DCR 2023).

@@ -12,13 +12,14 @@ Reservoir storage curves define operational "level" targets, flood control
 reservation space, top of conservation, and minimum pool thresholds for
 major California reservoirs in CalSim 3.
 
+The validation scores and figures on this page come from v1.0, whose rim inflows and water year types came from quantile-mapped VIC flows.
+
 Seven series are reconstructed and grouped by how they are generated:
 
 1. **Quantile Mapping**: reconstructs the target series from a strongly
    correlated hydrologic basis series by mapping between their monthly
-   empirical distributions; trained on 1921-1971 and applied on 1972-2018
-   for validation, then trained on the full historical record and applied
-   to the Product B stochastic sequences; used for Mammoth Pool storage
+   empirical distributions, fitted once on WY 1950-2018 and applied to
+   every set; used for Mammoth Pool storage
    (`MAMMOTH_STORAGE`) with Millerton inflow as the basis
 2. **Wetness Index Rule Curve**: implements the USACE flood
    control rule curve for Lake Oroville, in which daily Feather River
@@ -54,10 +55,10 @@ between 0 and 123 TAF. The procedure follows the same quantile mapping
 implementation used elsewhere in the pipeline
 (`utils/quantile_mapping.py`), stratified by month to preserve seasonal
 distributions.
-Training uses WY 1921-1971 from the DCR 2023 CalSim 3 historical
-baseline (`CalSim3/__calsim_sv_default__.dss`); validation applies the
-trained relationship to the Product A reconstruction of Millerton inflow
-over WY 1972-2018.
+The map is a pass fit (`utils/qmap_fit.py`): fitted from CalSim 3's
+Millerton inflow to CalSim 3's Mammoth Pool storage over WY 1950-2018
+(`CalSim3/__calsim_sv_default__.dss`) and applied to the rim-inflow
+model's Millerton inflow of each set.
 
 #### Validation
 

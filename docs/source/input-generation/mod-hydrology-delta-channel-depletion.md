@@ -21,6 +21,8 @@ The master inventory requires 28 DCD variables, and the model writes 24 of them:
 
 ## Results
 
+The results of this section come from v1.0.
+
 The changes in Delta Channel Depletion (DCD) variables under the WGEN precipitation scenario relative to historical conditions are summarized in the following figure. The comparison highlights how reduced precipitation affects multiple hydrologic components, including drainage, deep percolation, groundwater flow, irrigation demand, and seepage throughout the Delta system.
 
 ```{figure} figures/s3-inputs_delta-channel-depletion-differences.png

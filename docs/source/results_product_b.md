@@ -1,5 +1,7 @@
 # Results / Product B
 
+This page reports the v1.0 Product B inputs and the CalSim 3 runs on them ({doc}`changelog`).
+
 Product B is the project's primary deliverable, a 1,000-year stochastic hydroclimate ensemble
 delivered as ten 100-water-year traces (`_n01` through `_n10`). Unlike Product A, Product B has no
 historical truth to validate against, because the synthetic sequences are not tied to the observed

@@ -14,7 +14,7 @@ This chunked structure was selected over a single continuous 1,000-year run for 
 
 From a practical standpoint, the reinitialization between traces ensures that each 100-year segment begins from a common reference state rather than inheriting potentially unrealistic conditions from the end of the previous trace. This prevents artifact propagation where an extreme drought ending one trace could bias operations at the start of the next. The starting conditions match the DCR 2023 benchmark initialization, which provides a consistent baseline for comparison.
 
-Product B file chunking aligns with this structure: each input category produces 10 CSV files (`*_n01.csv` through `*_n10.csv`), with the first 9 months of each chunk skipped to align with October water year start. This water year alignment ensures that CalSim operational rules referencing annual or seasonal totals operate correctly from the first complete water year of each trace.
+Product B file chunking aligns with this structure: each input category produces 10 CSV files (`*_n01.csv` through `*_n10.csv`), with the first 9 months of the sequence skipped so that every chunk starts in October. This water year alignment ensures that CalSim operational rules referencing annual or seasonal totals operate correctly from the first complete water year of each trace.
 
 ## Evaluation metrics
 

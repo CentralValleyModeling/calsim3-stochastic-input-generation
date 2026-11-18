@@ -78,7 +78,7 @@ flowchart TD
     WGEN["WGEN<br/>Synthetic Climate<br/>(Temp + Precip)"]:::wgen
 
     subgraph Tier1["Tier 1: Forcing (mod_forcing)"]
-        VIC["VIC Hydrologic Model"]:::forcing
+        INFLOWS["Rim-Inflow Model<br/>(SAC-SMA)"]:::forcing
         CLIMATE["Climate<br/>56 vars"]:::forcing
     end
 
@@ -106,10 +106,10 @@ flowchart TD
     end
 
     subgraph Tier5["Tier 5: Final Compilation (postprocessing)"]
-        COMPILE["sv_compile<br/>Product A / Product B DSS"]:::postproc
+        COMPILE["sv_compile<br/>DSS per set and chunk"]:::postproc
     end
 
-    WGEN --> VIC
+    WGEN --> INFLOWS
     WGEN --> CLIMATE
     WGEN --> CSHYDRO
     WGEN --> CSHYDRO_EE
@@ -117,8 +117,8 @@ flowchart TD
     WGEN --> DCD
     WGEN --> EVAP
     WGEN -->|"Dates"| CLOSURE
-    VIC -->|"QMap (Flow)"| RIM
-    VIC -->|"QMap (ET)"| CSHYDRO
+    INFLOWS -->|"Arc flows"| RIM
+    CLIMATE -->|"Ref ET"| CSHYDRO
     RIM --> WYT
     WYT --> TULARE
     WYT --> UPPER
@@ -132,16 +132,17 @@ flowchart TD
     Tier2 --> COMPILE
     Tier3 --> COMPILE
     Tier4 --> COMPILE
+    WYT -->|"Sac WYT"| DCD
 
     %% Arrow colors by source (linkStyle indices are 0-based, in order of appearance above)
     %% WGEN arrows: 0-7 (gold)
     linkStyle 0,1,2,3,4,5,6,7 stroke:#B7950B,stroke-width:1.5px
-    %% VIC arrows: 8-9 (blue)
+    %% forcing arrows: 8-9 (blue)
     linkStyle 8,9 stroke:#1A5276,stroke-width:1.5px
     %% RIM arrows: 10,15,16,17,18 (green)
     linkStyle 10,15,16,17,18 stroke:#1E8449,stroke-width:1.5px
-    %% WYT arrows: 11-14 (light green)
-    linkStyle 11,12,13,14 stroke:#52BE80,stroke-width:1.5px
+    %% WYT arrows: 11-14, 23 (light green)
+    linkStyle 11,12,13,14,23 stroke:#52BE80,stroke-width:1.5px
     %% compile arrows: 19-22 (gray)
     linkStyle 19,20,21,22 stroke:#717D7E,stroke-width:1.5px
 ```

@@ -4,82 +4,60 @@
 :class: tip
 
 **Module:** `mod_hydrology/rim_inflow/`  
-Quantile mapping of VIC inflows to CalSim rim inflow series
+Rim-inflow SVs from the rim-inflow model's arc flows
 ```
 
 
 Rim inflows are the streamflow entering the CalSim 3 model domain from surrounding mountain and foothill watersheds. They are major hydrologic drivers of reservoir inflows and downstream streamflows in the modeled river and tributary network, which makes their accurate reconstruction one of the more important components of the stochastic input generation effort. Of the 241 total rim inflow variables, 227 require stochastic generation (13 have missing historical data and 1 is unused).
 
-Rim inflow generation proceeds in two stages. The VIC hydrologic model first simulates streamflow across the domain, and quantile mapping then corrects those simulations to the distribution of the historical CalSim 3 inputs. VIC is run in two configurations. Product A is forced with a WGEN historical-parallel climate sequence and is used to train and validate the quantile mapping; Product B is forced with WGEN's 1,000-year stochastic climate and produces the synthetic traces delivered to CalSim 3.
-
-The quantile mapping is applied monthly, followed by basin level anchor adjustments that enforce mass balance between tributary inflows and their downstream aggregate watershed inflow. The validation figures on this page are all computed on Product A, comparing the Product A VIC reconstruction against the CalSim 3 historical record.
+The rim-inflow model ({doc}`mod-forcing-inflows`; SAC-SMA in the delivered sets) simulates monthly flow on the 196 rim arcs for each weather set. `_1_build_rim_inflow.py --product historical|A|B` builds the rim-inflow SVs from those arcs with no bias correction.
 
 ## Methodology
 
-The methodology has four parts: correlation analysis, model selection, applying quantile mapping to each rim inflow, and enforcing mass balance across tributaries through anchor watershed adjustments.
+### From arcs to SVs
 
-### Correlation analysis
+`reference/CalSim3_inflow_mapping.csv` gives each SV one method:
 
-The methodology development began with a systematic correlation analysis, matching each of the 227 CalSim rim inflow variables against modeled streamflow locations from both SAC-SMA and VIC hydrologic models to identify the strongest statistical predictors. Every one of the 227 variables had a corresponding VIC simulated streamflow series, and the correlations were strong, with most variables exceeding an $R^2$ of 0.6 and more than half exceeding 0.7.
+| Method | SVs | Series |
+|--------|----:|--------|
+| arc | 196 | The model's arc as it is. |
+| sum | 23 | The 11 UNIMP anchors, each the sum of its arcs; their `_UHH` twins, equal to the anchor as in CalSim 3; and I422, a copy of I_LOSVQ. |
+| qmap | 5 | The aliases FOLSM_INFLOW, FOLSOM_INFLOW, I_MLRTN_IMP, I_MELON_FCST and I_EBTML, quantile-mapped from a model series. |
+| gap | 3 | I_SJR258, I_SJR265 and I_TUO054, which SAC-SMA does not simulate: quantile-mapped like the aliases, or the model's own arc when a model has it (VIC). |
+| zero | 1 | I_RUB002, zero in CalSim 3. |
+| wyt | 1 | I_JBP006, a San Joaquin year-type average that `mod_other/miscellaneous` builds once the year types exist. |
+| none | 12 | No series. With I_RUB002 these are the 13 SVs the inventory marks Missing. |
 
-### Model selection
+An anchor is the sum of its arcs, so tributaries and anchor agree in every month. UNIMP_SRBB adds the Sacramento valley node I_SRBB_VAL, the valley floor between the tributaries and Bend Bridge, to its 8 tributary arcs.
 
-An early methodological choice involved selecting which hydrologic model would simulate the rim inflow streamflow: SAC-SMA or VIC. Both are rainfall-runoff models that convert climate forcings into streamflow. SAC-SMA produced higher average $R^2$ values against historical CalSim inputs, attributed to its watershed level calibration, whereas VIC is calibrated more broadly across the gridded domain. However, VIC remains the basis model for consistency with DWR's CalSim 3 climate change hydrology, which is likewise built on VIC (DWR 2023). Raw VIC streamflow tends to run wetter than the CalSim 3 historical inputs, but quantile mapping corrects this systematic bias. The VIC modeling process is described in [mod_forcing/vic](mod-forcing-vic.md).
+SAC-SMA's arc flows already include its share model, which divides the flow of each multi-arc system among that system's arcs (139 of the 196).
 
-### Quantile mapping procedure
+### Quantile-mapped SVs
 
-The rim inflow procedure follows the general quantile-mapping framework described in [Quantile Mapping](../methods.md#quantile-mapping). Quantile mapping is performed separately for each calendar month to preserve seasonal patterns in runoff. For each rim inflow variable, the corresponding VIC streamflow is the basis series (the series being corrected), and the historical CalSim 3 rim inflow (e.g., I_FOLSM, UNIMP_OROV) is the target series (the reference).
+The eight quantile-mapped SVs follow the framework in [Quantile Mapping](../methods.md#quantile-mapping). Each map is fitted per calendar month from the CalSim 3 source series to the CalSim 3 SV over WY 1950-2018 and applied to the model's source series, so the SV carries the model's error like the arcs it comes from. Product B is mapped once over all ten chunks.
 
-For the historical validation reported below, the mapping is trained on WY 1922-1971 and validated on WY 1972-2018, so the corrected Product A flows are scored against historical CalSim 3 inputs from outside the training period. For rim inflow generation, the Product B quantile mapping is trained on the full Product A overlap (Oct 1921-Dec 2018) and then applied to the 1,000-year stochastic VIC sequence.
+### Outputs
 
-Within the historical range the quantile mapping uses empirical monthly quantiles, and for synthetic values outside that range it relies on Gamma-distribution tail extrapolation. When a synthetic value falls below the entire historical range, the lower tail is extrapolated by taking the smallest observed target value and subtracting an increment from the fitted Gamma distribution; for months whose flows are already near zero, this can push the result slightly below zero. Because negative rim inflows are not physically meaningful, any negative mapped values are reset to zero.
+Historical_Unsplit and Product A cover the whole model run, WY 1916-2018, and their delivery files keep WY 1922-2018. Product B has one file per SV and chunk, each labelled WY 1922-2021. The builder copies the manifest of the model run beside its outputs, and the absorb fits and both compilers stop unless that run comes from the configured model at its pin.
 
-### Anchor watershed mass balance
+### Skill evaluation
 
-Because quantile mapping is applied independently to each rim inflow, the corrected upstream tributary flows no longer necessarily sum to their downstream aggregate watershed flow. To restore mass balance, an anchor watershed adjustment is applied. The approach recognizes that VIC model outputs are more reliable at integrated watershed scales than for individual small tributaries, so major downstream locations, represented by quantile-mapped unimpaired watershed flows (e.g., UNIMP_FOLS), serve as "anchor" control points, and upstream tributary flows (e.g., I_ALD002) are adjusted to ensure they sum correctly to the anchor totals.
+`_2_skill_evaluation.py` scores SAC-SMA's Historical_Unsplit run against CalSim 3, month by month, beside the VIC flows of v1.0 before their quantile maps. The script does not score Product A against CalSim 3: its temperature is detrended, so its difference from CalSim 3 mixes the warming response with model error. The windows follow the years dPL-CalSim trains on, WY 1950-1975 and WY 1986-2015 (`TRAIN_WY` at the pinned commit).
 
-Ten anchor watersheds are defined in total, six of which require tributary adjustment: Folsom (FOLS), the largest with 46 tributaries, followed by Oroville (OROV), Sacramento River at Bend Bridge (SRBB), Yuba (YUBA), Stanislaus (ST), and Tuolumne (TU). Together these six basins account for 116 of the 227 generated rim inflows. Of the remaining four, three (Trinity, Merced, and San Joaquin) have no assigned subtributaries, so their quantile-mapped flows are used directly without adjustment. Shasta is the exception: its inflow (I_SHSTA) is itself one of the eight drainages aggregated under Bend Bridge (SRBB), so it is mass balance adjusted under SRBB rather than used directly. This is why the aggregate error figures below show nine anchors (Shasta absorbed into Bend Bridge), even though Shasta still appears as its own panel in the per-location comparisons.
+| Window | SAC-SMA median KGE | VIC median KGE | SAC-SMA median abs. PBIAS (%) | VIC median abs. PBIAS (%) |
+|--------|-------:|-------:|-------:|-------:|
+| WY 1976-1985, held out | 0.81 | 0.58 | 7.3 | 20.1 |
+| WY 2016-2018, after training | 0.75 | 0.60 | 12.3 | 24.3 |
+| Training years | 0.85 | 0.58 | 3.4 | 21.3 |
+| WY 1922-1949, diagnostic | 0.76 | 0.49 | 12.7 | 26.6 |
 
-The Bend Bridge anchor (UNIMP_SRBB) is quantile-mapped against a composite VIC routing rather than the Shasta-inflow routing it previously borrowed. The Shasta routing stops at the dam and omits the drainage between Shasta and the Bend Bridge gauge (CalSim node SAC257), under-representing the anchor by roughly 30%. The composite (`CS3_8RI_SRBB`) is routed directly by `mod_forcing/vic/_2_compile_rim_inflows.py` from a merged grid-weight file (`reference/GridInfo/CS3_8RI_SRBB_GridInfo.txt`) that combines the Shasta drainage with the seven tributaries the CalSim 3 domain GIS tags as draining above SAC257: Cow, Battle, Bear, Clear below Whiskeytown, Clear inflow to Whiskeytown, Cottonwood, and South Fork Cottonwood creeks. Routing the merged cells as a single basin produces the Bend Bridge inflow the same way every other rim point is computed. The Merced (Lake McClure) and San Joaquin (Millerton) anchors already coincide with their index gauges and need no such composite.
+_Median over the 196 rim arcs of monthly KGE and absolute percent bias against CalSim 3 (`arc_skill_by_kind.csv`). The evaluation treats WY 1922-1949 as diagnostic because the weather record before 1950 is less certain._
 
-The adjustment formula distributes any discrepancy proportionally among tributaries based on their contribution to the total:
+The script also writes the response to the detrending, Product A minus Historical_Unsplit by period. In the Sacramento four-river sum, Product A's April-July share of annual flow is 6.8 points lower over WY 1922-1935 and 1.1 points lower over WY 1991-2018.
 
-$$\text{Trib}_{\text{adjust}} = \left(\text{Anchor}_{\text{QM}} - \sum \text{Tribs}_{\text{QM}}\right) \times \frac{\text{Trib}_{\text{QM}}}{\sum \text{Tribs}_{\text{QM}}}$$
+## Results from v1.0
 
-$$\text{Trib}_{\text{final}} = \text{Trib}_{\text{QM}} + \text{Trib}_{\text{adjust}}$$
-
-This ensures that the downstream anchor flow equals the sum of all upstream tributary contributions, which maintains hydrologic mass balance while individual tributary flows still reflect their quantile-mapped distributions.
-
-```{mermaid}
-flowchart TD
-    VIC["VIC Streamflow Outputs"] --> QM_ANC["Quantile Map<br/>Anchor Watershed<br/>(e.g., UNIMP_FOLS)"]
-    VIC --> QM_T1["Quantile Map<br/>Tributary 1"]
-    VIC --> QM_T2["Quantile Map<br/>Tributary 2"]
-    VIC --> QM_TN["Quantile Map<br/>Tributary N"]
-
-    QM_ANC --> COMPARE{"Anchor QM =<br/>Sum of Tribs QM?"}
-    QM_T1 --> SUM["Sum Tributary QMs"]
-    QM_T2 --> SUM
-    QM_TN --> SUM
-    SUM --> COMPARE
-
-    COMPARE -->|Yes| DONE["No Adjustment Needed"]
-    COMPARE -->|No| RESIDUAL["Residual =<br/>Anchor QM - Sum of Tribs QM"]
-    RESIDUAL --> DIST["Distribute Proportionally<br/>by Tributary Share"]
-    DIST --> ADJ1["Trib 1 Final =<br/>Trib 1 QM + Adjustment"]
-    DIST --> ADJ2["Trib 2 Final =<br/>Trib 2 QM + Adjustment"]
-    DIST --> ADJN["Trib N Final =<br/>Trib N QM + Adjustment"]
-
-    style QM_ANC fill:#264653,color:#fff
-    style DONE fill:#2d6a4f,color:#fff
-    style ADJ1 fill:#2d6a4f,color:#fff
-    style ADJ2 fill:#2d6a4f,color:#fff
-    style ADJN fill:#2d6a4f,color:#fff
-```
-
-_Anchor watershed mass balance adjustment. After independent quantile mapping, tributary flows are proportionally adjusted so their sum matches the anchor watershed total._
-
-## Results
+The text and figures of this section come from v1.0, which quantile-mapped VIC streamflow onto each CalSim 3 rim inflow (trained on WY 1922-1971, validated on WY 1972-2018 with Product A) and rescaled the tributaries of each anchor watershed to the anchor's mapped flow.
 
 Quantile mapping improved monthly skill across the rim inflow network. On the normalized NSE scale of the figure below, the network average rose from 0.68 (raw VIC) to 0.79 after quantile mapping.
 
@@ -214,7 +192,3 @@ quantile-mapped VIC (VIC-QMAP, red) flows. The annual series shows year to year 
 ::::
 
 _Annual flow (top) and centered 5-year mean annual flow (bottom) at each anchor watershed, WY 1922-2018._
-
-## References
-
-California Department of Water Resources (DWR). 2023. *Risk-Informed Future Climate Scenario Development for the State Water Project Delivery Capability Report*. Methodology report for the 2023 Delivery Capability Report (DCR 2023) climate change scenarios. <https://data.cnra.ca.gov/dataset/finaldcr2023/resource/e41f531d-dace-4d37-b52e-35a6ddd2224e>

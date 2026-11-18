@@ -1,5 +1,7 @@
 # Addressing infeasibilities
 
+This report covers the CalSim 3 runs on the v1.0 Product B inputs ({doc}`../changelog`).
+
 ## Overview
 
 Eight of ten Product B chunks failed during the SJR cycle (SJRBASE). Four failure modes were identified:

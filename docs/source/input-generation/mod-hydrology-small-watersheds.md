@@ -14,9 +14,11 @@ The Small Watersheds module generates groundwater recharge estimates for 210 sma
 
 The Small Watersheds executable operates similarly to CalSimHydro water budget calculation. However, the module takes ET as a repeating 12-month seasonal pattern without interannual variation, meaning precipitation drives all year-to-year variability in results. Precipitation comes directly from WGEN data without bias correction or post-processing. The fixed ET pattern means results that differ from the CalSim historical baseline are purely precipitation-driven.
 
-The model reads precipitation from a CSV with 1,602 columns representing spatial grid cells across the small watershed domains, where each column corresponds to a specific latitude-longitude precipitation point compiled from WGEN output. The precipitation compilation script aggregates WGEN precipitation data into a wide-format CSV that the executable consumes directly.
+`_1_compile_precip_sws.py` computes the monthly precipitation of each watershed from its grid cells, weighted by their area inside the watershed, and writes it into the model's `CVprecip` input file.
 
 ## Results
+
+The results of this section come from v1.0.
 
 The analysis showed maximum differences ranging from -4 to +2 TAF/yr in absolute terms. Percentage differences ranged widely, from approximately -100% to +300%, though this reflects the small baseline values for many watersheds. The median absolute difference was less than 1 TAF/yr, with a median percentage difference of -13.5%. The scatter plot shows that smaller watersheds with lower baseline flow volumes have proportionally larger percentage differences, while larger watersheds cluster near the median. This behavior is expected since small absolute changes produce large percentage changes when the baseline is small. The differences across all watersheds are driven primarily by lower WGEN precipitation compared to the historical baseline. There is no VIC-derived ET bias to offset or amplify the precipitation signal, unlike CalSimHydro where ET and precipitation changes interact.
 

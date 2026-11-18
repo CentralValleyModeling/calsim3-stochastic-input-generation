@@ -12,7 +12,7 @@ This module preprocesses inputs for seven CalSim 3 upper watershed cycles: Upper
 
 Analysis of all seven module DSS files identified 104 total terms across the modules. Most of these terms already appear in the main CalSim inventory, generated through other input categories such as CalSimHydro demands, rim inflows, or external elements. After filtering for monthly repeating patterns, zero-value terms, and matches to existing inventory, only 13 terms from 5 modules require new generation: Lower Yuba, Upper Yuba Bear, Upper American, Upper Feather, and Upper Tuolumne Watersheds. The other two modules (Upper Stanislaus and Upper Mokelumne Watersheds) are fully covered by existing inventory.
 
-The 13 remaining terms use quantile mapping, water year type averaging, and threshold optimization logic.
+The 13 remaining terms use quantile mapping, water year type averaging, and threshold optimization logic. The validation scores and figures on this page come from v1.0, which chained each quantile map behind a map of VIC flow trained on WY 1921-1971.
 
 | Term - Part B | Term - Part C | Methodology | Source Watershed Module |
 |---------------|:-------------:|:-----------:|:-----------------------:|
@@ -35,9 +35,9 @@ The 13 remaining terms use quantile mapping, water year type averaging, and thre
 
 Four different approaches are applied to reconstruct the studied upper watershed terms:
 
-**1- Water Year Type Monthly Averaging (WYT):** Groups historical months by water year type (Wet, Above Normal, Below Normal, Dry, Critical) and assigns the corresponding monthly mean to each synthetic year. This approach captures seasonal demand and operational patterns that vary with overall water availability but not with year-to-year flow variability. It is the preferred fallback when correlation with VIC outputs is too weak for quantile mapping.
+**1- Water Year Type Monthly Averaging (WYT):** Groups historical months by water year type (Wet, Above Normal, Below Normal, Dry, Critical) and assigns the corresponding monthly mean to each synthetic year. This approach captures seasonal demand and operational patterns that vary with overall water availability but not with year-to-year flow variability. It is the preferred fallback when correlation with the rim inflows is too weak for quantile mapping.
 
-**2- Quantile Mapping (QM):** For the Upper_Watershed Modules terms (i.e., other terms), quantile mapping follows a two-stage chaining approach. As a prerequisite step, the CalSim 3 historical rim inflow term with the highest R-squared correlation to the target upper watershed term is identified; this becomes the matching term. In the first QM stage, VIC Product A output is quantile-mapped to the matching term (trained on 1921-1971, applied on 1972-2018), producing a QMAP Product A reconstruction of the matching term. In the second QM stage, that reconstructed matching-term series becomes the simulation basis (1972-2018) for a second QM step trained on the relationship between the matching term and the target term (trained over 1921-1971), yielding the final QMAP Product A reconstruction of the upper watershed term for 1972-2018.
+**2- Quantile Mapping (QM):** Each term has a matching term, a CalSim 3 rim inflow or a sum of rim inflows. The map is a pass fit (`utils/qmap_fit.py`): fitted from the CalSim 3 matching term to the CalSim 3 target over WY 1950-2018, and applied to the rim-inflow model's series of the matching term in every set.
 
 **3- Hybrid (QM + WYT):** Averages the QM and WYT reconstructions to blend interannual variability with stable seasonal structure. This mitigates peak overshoot or noise that pure QM can introduce when predictor correlation is moderate. It is applied where QM alone is insufficient but the term still shows meaningful year-to-year signal.
 
@@ -167,13 +167,11 @@ The reconstruction achieves $R^2 = 0.85$, reflecting a strong fit between the WY
 
 ## 2. Quantile Mapping
 
-Three upper watershed channel flow terms are reconstructed using the two-stage chaining quantile mapping approach, covering the Upper American, Upper Yuba Bear, and Lower Yuba watershed modules.
+Three upper watershed channel flow terms are quantile-mapped from rim inflows, covering the Upper American, Upper Yuba Bear, and Lower Yuba watershed modules.
 
 ### C_NFA048_SV (Channel Flow, Upper American)
 
-North Fork American channel flow is reconstructed using the two-stage chaining quantile mapping approach for "other terms", with `I_NFA054` identified as the CalSim 3 matching term (highest R-squared correlation to C_NFA048_SV across the full CS3 input DSS screening). 
-
-In the first stage, VIC Product A output is quantile-mapped to `I_NFA054`, with the QM relationship trained on the 1921-1971 period and applied to the 1972-2018 simulation period, yielding a QMAP Product A reconstruction of the matching term. In the second stage, that reconstructed `I_NFA054` series (1972-2018) becomes the basis for a new QM step trained on the historical relationship between `I_NFA054` and `C_NFA048_SV` over 1921-1971, producing the final QMAP Product A reconstruction of the target term for 1972-2018.
+North Fork American channel flow is quantile-mapped from `I_NFA054`, the CalSim 3 matching term (highest R-squared correlation to C_NFA048_SV across the full CS3 input DSS screening).
 
 #### Validation
 
@@ -187,9 +185,7 @@ Product A validation over 1972-2018 yields $R^2 = 0.86$, $\text{NSE} = 0.85$, an
 
 ### C_SFY007_SV (Channel Flow, Upper Yuba Bear)
 
-South Fork Yuba channel flow is reconstructed using the two-stage chaining quantile mapping approach for "other terms", with `FOLSOM_INFLOW` identified as the CalSim 3 matching term (highest R-squared correlation to C_SFY007_SV across the full CS3 input DSS screening).
-
-In the first stage, VIC Product A output is quantile-mapped to `FOLSOM_INFLOW`, with the QM relationship trained on the 1921-1971 period and applied to the 1972-2018 simulation period, yielding a QMAP Product A reconstruction of the matching term. In the second stage, that reconstructed `FOLSOM_INFLOW` series (1972-2018) becomes the basis for a new QM step trained on the historical relationship between `FOLSOM_INFLOW` and `C_SFY007_SV` over 1921-1971, producing the final QMAP Product A reconstruction of the target term for 1972-2018.
+South Fork Yuba channel flow is quantile-mapped from the sum of 45 Folsom arcs (the arcs of UNIMP_FOLS less I_RUB002, which is zero). `FOLSOM_INFLOW` has the highest R-squared correlation to C_SFY007_SV across the full CS3 input DSS screening, but it is itself a quantile-mapped alias of UNIMP_FOLS, so the map reads the arcs instead.
 
 #### Validation
 
@@ -203,9 +199,7 @@ Product A validation over 1972-2018 yields $R^2 = 0.82$, $\text{NSE} = 0.82$, an
 
 ### C_DER001_SV (Channel Flow, Lower Yuba)
 
-Lower Yuba channel flow is reconstructed using the two-stage chaining quantile mapping approach for "other terms", with `I_CSM035` identified as the CalSim 3 matching term (highest R-squared correlation to C_DER001_SV across the full CS3 input DSS screening).
-
-In the first stage, VIC Product A output is quantile-mapped to `I_CSM035`, with the QM relationship trained on the 1921-1971 period and applied to the 1972-2018 simulation period, yielding a QMAP Product A reconstruction of the matching term. In the second stage, that reconstructed `I_CSM035` series (1972-2018) becomes the basis for a new QM step trained on the historical relationship between `I_CSM035` and `C_DER001_SV` over 1921-1971, producing the final QMAP Product A reconstruction of the target term for 1972-2018.
+Lower Yuba channel flow is quantile-mapped from the sum of the four Deer Creek arcs: `I_DER001`, `I_DER004`, `I_SCOTF` and `I_SFD003`.
 
 #### Validation
 
@@ -227,7 +221,7 @@ One upper watershed term employs the hybrid methodology, blending quantile mappi
 
 Middle Fork Yuba minimum channel flow shows unusual peak patterns that neither pure quantile mapping nor pure WYT averaging captures fully on its own. Pure QM tends to overfit to extreme years and can introduce peak overshoot, while WYT averaging smooths out year-to-year variability that is physically meaningful in the Middle Fork system. The hybrid approach averages the two reconstructions to blend interannual variability from QM with the stable seasonal structure from WYT, mitigating peak overshoot while preserving the year-to-year signal present in the historical record.
 
-For the QM component, `I_SFA076` is used as the CalSim 3 matching term, identified through screening as the highest R-squared predictor for C_MFY044_SV, and the two-stage chaining approach is applied over the standard 1921-1971 training and 1972-2018 simulation split. For the WYT component, San Joaquin Water Year Type monthly averaging is used, computing the conditional monthly mean for each of the five WYT classes and assigning the corresponding class mean to each synthetic month. The final reconstruction is the arithmetic average of the two component series.
+The QM component is a pass fit from the sum of the two Middle Yuba arcs, `I_JKSMD` and `I_MFY013`. For the WYT component, San Joaquin Water Year Type monthly averaging is used, computing the conditional monthly mean for each of the five WYT classes and assigning the corresponding class mean to each synthetic month. The final reconstruction is the arithmetic average of the two component series.
 
 #### Validation
 

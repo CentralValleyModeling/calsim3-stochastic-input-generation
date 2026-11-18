@@ -29,11 +29,11 @@ B120 Forecasts and Water Year Type Indexes were previously documented in separat
 
 ## Methodology overview
 
-Five different approaches are applied to reconstruct the miscellaneous terms:
+Five different approaches are applied to reconstruct the miscellaneous terms. The validation scores and figures on this page come from v1.0, whose predictors were VIC flows and whose maps were trained on WY 1921-1971.
 
-**1- Water Year Type Monthly Averaging (WYT):** Groups historical months by water year type (Wet, Above Normal, Below Normal, Dry, Critical) and assigns the corresponding monthly mean to each synthetic year. This approach captures seasonal demand and operational patterns that vary with overall water availability but not with year-to-year flow variability. It is the preferred fallback when correlation with VIC outputs is too weak for quantile mapping, and is applied here to SJR return flows and EBMUD terminal reservoir loss.
+**1- Water Year Type Monthly Averaging (WYT):** Groups historical months by water year type (Wet, Above Normal, Below Normal, Dry, Critical) and assigns the corresponding monthly mean to each synthetic year. This approach captures seasonal demand and operational patterns that vary with overall water availability but not with year-to-year flow variability. It is the preferred fallback when correlation with the rim inflows is too weak for quantile mapping, and is applied here to SJR return flows and EBMUD terminal reservoir loss.
 
-**2- Quantile Mapping (QM):** Maps the empirical CDF of a VIC-derived predictor series to the empirical CDF of the target CalSim term, trained on 1921-1971 and applied to 1972-2018. For miscellaneous terms, the predictor is selected by screening the full VIC output library for the highest R-squared correlation to the target. This approach is applied to the Tule Wetlands Index using VIC I_PEDRO (Don Pedro inflow) as the predictor.
+**2- Quantile Mapping (QM):** Maps the empirical CDF of a rim-inflow predictor onto the empirical CDF of the target CalSim term. The Tule Wetlands Index is mapped from Don Pedro inflow (I_PEDRO) with an absorb fit (`utils/qmap_fit.py`): fitted from the rim-inflow model's Historical_Unsplit predictor to the CalSim 3 target over WY 1950-2018, so the term keeps CalSim 3's level.
 
 **3- Hybrid (QM + WYT):** Averages the QM and WYT reconstructions to blend interannual variability with stable seasonal structure. This mitigates peak overshoot or noise that pure QM can introduce when predictor correlation is moderate, while avoiding the overly smooth patterns of pure WYT averaging. It is applied to Colusa Basin Drain and Knights Landing Ridge Cut, where QM alone produced physically unrealistic peak overshoots up to 900 TAF against a historical maximum near 500 TAF.
 
@@ -93,11 +93,11 @@ The reconstruction achieves $R^2 = 0.99$, $\text{NSE} = 0.99$, and $\text{PBIAS}
 
 ## 2. Quantile Mapping
 
-One miscellaneous term is reconstructed using quantile mapping, with the predictor identified by screening the full VIC output library for the highest R-squared correlation to the target.
+Quantile mapping from a rim inflow reconstructs one miscellaneous term.
 
 ### TULE_WET_INDX (Flow, Tulare Basin Wetlands Index)
 
-The Tule Wetlands Index tracks wetland conditions in the Tulare Basin, reconstructed through quantile mapping using VIC I_PEDRO (Don Pedro inflow) as the predictor, the highest R-squared match identified across the full VIC output screening. The QM relationship is trained on 1921-1971 and applied to 1972-2018. While the predictor correlation of $R^2 = 0.71$ sits at the lower threshold for effective quantile mapping, the approach preserves the statistical relationship between Don Pedro inflows and wetland conditions that WYT averaging alone cannot capture.
+The Tule Wetlands Index tracks wetland conditions in the Tulare Basin, reconstructed through quantile mapping with Don Pedro inflow (I_PEDRO) as the predictor. While the predictor correlation of $R^2 = 0.71$ sits at the lower threshold for effective quantile mapping, the approach preserves the statistical relationship between Don Pedro inflows and wetland conditions that WYT averaging alone cannot capture.
 
 #### Validation
 
@@ -115,11 +115,11 @@ The moderate NSE of 0.52 reflects the difficulty QM faces in reproducing the tim
 
 ## 3. Hybrid (QM + WYT)
 
-Two miscellaneous flow terms employ the hybrid methodology, combining quantile mapping and WYT averaging to handle cases where neither approach alone performs adequately without producing physically unrealistic peak overshoots. Both terms are approximately 95% correlated with each other and share the same VIC predictor.
+Two miscellaneous flow terms employ the hybrid methodology, combining quantile mapping and WYT averaging to handle cases where neither approach alone performs adequately without producing physically unrealistic peak overshoots. Both terms are approximately 95% correlated with each other and share one predictor, `I_BRC003`, with an absorb fit.
 
 ### C_CBD001HIST (Flow, Colusa Basin Drain)
 
-Colusa Basin Drain is combined USGS gauge flow through a drainage channel that returns agricultural and flood waters to the Sacramento River system, with annual peaks sometimes reaching 500 TAF. VIC flow correlation testing across approximately 200 locations identified `IERC_003` as the best predictor, achieving $R^2 = 0.70$. While this approaches the 0.7 threshold for standard quantile mapping, QM alone produced extreme peak overshoots up to 900 TAF, physically unrealistic values that would cause CalSim to simulate impossible drainage flows. The hybrid approach averages the QM and WYT reconstructions to eliminate overshoots while preserving more realistic inter-annual variability than pure WYT averaging:
+Colusa Basin Drain is combined USGS gauge flow through a drainage channel that returns agricultural and flood waters to the Sacramento River system, with annual peaks sometimes reaching 500 TAF. Correlation testing across approximately 200 flow locations identified `I_BRC003` as the best predictor, achieving $R^2 = 0.70$. While this approaches the 0.7 threshold for standard quantile mapping, QM alone produced extreme peak overshoots up to 900 TAF, physically unrealistic values that would cause CalSim to simulate impossible drainage flows. The hybrid approach averages the QM and WYT reconstructions to eliminate overshoots while preserving more realistic inter-annual variability than pure WYT averaging:
 
 $$V_{hybrid} = \frac{V_{QM} + V_{WYT}}{2}$$
 
@@ -137,7 +137,7 @@ The PBIAS of -11.5% reflects a systematic underestimation of the largest histori
 
 ### C_KLR005HIST (Flow, Knights Landing Ridge Cut)
 
-Knights Landing Ridge Cut represents a second Sacramento Valley drainage channel with approximately 95% correlation to Colusa Basin Drain. The same `IERC_003` predictor achieves $R^2 = 0.52$ for this term (well below the quantile mapping threshold), and QM alone produced the same category of extreme peak overshoots as for C_CBD001HIST. The hybrid methodology is applied identically, averaging QM and WYT reconstructions to constrain values within historical ranges while maintaining appropriate variability.
+Knights Landing Ridge Cut represents a second Sacramento Valley drainage channel with approximately 95% correlation to Colusa Basin Drain. The same `I_BRC003` predictor achieves $R^2 = 0.52$ for this term (well below the quantile mapping threshold), and QM alone produced the same category of extreme peak overshoots as for C_CBD001HIST. The hybrid methodology is applied identically, averaging QM and WYT reconstructions to constrain values within historical ranges while maintaining appropriate variability.
 
 #### Validation
 
@@ -149,7 +149,7 @@ Product A validation for C_KLR005HIST: monthly time series (left) and non-exceed
 
 Product A validation over 1972-2018 yields $R^2 = 0.75$, $\text{NSE} = 0.75$, and $\text{PBIAS} = -4.5\%$. The monthly time series shows the reconstruction closely tracking the inter-annual variability of the Knights Landing Ridge Cut record, with the hybrid approach again constraining peak values within physical bounds while preserving meaningful year-to-year flow signal. The non-exceedance CDF shows strong agreement: the two curves remain closely aligned from the 0th through approximately the 97th percentile, with divergence only at the very extreme upper tail where the largest historical peaks (approaching 600 TAF) are partially underestimated.
 
-The near-neutral PBIAS of -4.5% confirms negligible long-term volume bias (a marked improvement over C_CBD001HIST), consistent with the higher $R^2 = 0.75$ that reflects the stronger response of this channel to the shared `IERC_003` predictor after hybrid blending. The substantially better performance relative to the pre-hybrid QM-only result, combined with elimination of the extreme peak overshoots, confirms that the hybrid methodology is the appropriate reconstruction approach for this term.
+The near-neutral PBIAS of -4.5% confirms negligible long-term volume bias (a marked improvement over C_CBD001HIST), consistent with the higher $R^2 = 0.75$ that reflects the stronger response of this channel to the shared `I_BRC003` predictor after hybrid blending. The substantially better performance relative to the pre-hybrid QM-only result, combined with elimination of the extreme peak overshoots, confirms that the hybrid methodology is the appropriate reconstruction approach for this term.
 
 ---
 

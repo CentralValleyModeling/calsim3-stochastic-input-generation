@@ -14,9 +14,11 @@ The External Elements (EE) module generates deep percolation outputs for boundar
 
 ## Methodology
 
-The External Elements module uses precipitation taken directly from WGEN data and the same quantile mapped evapotranspiration that was processed as input the CalSimHydro model. The EE model generates exactly 17 deep percolation variables, each corresponding to an external element recharge zone. The EE model scripts required modification of hard-coded paths for the project directory structure.
+The External Elements module uses precipitation averaged over the grid cells of each area (`_1_compile_precip_EE.py`) and the evapotranspiration inputs of CalSimHydro ({doc}`mod-hydrology-calsimhydro`). The EE model generates exactly 17 deep percolation variables, each corresponding to an external element recharge zone. The EE model scripts required modification of hard-coded paths for the project directory structure.
 
 ## Results
+
+The results of this section come from v1.0, whose ET inputs were VIC fluxes quantile-mapped to CalSim 3.
 
 The analysis showed maximum differences of approximately +100% for some exterior areas, reflecting the small baseline values in these boundary regions (often fractions of a TAF per year), which amplify relative differences even when absolute differences are minimal. The median absolute difference was less than 1 TAF/yr, a small magnitude when viewed in context of the overall system water balance.
 

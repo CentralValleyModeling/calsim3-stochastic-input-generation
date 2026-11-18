@@ -20,7 +20,7 @@ This approach does not attempt to simulate Tulare Basin groundwater conditions. 
 
 ## Results
 
-Reconstruction quality is assessed over the WY 1972-2018 validation period. Although Product A spans the full historical period (WY 1915-2018), this window keeps the evaluation consistent with the quantile-mapped terms (see {doc}`Methods </source/methods>` for Product A). For both groundwater pumping and deep percolation, all seven terms are shown below; in each figure the left panel compares the reconstructed Product A series with the historical CalSim 3 State Variable (SV) inputs from the DCR 2023 baseline, and the right compares their non-exceedance distributions.
+The figures of this section come from v1.0, which assessed reconstruction quality over its WY 1972-2018 validation period. For both groundwater pumping and deep percolation, all seven terms are shown below; in each figure the left panel compares the reconstructed Product A series with the historical CalSim 3 State Variable (SV) inputs from the DCR 2023 baseline, and the right compares their non-exceedance distributions.
 
 ### Groundwater pumping terms
 

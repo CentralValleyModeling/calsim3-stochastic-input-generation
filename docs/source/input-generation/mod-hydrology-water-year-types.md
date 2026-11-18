@@ -7,11 +7,11 @@
 Sacramento 40-30-30 and San Joaquin 60-20-20 index classification
 ```
 
-Water year types (WYTs) are computed from rim inflows produced by the quantile mapping module and consumed by several downstream modules including Reservoir Storage Curves, Tulare Groundwater Terms, Upper Watershed, and Other/Miscellaneous variables.
+Water year types (WYTs) are computed from the rim inflows of `mod_hydrology/rim_inflow/` and consumed by several downstream modules including Delta Channel Depletion, Reservoir Storage Curves, Tulare Groundwater Terms, Upper Watershed, and Other/Miscellaneous variables.
 
 ## Methodology
 
-Two independent indices are calculated from the quantile-mapped rim inflows:
+Two independent indices are calculated from the rim inflows:
 
 **Sacramento Valley 40-30-30 Index** aggregates unimpaired flows from four rim watersheds (SRBB, OROV, YUBA, FOLS). The index is computed recursively, where each year's value depends on the prior year:
 
@@ -28,9 +28,11 @@ Each index value maps to one of five WYT classes (Wet (W), Above Normal (AN), Be
 | Sacramento | < 5.4 | < 6.5 | < 7.8 | < 9.2 / >= 9.2 |
 | San Joaquin | < 2.1 | < 2.5 | < 3.1 | < 3.8 / >= 3.8 |
 
-The recursion is seeded with the prior water year's index. Product A begins at WY1972 using CDEC's 1971 values (Sac 10.37, SJ 2.89). For Product B, indices are computed independently for each of the 10 chunks; because every chunk is an independent sequence mapped to a WY1922 start, each is seeded identically from CDEC's 1921 values (Sac 9.20, SJ 3.23), the year preceding WY1922. The script (`_1_calc_WYTs.py`) accepts a `--product {A, B}` flag; a companion `_2_compare_wyts.py` produces the validation figures below.
+The recursion starts from CDEC's index for the water year before the first one computed. Historical_Unsplit and Product A cover every water year of the rim-inflow model run, WY1916-2018, and start from CDEC's WY1915 values. Each of the 10 Product B chunks is labelled from WY1922, so each starts from CDEC's WY1921 values (Sac 9.20, SJ 3.23). `_1_calc_WYTs.py` takes `--product historical|A|B`, and `_2_compare_wyts.py` draws the validation figures below.
 
 ## Results
+
+The results of this section come from v1.0, whose rim inflows were quantile-mapped VIC flows and whose Product A indices began at WY1972.
 
 Product A index values track CDEC historical values for both Sacramento and San Joaquin indices across the 1972--2018 validation period. WYT classification matches CDEC in most years, and diverges in years where the index falls near a threshold boundary.
 

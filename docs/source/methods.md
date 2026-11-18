@@ -10,7 +10,7 @@ The algorithm samples historical dates in 4-year blocks to maintain multi-year p
 
 For heavy precipitation events, a copula-based jittering step adds noise to resampled values, so the synthetic record can occasionally exceed historical maxima while preserving the statistical structure of the data.
 
-The WGEN produces two output products. **Product A** covers the historical period (WY 1915--2018) using a mode that reproduces the historical weather regime sequence, a synthetic parallel to observed climate used for validation. **Product B** spans 1,000 years with entirely new regime sequences unconstrained by historical chronology, and is the planning dataset.
+The pipeline runs on three weather sets. Historical_Unsplit is the gridded historical record (1915--2018) without the temperature detrending. Product A is the same record with its temperature detrended. Product B spans 1,000 years with entirely new regime sequences unconstrained by historical chronology, and is the planning dataset.
 
 ::::{tab-set}
 :::{tab-item} Algorithm Overview
@@ -21,13 +21,12 @@ The WGEN produces two output products. **Product A** covers the historical perio
 ![WGEN Sampling Patterns](figures/s2-methods_wgen-sampling-patterns.png)
 *Sampling date patterns showing which historical dates (y-axis) are sampled for each simulation period (x-axis). Top panel: portion of the 1,000-year simulation. Bottom panel: 10-year detail. Diagonal bands indicate the 4-year block sampling structure.*
 :::
-:::{tab-item} Product A vs Product B
-| | **Product A** (Validation) | **Product B** (Planning) |
-|---|---|---|
-| **Period** | WY 1915--2018 (~104 years) | 1,000 years (10 x 100-year chunks) |
-| **WGEN mode** | Historical regime sequence | Unconstrained stochastic regimes |
-| **QM training** | WY 1922--1971 (validated on WY 1972--2018) | Full historical record (WY 1922--2018) |
-| **Purpose** | Validate methods against known CalSim inputs | Stochastic planning runs |
+:::{tab-item} Weather sets
+| | Historical_Unsplit | Product A | Product B |
+|---|---|---|---|
+| Weather | Historical record, 1915--2018 | The record with detrended temperature | 1,000 years of stochastic regime sequences |
+| Delivered | WY 1922--2018 | WY 1922--2018 | 10 chunks of 100 water years |
+| Purpose | Validation against the CalSim 3 baseline | Historical sequence under detrended temperature | Stochastic planning runs |
 :::
 ::::
 
@@ -35,7 +34,7 @@ The WGEN produces two output products. **Product A** covers the historical perio
 
 Synthetic weather enters CalSim through two pathways: **model-based generation**, where physical process models are driven directly with WGEN climate, and **statistical reconstruction**, where quantile mapping or other methods transform model outputs into CalSim variables.
 
-Six process models (VIC, CalSimHydro, CalSimHydroEE, Small Watersheds, DCD, and Reservoir Evaporation) produce over 1,200 variables, about 80% of all generated inputs. VIC sits upstream of everything but produces no CalSim inputs directly: its streamflow is quantile-mapped into the 241 rim inflow variables and its ET into CalSimHydro. Through these downstream models VIC drives over 1,000 variables, even though its raw output is never used as-is. Wind speed, which WGEN does not produce, is handled by merging actual historical wind for Product A and sampling via WGEN date mapping for Product B.
+Six process models (SAC-SMA, CalSimHydro, CalSimHydroEE, Small Watersheds, DCD, and Reservoir Evaporation) produce over 1,200 variables, about 80% of all generated inputs. SAC-SMA's monthly arc flows become the rim inflows without bias correction. CalSimHydro and CalSimHydroEE run on WGEN precipitation and on reference ET computed from WGEN temperature; Small Watersheds runs on precipitation with a fixed ET pattern, and DCD on station precipitation and Lodi temperature.
 
 The remaining ~20% of variables lack a direct process model and are reconstructed statistically. The method chosen for each variable depends on its physical characteristics and how well it correlates with available model outputs:
 
@@ -62,27 +61,24 @@ flowchart LR
     style START fill:#264653,color:#fff
 ```
 
-_Method selection decision tree. The appropriate reconstruction methodology for each variable is determined by available physical models, correlation strength with VIC or flow indices, seasonal pattern regularity, and WGEN date mapping availability._
+_Method selection decision tree. The appropriate reconstruction methodology for each variable is determined by available physical models, correlation strength with rim inflows or flow indices, seasonal pattern regularity, and WGEN date mapping availability._
 
 ## Input generation validation
 
 Validation applies to the entire suite of generated inputs, not just the quantile-mapped variables but every variable produced by every module. The goal is to confirm that the full set of synthetic inputs, taken together, produces a CalSim run that behaves consistently with the historical baseline.
 
-The validation period is dictated by the quantile mapping train/test split. The overlapping historical period (WY 1922--2018) is divided 50/46: training on WY 1922--1971 and testing on WY 1972--2018. The held-out half is therefore the only period where QM-based inputs can be independently evaluated. All other input types (model-based, WYT averaging, direct calculation) are validated over this same window for consistency. Product A VIC output is used as the validation basis so that it matches Product B, since both share the same underlying gridded climate data. Performance at the individual variable level is measured with coefficient of determination (R-squared), Nash-Sutcliffe Efficiency (NSE), and percent bias (PBIAS).
+We validate on Historical_Unsplit, whose weather is the historical record, like the CalSim 3 baseline's. We do not validate Product A against CalSim 3: its temperature is detrended, so its difference from the baseline mixes the warming response with reconstruction error. Performance at the individual variable level is measured with coefficient of determination (R-squared), Nash-Sutcliffe Efficiency (NSE), and percent bias (PBIAS). The rim-inflow model is also scored on the years it does not train on ({doc}`input-generation/mod-hydrology-rim-inflow`).
 
-Beyond variable-level checks, Product A validation includes a full CalSim 3 run using the complete set of Product A inputs. This end-to-end test compares the CalSim historical baseline (driven by its original inputs) against a CalSim run driven entirely by inputs reconstructed from WGEN Product A climate. Differences in the resulting system operations (reservoir storage, deliveries, Delta exports) reflect the cumulative effect of all input generation procedures and show whether the synthetic inputs are suitable for planning-scale analysis.
-
-![Validation Framework](figures/s2-methods_qm-validation-framework.png)
-_Validation Framework. The training half (WY 1922--1971) builds empirical CDFs; the testing half (1972--2018) validates mapped values against held-out CalSim truth. In the stochastic application (Product B), no truth target is available._
+Beyond variable-level checks, we compare a full CalSim 3 run on a set's complete inputs with the CalSim historical baseline run. Differences in the resulting system operations (reservoir storage, deliveries, Delta exports) reflect the cumulative effect of all input generation procedures and show whether the inputs are suitable for planning-scale analysis.
 
 
 ## Quantile mapping
 
-Quantile mapping (QM) is the core statistical method. It establishes an empirical relationship between a basis time series (typically VIC output) and a target (CalSim historical input), then applies that relationship to transform new basis values into CalSim-compatible values.
+Quantile mapping (QM) is the core statistical method. It establishes an empirical relationship between a basis time series (a rim inflow, basin temperature for VPD, or Hargreaves-Samani ETo for pan evaporation) and a target (CalSim historical input), then applies that relationship to transform new basis values into CalSim-compatible values.
 
 Each calendar month is processed independently to preserve seasonal patterns:
 
-1. Build empirical CDFs for both basis and target from the training period
+1. Build empirical CDFs for both basis and target from the fit period
 2. For each simulated basis value, interpolate its probability from the basis CDF
 3. Invert the target CDF at that probability to obtain the mapped value
 4. For values outside the historical range, fit a Gamma distribution for tail extrapolation
@@ -92,7 +88,7 @@ Each calendar month is processed independently to preserve seasonal patterns:
 :::{tab-item} QM Diagram
 ```{mermaid}
 flowchart LR
-    subgraph basis["Basis Side (VIC)"]
+    subgraph basis["Basis Side (predictor)"]
         direction TB
         INPUT["Monthly<br/>Basis Value"] --> BCDF["Lookup in<br/>Basis CDF"]
     end
@@ -119,85 +115,26 @@ _Quantile mapping transforms a basis value to a target value by passing through 
 :::
 :::{tab-item} Example: QM Rim Inflow
 ![Rim Inflow QM](figures/s2-methods_qm-streamflow-oroville.png)
-_Oroville unimpaired inflow (UNIMP\_OROV) during the validation period (WY 1972--2018). Monthly average profiles (left) and annual distributions (right) compare CS3 Historical (blue), raw VIC Product A (tan), and quantile-mapped Product A (red). Quantile mapping corrects VIC's wet bias and brings the seasonal profile and annual distribution into closer agreement with the historical CalSim target._
+_Example from v1.0: Oroville unimpaired inflow (UNIMP\_OROV) during its validation period (WY 1972--2018). Monthly average profiles (left) and annual distributions (right) compare CS3 Historical (blue), raw VIC Product A (tan), and quantile-mapped Product A (red). Quantile mapping corrects VIC's wet bias and brings the seasonal profile and annual distribution into closer agreement with the historical CalSim target._
 :::
 :::{tab-item} Example: QM ET
 ![ET QM](figures/s2-methods_qm-et-cdf-comparison.png)
-_Empirical CDF comparison for monthly reference ET at WBA 02. Gray: CalSim 3 historical (target); Red: Raw VIC output (basis); Blue: Quantile-mapped VIC._
+_Example from v1.0: empirical CDF comparison for monthly reference ET at WBA 02. Gray: CalSim 3 historical (target); Red: Raw VIC output (basis); Blue: Quantile-mapped VIC._
 :::
 ::::
 
-### QM: rim inflows vs other terms
+### Pass and absorb fits
 
-Quantile mapping is applied differently depending on whether a variable has a direct VIC model counterpart. Rim inflow and ET terms are mapped from VIC output, an independent physical model driven by WGEN climate. A handful of other CalSim3 terms lack a VIC equivalent and are instead mapped from a correlated CalSim3 variable (the "matching term"), which must itself be generated first. This creates a two-stage dependency: rim inflow and ET outputs must exist before other terms can be reconstructed.
+Every quantile map that reads a rim inflow is fitted once, on WY 1950--2018, and applied to all three sets (`utils/qmap_fit.py`). Each pair of predictor and target names its fit:
 
-**Product A validation diagram.** QM is trained on the first half of the historical record (WY 1922--1971) and applied to the held-out second half (1972--2018), where mapped values can be compared against known CalSim3 truth.
+- A pass fit trains on the CalSim 3 predictor against the CalSim 3 target and is applied to the rim-inflow model's predictor, so the term carries the model's error as its predictor does. The quantile-mapped rim-inflow SVs, MAMMOTH_STORAGE and the upper watershed channel terms use it.
+- An absorb fit trains on the model's Historical_Unsplit predictor against the CalSim 3 target, so the map absorbs the model's bias and the term keeps CalSim 3's level. It suits a term tied to its predictor only statistically: TULE_WET_INDX, C_CBD001HIST and C_KLR005HIST.
 
-```{mermaid}
-flowchart TB
-    subgraph rim_a["RIM INFLOW / ET TERMS"]
-        RA_sim["Basis: VIC Product A<br/>(WY 1972-2018)"] -. sim .-> RA_qm["QM"] 
-        RA_basis["Basis: VIC Product A<br/>(WY 1922-1971)"] -. train .-> RA_qm
-        RA_target["Target: CalSim3 Inflow Term<br/>(WY 1922-1971)"] -. train .-> RA_qm -. sim .-> RA_out["Target: QMAP Product A<br/>of CalSim3 Inflow Term<br/>(WY 1972-2018)"]
-    end
+No map is fitted on Product A, whose detrended temperature would enter the fit as model error. Two maps have a basis built from temperature and are fitted on Historical_Unsplit weather: basin VPD ({doc}`input-generation/mod-forcing-climate`) and Gerber pan evaporation ({doc}`input-generation/mod-hydrology-calsimhydro`).
 
-    subgraph other_a["OTHER TERMS"]
-    
-        OA_sim["Basis: QMAP Product A<br/>of Calsim Inflow Term<br/>(WY 1972-2018)"] -.sim .-> OA_qm["QM"]
-        OA_basis["Basis: CalSim3 Inflow Term<br/>(WY 1922-1971)"] -. train .-> OA_qm
-        OA_target["Target: CalSim3 Other Term<br/>(WY 1922-1971)"] -. train .-> OA_qm -. sim .-> OA_out["Target: QMAP Product A<br/>of CalSim3 Other Term<br/>(WY 1972-2018)"]
-    end
+Limits of quantile mapping:
 
-    RA_out -.->|"sim basis for"| OA_sim
-
-    style rim_a fill:#264653,color:#fff
-    style RA_basis fill:#264653,color:#fff
-    style RA_target fill:#2d6a4f,color:#fff
-    style OA_basis fill:#264653,color:#fff
-    style OA_target fill:#2d6a4f,color:#fff
-    style RA_sim fill:#457b9d,color:#fff
-    style OA_sim fill:#457b9d,color:#fff
-    style RA_qm fill:#f4a261,color:#fff
-    style OA_qm fill:#f4a261,color:#fff
-    style RA_out fill:#e76f51,color:#fff
-    style OA_out fill:#e76f51,color:#fff
-```
-_Product A validation. Dashed "train" arrows feed empirical CDFs from the training half; dashed "sim" arrows apply the fitted QM to held-out basis data. The cross-subgraph arrow shows the dependency: rim inflow outputs become the simulation basis for other terms._
-
-**Product B application diagram.** QM is trained on the full historical record (WY 1922--2018) and applied to VIC Product B (1,000 years). No held-out truth exists for comparison. The same two-stage dependency applies: rim inflow and ET outputs must be produced before other terms can be mapped.
-
-```{mermaid}
-flowchart TB
-    subgraph rim_b["RIM INFLOW / ET TERMS"]
-        RB_sim["Basis: VIC Product B<br/>(1000 years)"] -. sim .-> RB_qm["QM"]
-        RB_basis["Basis: VIC Product A<br/>(WY 1922-2018)"] -. train .-> RB_qm
-        RB_target["Target: CalSim3 Inflow Term<br/>(WY 1922-2018)"] -. train .-> RB_qm -. sim .-> RB_out["Target: QMAP Product B<br/>of CalSim3 Inflow Term<br/>(1000 years)"]
-    end
-
-    subgraph other_b["OTHER TERMS"]
-        OB_sim["Basis: QMAP Product B<br/>of CalSim3 Inflow Term<br/>(1000 years)"] -. sim .-> OB_qm["QM"]
-        OB_basis["Basis: CalSim3 Inflow Term<br/>(WY 1922-2018)"] -. train .-> OB_qm
-        OB_target["Target: CalSim3 Other Term<br/>(WY 1922-2018)"] -. train .-> OB_qm -. sim .-> OB_out["Target: QMAP Product B<br/>of CalSim3 Other Term<br/>(1000 years)"]
-    end
-
-    RB_out -.->|"sim basis for"| OB_sim
-
-    style RB_basis fill:#264653,color:#fff
-    style RB_target fill:#2d6a4f,color:#fff
-    style OB_basis fill:#264653,color:#fff
-    style OB_target fill:#2d6a4f,color:#fff
-    style RB_sim fill:#457b9d,color:#fff
-    style OB_sim fill:#457b9d,color:#fff
-    style RB_qm fill:#f4a261,color:#fff
-    style OB_qm fill:#f4a261,color:#fff
-    style RB_out fill:#e76f51,color:#fff
-    style OB_out fill:#e76f51,color:#fff
-```
-_Product B application. The full historical record trains the CDFs. VIC Product B (1,000 years of stochastic streamflow) is the simulation basis for rim inflow terms. The dashed dependency arrow shows the same sequential requirement as Product A._
-
-This framework relies heavily on quantile mapping, which brings several limitations:
-
-- **Trend inheritance**: QM inherits long-term trends from the basis. If VIC shows a drying trend, mapped flows will too.
+- **Trend inheritance**: QM inherits long-term trends from the basis. If the predictor shows a drying trend, the mapped term will too.
 - **Sequence preservation**: distributions are corrected but temporal sequencing follows the basis, so synthetic timing may differ from historical.
 - **Tail extrapolation**: values outside the historical range rely on Gamma distribution assumptions that may not hold for truly extreme events.
 - **Correlation threshold**: QM works best when basis and target are well-correlated (R-squared > 0.7). Performance degrades for weaker pairs.
@@ -206,7 +143,7 @@ This framework relies heavily on quantile mapping, which brings several limitati
 
 For variables where quantile mapping is unsuitable (weak correlation, no continuous basis series, or a known physical relationship), three principal alternatives are used.
 
-**WYT Monthly Averaging** computes monthly averages conditional on water year type (W/AN/BN/D/C) using Sacramento or San Joaquin indices. It works for variables with regular seasonal patterns but weak direct correlation with VIC outputs, such as diversions and scheduled operations. A **Hybrid QM** variant averages QM output with the WYT monthly means: $(QM + WYT) / 2$. This dampens excessive QM peak overshoots while adding interannual variability that flat WYT patterns lack.
+**WYT Monthly Averaging** computes monthly averages conditional on water year type (W/AN/BN/D/C) using Sacramento or San Joaquin indices. It works for variables with regular seasonal patterns but weak direct correlation with rim inflows, such as diversions and scheduled operations. A **Hybrid QM** variant averages QM output with the WYT monthly means: $(QM + WYT) / 2$. This dampens excessive QM peak overshoots while adding interannual variability that flat WYT patterns lack.
 
 **Direct Calculation** applies physical formulas where relationships are known. For example, NDOI precipitation accretion uses precip x area x coefficient (R-squared = 0.92). This category also includes threshold-based logic for allocation ratios optimized with Excel Solver, and Hargreaves-Samani reservoir evaporation computed directly from WGEN temperature inputs.
 

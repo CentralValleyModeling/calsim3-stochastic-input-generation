@@ -21,7 +21,7 @@ CalSim Synthetic Hydroclimate
    :caption: Input Generation
 
    source/input-generation/overview
-   source/input-generation/mod-forcing-vic
+   source/input-generation/mod-forcing-inflows
    source/input-generation/mod-forcing-climate
    source/input-generation/mod-hydrology-rim-inflow
    source/input-generation/mod-hydrology-calsimhydro

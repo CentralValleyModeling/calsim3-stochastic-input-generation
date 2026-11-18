@@ -1,5 +1,7 @@
 # Results / Product A
 
+This page reports v1.0: the Product A inputs built from VIC with quantile mapping, and the CalSim 3 run on them ({doc}`changelog`).
+
 Product A validation proceeds in two stages. First, the reconstructed Product A SV variables are compared directly against their CalSim 3 baseline values over the WY 1972--2018 overlap period, to check that the input generation pipeline reproduces historical patterns. This comparison focuses on the time-varying generated variables, the subset that carries a meaningful skill signal (see the variable-count breakdown below); constant, zero-valued, and annually repeating outputs are excluded from skill scoring. Second, the CalSim 3 model is run with the Product A mapped SV variables over WY 1972--2018. The baseline runs normally with unchanged SV from 1921 through September 1971, so initial conditions are identical at the start of WY 1972. The resulting system outputs (deliveries, Delta flows, reservoir storage) over the validation period are compared against the CalSim baseline to see how input differences propagate through operational logic.
 
 ## Full summary

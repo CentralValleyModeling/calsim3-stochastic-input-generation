@@ -37,7 +37,7 @@ Freeport lies upstream of the San Joaquin confluence, so a Sacramento index alon
 
 ### Stochastic application
 
-For stochastic Product B generation, the expanded observation pool from 1955-2021 provides bootstrap candidates. Each synthetic water year gets matched to the historical year with the closest value of the adopted index, then borrows that year's day volume fraction pattern. 
+For stochastic Product B generation, the expanded observation pool from 1955-2021 provides bootstrap candidates. Each synthetic water year gets matched to the historical year with the closest value of the adopted index, then borrows that year's day volume fraction pattern. Where the donor's February and the synthetic one differ in length, the script interpolates the donor's fractions by cumulative volume onto the synthetic month's days, so the month sums to 1.
 
 
 
