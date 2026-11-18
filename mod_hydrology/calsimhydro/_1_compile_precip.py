@@ -81,7 +81,8 @@ def write_single(results: dict, output_path: Path, clip_period) -> None:
     """One CSV per WBA over every day, and the DSS file over ``clip_period``."""
     for wba, pcp in results.items():
         pcp.to_csv(output_path / 'pcp' / f"{wba}_pcp.csv", header=False)
-    with dss_io.open_dss(str(output_path / "CS3_DailyPrecipitation.dss"), catalog_flag=False) as dss:
+    with dss_io.open_dss(str(output_path / "CS3_DailyPrecipitation.dss"), catalog_flag=False,
+                         create=True) as dss:
         for wba, pcp in results.items():
             if clip_period:
                 pcp = pcp[clip_period[0]:clip_period[1]]
@@ -94,7 +95,7 @@ def write_product_b(results: dict, output_path: Path) -> None:
     print(f"  Product B: {len(days)} days per chunk, {N_CHUNKS} chunks")
     for k in range(1, N_CHUNKS + 1):
         dss_file = output_path / f"CS3_DailyPrecipitation_n{k:02d}.dss"
-        with dss_io.open_dss(str(dss_file), catalog_flag=False) as dss:
+        with dss_io.open_dss(str(dss_file), catalog_flag=False, create=True) as dss:
             for wba, pcp in results.items():
                 values = daily_chunk_1920_2021(pcp.values, k)
                 pd.DataFrame({'y': days.year, 'm': days.month, 'd': days.day, 'pcp': values}).to_csv(

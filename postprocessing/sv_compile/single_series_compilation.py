@@ -7,15 +7,15 @@ replaced over ``utils.paths.DELIVERY_WY`` (Oct 1921 to Sep 2018). Cross-checks t
 against the master inventory and compares it with the baseline.
 
 1. Reads each module's delivery folder of the set (``utils.paths.delivery_dirs``, in that
-   order) and copies its CSVs to compiled_input_files/<module>/. Stops when no module has
-   CSVs, and, when rim inflows are delivered, unless their run comes from the configured
-   model at its pin (``utils.paths.require_pinned_run``).
+   order). Stops when no module has CSVs, and, when rim inflows are delivered, unless their
+   run comes from the configured model at its pin (``utils.paths.require_pinned_run``).
 2. Writes per module a DSS of the baseline records of its SVs with its values over the
    window; a NaN keeps the baseline value. Stops when a module has two rows for one SV and
    month, or when two modules provide one SV. An SV absent from the baseline is reported.
 3. Fills each Constant/Rept SV of the inventory that no module provides with the baseline's
    last complete water year, repeated over the window.
-4. Copies the baseline to the compiled DSS and writes the module layers onto it.
+4. Copies the CSVs to compiled_input_files/<module>/, then the baseline to the compiled DSS,
+   and writes the module layers onto it.
 5. Cross-references the inventory (sheet MASTER): expected SVs modified or missing, and
    modified SVs it does not expect; SVs flagged Missing = T or Used in DCR = F are skipped.
 6. Writes the diagnostics, then the statistics of every modified SV against the baseline,
@@ -1777,8 +1777,6 @@ while True:
             sys.exit("\nAborted.")
 
 OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
-remove_tree(COMPILED_CSV)
-COMPILED_CSV.mkdir(parents=True)
 
 # -- Locate source CSVs per module --------------------------------------------
 available_modules = OrderedDict()   # label -> list[Path] of data CSVs
@@ -1818,22 +1816,9 @@ if "rim_inflow" in available_modules:
 
 
 # ------------------------------------------------------------------------------
-# STEP 1 - Copy CSVs into compiled_input_files/<module>/
+# STEP 1 - Catalog baseline DSS
 # ------------------------------------------------------------------------------
-print("Step 1: Copying source CSVs into compiled_input_files/ ...")
-for label, csvs in available_modules.items():
-    dest_dir = COMPILED_CSV / label
-    dest_dir.mkdir(parents=True, exist_ok=True)
-    for csv_path in csvs:
-        shutil.copy2(csv_path, dest_dir / csv_path.name)
-    print(f"  {label:40s}  -> {len(csvs)} file(s) copied")
-print()
-
-
-# ------------------------------------------------------------------------------
-# STEP 2 - Catalog baseline DSS
-# ------------------------------------------------------------------------------
-print("Step 2: Cataloging baseline DSS ...")
+print("Step 1: Cataloging baseline DSS ...")
 with dss_io.open_dss(BASELINE_DSS, version=6, catalog_flag=True, use_junction=False) as dss_base:
     baseline_paths = dss_base.getPathnameList(DSS_PATTERN)
 
@@ -1850,9 +1835,9 @@ print()
 
 
 # ------------------------------------------------------------------------------
-# STEP 3 - Build per-module intermediate DSS files
+# STEP 2 - Build per-module intermediate DSS files
 # ------------------------------------------------------------------------------
-print("Step 3: Building intermediate DSS per module ...")
+print("Step 2: Building intermediate DSS per module ...")
 print("-" * 72)
 
 module_dss_paths   = OrderedDict()   # label -> Path to intermediate DSS
@@ -1912,7 +1897,8 @@ for label, csvs in available_modules.items():
     missing_parts = []
 
     with dss_io.open_dss(BASELINE_DSS, version=6, catalog_flag=True, use_junction=False) as dss_in, \
-         dss_io.open_dss(_dss_str(int_dss), version=6, catalog_flag=False, use_junction=False) as dss_out:
+         dss_io.open_dss(_dss_str(int_dss), version=6, catalog_flag=False, use_junction=False,
+                         create=True) as dss_out:
 
         for part_key in sorted(override_dict):
             if part_key not in baseline_bucket:
@@ -1995,9 +1981,9 @@ if _clashes:
 
 
 # ------------------------------------------------------------------------------
-# STEP 3b - Auto-fill Constant/Rept SVs from baseline last-12-month pattern
+# STEP 2b - Auto-fill Constant/Rept SVs from baseline last-12-month pattern
 # ------------------------------------------------------------------------------
-print("Step 3b: Auto-filling Constant/Rept SVs ...")
+print("Step 2b: Auto-filling Constant/Rept SVs ...")
 
 # Read inventory early to identify Constant/Rept keys
 inventory_df = read_master_inventory()
@@ -2045,7 +2031,8 @@ const_rept_filled = set()
 
 if const_rept_to_fill:
     with dss_io.open_dss(BASELINE_DSS, version=6, catalog_flag=True, use_junction=False) as dss_in, \
-         dss_io.open_dss(_dss_str(const_rept_dss), version=6, catalog_flag=False, use_junction=False) as dss_out:
+         dss_io.open_dss(_dss_str(const_rept_dss), version=6, catalog_flag=False, use_junction=False,
+                         create=True) as dss_out:
 
         for pk in sorted(const_rept_to_fill):
             overrides = build_constant_rept_overrides(
@@ -2072,6 +2059,22 @@ if const_rept_to_fill:
 print(f"  Constant/Rept SVs to auto-fill:  {len(const_rept_to_fill):,}")
 print(f"  Successfully written:            {n_const_written:,} paths ({len(const_rept_filled)} B,C)")
 print(f"  Already provided by module CSVs: {len(const_rept_keys & already_from_csv):,}")
+print()
+
+
+# ------------------------------------------------------------------------------
+# STEP 3 - Copy CSVs into compiled_input_files/<module>/
+# ------------------------------------------------------------------------------
+# Every check has passed, so the copies of an earlier compile can be replaced
+print("Step 3: Copying source CSVs into compiled_input_files/ ...")
+remove_tree(COMPILED_CSV)
+COMPILED_CSV.mkdir(parents=True)
+for label, csvs in available_modules.items():
+    dest_dir = COMPILED_CSV / label
+    dest_dir.mkdir(parents=True, exist_ok=True)
+    for csv_path in csvs:
+        shutil.copy2(csv_path, dest_dir / csv_path.name)
+    print(f"  {label:40s}  -> {len(csvs)} file(s) copied")
 print()
 
 

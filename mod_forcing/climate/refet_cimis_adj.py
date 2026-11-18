@@ -1412,7 +1412,7 @@ def write_refeto_dss(wba_table: pd.DataFrame, start_year: int, path: Path) -> in
     temp_path.unlink()
     expected = set()
     try:
-        with dss_io.open_dss(temp_path, version=6, catalog_flag=False) as dss:
+        with dss_io.open_dss(temp_path, version=6, catalog_flag=False, create=True) as dss:
             for row in wba_table.itertuples(index=False, name=None):
                 wba_id, *values = row
                 if len(values) != n_months:
@@ -1466,7 +1466,7 @@ def write_land_use_et(path: Path, series: dict[str, pd.Series], start_year: int,
     path = Path(path)
     path.parent.mkdir(parents=True, exist_ok=True)
     remove_dss_files(path)
-    with dss_io.open_dss(path, version=6, catalog_flag=False) as dss:
+    with dss_io.open_dss(path, version=6, catalog_flag=False, create=True) as dss:
         for part_b, values in series.items():
             if len(values) != n_months:
                 raise ValueError(f"{part_b}: {len(values)} months, expected {n_months}")

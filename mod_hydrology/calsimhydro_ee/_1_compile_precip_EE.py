@@ -89,7 +89,7 @@ def write_single(results: dict, output_path: Path, clip_period, write_dss: bool)
         print("DSS output skipped (--no_dss).")
         return
     dss_file = output_path / "CS3_DailyPrecipitation_EE.dss"
-    with dss_io.open_dss(str(dss_file), catalog_flag=False) as dss:
+    with dss_io.open_dss(str(dss_file), catalog_flag=False, create=True) as dss:
         for wba, pcp in results.items():
             if clip_period:
                 pcp = pcp[clip_period[0]:clip_period[1]]
@@ -108,7 +108,7 @@ def write_product_b(results: dict, output_path: Path, write_dss: bool) -> None:
                 output_path / 'pcp' / f"{wba}_pcp_n{k:02d}.csv", header=False, index=False)
         if write_dss:
             with dss_io.open_dss(str(output_path / f"CS3_DailyPrecipitation_EE_n{k:02d}.dss"),
-                                 catalog_flag=False) as dss:
+                                 catalog_flag=False, create=True) as dss:
                 for wba, values in chunk.items():
                     put_daily(dss, wba, "01JAN1920", values)
         print(f"    Chunk {k:02d}/{N_CHUNKS} written")

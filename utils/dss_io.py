@@ -4,12 +4,14 @@ HEC-DSS Access Helpers
 The pipeline's route to DSS files: ``open_dss`` and two monthly readers that turn a DSS catalog
 into pandas series.
 
-- ``open_dss(dss_path, version=6, catalog_flag=True, use_junction=None, **open_kwargs)``:
-  context manager over ``HecDss.Open``. A path longer than 200 characters (``needs_junction``;
-  the HEC-DSS Fortran library takes 256) opens through a directory junction
-  ``_dss_link_<pid>_<n>`` under the repo root, removed on exit; ``create_junction`` also removes
-  the junctions of processes no longer running. ``create_junction`` and ``remove_junction``
-  serve callers that keep one junction over many opens.
+- ``open_dss(dss_path, version=6, catalog_flag=True, use_junction=None, create=False,
+  **open_kwargs)``: context manager over ``HecDss.Open``. It stops on a missing file unless
+  ``create`` is set, since ``HecDss.Open`` would create an empty one. A path longer than 200
+  characters (``needs_junction``; the HEC-DSS Fortran library takes 256) opens through a
+  directory junction ``_dss_link_<pid>_<n>`` in %LOCALAPPDATA%\\csstochastic\\dss_links,
+  removed on exit; ``create_junction`` also removes the junctions of processes no longer
+  running. ``create_junction`` and ``remove_junction`` serve callers that keep one junction
+  over many opens.
 - ``read_monthly_series(dss, requested, dss_read_start, dss_read_end)``: a dict of month-end
   Series keyed by upper-cased (Part B, Part C), each on a fixed month-end index over the read
   window; catalog ``/*/*/*/*/1MON/*``, records in D-part then path order; only keys with a value.
@@ -52,12 +54,14 @@ from pydsstools.heclib.dss import HecDss
 # -- Windows long-path junction ------------------------------------------------
 # The Fortran HEC-DSS library inside pydsstools limits path names to 256 chars,
 # and the data directory lives on OneDrive with a very long path, so a long path
-# is opened through a temporary directory junction under the repo root. Every
-# junction has its own name, _dss_link_<pid>_<n>, so runs in parallel and nested
-# opens in one run never re-point each other's link. create_junction removes the
-# junctions of processes that are no longer running (a killed run leaves its own).
+# is opened through a temporary directory junction. The junctions live in their own
+# folder outside every worktree and temp folder, since a recursive delete of a folder
+# that holds one can follow it into the data. Every junction has its own name,
+# _dss_link_<pid>_<n>, so runs in parallel and nested opens in one run never re-point
+# each other's link. create_junction removes the junctions of processes that are no
+# longer running (a killed run leaves its own).
 
-_REPO_ROOT = Path(__file__).resolve().parents[1]
+_LINK_DIR = Path(os.environ.get("LOCALAPPDATA", Path.home() / "AppData" / "Local")) / "csstochastic" / "dss_links"
 _LINK_PREFIX = "_dss_link_"
 _PATH_LIMIT = 200  # conservative limit vs Fortran's 256-char CNAME
 _link_numbers = itertools.count(1)
@@ -89,20 +93,21 @@ def _unlink(link) -> None:
 
 def _remove_orphan_junctions() -> None:
     """Remove the junctions of processes that are no longer running."""
-    for link in _REPO_ROOT.glob(f"{_LINK_PREFIX}*"):
+    for link in _LINK_DIR.glob(f"{_LINK_PREFIX}*"):
         pid = link.name[len(_LINK_PREFIX):].split("_")[0]
         if pid.isdigit() and int(pid) != os.getpid() and not _process_running(int(pid)):
             _unlink(link)
 
 
 def create_junction(target_dir) -> Path:
-    """Create a new directory junction under the repo root to ``target_dir`` and return
-    its path; remove it with :func:`remove_junction`."""
+    """Create a new directory junction in ``_LINK_DIR`` to ``target_dir`` and return its
+    path; remove it with :func:`remove_junction`."""
     target_str = str(target_dir)
     if target_str.startswith("\\\\?\\"):
         target_str = target_str[4:]  # mklink /J requires a plain path, not \\?\ prefix
+    _LINK_DIR.mkdir(parents=True, exist_ok=True)
     _remove_orphan_junctions()
-    link = _REPO_ROOT / f"{_LINK_PREFIX}{os.getpid()}_{next(_link_numbers)}"
+    link = _LINK_DIR / f"{_LINK_PREFIX}{os.getpid()}_{next(_link_numbers)}"
     # A dead process with this pid may have left the name behind, possibly broken:
     # os.path.lexists sees a broken junction, Path.exists does not.
     if os.path.lexists(str(link)):
@@ -121,7 +126,7 @@ def remove_junction(link) -> None:
 
 
 @contextmanager
-def open_dss(dss_path, *, version=6, catalog_flag=True, use_junction=None,
+def open_dss(dss_path, *, version=6, catalog_flag=True, use_junction=None, create=False,
              **open_kwargs):
     """Open a DSS file, transparently handling the long-path junction.
 
@@ -140,6 +145,10 @@ def open_dss(dss_path, *, version=6, catalog_flag=True, use_junction=None,
         ``None`` (default) decides automatically via :func:`needs_junction`.
         Pass ``False`` to open the path directly, or ``True`` to force a
         junction.
+    create : bool
+        ``False`` (default) raises ``FileNotFoundError`` when the file does not
+        exist, since ``HecDss.Open`` would create an empty one. A caller that
+        writes a new file passes ``True``.
     **open_kwargs
         Any additional keyword arguments are forwarded verbatim to
         ``HecDss.Open`` (e.g. ``window=(start, end)`` to pre-restrict a read
@@ -151,6 +160,8 @@ def open_dss(dss_path, *, version=6, catalog_flag=True, use_junction=None,
     on exit, including on error.
     """
     dss_path = Path(dss_path)
+    if not create and not dss_path.is_file():
+        raise FileNotFoundError(f"DSS file not found: {dss_path}")
     if use_junction is None:
         use_junction = needs_junction(dss_path)
 

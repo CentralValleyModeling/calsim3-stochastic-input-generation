@@ -113,7 +113,7 @@ def island_sums(island_file: Path) -> dict:
 
 
 def write_records(dss_file: Path, records: dict) -> None:
-    with dss_io.open_dss(dss_file, version=6, catalog_flag=False) as dss:
+    with dss_io.open_dss(dss_file, version=6, catalog_flag=False, create=True) as dss:
         for rec in records.values():
             a, b, c, _, e, f = rec["parts"]
             tsc = TimeSeriesContainer()

@@ -93,8 +93,6 @@ def extract_dss_data(dss_path):
     # catalog_flag=True). The read loop below (no-trailing-slash pattern, sort by
     # Part C) differs from dss_io.read_monthly_frame, so it stays here.
     dss_path = Path(dss_path).resolve()
-    if not dss_path.is_file():  # opening a missing DSS would create an empty one
-        raise FileNotFoundError(f"{dss_path} not found; run _1c_build_cs3sv_dss.py first")
     print(f"    Reading DSS: {dss_path.name}")
 
     data_dict = {}

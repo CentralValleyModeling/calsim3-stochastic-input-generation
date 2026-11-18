@@ -147,7 +147,7 @@ def write_dss(dss_file: Path, pan, start: str) -> None:
     tsc.values = np.asarray(pan, dtype=float)
     # A fresh file, so no record from an earlier run survives next to this one
     dss_file.unlink(missing_ok=True)
-    with dss_io.open_dss(dss_file, version=6, catalog_flag=False) as dss:
+    with dss_io.open_dss(dss_file, version=6, catalog_flag=False, create=True) as dss:
         dss.put_ts(tsc)
 
 
