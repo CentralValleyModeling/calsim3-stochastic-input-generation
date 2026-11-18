@@ -77,7 +77,9 @@ Tier 2  CORE HYDROLOGY (mod_hydrology)
         python mod_hydrology/small_watersheds/_2_postprocess_single.py --product A
     Delta Channel Depletion:
         python mod_hydrology/delta_channel_depletion/_1_compile_precip_DETAW.py --product A
+        python mod_hydrology/delta_channel_depletion/_1b_prepare_dcd_run.py --product A --run-dir <run>
         -> [EXTERNAL] DETAW/DCD model run
+        python mod_hydrology/delta_channel_depletion/_1c_build_cs3sv_dss.py --run-dir <run>
         python mod_hydrology/delta_channel_depletion/_2_postprocess_single.py --product A
 
 Tier 3  WATER YEAR TYPES (mod_hydrology)
@@ -222,9 +224,13 @@ Watersheds; `<set>`: `Historical_Unsplit`, `Product_A`).
 1. `python mod_hydrology/delta_channel_depletion/_1_compile_precip_DETAW.py --product A`
    - **Inputs:** WGEN met files; DCD station list
    - **Outputs:** daily DCD-station precip
-2. **[EXTERNAL] DETAW/DCD model run**
-   - **Outputs:** `DCD_<set>_1921-2018/DCD/Output/CALSIM3/CS3sv_DCD_PRISM_Dtrnd.dss` (+ `DCD_Calsim3_PlanningStudy_1921-2018`, the baseline run)
-3. `python mod_hydrology/delta_channel_depletion/_2_postprocess_single.py --product A`
+2. `python mod_hydrology/delta_channel_depletion/_1b_prepare_dcd_run.py --product A --run-dir <run>`
+   - **Inputs:** the set's DCD-station weather; water_year_types `_SacWYT.csv` (run `_1_calc_WYTs.py --product A` first); the run folder `DCD_<set>_1921-2018`, a copy of `DCD_Calsim3_PlanningStudy_1921-2018`
+   - **Outputs:** the run's weather, Landuse TYPE and WYTYPES, WY1922-2018
+3. **[EXTERNAL] DETAW/DCD model run**: `python DCD.py` in `<run>/DCD`
+4. `python mod_hydrology/delta_channel_depletion/_1c_build_cs3sv_dss.py --run-dir <run>`
+   - **Outputs:** `DCD_<set>_1921-2018/DCD/Output/CALSIM3/CS3sv_DCD_PRISM_Dtrnd.dss` (DSS 6; the postprocessor also reads the baseline run `DCD_Calsim3_PlanningStudy_1921-2018`)
+5. `python mod_hydrology/delta_channel_depletion/_2_postprocess_single.py --product A`
    - **Inputs:** the set's DCD DSS; master inventory (CFS->TAF)
    - **Outputs:** `_dcd_productA_1922_2018.csv` (+ merged/summary/boxplots under `_2_postprocess_single/<set>/`)
 

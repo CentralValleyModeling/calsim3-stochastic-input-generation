@@ -9,7 +9,7 @@ Inputs
 ------
 - <generated>/mod_hydrology/delta_channel_depletion/DeltaChannelDepletion_Runs/<run>/DCD/Output/
   CALSIM3/CS3sv_DCD_PRISM_Dtrnd.dss of the runs DCD_Calsim3_PlanningStudy_1921-2018 and
-  DCD_<Historical_Unsplit|Product_A>_1921-2018
+  DCD_<Historical_Unsplit|Product_A>_1921-2018 (_1c_build_cs3sv_dss.py)
 - inventory/_MASTER_INVENTORY_FOR_STOCHASTIC_INPUT_GENERATION_.xlsx, sheet MASTER: the Delta
   Channel Depletion SVs of DCD_island_month.dss
 

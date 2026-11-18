@@ -211,8 +211,8 @@ Rim components: Sac (SRBB+OROV+YUBA+FOLS), SJ (ST+TU+ME+SJ).
 | Script | Purpose | Product |
 |--------|---------|---------|
 | `_1_compile_precip_DETAW.py` | Daily precip for DCD stations from WGEN | historical, A & B (`--product`) |
-| `_aggregate_dpflow_gwflow_for_DCD.py` | Aggregate DP/GW flow outputs | -- |
-| `_merge_DCD_outputs_for_CS3.py` | Merge DCD outputs for CalSim | -- |
+| `_1b_prepare_dcd_run.py` | Write a set's weather and Sacramento WYT into a DETAW-DCD run folder | historical, A & B (`--product`, `--chunk`, `--run-dir`) |
+| `_1c_build_cs3sv_dss.py` | Island sums + node series of a finished run -> CS3sv_DCD_PRISM_Dtrnd.dss (DSS 6) | any run (`--run-dir`) |
 | `_2_postprocess_single.py` | Extract & postprocess DCD DSS -> delivery CSVs | historical, A (`--product`) |
 | `_3_postprocess_product_b.py` | Extract Product B DSS (10 chunks) -> per-chunk CSVs | B (`--chunks`, `--compare-a`, `--plot`) |
 

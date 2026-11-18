@@ -69,7 +69,9 @@ Tier 2  CORE HYDROLOGY (mod_hydrology)
         python mod_hydrology/small_watersheds/_3_postprocess_product_b.py
     Delta Channel Depletion:
         python mod_hydrology/delta_channel_depletion/_1_compile_precip_DETAW.py --product B
+        python mod_hydrology/delta_channel_depletion/_1b_prepare_dcd_run.py --product B --chunk N --run-dir <run>
         -> [EXTERNAL] DETAW/DCD model run (10 chunks)
+        python mod_hydrology/delta_channel_depletion/_1c_build_cs3sv_dss.py --run-dir <run>  (per chunk)
         python mod_hydrology/delta_channel_depletion/_3_postprocess_product_b.py
 
 Tier 3  WATER YEAR TYPES (mod_hydrology)
@@ -249,13 +251,17 @@ chunk CSVs under `_product_b_final/`.
 1. `python mod_hydrology/delta_channel_depletion/_1_compile_precip_DETAW.py --product B`
    - **Inputs:** WGEN met files; DCD station list
    - **Outputs:** daily DCD-station precip per chunk
-2. **[EXTERNAL] DETAW/DCD model run (10 chunks)**
-   - **Outputs:** `DeltaChannelDepletion_Runs/
-     DCD_Calsim3_PlanningStudy_Product_B/
-     CS3sv_DCD_PRISM_Dtrnd_n{01..10}.DSS`
-3. `python mod_hydrology/delta_channel_depletion/_3_postprocess_product_b.py`
+2. `python mod_hydrology/delta_channel_depletion/_1b_prepare_dcd_run.py --product B --chunk N --run-dir <run>`, per chunk
+   - **Inputs:** the chunk's DCD-station weather; water_year_types `_SacWYT_nKK.csv` (run
+     `_1_calc_WYTs.py --product B` first); a copy of `DCD_Calsim3_PlanningStudy_1921-2018`
+   - **Outputs:** the run's weather, Landuse TYPE, WYTYPES and GW_RATES, WY1922-2021
+3. **[EXTERNAL] DETAW/DCD model run (10 chunks)**: `python DCD.py` in `<run>/DCD`
+4. `python mod_hydrology/delta_channel_depletion/_1c_build_cs3sv_dss.py --run-dir <run>`, per chunk
+   - **Outputs:** `<run>/DCD/Output/CALSIM3/CS3sv_DCD_PRISM_Dtrnd.dss` (DSS 6)
+5. `python mod_hydrology/delta_channel_depletion/_3_postprocess_product_b.py`
    - Optional: `--chunks 1 2 3`, `--compare-a`, `--plot`
-   - **Inputs:** external DCD DSS; master inventory (CFS->TAF)
+   - **Inputs:** `DeltaChannelDepletion_Runs/DCD_Calsim3_PlanningStudy_Product_B/
+     CS3sv_DCD_PRISM_Dtrnd_n{01..10}.DSS`; master inventory (CFS->TAF)
    - **Outputs:** `_dcd_productB_n{01..10}.csv` and
      `_product_b_final/*.csv`
 

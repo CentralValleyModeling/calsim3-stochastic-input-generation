@@ -69,6 +69,8 @@ PRODUCT_A_SCRIPTS = [
     "mod_hydrology/calsimhydro/_2b_compile_pan_evap.py",
     "mod_hydrology/calsimhydro_ee/_1_compile_precip_EE.py",
     "mod_hydrology/delta_channel_depletion/_1_compile_precip_DETAW.py",
+    "mod_hydrology/delta_channel_depletion/_1b_prepare_dcd_run.py",
+    "mod_hydrology/delta_channel_depletion/_1c_build_cs3sv_dss.py",
     "mod_hydrology/small_watersheds/_1_compile_precip_sws.py",
     "mod_hydrology/rim_inflow/_1_build_rim_inflow.py",
     "mod_hydrology/rim_inflow/_2_skill_evaluation.py",
