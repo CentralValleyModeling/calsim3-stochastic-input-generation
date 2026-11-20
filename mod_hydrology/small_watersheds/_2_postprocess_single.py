@@ -10,7 +10,7 @@ Inputs
 Under <generated>/mod_hydrology/small_watersheds/SmallWatersheds_Runs/:
 - SmallWatershed_Historical_1921-2018/CVSWShed_FlowContribution3pcntWBA24_2013Init_2021.dss
   (CalSim historical inputs)
-- SmallWatershed_<Historical_Unsplit|Product_A>/ the same file (the set's run, on the
+- SmallWatershed_<Historical_Unsplit|Product_A>_1921-2018/ the same file (the set's run, on the
   precipitation of _1_compile_precip_sws.py)
 - inventory/_MASTER_INVENTORY_FOR_STOCHASTIC_INPUT_GENERATION_.xlsx, sheet MASTER: the Small
   Watersheds SVs
@@ -78,7 +78,7 @@ def set_label(product):
 def dss_paths(product):
     """The CalSim historical run, then the set's run."""
     return [str(_sws_runs / CALSIM_RUN / DSS_NAME),
-            str(_sws_runs / f"SmallWatershed_{WEATHER_SETS[product]['name']}" / DSS_NAME)]
+            str(_sws_runs / f"SmallWatershed_{WEATHER_SETS[product]['name']}_1921-2018" / DSS_NAME)]
 
 
 # -- HELPER FUNCTIONS ------------------------------------------------

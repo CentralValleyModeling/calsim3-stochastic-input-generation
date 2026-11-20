@@ -12,10 +12,17 @@ DCD.py names the node file after the last month of its weather (DCD_Sep2018_Lch5
 for a run ending in September 2018), so the script takes the one DCD_*_Lch*_mon_C3.dss of the
 run. Run it after DCD.py (see _1b_prepare_dcd_run.py); _2_postprocess_single.py reads its output.
 
+DCD.py goes on when DETAW fails, and its kernel then reruns on the previous DETAW output. So the
+script first checks that DETAW ran on the run's weather: the island precipitation of percip.nc
+must have one day per line of calender.txt and equal the station precipitation of mm_pcp.csv
+times the island weights of Percentage.csv.
+
 Inputs
 ------
 - <run>/DCD/Output/CALSIM3/DCD_island_month.dss: /DICU-ISLAND/<island>/DP-FLOW and GW-FLOW
 - <run>/DCD/Output/CALSIM3/DCD_*_Lch*_mon_C3.dss
+- <run>/DETAW/Output/percip.nc and <run>/DETAW/Input/planning_study/mm_pcp.csv, Percentage.csv
+  and calender.txt, for the check
 - reference/WeightedRatiosForDCD.csv: Island, Delta, WBA50 (the share of each island in the
   Delta and in WBA 50)
 
@@ -27,7 +34,7 @@ Outputs
 
 Dependencies
 ------------
-utils.dss_io; pydsstools
+utils.dss_io; pydsstools, netCDF4
 
 Usage
 -----
@@ -39,6 +46,7 @@ import os
 import sys
 from pathlib import Path
 
+import netCDF4
 import numpy as np
 import pandas as pd
 from pydsstools.core import TimeSeriesContainer
@@ -48,11 +56,36 @@ from utils import dss_io
 
 WEIGHTS_CSV = Path(__file__).resolve().parent / "reference" / "WeightedRatiosForDCD.csv"
 OUT_DIR = Path("DCD") / "Output" / "CALSIM3"
+PLANNING = Path("DETAW") / "Input" / "planning_study"
+PERCIP_NC = Path("DETAW") / "Output" / "percip.nc"
+N_ISLANDS = 168
 CS3SV = "CS3sv_DCD_PRISM_Dtrnd.dss"
 # Part B of each island sum: (Part C of the island records, weight column)
 SUMS = {"DP_DELTA_DCD": ("DP-FLOW", "Delta"), "DP_WBA50_DCD": ("DP-FLOW", "WBA50"),
         "GW_DELTA_DCD": ("GW-FLOW", "Delta"), "GW_WBA50_DCD": ("GW-FLOW", "WBA50")}
 A_PART, F_PART = "CALSIM", "L2015A"
+
+
+def check_detaw_current(run: Path) -> None:
+    """Refuse a run whose DETAW output was not computed from its weather. DETAW/Output/percip.nc
+    must hold one day per line of calender.txt and equal the station precipitation of mm_pcp.csv
+    times the island weights of Percentage.csv, each station taking the Percentage column that
+    starts with its first two letters, as DETAW.py matches them."""
+    calender = [ln for ln in (run / PLANNING / "calender.txt").read_text().splitlines() if ln.strip()]
+    pcp = pd.read_csv(run / PLANNING / "mm_pcp.csv")
+    stations = list(pcp.columns[4:])
+    per = pd.read_csv(run / PLANNING / "Percentage.csv", nrows=N_ISLANDS)
+    weights = np.vstack([per[[c for c in per.columns[1:] if c[:2] == s[:2]][0]].to_numpy(dtype=float)
+                         for s in stations])
+    # Read from memory: the netCDF library does not open \\?\ long paths
+    with netCDF4.Dataset("percip.nc", memory=(run / PERCIP_NC).read_bytes()) as ds:
+        island_pcp = np.asarray(ds["precip"][:], dtype=float)
+    if not len(calender) == len(pcp) == len(island_pcp):
+        raise ValueError(f"{run / PERCIP_NC} holds {len(island_pcp)} days, calender.txt {len(calender)} "
+                         f"and mm_pcp.csv {len(pcp)}: DETAW did not run on this weather")
+    if not np.allclose(pcp[stations].to_numpy(dtype=float) @ weights, island_pcp, rtol=1e-9, atol=1e-9):
+        raise ValueError(f"{run / PERCIP_NC} does not match mm_pcp.csv and Percentage.csv: DETAW did "
+                         f"not run on this weather")
 
 
 def read_records(dss_file: Path, part_c: str = "*") -> dict:
@@ -134,7 +167,9 @@ def main():
                     help="The DETAW-DCD run folder (holds DETAW/ and DCD/)")
     args = ap.parse_args()
 
-    out_dir = args.run_dir.resolve() / OUT_DIR
+    run = args.run_dir.resolve()
+    check_detaw_current(run)
+    out_dir = run / OUT_DIR
     nodes = sorted(out_dir.glob("DCD_*_Lch*_mon_C3.dss"))
     if len(nodes) != 1:
         raise FileNotFoundError(f"{out_dir} holds {len(nodes)} DCD_*_Lch*_mon_C3.dss files, not 1")

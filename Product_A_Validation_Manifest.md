@@ -174,8 +174,8 @@ identical inputs.
 
 Each external-run model is a contiguous block: compile inputs ->
 [EXTERNAL] model run -> postprocess the set's run DSS into delivery CSVs. The
-runs live in `<Model>_<set>_1921-2018` folders (`SmallWatershed_<set>` for Small
-Watersheds; `<set>`: `Historical_Unsplit`, `Product_A`).
+runs live in `<Model>_<set>_1921-2018` folders (`<set>`: `Historical_Unsplit`,
+`Product_A`).
 
 ### CalSimHydro (746 vars)
 
@@ -220,7 +220,7 @@ Watersheds; `<set>`: `Historical_Unsplit`, `Product_A`).
    - **Inputs:** WGEN met files; SWS station list
    - **Outputs:** monthly SWS precip (in/mo)
 2. **[EXTERNAL] Small Watersheds model run**
-   - **Outputs:** `SmallWatershed_<set>/CVSWShed_FlowContribution3pcntWBA24_2013Init_2021.dss`
+   - **Outputs:** `SmallWatershed_<set>_1921-2018/CVSWShed_FlowContribution3pcntWBA24_2013Init_2021.dss`
 3. `python mod_hydrology/small_watersheds/_2_postprocess_single.py --product A`
    - **Inputs:** the set's SWS DSS; master inventory
    - **Outputs:** `_smallwatersheds_productA_1922_2018.csv` (+ merged/summary/boxplots under `_2_postprocess_single/<set>/`)

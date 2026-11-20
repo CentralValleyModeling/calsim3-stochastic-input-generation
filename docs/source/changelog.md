@@ -139,6 +139,8 @@ last.
   year types. A chunk of Product B runs through WY2021, so its run folder needs rows 2019-2021
   added to `GW_RATES_CALSIM3.TXT`.
 - `_1_compile_precip_DETAW.py` writes `mm_pcp.csv` and `LODI_PT.csv`, the file names DETAW reads.
+- `_1c_build_cs3sv_dss.py` stops when the run's DETAW output was not computed from its weather.
+  DCD.py goes on when DETAW fails, and its kernel then reruns on the old DETAW output.
 
 ### Stops in place of stale output
 
